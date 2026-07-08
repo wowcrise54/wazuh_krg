@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?} 
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        %%{WORD+}/{NUMBER}/{msgid="RDAUTHDOWN"}{"(l)"?}{"["NUMBER"]"?}:
+        {object.name="RADIUS authentication server"} ( IP:
+        {datafield1=IPV4|datafield1=IPV6|"**"} )  is down!'
+
+action = "down"
+object = "system"
+status = "success"
+
+# datafield1 - ip radius server
+
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Radius_server_failed"

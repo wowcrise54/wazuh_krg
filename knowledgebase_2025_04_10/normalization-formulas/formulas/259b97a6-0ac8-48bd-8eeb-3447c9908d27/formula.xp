@@ -1,0 +1,57 @@
+!TABULAR = "hostname,
+            {msgid=event_type},
+            {time=event_time},
+            severity,
+            {datafield1=group_name}"
+
+!COND = $event_type == "KLSRV_INVISIBLE_HOSTS_REMOVED"
+
+$description = replace($description, " ", "\t")
+if find_substr($description, "\r\n") != null then
+    $kv = keyvalue($description, "\r\n", ":")
+else
+    $kv = keyvalue($description, " ", ": ")
+endif
+
+action = "unbind"
+object = "host"
+status = "success"
+
+object.name = $par1
+object.property = "group name"
+object.value = $par3
+
+# datafield1 - имя группы, в которую входит узел-источник
+
+importance = switch $severity
+    case 1 "info"
+    case 2 "low"
+    case 3 "medium"
+    case 4 "high"
+endswitch
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $ip_address != "127.0.0.1" then
+    event_src.ip = $ip_address
+endif
+if ipv4($fqdn) == null and find_substr($fqdn, ".") != null then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_odbc_KLSRV_INVISIBLE_HOSTS_REMOVED"

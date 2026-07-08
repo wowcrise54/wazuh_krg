@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="PROC_Execute"} {subject.account.name=WORDDASH} {$status="OK"|"FAIL"|"FAILURE"}
+        {$temp=WORDDASH} euid{":"?} {subject.account.id=NUMBER} egid{":"?} {NUMBER} epriv{":"?} {STRING}
+        name {$cmd=STRING} {$cmd_param=STRING?}'
+
+subject = "account"
+action = "execute"
+object = "command"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+if $cmd_param != null then
+    object.value = $cmd + " " + $cmd_param
+else
+    object.value = $cmd
+endif
+if $temp == "smitty" then
+    object.type = "utility smitty"
+elif find_substr($cmd_param,"suma") != null then
+    object.type = "utility suma"
+endif
+
+if  $temp == "shutdown" or $temp == "telinit" or $temp == "init" then
+    importance = "medium"
+else
+    importance = "info"
+endif
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_user_cmd_execute"

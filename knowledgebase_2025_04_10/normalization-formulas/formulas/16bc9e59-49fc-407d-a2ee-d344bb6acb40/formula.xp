@@ -1,0 +1,15 @@
+!TEXT = '{time=DATETIME} - OK,{msgid="USER_ADD"},{subject.name=WORDDASH+},
+        id_user: {object.id=NUMBER},login: {object.name=WORDDASH+}'
+
+subject = "account"
+action = "create"
+object = "account"
+status = "success"
+
+importance = "low"
+
+event_src.vendor = "zoom_international"
+event_src.title = "call_recording"
+event_src.category = "Telecom"
+
+id = "PT_ZOOM_International_Call_Recording_filemonitor_User_add"

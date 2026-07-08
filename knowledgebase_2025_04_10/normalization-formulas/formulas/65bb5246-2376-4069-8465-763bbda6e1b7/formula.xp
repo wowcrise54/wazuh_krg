@@ -1,0 +1,22 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="networkd"}[{NUMBER}]: msg_id="{msgid="3100-0057"}"
+         Starts processing a configuration setting'
+
+action = "apply"
+object = "configuration"
+status = "ongoing"
+
+importance = "info"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_31000057_Start_processing_configuration"

@@ -1,0 +1,83 @@
+event Subrule_SSHGuard:
+    key: 
+        src.ip, event_src.host
+    filter {
+        correlation_name == "Subrule_SSHGuard"
+        and datafield1 == "password bruteforce"
+    }
+
+event IP_Blocked:
+    key:
+        datafield2, event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sshguard"
+        and action == "lock"
+        and object == "ip_address"
+        and filter::CheckWL_Specific_Only("SSHGuard_Bruteforce", lower(join([datafield2, event_src.host], "|")))
+    }
+
+rule SSHGuard_Bruteforce: (Subrule_SSHGuard and IP_Blocked) timer 10m
+
+    init {
+        $labels = "CheckWL_Specific_Only"
+    }
+
+    on Subrule_SSHGuard {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $start_time = start_time
+
+        $count.subevents = count.subevents
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on IP_Blocked {
+        $reason = reason
+
+        $alert.key = lower(join([datafield2, event_src.host], "|"))
+
+        $labels = "CheckWL_Specific_Only"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "initiate"
+    $object = "attack"
+    $status = "ongoing"
+
+    $alert.context = join(remove([$subject.account.name, "attempts count: " + string($count.subevents)], null), " | ")
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Brute Force: Password Guessing"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id, $subject.account.name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "BruteForce"
+    $incident.aggregation.timeout = 2h
+}

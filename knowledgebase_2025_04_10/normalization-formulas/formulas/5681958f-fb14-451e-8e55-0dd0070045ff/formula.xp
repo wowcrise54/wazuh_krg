@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="SNMP_FAIL"}
+        ({WORD}){"["NUMBER"]"?}:Failed to login through SNMP. (Ip=
+        {src.ip=IPV4}, Times={NUMBER}, Reason={$reason=STRING+} VPN= {REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+protocol = "snmp"
+
+reason = strip($reason,'',',')
+
+importance = "medium"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_SNMP_version_mismatch"

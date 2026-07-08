@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+        {object.type=WORD} beginning download of remote file {$path=REST}'
+
+action = "download"
+object = "database"
+status = "ongoing"
+
+object.path = strip($path,'\"','\"')
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_start_base_download"

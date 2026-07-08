@@ -1,0 +1,34 @@
+TEXT = '[DROP] {$Computer=HOSTNAME} {reason=WORD} {UNTIL ("]")} [Priority: {$priority=NUMBER}]: {REST}'
+
+subject = "rule"
+action = "detect"
+object = "alert"
+status = "success"
+
+time = recv_time
+if $priority == 1 then
+    importance = "high"
+elif $priority == 2 then
+    importance = "medium"
+elif $priority == 3 then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Potential Attack"
+
+event_src.vendor = "factor_ts"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dionis_dps"
+event_src.category = "IDS/IPS"
+
+id = "PT_Factor_TS_Dionis_DPS_syslog_snort_alert"

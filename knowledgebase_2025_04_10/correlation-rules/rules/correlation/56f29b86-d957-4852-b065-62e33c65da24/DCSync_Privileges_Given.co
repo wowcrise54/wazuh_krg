@@ -1,0 +1,68 @@
+event Modify_AD_Object:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and object.state == "value added"
+        and lower(object.type) == "domaindns"
+        and regex(lower(object.value), "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2|1131f6ad-9c07-11d1-f79f-00c04fc2dcd2|89e95b76-444d-4c62-991a-0facbeda640c", 0) != null
+        and filter::CheckWL_Specific_Only("DCSync_Privileges_Given", lower(join([subject.account.name, object.name], "|")))
+    }
+
+rule DCSync_Privileges_Given: Modify_AD_Object
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Modify_AD_Object {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.state = object.state
+        
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(join([subject.account.name, object.name], "|"))
+        $alert.regex_match = regex(lower(object.value), "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2|1131f6ad-9c07-11d1-f79f-00c04fc2dcd2|89e95b76-444d-4c62-991a-0facbeda640c", 0)
+        $alert.context = object.value
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "ds_object"
+    $status = "success"
+
+    $importance = "high"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "DCsync"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        en: "Checks if an event exists in the whitelisting system by a specific event field value"
+        ru: "Проверяет наличие события в системе вайтлистинга по специфическому значению поля события"
+    Description:
+        en: "This filter is used to reduce the repetitive part of the check against the tabular list system"
+        ru: "Фильтр используется для сокращения повторяющейся части проверки по системе табличных списков"
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "The specific value of the event field to be checked"
+            ru: "Проверяемое специфическое значение поля события"
+    rule_name:
+        Type: string
+        Name:
+            ru: "Название правила корреляции, для которого событие будет занесено в систему вайтлистинга"
+            en: "The name of the correlation rule for which the event will be entered into the whitelisting system"
+ObjectId: PT-RF-103
+Origin: PT

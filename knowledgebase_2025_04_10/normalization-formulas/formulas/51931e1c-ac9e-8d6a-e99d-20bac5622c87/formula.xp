@@ -1,0 +1,59 @@
+# INFO  [Native-Transport-Requests-1] 2023-11-23 23:34:25.654 FileAuditLogger.java:51 - user:dba|host:localhost/127.0.0.1:7000|source:/127.0.0.1|port:35578|timestamp:1700771665650|type:DELETE|category:DML|ks:auditlogkeyspace|scope:cyclist_races|operation:DELETE firstname FROM cyclist_races WHERE id = 27b26700-8a3f-11ee-af1d-63a8b87672cf;
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type']=='DELETE')
+
+submessage('TEXT', 'parse_query', lower($kv['operation']))
+
+subject = "account"
+action = "remove"
+object = "db_object"
+status = "success"
+
+subformula "parse_query"
+    TEXT = 'delete {$column_names=UNTIL(" from")?} {$ks_name=UNTIL(".")?}
+    {$table_name=WORD} where {$conditions=UNTIL(";")}'
+endsubformula
+
+if $kv['scope'] != null then  
+    object.name = $kv['scope']
+else
+    object.name = $table_name
+endif 
+
+if $kv['ks'] != null then  
+    object.path = $kv['ks']
+    object.fullpath = object.path + "." + object.name
+else
+    object.fullpath = object.path + "." + object.name
+endif
+
+if $column_names == null then
+    object.property = "rows"
+else
+    object.property = "columns"
+endif
+
+object.query = $kv['operation']
+object.state = "delete data from rows/columns"
+
+datafield1 = $kv['category'] # Категория CQL-запроса
+datafield2 = $column_names # Удаляемые столбцы
+datafield3 = $conditions # Условия для удаления
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Delete"

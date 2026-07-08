@@ -1,0 +1,38 @@
+!JSON = 'EventIdentifier=552'
+!COND = $Logfile=="Security" and $Category==2
+
+subject = "account"
+action = "elevate"
+object = "account"
+status = "success"
+
+subject.account.name = lower($InsertionStrings[0])
+subject.account.domain = lower($InsertionStrings[1])
+subject.account.session_id = maybe_number16(csv(strip($InsertionStrings[2], "(", ")"), ",", "")[1])
+
+object.account.name = lower($InsertionStrings[4])
+object.account.domain = lower($InsertionStrings[5])
+
+dst.hostname = lower($ComputerName)
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_552_Logon_success"

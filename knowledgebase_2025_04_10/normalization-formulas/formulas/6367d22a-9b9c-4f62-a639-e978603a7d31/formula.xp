@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{time=DATETIME}{":"?} {WORD":"?}
+        %{msgid="GLBP-4-BADAUTH"}: Bad authentication received from {src.ip=IPV4|src.ip=IPV6}, group {subject.group=NUMBER}{REST}'
+
+subject = "system"
+action = "validate"
+object = "message"
+status = "failure"
+
+subject.type = "Redundancy protocol"
+
+object.type = "FHRP"
+
+protocol = "glbp"
+
+reason = "Authentication type or key mismatch"
+
+importance = "medium"
+
+event_src.title = "ios"
+event_src.vendor = "cisco"
+if number($hostname) == null then
+    event_src.hostname = coalesce($hostname, $origin_id_hostname)
+    event_src.ip = coalesce($ip, $origin_id_ip)
+endif
+
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_syslog_GLBP_4_BADAUTH"

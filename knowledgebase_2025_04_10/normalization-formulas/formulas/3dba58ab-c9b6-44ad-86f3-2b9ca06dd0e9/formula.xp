@@ -1,0 +1,25 @@
+TEXT = '{time=DATETIME} {STRING} ({WORD}) {WORD+} {msgid="ajjun"} {WORD}
+        MySiteInstantiationJob:ProcessWorkItem: ProcessWorkItemCore for My Site Instantiation for:
+        \'{"i:"?}{"0#.w|"?}{$temp_user=UNTIL("\' failed")}. Error Message: {$tmp_reason=CSV(".","\'")}'
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "failure"
+
+$sep = csv($temp_user, "\\", "")
+subject.account.domain = lower($sep[0])
+subject.account.name = lower($sep[1])
+
+object.type = "site"
+
+reason = $tmp_reason[0]
+datafield1 = $tmp_reason[length($tmp_reason) - 1]
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Personal_site_instantiation_failure"

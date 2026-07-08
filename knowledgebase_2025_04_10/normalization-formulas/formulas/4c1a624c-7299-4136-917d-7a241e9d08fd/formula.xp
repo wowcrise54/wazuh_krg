@@ -1,0 +1,38 @@
+!TABULAR = "C_4,
+            {datafield2 = C_6},
+            {object.name = C_7},
+            {object.id = C_8},
+            {time = EVENT_TIME},
+            {datafield1 = SESSION_ID},
+            USER_NAME"
+
+!COND = in_list(['Изменение','Создание','Удаление'], $C_5) and ($EVENT_TYPE == "VW_CRIT_DIARY_PARAM_VARS")
+
+subject = "account"
+action = switch $C_5
+    case "Изменение" "modify"
+    case "Создание" "create"
+    case "Удаление" "remove"
+endswitch
+object = "resource"
+status = "success"
+
+subject.name = $USER_NAME
+object.state = $C_5
+
+if $C_4 == "Параметр" then
+    object.type = "operation parameter"
+elif $C_4 == "Переменная" then
+    object.type = "operation variable"
+endif
+
+# datafield1 - id сессии
+# datafield2 - Подробности
+
+importance = "info"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_options_and_variables_action"

@@ -1,0 +1,156 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"multiscanner"|"sandbox"} - {msgid="scan_machine.file_result.melded"} - {$json_data=REST}'
+
+subject = "application"
+        
+subformula "item_handler"
+    TEXT = "{REST}"
+
+    $next = bool($array[$current + 1])
+    $current = $current + 1
+    $item = $array[$current]
+endsubformula
+
+# Parsing JSON submessage from PT Multiscanner
+submessage('JSON', 'multiscanner', $json_data)
+subformula 'multiscanner'
+    JSON = 'scan_id'
+    
+    object.id = $scan_id 
+    chain_id = $scan_id   #id скана  
+    
+    if $file['mime_type'] != "" then
+        object.type = $file['mime_type']
+    endif
+    
+    if $file['name'] != "" then
+        object.storage.fullpath = replace($file['name'], "", "/")
+        
+        $splitted_parts = csv(object.storage.fullpath, "\\", "'")
+        object.storage.name = $splitted_parts[length($splitted_parts) - 1]
+        if length($splitted_parts) > 1 then
+            object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+        endif
+    endif
+    
+    if $file != null then
+        object.property = "size"
+        object.value = $file['size']
+        
+        object.hash.sha256 = upper($file['sha256'])
+        object.hash.md5 = upper($file['md5'])
+        object.hash.sha1 = upper($file['sha1'])
+        
+        object.state = lower($result['verdict']['threat_level'])
+    elif $url['value'] != null then
+        $url_net_obj = append($url_net_obj, $url['value'])
+    endif
+
+    if lower($result['verdict']['threat_level']) == 'clean' or lower($result['verdict']['threat_level']) == 'unknown' then 
+        action = "info"
+        object = "resource"
+        importance = "low"
+        
+        reason = lower($result['verdict']['threat_level'])
+    else
+        action = "detect"
+        object = "malware"
+        
+        if $result['verdict']['threat']['classification'] != "" then $threat_classification = $result['verdict']['threat']['classification'] else $threat_classification = "-" endif
+        if $result['verdict']['threat']['family'] != "" then $threat_family = $result['verdict']['threat']['family'] else $threat_family = "-" endif
+        if $result['verdict']['threat']['platform'] != "" then $threat_platform = $result['verdict']['threat']['platform'] else $threat_platform = "-" endif
+        
+        reason = lower(join([$threat_classification, $threat_family, $threat_platform], "|"))
+        
+        datafield1 = lower($threat_classification)
+        datafield2 = lower($threat_family)
+        datafield3 = lower($threat_platform)   
+        
+        importance = "high"
+    endif
+    
+    $errors = $result['errors']
+    if ($errors['internal'] or $errors['corrupted'] or $errors['encrypted'] or $errors['limit_exceeded']) == false then
+        status = "success"
+    else
+        status = "failure"
+        reason = "scan finished with error(s)"
+        if $errors['internal'] == true then datafield8 = "internal|" + datafield8 endif
+        if $errors['corrupted'] == true then datafield8 = "corrupted|" + datafield8 endif
+        if $errors['encrypted'] == true then datafield8 = "encrypted|" + datafield8 endif
+        if $errors['limit_exceeded'] == true then datafield8 = "limit_exceeded|" + datafield8 endif
+    endif
+    
+    $array = $network_objects
+    $current = -1
+    submessage("TEXT", "item_handler", "")
+    if bool($item) then
+        $domain = append($domain, $item['domain']['value'])
+        $url_net_obj = append($url_net_obj, $item['url']['value'])
+        $ip = append($ip, $item['ip']['value'])
+        submessage("TEXT", "item_handler", "")
+    endif
+    if $next then
+        $domain = append($domain, $item['domain']['value'])
+        $url_net_obj = append($url_net_obj, $item['url']['value'])
+        $ip = append($ip, $item['ip']['value'])
+        submessage("TEXT", "item_handler", "")
+    endif
+    if $next then
+        $domain = append($domain, $item['domain']['value'])
+        $url_net_obj = append($url_net_obj, $item['url']['value'])
+        $ip = append($ip, $item['ip']['value'])
+        submessage("TEXT", "item_handler", "")
+    endif
+    if $next then
+        $domain = append($domain, $item['domain']['value'])
+        $url_net_obj = append($url_net_obj, $item['url']['value'])
+        $ip = append($ip, $item['ip']['value'])
+        submessage("TEXT", "item_handler", "")
+    endif
+    if $next then
+        $domain = append($domain, $item['domain']['value'])
+        $url_net_obj = append($url_net_obj, $item['url']['value'])
+        $ip = append($ip, $item['ip']['value'])
+        submessage("TEXT", "item_handler", "")
+    endif
+    $domain = remove($domain, null)
+    $url_net_obj = remove($url_net_obj, null)
+    $ip = remove($ip, null)
+    
+    if $domain[0] != null then
+        datafield12 = datafield12 + "domain:" + $domain[0] + "\r\n"
+    endif
+    
+    if $ip[0] != null then
+        datafield12 = datafield12 + "ip:" + $ip[0] + "\r\n"
+    endif
+    
+    if $url_net_obj[0] != null then
+        datafield12 = datafield12 + "url:" + $url_net_obj[0] + "\r\n"
+    endif
+    
+    datafield12 = strip(datafield12, "","\r\n")
+    
+    # datafield12 - network_objects
+    
+    object.state = lower($result['verdict']['threat_level'])   # threat level
+    if lower($result['state']) == "unscanned" then object.state = "unscanned" endif
+    
+    #datafield11 = lower($result['verdict']['threat_level']) 
+    
+    time = epoch_to_datetime(number($created))
+endsubformula
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multiscanner"
+event_src.category = "Anti-virus"
+
+id = "PT_Positive_Technologies_Multiscanner_syslog_scan_machine_melded"

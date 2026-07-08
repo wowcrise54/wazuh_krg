@@ -1,0 +1,63 @@
+TABULAR = '{msgid=auditType_actionI18nKey},
+           author_id,
+           author_name,
+           author_type,
+           affectedObjects,
+           changedValues,
+           extraAttributes,
+           timestamp_epochSecond'
+
+COND = in_list([
+            "audit.logging.summary.login.success",
+            "audit.logging.summary.user.logout",
+            "audit.logging.summary.login.failed"
+       ], $auditType_actionI18nKey)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", '{"affectedObjects_json": ' + $affectedObjects + '}')
+if $affectedObjects_json[0]["type"] == "User" then
+    subject = "account"
+endif
+
+object = "application"
+
+$act_type = csv(msgid, ".", "'")
+switch $act_type[3]
+    case "login"
+        action = "login"
+        status = if $act_type[4] == "success" then "success" else "failure" endif
+    case "user"
+        action = "logout"
+        status = "success"
+endswitch
+
+if $affectedObjects_json[0]["type"] == "User" then
+    subject.account.fullname = $affectedObjects_json[0]["name"]
+    subject.account.id = $affectedObjects_json[0]["id"]
+endif
+
+$s_login_source = find_substr($extraAttributes, '{"nameI18nKey":"audit.logging.extra.attribute.key.login.source"')
+$e_login_source = find_substr(substr($extraAttributes, $s_login_source, length($extraAttributes)), '"}')
+$login_source = substr($extraAttributes, $s_login_source, $e_login_source+2)
+if $login_source != null and length($login_source) != 0 then
+    submessage("JSON", "parse_json", '{"login_source_json": ' + $login_source + '}')
+    logon_service = $login_source_json["value"]
+endif
+
+src.ip = $source
+
+time = epoch_to_datetime($timestamp_epochSecond)
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "atlassian"
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_odbc_Audit_Security_Authentication"

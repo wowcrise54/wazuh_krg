@@ -1,0 +1,215 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL("]")} INFO - {$class=STRING} - {$tag=WORD}: {$raw_message=REST}'
+COND = in_list([
+           "build_type_create", "build_type_delete",
+           "build_type_copy", "build_type_move", 
+           "build_type_pause", "build_type_activate",
+           "build_type_edit_settings", "build_type_external_id_change",
+           "build_type_create_from_template"
+       ], $tag)
+
+subject = "account"
+object = "configuration"
+status = "success"
+
+subformula "parse_user"
+    TEXT = "'{$user_name=UNTIL('\\'')} {'('$user_fullname=UNTIL(')')?} {'{'}id={$user_id=NUMBER}{'}'}"
+endsubformula
+
+subformula "parse_user"
+    # since version 2023
+    TEXT = "user with id={$user_id=NUMBER}"
+endsubformula
+
+subformula "parse_build_type_info"
+    TEXT = "id={$build_type_id=LITERAL*}, internal id=bt{$build_type_int_id=NUMBER}"
+endsubformula
+
+subformula "parse_build_type_info"
+    TEXT = "id={$build_type_id=LITERAL*}/bt{$build_type_int_id=NUMBER}"
+endsubformula
+
+subformula "parse_build_type"
+    TEXT = "{$bt_fullname=UNTIL(' {')} {$build_type_info=UNTIL('}')}"
+    
+    submessage("TEXT", "parse_build_type_info", $build_type_info)
+    
+    $build_type_list = csv($bt_fullname, " / ", "'")
+    $build_type_name = $build_type_list[length($build_type_list)-1]
+    $project_fullpath = strip($bt_fullname, "", " / " + $build_type_name)
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\" with comment \"')} {$comment=REST}"
+    
+    reason = strip($comment, '', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\"')}"
+endsubformula
+
+subformula "by_comment"
+    TEXT = "with comment {$comment=REST}"
+    
+    reason = strip($comment, '"', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "{REST}"
+endsubformula
+
+subformula "create"
+    TEXT = "\"{$build_type=UNTIL('\" was created')} {$by_comment=REST}"
+    
+    action = "create"
+endsubformula
+
+subformula "create_from_template"
+    TEXT = "\"{$build_type=UNTIL('\" was created from \"')} {$template_info=UNTIL('\" template ')} {$by_comment=REST}"
+    
+    action = "create"
+    
+    submessage("TEXT", "parse_build_type", $template_info)
+    
+    object.property = "template_id"
+    object.value = $build_type_id  # Built Type Template ID in this case
+    
+    $bt_fullname = null
+    $build_type_info = null
+    $build_type_list = null
+    $build_type_name = null
+    $project_fullpath = null
+    $build_type_id = null
+    $build_type_int_id = null
+endsubformula
+
+subformula "edit_settings"
+    TEXT = "\"{$build_type=UNTIL('\" build configuration settings were edited (')} {$changes=UNTIL(')')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    $changes = keyvalue(strip($changes, '"', '"'), ",", ":", "'")
+    object.version = $changes["version before"]
+endsubformula
+
+subformula "copy"
+    TEXT = "\"{$build_type_target=UNTIL('\" was copied from \"')} {$build_type=UNTIL('\"')} {$by_comment=REST}"
+    
+    action = "copy"
+endsubformula
+
+subformula "move"
+    TEXT = "\"{$build_type_target=UNTIL('\" was moved from \"')} {$bt_fullname=UNTIL('\"')} {$by_comment=REST}"
+    
+    action = "move"
+    
+    $build_type_list = csv($bt_fullname, " / ", "'")
+    $build_type_name = $build_type_list[length($build_type_list)-1]
+endsubformula
+
+subformula "pause"
+    TEXT = "\"{$build_type=UNTIL('\" was paused')} {$by_comment=REST}"
+    
+    action = "disable"
+endsubformula
+
+subformula "activate"
+    TEXT = "\"{$build_type=UNTIL('\" was activated')} {$by_comment=REST}"
+    
+    action = "enable"
+endsubformula
+
+subformula "delete"
+    TEXT = "\"{$build_type=UNTIL('\" was deleted')} {$by_comment=REST}"
+    
+    action = "remove"
+endsubformula
+
+subformula "external_id_change"
+    TEXT = "\"{$build_type=UNTIL('\" ID was changed from \"')} {$old_id=UNTIL('\" to \"')}{$new_id=UNTIL('\"')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    object.property = "id"
+    object.value = $old_id
+    object.new_value = $new_id
+endsubformula
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+switch $tag
+    case "build_type_create" submessage("TEXT", "create", $raw_message)
+    case "build_type_create_from_template" submessage("TEXT", "create_from_template", $raw_message)
+    case "build_type_edit_settings" submessage("TEXT", "edit_settings", $raw_message)
+    case "build_type_copy" submessage("TEXT", "copy", $raw_message)
+    case "build_type_move" submessage("TEXT", "move", $raw_message)
+    case "build_type_pause" submessage("TEXT", "pause", $raw_message)
+    case "build_type_activate" submessage("TEXT", "activate", $raw_message)
+    case "build_type_delete" submessage("TEXT", "delete", $raw_message)
+    case "build_type_external_id_change" submessage("TEXT", "external_id_change", $raw_message)
+endswitch
+
+submessage("TEXT", "by_comment", $by_comment)
+submessage("TEXT", "parse_user", $user)
+submessage("TEXT", "parse_build_type", $build_type)
+
+subject.account.fullname = $user_fullname
+subject.account.name = $user_name
+subject.account.id = $user_id
+
+object.id = $build_type_id
+object.name = $build_type_name
+object.fullpath = $bt_fullname
+object.type = "build_type"
+
+if $tag == "build_type_copy" then
+    object.property = "fullpath|id"
+    object.value = $bt_fullname + " | " + $build_type_id
+    
+    $build_type_id = null
+    $bt_fullname = null
+    
+    submessage("TEXT", "parse_build_type", $build_type_target)
+    object.new_value = $bt_fullname + " | " + $build_type_id
+elif $tag == "build_type_move" then
+    object.property = "fullpath"
+    object.value = $bt_fullname
+    
+    $bt_fullname = null
+    
+    submessage("TEXT", "parse_build_type", $build_type_target)
+    object.new_value = $bt_fullname
+endif
+
+if $comment != "" then
+    reason = strip($comment, 'with comment "', '"')
+endif
+
+datafield1 = $project_fullpath  # Project Fullpath
+datafield4 = $build_type_id  # Build Type ID
+
+numfield4 = $build_type_int_id  # Build Type Internal ID
+
+time = replace($time, ".", ",")
+msgid = $tag
+importance = "low"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Activities_BuildType_Management"

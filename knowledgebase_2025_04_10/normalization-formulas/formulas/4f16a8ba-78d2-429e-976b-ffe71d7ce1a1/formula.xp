@@ -1,0 +1,41 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1291"
+       and (
+        $event_category == "Контроль конфигурации"
+        or $event_category == "Configuration control"
+       )
+       and (
+        $event_type == "Failure Audit"
+        or $event_type == "Аудит отказов"
+        or $event_type == "Audit failure"
+       )
+
+action = "alert"
+object = "configuration"
+status = "success"
+
+reason = $event_message
+
+msgid = $event_id
+importance = "high"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Контроль конфигурации" then
+    event_src.subsys = "configuration control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1291_hardware_configuration_changed"

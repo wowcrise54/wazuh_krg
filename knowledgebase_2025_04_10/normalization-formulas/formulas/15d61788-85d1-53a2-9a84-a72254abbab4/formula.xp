@@ -1,0 +1,34 @@
+JSON = 'Provider = "Microsoft-Windows-Kernel-Process"'
+COND = $EventID == 11 or $EventID == 12
+
+subject = "process"
+
+if $OpcodeName == "Start" then
+    action = "start"
+elif $OpcodeName == "Stop" then
+    action = "stop"
+endif
+
+object = "process"
+status = "success"
+
+subject.process.id = $ProcessID
+
+object.process.id = $EventData["FrozenProcessID"]
+
+datafield1 = $ThreadID                        # Thread ID
+if $Name != "" then datafield2 = $Name endif  # process name if not empty
+
+time = $Timestamp
+msgid = $EventID
+importance = "info"
+
+category.generic = "Process"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_ETW_Process_freeze_unfreeze"

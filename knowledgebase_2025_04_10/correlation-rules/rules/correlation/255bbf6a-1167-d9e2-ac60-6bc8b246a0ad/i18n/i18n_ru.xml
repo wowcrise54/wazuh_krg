@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Использование скрипта из измененного набора инструмента Impacket, позволяющего удаленно сделать дамп памяти процесса lsass</Description>
+  <EventDescriptions>
+    <EventDescription id="77e10f83-5bdb-6556-b725-c5ad04800cd3">Пользователь {subject.account.name} запустил процесс с закодированной в base64 командой, что породило процесс с известными паттернами инструмента Impacket в командной строке: "{datafield1}" на узле {event_src.host}</EventDescription>
+    <EventDescription id="9553a075-e644-b3e5-de96-ddee0d663988">Процесс {subject.process.name} добавил на узле {event_src.host} значения ключа реестра {reason}, являющиеся известными паттернами инструмента Impacket</EventDescription>
+    <EventDescription id="ec9db3bd-a6f2-f7bf-888e-fb2627b1bc30">Пользователь {subject.account.name} с узла {src.host} удаленно использовал на узле {event_src.host} файлы {reason}, вероятно являющиеся вредоносной библиотекой SSP и дампом lsass. Это является признаком использования измененного инструмента Impacket</EventDescription>
+  </EventDescriptions>
+</Localization>

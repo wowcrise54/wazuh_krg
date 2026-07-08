@@ -1,0 +1,115 @@
+# {"class":"vim.event.VmUpgradingEvent","key":"63035","chainId":"63035","createdTime":"2022-02-25 09:59:15.833999+00:00","userName":"root","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"Datacenter","datacenter":"vim.Datacenter:datacenter-3"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"10.125.4.3","computeResource":"vim.ComputeResource:domain-s8"},"host":{"class":"vim.event.HostEventArgument","name":"10.125.4.3","host":"vim.HostSystem:host-10"},"vm":{"class":"vim.event.VmEventArgument","name":"vCSA 7","vm":"vim.VirtualMachine:vm-13"},"fullFormattedMessage":"Upgrading virtual machine compatibility of vCSA 7 in Datacenter to ESXi 6.7 and later (VM version 14)","template":"True","version":"vmx-14"}
+
+JSON = ''
+COND = in_list([
+           "VmReconfiguredEvent",
+           "VmUpgradingEvent",
+           "VmUpgradeCompleteEvent",
+           "VmUpgradeFailedEvent",
+           "VmRenamedEvent",
+           "VmAutoRenameEvent"
+       ], strip($class, "vim.event.", ""))
+ 
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+if $class == "vim.event.VmReconfiguredEvent" then
+    action = "modify"
+elif in_list(["VmRenamedEvent", "VmAutoRenameEvent"], strip($class, "vim.event.", "")) then
+    action = "modify"
+else
+    action = "upgrade"
+endif
+
+object = "virtual_machine"
+
+if $class == "vim.event.VmUpgradeFailedEvent" then
+    status = "failure"
+elif $class == "vim.event.VmUpgradingEvent" then
+    status = "ongoing"
+else
+    status = "success"
+endif 
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.name = $vm["name"]
+object.id = strip($vm["vm"], "vim.VirtualMachine:", "")
+
+$modified = replace($configChanges["modified"], "", "\n")
+$modified = replace($modified, "'", '"')
+$added = replace($configChanges["added"], "", "\n")
+$added = replace($added, "'", '"')
+$deleted = replace($configChanges["deleted"], "", "\n")
+$deleted = replace($deleted, "'", '"')
+
+if $class == "vim.event.VmReconfiguredEvent" then
+    object.property = "configuration"
+    object.new_value = "Modified: " + $modified + "  Added: " + $added + "  Deleted: " + $deleted
+elif in_list(["VmRenamedEvent", "VmAutoRenameEvent"], strip($class, "vim.event.", "")) then
+    object.property = "name"
+    object.value = $oldName
+    
+    if (substr($newName, 0, 14) == "/vmfs/volumes/") and (substr($newName, -4, 4) == ".vmx") then
+        $newName_list = csv($newName, "/", "")
+        $newName = strip($newName_list[length($newName_list)-1], "", ".vmx")
+    endif
+    
+    object.new_value = $newName
+elif $class == "vim.event.VmUpgradingEvent" then
+    $prefix = join(["Upgrading virtual machine compatibility of", $vm["name"], "in", $datacenter["name"], "to "], " ")
+    object.property = "compatibility_version"
+    object.new_value = strip($fullFormattedMessage, $prefix, "")
+elif $class == "vim.event.VmUpgradeCompleteEvent" then
+    $prefix = "Virtual machine compatibility upgraded to "
+    object.property = "compatibility_version"
+    object.new_value = strip($fullFormattedMessage, $prefix, "")
+endif
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+ 
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield2 = $ds["name"]  # Datastore Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = object.name  # Entity Name
+datafield5 = $vm["name"]  # Virtual Machine Name
+datafield6 = $host["name"]  # Host Name
+datafield7 = $parent["name"]  # Parent Entity Name
+datafield10 = object.id  # Internal Entity ID
+ 
+chain_id = $chainId
+ 
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "low"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_Modify_VM"

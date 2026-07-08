@@ -1,0 +1,24 @@
+TEXT = '{time=DATETIME} [{WORD}] info: {$success="Успешный вход"|"Неудачная попытка входа"} в веб-интерфейс: {"{"} {$raw_kv=STRING}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = if $success != null then "success" else "failure" endif
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.account.name = $kv['"login"']
+
+src.ip = $kv['"ip"']
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_login_to_web"

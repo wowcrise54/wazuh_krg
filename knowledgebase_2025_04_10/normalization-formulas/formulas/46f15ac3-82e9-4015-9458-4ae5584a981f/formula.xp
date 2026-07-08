@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?} PINsafe[{STRING} INFO
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} {subject.name=STRING} - User
+        {$user=STRING} has had their PIN reset.'
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+object.name = strip($user, "\"", "\"")
+object.state = "PIN reset"
+
+time = recv_time
+importance = "info"
+
+event_src.vendor = "swivel_secure"
+event_src.title = "pinsafe"
+event_src.category = "AAA"
+
+id = "PT_Swivel_Secure_PINsafe_syslog_reset_pin"

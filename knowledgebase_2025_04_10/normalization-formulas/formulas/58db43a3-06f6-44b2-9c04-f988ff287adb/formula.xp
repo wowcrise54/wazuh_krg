@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {WORDDASH}: {NUMBER}: info: {msgid="qemuMonitorJSONIOProcessLine"}:
+        {NUMBER} : QEMU_MONITOR_RECV_EVENT: mon={STRING} event={$json=REST}'
+
+object = "session"
+status = "success"
+
+submessage("JSON", "SPLIT", $json)
+
+object.type = "VNC"
+
+subformula "SPLIT"
+    # Извлечение action, src.ip, src.port, dst.ip, dst.port из $rest
+    JSON = 'event'
+    !COND = $event == "VNC_CONNECTED" or $event == "VNC_DISCONNECTED"
+    action = switch $event
+        case "VNC_CONNECTED" "start"
+        case "VNC_DISCONNECTED" "stop"
+    endswitch
+    src.ip = $data['client']['host']
+    src.port = $data['client']['service']
+    dst.ip = $data['server']['host']
+    dst.port = $data['server']['service']
+endsubformula
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "qemu_kvm_libvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_QEMU_KVM_libvirt_syslog_VNC_session_start_stop"

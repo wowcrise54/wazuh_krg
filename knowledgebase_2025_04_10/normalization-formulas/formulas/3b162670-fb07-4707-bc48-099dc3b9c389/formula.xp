@@ -1,0 +1,45 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Системные сообщения"
+       and $event_id == 6
+       and find_substr($event_message, "added by") != null
+
+subject = "account"
+action = "modify"
+object = "user_group"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение object.value, subject.name и object.name из $event_message
+    TEXT = "Системное сообщение\n\r\n\ruser {object.value=WORDDASH} added by
+            {subject.name=WORDDASH} to group {object.name=WORDDASH}{'\n'?}"
+
+    object.property = "account"
+endsubformula
+
+object.state = "member added"
+
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_user_add_to_group"

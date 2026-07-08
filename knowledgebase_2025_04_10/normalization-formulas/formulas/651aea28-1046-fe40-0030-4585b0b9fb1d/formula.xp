@@ -1,0 +1,87 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL("]")} INFO - {STRING} - {$raw_message=REST}'
+COND = find_substr($raw_message, "External process is launched") != null
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+subformula "parse_user"
+    TEXT = "'{$user_name=UNTIL('\\'')} {'('$user_fullname=UNTIL(')')?} {'{'}id={$user_id=NUMBER}{'}'}"
+endsubformula
+
+subformula "parse_user"
+    # since version 2023
+    TEXT = "user with id={$user_id=NUMBER}"
+endsubformula
+
+subformula "parse_user"
+    # since version 2023
+    TEXT = "user {$user_name=WORDDASH} with id={$user_id=NUMBER}"
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\" with comment \"')} {$comment=REST}"
+    
+    reason = strip($comment, '', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\"')}"
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by {$user=REST}"
+endsubformula
+
+subformula "by_comment"
+    TEXT = "with comment {$comment=REST}"
+    
+    reason = strip($comment, '"', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "{REST}"
+endsubformula
+
+subformula "external_process_command_line"
+    TEXT = "External process is launched {$by_comment=UNTIL('.')} Command line: {object.process.cmdline=REST}"
+    
+    datafield20 = $by_comment
+endsubformula
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+submessage("TEXT", "external_process_command_line", $raw_message)
+
+submessage("TEXT", "by_comment", $by_comment)
+submessage("TEXT", "parse_user", $user)
+
+subject.account.fullname = $user_fullname
+subject.account.name = $user_name
+subject.account.id = $user_id
+
+
+time = replace($time, ".", ",")
+msgid = "external_process_command_line"
+importance = "low"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Activities_External_Process_Command_Line"

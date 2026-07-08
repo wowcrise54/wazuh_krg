@@ -1,0 +1,1742 @@
+query GetProcessChain($host, $proc_id, $proc_name) from Process_Chains { 
+    host == $host
+    and proc_id == $proc_id
+    and proc_name == $proc_name
+}
+    qhandler {
+        $subject_account = subject_account
+        $subject_session_id = subject_session_id
+        $object_session_id = object_session_id
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $object_account = object_account
+        $first_cmdline = first_cmdline
+        $second_cmdline = second_cmdline
+        $proc_hash = proc_hash
+        $proc_meta = proc_meta
+        $step = step
+        $parent_proc_name = parent_proc_name
+        $parent_proc_id = parent_proc_id
+        
+    }
+
+query GetProcessChain_pid_ppid($host, $proc_id, $parent_proc_id) from Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and parent_proc_id == $parent_proc_id
+}
+    qhandler {
+        $subject_account = subject_account
+        $subject_session_id = subject_session_id
+        $object_session_id = object_session_id
+        $proc_name = proc_name
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $object_account = object_account
+        $first_cmdline = first_cmdline
+        $second_cmdline = second_cmdline
+        $proc_hash = proc_hash
+        $proc_meta = proc_meta
+        $step = step
+        $parent_proc_name = parent_proc_name
+        $parent_proc_id = parent_proc_id
+    }
+    
+query GetProcessChain_no_name($host, $proc_id, $object_account) from Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and object_account == $object_account
+}
+    qhandler {
+        $counter = count()
+        $max_last_changed = max(time_like_number)
+        $time_like_number = time_like_number
+        $subject_account = subject_account
+        $subject_session_id = subject_session_id
+        $object_session_id = object_session_id
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $proc_name = proc_name
+        $object_account = object_account
+        $first_cmdline = first_cmdline
+        $second_cmdline = second_cmdline
+        $proc_hash = proc_hash
+        $proc_meta = proc_meta
+        $step = step
+        $parent_proc_name = parent_proc_name
+        $parent_proc_id = parent_proc_id
+    }
+
+query GetProcessChain_no_name_newest($host, $proc_id, $object_account, $max_last_changed) from Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and object_account == $object_account
+    and time_like_number == $max_last_changed
+}
+    qhandler {
+        $subject_account = subject_account
+        $subject_session_id = subject_session_id
+        $object_session_id = object_session_id
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $proc_name = proc_name
+        $object_account = object_account
+        $first_cmdline = first_cmdline
+        $second_cmdline = second_cmdline
+        $proc_hash = proc_hash
+        $proc_meta = proc_meta
+        $step = step
+        $parent_proc_name = parent_proc_name
+        $parent_proc_id = parent_proc_id
+    }
+
+
+query CheckIfWhitelisted($rule, $value, $tag) from Common_whitelist_for_labeling {
+    (rule == $rule or rule == "*")
+    and specific_value == $value
+    and tag == $tag
+}
+
+query CheckIfWhitelisted_regex($rule, $value, $tag) from Common_whitelist_for_labeling_regex {
+    (rule == $rule or rule == "*")
+    and regex_match($value, column::specific_value)
+    and tag == $tag
+}
+
+query GetAccountSID($username, $domain) from Known_Windows_Accounts {
+        column::name == $username
+        and (
+            column::domain_full == $domain
+            or column::domain_netbios == $domain
+        )
+} 
+    qhandler {
+        $id = id
+        $storage = storage
+        $domain_full = domain_full
+    }
+
+query GetAccountNameDomain($sid) from Known_Windows_Accounts {
+    column::id == $sid
+} 
+    qhandler {
+        $username = name
+        $domain_full = domain_full
+        $domain_netbios = domain_netbios
+        $storage = storage
+    }
+
+query GetBase64Regex($type) from Generic_Regexes {
+    column::regex_type == $type
+}
+
+query GetURLRegex() from Generic_Regexes {
+    column::regex_type == "common_url"
+}
+
+
+event Chain_labeled:
+    key:
+        event_src.host
+    filter {
+        correlation_name != null
+        and ( 
+            event_src.title == "windows"
+            or event_src.title == "sysmon"
+        )
+        and find_substr(labels, "proc_chain_enriched") == null
+        and find_substr(labels, "proc_chain_exclude") == null
+        and (
+            # Убрал исключение по "←", чтобы корреляции с цепочкой проходили через вайтлист по цепочке
+            object.process.id != null or object.process.parent.id != null or subject.process.id != null
+        )
+    
+    }
+
+
+enrichment Process_chain_addition
+    enrich Chain_labeled:
+        enrich_fields {
+            # Данный фильтр исключает попадание в условие событий Powershell             
+            if object.process.id != null and (object.process.name != null or (object.process.parent.id != null and object.process.id != object.process.parent.id)) then
+                if object.process.name != null then
+                    $query_obj_proc = exec_query("GetProcessChain", [event_src.host, number(object.process.id), object.process.name])
+                else
+                    $query_obj_proc = exec_query("GetProcessChain_pid_ppid", [event_src.host, number(object.process.id), number(object.process.parent.id)])
+                    object.process.name = $query_obj_proc["$proc_name"]
+                    if object.process.name != null then
+                        labels = labels + "|obj_proc_name_enriched"  # Метка для валидации проставления object.process.name
+                    endif
+                endif
+                
+                if $query_obj_proc["$chain_proc_names"] != null and (
+                    exec_query("CheckIfWhitelisted", [correlation_name, lower($query_obj_proc["$chain_proc_names"]), "chain"]) 
+                    or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower($query_obj_proc["$chain_proc_names"]), "chain"])) then
+                    drop
+                endif
+
+                if $query_obj_proc["$chain_proc_names"] != null 
+                        and (
+                            (object.process.parent.id == null and object.process.parent.name == null)
+                            or (object.process.parent.id != null and object.process.parent.name == null and string($query_obj_proc["$parent_proc_id"]) == object.process.parent.id)
+                            or (object.process.parent.name != null and object.process.parent.id == null and string($query_obj_proc["$parent_proc_name"]) == object.process.parent.name)
+                            or (object.process.parent.name != null and object.process.parent.id != null and string($query_obj_proc["$parent_proc_name"]) == object.process.parent.name and string($query_obj_proc["$parent_proc_id"]) == object.process.parent.id)
+                        )
+                    then
+                    object.process.chain = $query_obj_proc["$chain_proc_names"]
+                    datafield19 = $query_obj_proc["$chain_proc_info"]
+
+                    if object.process.parent.name == null and $query_obj_proc["$parent_proc_name"] != null then 
+                        object.process.parent.name = $query_obj_proc["$parent_proc_name"]
+                        labels = labels + "|obj_proc_parent_name_enriched"  # Метка для валидации проставления object.process.parent.name
+                    endif
+                    
+                    if object.process.parent.id == null and $query_obj_proc["$parent_proc_id"] != null then
+                        object.process.parent.id = $query_obj_proc["$parent_proc_id"]
+                        labels = labels + "|obj_proc_parent_id_enriched"  # Метка для валидации проставления object.process.parent.id
+                    endif
+
+                    if object.process.cmdline == null and $query_obj_proc["$first_cmdline"] != null then
+                        object.process.cmdline = $query_obj_proc["$first_cmdline"]
+                        labels = labels + "|obj_proc_cmdline_enriched"  # Метка для валидации проставления object.process.cmdline
+                    endif
+                    if object.process.parent.cmdline == null and $query_obj_proc["$second_cmdline"] != null then
+                        object.process.parent.cmdline = $query_obj_proc["$second_cmdline"]
+                        labels = labels + "|obj_proc_parent_cmdline_enriched"  # Метка для валидации проставления object.process.parent.cmdline
+                    endif
+                    if object.process.hash == null and $query_obj_proc["$proc_hash"] != null then
+                        object.process.hash = $query_obj_proc["$proc_hash"]
+                        object.process.hash.imphash = regex($query_obj_proc["$proc_hash"], "IMPHASH:([A-Z0-9]+)\\b", 1)
+                        object.process.hash.md5 = regex($query_obj_proc["$proc_hash"], "MD5:([A-Z0-9]+)\\b", 1)
+                        object.process.hash.sha1 = regex($query_obj_proc["$proc_hash"], "SHA1:([A-Z0-9]+)\\b", 1)
+                        object.process.hash.sha256 = regex($query_obj_proc["$proc_hash"], "SHA256:([A-Z0-9]+)\\b", 1)
+                        
+                        labels = labels + "|obj_proc_hash_enriched"  # Метка для валидации проставления object.process.hash
+                    endif
+                    if object.process.meta == null and $query_obj_proc["$proc_meta"] != null then
+                        object.process.meta = $query_obj_proc["$proc_meta"]
+                        labels = labels + "|obj_proc_meta_enriched"  # Метка для валидации проставления object.process.meta
+                    endif
+                    if  object.account.session_id == null and $query_obj_proc["$object_session_id"] != null then
+                        object.account.session_id = $query_obj_proc["$object_session_id"]
+                        labels = labels + "|obj_acc_ses_enriched"  # Метка для валидации проставления object.process.meta
+                    endif
+
+                    # Проставляем object УЗ, если ее нет в событии, но она есть в табличном списке
+                    if object.account.name == null and object.account.domain == null and $query_obj_proc["$object_account"] != null then
+                        $separator_pos = find_substr($query_obj_proc["$object_account"], "\\")
+                        if $separator_pos != null then
+                            object.account.domain = substr($query_obj_proc["$object_account"], 0, $separator_pos)
+                            object.account.name = substr($query_obj_proc["$object_account"], $separator_pos + 1, length($query_obj_proc["$object_account"]))
+                            object.account.id = null
+                        else
+                            object.account.name = $query_obj_proc["$object_account"]
+                            object.account.id = null
+                        endif
+                        # меняем SID и provider, если из ТС с цепочками подставилась локальная УЗ
+                        if object.account.domain == "nt authority" then
+                            object.account.id = switch lower(object.account.name)
+                                case "anonymous logon" "S-1-5-7"
+                                case "iusr"            "S-1-5-17"
+                                case "system"          "S-1-5-18"
+                                case "local service"   "S-1-5-19"
+                                case "network service" "S-1-5-20"
+                                case "анонимный вход"  "S-1-5-7"
+                                case "система"         "S-1-5-18"
+                                case "центр nt"        "S-1-5-19"
+                                case "сетевая служба"  "S-1-5-20"
+                            endswitch
+                            object.account.provider = "local"
+                        endif
+
+                        if object.account.name != null then
+                            labels = labels + "|obj_acc_name_enriched"  # Метка для валидации проставления object.account.name
+                        endif
+                        if object.account.domain != null then
+                            labels = labels + "|obj_acc_domain_enriched"  # Метка для валидации проставления object.account.domain
+                        endif 
+                    endif
+                    if object.account.domain != null and object.account.name != null and object.account.id == null then
+                        $query_obj_acc_by_obj_proc = exec_query("GetAccountSID", [object.account.name, object.account.domain])
+                        if $query_obj_acc_by_obj_proc["$id"] != null then
+                            object.account.id = $query_obj_acc_by_obj_proc["$id"]
+                            object.account.provider = $query_obj_acc_by_obj_proc["$storage"]
+                            if $query_obj_acc_by_obj_proc["$domain_full"] != null and $query_obj_acc_by_obj_proc["$domain_full"] != object.account.domain then 
+                                object.account.domain = $query_obj_acc_by_obj_proc["$domain_full"] 
+                            endif
+                        endif
+                    endif
+
+                    # Проставляем subject УЗ, если ее нет в событии, но она есть в табличном списке
+                    if subject.process.id == null then
+                        if  subject.account.session_id == null and $query_obj_proc["$subject_session_id"] != null then
+                            subject.account.session_id = $query_obj_proc["$subject_session_id"]
+                            labels = labels + "|subj_acc_ses_enriched"  # Метка для валидации проставления object.process.meta
+                        endif
+                        if subject.account.name == null and subject.account.domain == null and $query_obj_proc["$subject_account"] != null then
+                            $separator_pos = find_substr($query_obj_proc["$subject_account"], "\\")
+                            if $separator_pos != null then
+                                subject.account.domain = substr($query_obj_proc["$subject_account"], 0, $separator_pos)
+                                subject.account.name = substr($query_obj_proc["$subject_account"], $separator_pos + 1, length($query_obj_proc["$subject_account"]))
+                                subject.account.id = null
+                            else
+                                subject.account.name = $query_obj_proc["$subject_account"]
+                                subject.account.id = null
+                            endif
+                            # меняем SID и provider, если из ТС с цепочками подставилась локальная УЗ
+                            if subject.account.domain == "nt authority" then
+                                subject.account.id = switch lower(subject.account.name)
+                                    case "anonymous logon" "S-1-5-7"
+                                    case "iusr"            "S-1-5-17"
+                                    case "system"          "S-1-5-18"
+                                    case "local service"   "S-1-5-19"
+                                    case "network service" "S-1-5-20"
+                                    case "анонимный вход"  "S-1-5-7"
+                                    case "система"         "S-1-5-18"
+                                    case "центр nt"        "S-1-5-19"
+                                    case "сетевая служба"  "S-1-5-20"
+                                endswitch
+                                subject.account.provider = "local"
+                            endif
+
+                            if subject.account.name != null then
+                                labels = labels + "|subj_acc_name_enriched"  # Метка для валидации проставления subject.account.name
+                            endif
+                            if subject.account.domain != null then
+                                labels = labels + "|subj_acc_domain_enriched"  # Метка для валидации проставления subject.account.domain
+                            endif
+                        endif                    
+                        if subject.account.domain != null and subject.account.name != null and subject.account.id == null then
+                            $query_subj_acc_by_obj_proc = exec_query("GetAccountSID", [subject.account.name, subject.account.domain])
+                            if $query_subj_acc_by_obj_proc["$id"] != null then
+                                subject.account.id = $query_subj_acc_by_obj_proc["$id"]
+                                subject.account.provider = $query_subj_acc_by_obj_proc["$storage"]
+                                if $query_subj_acc_by_obj_proc["$domain_full"] != null and $query_subj_acc_by_obj_proc["$domain_full"] != subject.account.domain then 
+                                    subject.account.domain = $query_subj_acc_by_obj_proc["$domain_full"]
+                                endif
+                            endif
+                        endif
+                    endif
+                else 
+                    $query_obj_proc = null
+                endif
+            endif
+
+            # Условие для корреляций с заполненными subject.process*
+            if subject.process.id != null and (subject.process.name != null or subject.process.parent.id != null) then
+                if subject.process.name != null then
+                    if subject.process.id != object.process.id or subject.process.name != object.process.name then
+                        $query_subj_proc = exec_query("GetProcessChain", [event_src.host, number(subject.process.id), subject.process.name])
+                    else
+                        $query_subj_proc = $query_obj_proc
+                    endif
+                else 
+                    if subject.process.id != object.process.id or subject.process.parent.id != object.process.parent.id then
+                        $query_subj_proc = exec_query("GetProcessChain_pid_ppid", [event_src.host, number(subject.process.id), number(subject.process.parent.id)])
+                    else
+                        $query_subj_proc = $query_obj_proc
+                    endif
+                    subject.process.name = $query_subj_proc["$proc_name"]
+                    if subject.process.name != null then
+                        labels = labels + "|subj_proc_name_enriched"  # Метка для валидации проставления subject.process.name
+                    endif
+                endif
+
+                # цепочка процессов для процесса-субъекта
+                if $query_subj_proc["$chain_proc_names"] != null and (
+                    exec_query("CheckIfWhitelisted", [correlation_name, lower($query_subj_proc["$chain_proc_names"]), "chain"]) 
+                    or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower($query_subj_proc["$chain_proc_names"]), "chain"])) then
+                    drop
+                endif
+                
+
+                if $query_subj_proc["$chain_proc_names"] != null
+                        and (
+                            (subject.process.parent.id == null and subject.process.parent.name == null)
+                            or (subject.process.parent.id != null and subject.process.parent.name == null and string($query_subj_proc["$parent_proc_id"]) == subject.process.parent.id)
+                            or (subject.process.parent.name != null and subject.process.parent.id == null and string($query_subj_proc["$parent_proc_name"]) == subject.process.parent.name)
+                            or (subject.process.parent.name != null and subject.process.parent.id != null and string($query_subj_proc["$parent_proc_name"]) == subject.process.parent.name and string($query_subj_proc["$parent_proc_id"]) == subject.process.parent.id)
+                        ) 
+                    then
+                    
+                    subject.process.chain = $query_subj_proc["$chain_proc_names"]
+                    datafield18 = $query_subj_proc["$chain_proc_info"]
+                    
+                    if subject.process.parent.name == null and $query_subj_proc["$parent_proc_name"] != null then 
+                        subject.process.parent.name = $query_subj_proc["$parent_proc_name"]
+                        labels = labels + "|subj_proc_parent_name_enriched"  # Метка для валидации проставления subject.process.parent.name
+                    endif
+                    
+                    if subject.process.parent.id == null and $query_subj_proc["$parent_proc_id"] != null then
+                        subject.process.parent.id = $query_subj_proc["$parent_proc_id"]
+                        labels = labels + "|subj_proc_parent_id_enriched"  # Метка для валидации проставления subject.process.parent.id
+                    endif
+
+                    if subject.process.cmdline == null and $query_subj_proc["$first_cmdline"] != null then
+                        subject.process.cmdline = $query_subj_proc["$first_cmdline"]
+                        labels = labels + "|subj_proc_cmdline_enriched"  # Метка для валидации проставления subject.process.cmdline
+                    endif
+                    if subject.process.parent.cmdline == null and $query_subj_proc["$second_cmdline"] != null then
+                        subject.process.parent.cmdline = $query_subj_proc["$second_cmdline"]
+                        labels = labels + "|subj_proc_parent_cmdline_enriched"  # Метка для валидации проставления subject.process.parent.cmdline
+                    endif
+                    if subject.process.hash == null and $query_subj_proc["$proc_hash"] != null then
+                        subject.process.hash = $query_subj_proc["$proc_hash"]
+                        subject.process.hash.imphash = regex($query_subj_proc["$proc_hash"], "IMPHASH:([A-Z0-9]+)\\b", 1)
+                        subject.process.hash.md5 = regex($query_subj_proc["$proc_hash"], "MD5:([A-Z0-9]+)\\b", 1)
+                        subject.process.hash.sha1 = regex($query_subj_proc["$proc_hash"], "SHA1:([A-Z0-9]+)\\b", 1)
+                        subject.process.hash.sha256 = regex($query_subj_proc["$proc_hash"], "SHA256:([A-Z0-9]+)\\b", 1)
+                        
+                        labels = labels + "|subj_proc_hash_enriched"  # Метка для валидации проставления subject.process.hash
+                    endif
+                    if subject.process.meta == null and $query_subj_proc["$proc_meta"] != null then
+                        subject.process.meta = $query_subj_proc["$proc_meta"]
+                        labels = labels + "|subj_proc_meta_enriched"  # Метка для валидации проставления subject.process.meta
+                    endif
+                    if  subject.account.session_id == null and $query_subj_proc["$object_session_id"] != null then
+                        subject.account.session_id = $query_subj_proc["$object_session_id"]
+                        labels = labels + "|subj_acc_ses_enriched"  # Метка для валидации проставления object.process.meta
+                    endif
+
+                    # Проставляем subject УЗ, если ее нет в событии, но она есть в табличном списке
+                    if subject.account.name == null and subject.account.domain == null and $query_subj_proc["$subject_account"] != null then
+                        $separator_pos = find_substr($query_subj_proc["$subject_account"], "\\")
+                        if $separator_pos != null then
+                            subject.account.domain = substr($query_subj_proc["$subject_account"], 0, $separator_pos)
+                            subject.account.name = substr($query_subj_proc["$subject_account"], $separator_pos + 1, length($query_subj_proc["$subject_account"]))
+                        else
+                            subject.account.name = $query_subj_proc["$subject_account"]
+                        endif
+                        if subject.account.name != null then
+                            labels = labels + "|subj_acc_name_enriched"  # Метка для валидации проставления subject.account.name
+                        endif
+                        if subject.account.domain != null then
+                            labels = labels + "|subj_acc_domain_enriched"  # Метка для валидации проставления subject.account.domain
+                        endif 
+                    endif
+                    if subject.account.domain != null and subject.account.name != null and subject.account.id == null then
+                        $query_subj_acc_by_subj_proc = exec_query("GetAccountSID", [subject.account.name, subject.account.domain])
+                        if $query_subj_acc_by_subj_proc["$id"] != null then
+                            subject.account.id = $query_subj_acc_by_subj_proc["$id"]
+                            subject.account.provider = $query_subj_acc_by_subj_proc["$storage"]
+                            if $query_subj_acc_by_subj_proc["$domain_full"] != null and $query_subj_acc_by_subj_proc["$domain_full"] != subject.account.domain then 
+                                subject.account.domain = $query_subj_acc_by_subj_proc["$domain_full"]
+                            endif
+                        endif
+                    endif
+                else
+                    $query_subj_proc = null
+                endif
+            endif
+
+            # Условие для событий Powershell    
+            if lower(event_src.subsys) == "microsoft-windows-powershell/operational" then
+                if object.process.id != null then
+                    # 4104
+                    # когда будем править все по 4104 надо будет убрать
+                    # но сейчас это очень странно, что дальше все складывается в 
+                    # object.process.parent.*, хотя в 4104 родителя нет
+                    object.process.parent.id = object.process.id
+                endif
+
+                # Проверка, чтобы получить object.account.name для точного поиска процесса, чтобы избежать фолзов связаннных с одинаковым object.process.id
+                # для событий powershell, по хорошему, всегда выставляется SID, но только для объект аккаунта. если он выставился, то еще на этапе нормализации выставятся поля name / domain. 
+                if object.account.id != null and object.account.name == null and object.account.domain == null then
+                    # дублирование логики Domain and SID mapping, на случай некорректной прокидки полей в корреляции.
+                    $query_obj_acc_posh_sid = exec_query("GetAccountNameDomain", [object.account.id])
+                    if $query_obj_acc_posh_sid["$username"] != null then
+                        object.account.name = $query_obj_acc_posh_sid["$username"]
+                        object.account.domain = coalesce($query_obj_acc_posh_sid["$domain_full"], $query_obj_acc_posh_sid["$domain_netbios"])
+                        object.account.provider = $query_obj_acc_posh_sid["$storage"]
+                    endif
+                endif
+
+                # достаем все записи с этим ПИДом и object.account.name
+                $query_posh_temp = exec_query("GetProcessChain_no_name", [event_src.host, number(object.process.parent.id), lower(object.account.domain) + "\\" + lower(object.account.name)])
+
+                if $query_posh_temp["$counter"] == 1 then
+                    # запись только одна, ничего лучше мы не найдем
+                    $query_posh = $query_posh_temp
+                elif $query_posh_temp["$counter"] > 1 then
+                    if $query_posh_temp["$max_last_changed"] == $query_posh_temp["$time_like_number"] then
+                        $query_posh = $query_posh_temp
+                    else
+                        $query_posh = exec_query("GetProcessChain_no_name_newest", [event_src.host, number(object.process.parent.id), lower(object.account.domain) + "\\" + lower(object.account.name), $query_posh_temp["$max_last_changed"]])
+                    endif
+                endif
+
+                if object.process.parent.name == null and $query_posh["$proc_name"] != null then  # В событии 4103 есть поля object.process.parent.id & cmdline, но нет object.process.parent.name
+                    object.process.parent.name = $query_posh["$proc_name"]  # Для события 4104 мы для унификации проставляем ее в object.process.parent.name  
+                    labels = labels + "|obj_proc_parent_name_enriched"  # Метка для валидации проставления object.process.parent.name
+                endif
+
+                if object.process.parent.cmdline == null and $query_posh["$first_cmdline"] != null then
+                    object.process.parent.cmdline = $query_posh["$first_cmdline"]
+                    labels = labels + "|obj_proc_parent_cmdline_enriched"  # Метка для валидации проставления object.process.parent.cmdline
+                endif
+                
+                if object.process.parent.hash == null and $query_posh["$proc_hash"] != null then
+                    object.process.parent.hash = $query_posh["$proc_hash"]
+                    labels = labels + "|obj_proc_parent_hash_enriched"  # Метка для валидации проставления object.process.hash
+                endif
+                
+                object.process.chain = $query_posh["$chain_proc_names"]
+                datafield19 = $query_posh["$chain_proc_info"]
+
+                # Дропаем корреляцию, если цепочка попадает под вайтлист
+                if object.process.chain != null and (exec_query("CheckIfWhitelisted", [correlation_name, lower(object.process.chain), "chain"]) 
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(object.process.chain), "chain"]))
+                then
+                    drop
+                endif
+                
+                if object.account.session_id == null and $query_posh["$object_session_id"] != null then
+                    object.account.session_id = $query_posh["$object_session_id"]
+                    labels = labels + "|obj_acc_ses_enriched"  # Метка для валидации проставления object.process.meta
+                endif
+
+                if $query_posh["$object_account"] != null and object.account.name == null and object.account.domain == null then
+                    # если в проверке перед запросом к ТС не нашлось имени и домена, то возможно, Domain_and_SID_mapping не включен, тогда заберем данные из ТС
+                    $separator_pos = find_substr($query_posh["$object_account"], "\\")
+                    if $separator_pos != null then
+                        object.account.domain = substr($query_posh["$object_account"], 0, $separator_pos)
+                        object.account.name = substr($query_posh["$object_account"], $separator_pos + 1, length($query_posh["$object_account"]))
+                        object.account.id = null
+                    else
+                        object.account.name = $query_posh["$object_account"]
+                        object.account.id = null
+                    endif
+                    # меняем SID и provider, если из ТС с цепочками подставилась локальная УЗ
+                    if object.account.domain == "nt authority" then
+                        object.account.id = switch lower(object.account.name)
+                            case "anonymous logon" "S-1-5-7"
+                            case "iusr"            "S-1-5-17"
+                            case "system"          "S-1-5-18"
+                            case "local service"   "S-1-5-19"
+                            case "network service" "S-1-5-20"
+                            case "анонимный вход"  "S-1-5-7"
+                            case "система"         "S-1-5-18"
+                            case "центр nt"        "S-1-5-19"
+                            case "сетевая служба"  "S-1-5-20"
+                        endswitch
+                        object.account.provider = "local"
+                    endif
+                    
+                    if object.account.name != null then
+                        labels = labels + "|obj_acc_name_enriched"  # Метка для валидации проставления object.account.name
+                    endif
+                    if object.account.domain != null then
+                        labels = labels + "|obj_acc_domain_enriched"  # Метка для валидации проставления object.account.domain
+                    endif 
+                endif
+
+                if object.account.domain != null and object.account.name != null and object.account.id == null then
+                    $query_obj_acc_posh_nd = exec_query("GetAccountSID", [object.account.name, object.account.domain])
+                    if $query_obj_acc_posh_nd["$id"] != null then
+                        object.account.id = $query_obj_acc_posh_nd["$id"]
+                        object.account.provider = $query_obj_acc_posh_nd["$storage"]
+                        if $query_obj_acc_posh_nd["$domain_full"] != null and $query_obj_acc_posh_nd["$domain_full"] != object.account.domain then 
+                            object.account.domain = $query_obj_acc_posh_nd["$domain_full"]
+                        endif
+                    endif
+                endif
+
+                if subject.process.id == null and $query_posh["$subject_account"] != null then
+                    if  subject.account.session_id == null and $query_posh["$subject_session_id"] != null then
+                        subject.account.session_id = $query_posh["$subject_session_id"]
+                        labels = labels + "|subj_acc_ses_enriched"  # Метка для валидации проставления object.process.meta
+                    endif
+                    # настоящий субъект аккаунт для событий powershell выставляется только: для 4103, в поле connected user, в формате имя / домен
+                    # просто проверить что эти поля не пустые нельзя, так как Domain and SID mapping заполнит все поля после нормализации
+                    if (subject.account.name == null and subject.account.domain == null) or (subject.account.name == object.account.name 
+                        and (subject.account.domain + "\\" + subject.account.name != $query_posh["$subject_account"])) then
+                        $separator_pos = find_substr($query_posh["$subject_account"], "\\")
+                        if $separator_pos != null then
+                            subject.account.domain = substr($query_posh["$subject_account"], 0, $separator_pos)
+                            subject.account.name = substr($query_posh["$subject_account"], $separator_pos + 1, length($query_posh["$subject_account"]))
+                            subject.account.id = null
+                        else
+                            subject.account.name = $query_posh["$subject_account"]
+                            subject.account.id = null
+                        endif
+                        # меняем SID и provider, если из ТС с цепочками подставилась локальная УЗ
+                        if subject.account.domain == "nt authority" then
+                            subject.account.id = switch lower(subject.account.name)
+                                case "anonymous logon" "S-1-5-7"
+                                case "iusr"            "S-1-5-17"
+                                case "system"          "S-1-5-18"
+                                case "local service"   "S-1-5-19"
+                                case "network service" "S-1-5-20"
+                                case "анонимный вход"  "S-1-5-7"
+                                case "система"         "S-1-5-18"
+                                case "центр nt"        "S-1-5-19"
+                                case "сетевая служба"  "S-1-5-20"
+                            endswitch
+                            subject.account.provider = "local"
+                        endif
+
+                        if subject.account.name != null then
+                            labels = labels + "|subj_acc_name_enriched"  # Метка для валидации проставления subject.account.name
+                        endif
+                        if subject.account.domain != null then
+                            labels = labels + "|subj_acc_domain_enriched"  # Метка для валидации проставления subject.account.domain
+                        endif
+                    endif
+
+                    if subject.account.domain != null and subject.account.name != null and subject.account.id == null then
+                        $query_subj_acc_posh = exec_query("GetAccountSID", [subject.account.name, subject.account.domain])
+                        if $query_subj_acc_posh["$id"] != null then
+                            subject.account.id = $query_subj_acc_posh["$id"]
+                            subject.account.provider = $query_subj_acc_posh["$storage"]
+                            if $query_subj_acc_posh["$domain_full"] != null and $query_subj_acc_posh["$domain_full"] != subject.account.domain then 
+                                subject.account.domain = $query_subj_acc_posh["$domain_full"]
+                            endif
+                        endif
+                    endif
+                endif
+            endif
+
+            # Вайтлист по обогащенному subj_proc_name
+            if find_substr(lower(labels),"subj_proc_name_enriched") != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + subject.process.name), "subj_acc|subj_proc_name"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.process.name), "subj_proc_name"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + subject.process.name), "obj_acc|subj_proc_name"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по обогащенному obj_proc_name
+            if find_substr(lower(labels),"obj_proc_name_enriched") != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + object.process.name), "subj_acc|obj_proc_name"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.process.name), "obj_proc_name"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + object.process.name), "obj_acc|obj_proc_name"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по обогащенному subj_proc_parent_name
+            if find_substr(lower(labels),"subj_proc_parent_name_enriched") != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + subject.process.parent.name), "subj_acc|subj_proc_parent_name"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.process.parent.name), "subj_proc_parent_name"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + subject.process.parent.name), "obj_acc|subj_proc_parent_name"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по обогащенному obj_proc_parent_name
+            if find_substr(lower(labels),"obj_proc_parent_name_enriched") != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + object.process.parent.name), "subj_acc|obj_proc_parent_name"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.process.parent.name), "obj_proc_parent_name"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + object.process.parent.name), "obj_acc|obj_proc_parent_name"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по обогащенной subj_proc_cmdline
+            if find_substr(lower(labels),"subj_proc_cmdline_enriched") != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + subject.process.cmdline), "subj_acc|subj_proc_cmdline"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.process.cmdline), "subj_proc_cmdline"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + subject.process.cmdline), "obj_acc|subj_proc_cmdline"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(subject.process.cmdline), "subj_proc_cmdline"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по обогащенной obj_proc_cmdline
+            if find_substr(lower(labels),"obj_proc_cmdline_enriched") != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + object.process.cmdline), "subj_acc|obj_proc_cmdline"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.process.cmdline), "obj_proc_cmdline"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + object.process.cmdline), "obj_acc|obj_proc_cmdline"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(object.process.cmdline), "obj_proc_cmdline"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по обогащенной subj_proc_parent_cmdline
+            if find_substr(lower(labels),"subj_proc_parent_cmdline_enriched") != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + subject.process.parent.cmdline), "subj_acc|subj_proc_parent_cmdline"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.process.parent.cmdline), "subj_proc_parent_cmdline"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + subject.process.parent.cmdline), "obj_acc|subj_proc_parent_cmdline"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(subject.process.parent.cmdline), "subj_proc_parent_cmdline"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по обогащенной obj_proc_parent_cmdline
+            if find_substr(lower(labels),"obj_proc_parent_cmdline_enriched") != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + object.process.parent.cmdline), "subj_acc|obj_proc_parent_cmdline"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.process.parent.cmdline), "obj_proc_parent_cmdline"])
+                or exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + object.process.parent.cmdline), "obj_acc|obj_proc_parent_cmdline"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(object.process.parent.cmdline), "obj_proc_parent_cmdline"])
+                then
+                    drop
+                endif
+            endif
+            
+            if object.process.chain != null or subject.process.chain != null then
+                labels = labels + "|proc_chain_enriched"  # Метка для декларации вайтлистинга
+            endif
+
+            if object.process.cmdline != null and object.process.decoded_data == null and find_substr(lower(labels), "obj_proc_cmdline_enriched") != null then
+
+                $base64_pattern = select_query_first("GetBase64Regex", ["base64"], "regex_value")
+                $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+
+                $cmdline = object.process.cmdline
+
+                $url = regex($cmdline, $url_pattern, 1)
+
+                if $url != null then
+                    $url_pos = find_substr($cmdline, $url)
+                    $prefix = substr($cmdline, $url_pos - 1, 1)
+         
+                    if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                        if $prefix == "(" then
+                            $postfix = ")"
+                        elif $prefix == "[" then
+                            $postfix = "]"
+                        elif $prefix == "{" then
+                            $postfix = "}"
+                        else
+                            $postfix = $prefix
+                        endif
+
+                        $url_to_rest = substr($cmdline, $url_pos, length($cmdline))
+                        $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                        if $url_to_postfix != null then
+                            $url = substr($url_to_rest, 0, $url_to_postfix)
+                        endif
+                    endif
+
+                    if find_substr($url, ";") != null then
+                        $bytenum = find_substr($url, ";")
+                        $first_url = substr($url, 0, $bytenum)
+                        $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                        if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                            $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                        endif
+                    elif find_substr($url, ",") != null then
+                        $bytenum = find_substr($url, ",")
+                        $first_url = substr($url, 0, $bytenum)
+                        $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                        if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                            $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                        endif
+                    endif
+
+                    if external_link == null then
+                        external_link = $url
+
+                    elif not (match(external_link, $url) or match(external_link, "*" + $url + " |*")) then
+                        external_link = join([external_link, $url], " | ")
+                    endif   
+
+                    $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                    $ipv4_in_url = ipv4($domain)
+
+                    if ($ipv4_in_url != null
+                        and external_dst.ip == null
+                        and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                        and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                        and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                        and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                        and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                        and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                        and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                        external_dst.ip = $domain
+
+                    elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                        $at = find_substr($domain, ".")
+
+                        if $at != null then
+                            external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                            external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                        else
+                            external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                        endif
+                    endif
+
+                    external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+                    if labels == null then
+                         labels = "url_extracted_from_obj_cmdline"
+
+                    elif not match(labels, "*url_extracted_from_obj_cmdline*") then
+                         labels = labels + "|url_extracted_from_obj_cmdline"
+                    endif
+
+                    $url_from_obj_cmdline = $url
+                endif
+
+                $raw_base64 = regex($cmdline, $base64_pattern, 1)
+
+                if $raw_base64 != null then
+                    $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                    if find_substr($decoded, "\u0000") != null then
+                        $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                    endif
+
+                    if find_substr($decoded, "\u0000") != null then
+                        $decoded = null
+                    endif
+
+                    if $decoded != null and find_substr($decoded, "�") == null then
+                        $base64_pattern = select_query_first("GetBase64Regex", ["base64_short"], "regex_value")
+                        $raw_base64 = regex($decoded, $base64_pattern, 1)
+
+                        if $raw_base64 != null then
+                            $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                            if find_substr($decoded, "\u0000") != null then
+                                $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                            endif
+
+                            if find_substr($decoded, "\u0000") != null then
+                                $decoded = null
+                            endif
+                        endif
+                    endif
+
+                    if $decoded != null and find_substr($decoded, "�") == null then
+                        object.process.decoded_data = $decoded
+
+                        labels = labels + "|obj_proc_decoded_data_enriched"
+
+                        if table::Common_whitelist_for_labeling {
+                                column::rule == correlation_name or column::rule == "*"
+                                and column::specific_value == lower(object.process.decoded_data)
+                                and column::tag == "object_process_decoded_data"
+                            }
+                            or table::Common_whitelist_for_labeling_regex{
+                                column::rule == correlation_name or column::rule == "*"
+                                and regex_match(lower(object.process.decoded_data), column::specific_value)
+                                and column::tag == "object_process_decoded_data"
+                            }
+                        then
+                            drop
+                        endif
+
+                        if subject.process.cmdline == object.process.cmdline and subject.process.decoded_data == null then
+                            subject.process.decoded_data = $decoded
+
+                            labels = labels + "|subj_proc_decoded_data_enriched"
+
+                            if table::Common_whitelist_for_labeling {
+                                    column::rule == correlation_name or column::rule == "*"
+                                    and column::specific_value == lower(subject.process.decoded_data)
+                                    and column::tag == "subject_process_decoded_data"
+                                }
+                                or table::Common_whitelist_for_labeling_regex{
+                                    column::rule == correlation_name or column::rule == "*"
+                                    and regex_match(lower(subject.process.decoded_data), column::specific_value)
+                                    and column::tag == "subject_process_decoded_data"
+                                }
+                            then
+                                drop
+                            endif
+                        endif
+
+                        $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+                        $url = regex($decoded, $url_pattern, 1)
+
+                        if $url != null then
+                            $url_pos = find_substr($decoded, $url)
+                            $prefix = substr($decoded, $url_pos - 1, 1)
+                 
+                            if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                                if $prefix == "(" then
+                                    $postfix = ")"
+                                elif $prefix == "[" then
+                                    $postfix = "]"
+                                elif $prefix == "{" then
+                                    $postfix = "}"
+                                else
+                                    $postfix = $prefix
+                                endif
+
+                                $url_to_rest = substr($decoded, $url_pos, length($decoded))
+                                $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                                if $url_to_postfix != null then
+                                    $url = substr($url_to_rest, 0, $url_to_postfix)
+                                endif
+                            endif
+
+                            if find_substr($url, ";") != null then
+                                $bytenum = find_substr($url, ";")
+                                $first_url = substr($url, 0, $bytenum)
+                                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                    $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                                endif
+                            elif find_substr($url, ",") != null then
+                                $bytenum = find_substr($url, ",")
+                                $first_url = substr($url, 0, $bytenum)
+                                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                    $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                                endif
+                            endif
+
+                            if external_link == null then
+                                external_link = $url
+
+                            elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                                external_link = join([external_link, $url], " | ")
+                            endif   
+
+                            $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                            $ipv4_in_url = ipv4($domain)
+
+                            if ($ipv4_in_url != null
+                                and external_dst.ip == null
+                                and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                                and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                                and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                                and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                                and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                                and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                                and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                                external_dst.ip = $domain
+
+                            elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                                $at = find_substr($domain, ".")
+
+                                if $at != null then
+                                    external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                                    external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                                else
+                                    external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                                endif
+                            endif
+
+                            external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+                            if labels == null then
+                                 labels = "url_extracted_from_obj_cmdline"
+
+                            elif not match(labels, "*url_extracted_from_obj_cmdline*") then
+                                 labels = labels + "|url_extracted_from_obj_cmdline"
+                            endif
+
+                            $url_from_decoded_obj_cmdline = $url
+                        endif
+                    endif
+                endif
+            endif
+
+            if object.process.parent.cmdline != null and object.process.parent.decoded_data == null and find_substr(lower(labels), "obj_proc_parent_cmdline_enriched") != null then
+
+                $base64_pattern = select_query_first("GetBase64Regex", ["base64"], "regex_value")
+                $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+
+                $cmdline = object.process.parent.cmdline
+
+                $url = regex($cmdline, $url_pattern, 1)
+
+                if $url != null then
+                    $url_pos = find_substr($cmdline, $url)
+                    $prefix = substr($cmdline, $url_pos - 1, 1)
+         
+                    if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                        if $prefix == "(" then
+                            $postfix = ")"
+                        elif $prefix == "[" then
+                            $postfix = "]"
+                        elif $prefix == "{" then
+                            $postfix = "}"
+                        else
+                            $postfix = $prefix
+                        endif
+
+                        $url_to_rest = substr($cmdline, $url_pos, length($cmdline))
+                        $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                        if $url_to_postfix != null then
+                            $url = substr($url_to_rest, 0, $url_to_postfix)
+                        endif
+                    endif
+
+                    if find_substr($url, ";") != null then
+                        $bytenum = find_substr($url, ";")
+                        $first_url = substr($url, 0, $bytenum)
+                        $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                        if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                            $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                        endif
+                    elif find_substr($url, ",") != null then
+                        $bytenum = find_substr($url, ",")
+                        $first_url = substr($url, 0, $bytenum)
+                        $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                        if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                            $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                        endif
+                    endif
+
+                    if external_link == null then
+                        external_link = $url
+
+                    elif not (match(external_link, $url) or match(external_link, "*" + $url + " |*")) then
+                        external_link = join([external_link, $url], " | ")
+                    endif   
+
+                    $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                    $ipv4_in_url = ipv4($domain)
+
+                    if ($ipv4_in_url != null
+                        and external_dst.ip == null
+                        and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                        and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                        and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                        and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                        and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                        and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                        and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                        external_dst.ip = $domain
+
+                    elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                        $at = find_substr($domain, ".")
+
+                        if $at != null then
+                            external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                            external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                        else
+                            external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                        endif
+                    endif
+
+                    external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+                    if labels == null then
+                         labels = "url_extracted_from_obj_parent_cmdline"
+
+                    elif not match(labels, "*url_extracted_from_obj_parent_cmdline*") then
+                         labels = labels + "|url_extracted_from_obj_parent_cmdline"
+                    endif
+
+                    $url_from_obj_parent_cmdline = $url
+                endif
+
+                $raw_base64 = regex($cmdline, $base64_pattern, 1)
+
+                if $raw_base64 != null then
+                    $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                    if find_substr($decoded, "\u0000") != null then
+                        $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                    endif
+
+                    if find_substr($decoded, "\u0000") != null then
+                        $decoded = null
+                    endif
+
+                    if $decoded != null and find_substr($decoded, "�") == null then
+                        $base64_pattern = select_query_first("GetBase64Regex", ["base64_short"], "regex_value")
+                        $raw_base64 = regex($decoded, $base64_pattern, 1)
+
+                        if $raw_base64 != null then
+                            $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                            if find_substr($decoded, "\u0000") != null then
+                                $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                            endif
+
+                            if find_substr($decoded, "\u0000") != null then
+                                $decoded = null
+                            endif
+                        endif
+                    endif
+
+                    if $decoded != null and find_substr($decoded, "�") == null then
+                        object.process.parent.decoded_data = $decoded
+
+                        labels = labels + "|obj_proc_parent_decoded_data_enriched"
+
+                        if table::Common_whitelist_for_labeling {
+                                column::rule == correlation_name or column::rule == "*"
+                                and column::specific_value == lower(object.process.parent.decoded_data)
+                                and column::tag == "object_process_parent_decoded_data"
+                            }
+                            or table::Common_whitelist_for_labeling_regex{
+                                column::rule == correlation_name or column::rule == "*"
+                                and regex_match(lower(object.process.parent.decoded_data), column::specific_value)
+                                and column::tag == "object_process_parent_decoded_data"
+                            }
+                        then
+                            drop
+                        endif
+
+                        if subject.process.parent.cmdline == object.process.parent.cmdline and subject.process.parent.decoded_data == null then
+                            subject.process.parent.decoded_data = $decoded
+
+                            labels = labels + "|subj_proc_parent_decoded_data_enriched"
+
+                            if table::Common_whitelist_for_labeling {
+                                    column::rule == correlation_name or column::rule == "*"
+                                    and column::specific_value == lower(subject.process.parent.decoded_data)
+                                    and column::tag == "subject_process_parent_decoded_data"
+                                }
+                                or table::Common_whitelist_for_labeling_regex{
+                                    column::rule == correlation_name or column::rule == "*"
+                                    and regex_match(lower(subject.process.parent.decoded_data), column::specific_value)
+                                    and column::tag == "subject_process_parent_decoded_data"
+                                }
+                            then
+                                drop
+                            endif
+                        endif
+
+                        $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+                        $url = regex($decoded, $url_pattern, 1)
+
+                        if $url != null then
+                            $url_pos = find_substr($decoded, $url)
+                            $prefix = substr($decoded, $url_pos - 1, 1)
+                 
+                            if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                                if $prefix == "(" then
+                                    $postfix = ")"
+                                elif $prefix == "[" then
+                                    $postfix = "]"
+                                elif $prefix == "{" then
+                                    $postfix = "}"
+                                else
+                                    $postfix = $prefix
+                                endif
+
+                                $url_to_rest = substr($decoded, $url_pos, length($decoded))
+                                $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                                if $url_to_postfix != null then
+                                    $url = substr($url_to_rest, 0, $url_to_postfix)
+                                endif
+                            endif
+
+                            if find_substr($url, ";") != null then
+                                $bytenum = find_substr($url, ";")
+                                $first_url = substr($url, 0, $bytenum)
+                                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                    $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                                endif
+                            elif find_substr($url, ",") != null then
+                                $bytenum = find_substr($url, ",")
+                                $first_url = substr($url, 0, $bytenum)
+                                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                    $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                                endif
+                            endif
+
+                            if external_link == null then
+                                external_link = $url
+
+                            elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                                external_link = join([external_link, $url], " | ")
+                            endif   
+
+                            $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                            $ipv4_in_url = ipv4($domain)
+
+                            if ($ipv4_in_url != null
+                                and external_dst.ip == null
+                                and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                                and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                                and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                                and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                                and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                                and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                                and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                                external_dst.ip = $domain
+
+                            elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                                $at = find_substr($domain, ".")
+
+                                if $at != null then
+                                    external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                                    external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                                else
+                                    external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                                endif
+                            endif
+
+                            external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+                            if labels == null then
+                                 labels = "url_extracted_from_obj_parent_cmdline"
+
+                            elif not match(labels, "*url_extracted_from_obj_parent_cmdline*") then
+                                 labels = labels + "|url_extracted_from_obj_parent_cmdline"
+                            endif
+
+                            $url_from_decoded_obj_parent_cmdline = $url
+                        endif
+                    endif
+                endif
+            endif
+
+            if subject.process.cmdline != null and subject.process.decoded_data == null and find_substr(lower(labels), "subj_proc_cmdline_enriched") != null then
+
+                $base64_pattern = select_query_first("GetBase64Regex", ["base64"], "regex_value")
+                $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+
+                $cmdline = subject.process.cmdline
+
+                $url = regex($cmdline, $url_pattern, 1)
+
+                if $url != null then
+                    $url_pos = find_substr($cmdline, $url)
+                    $prefix = substr($cmdline, $url_pos - 1, 1)
+         
+                    if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                        if $prefix == "(" then
+                            $postfix = ")"
+                        elif $prefix == "[" then
+                            $postfix = "]"
+                        elif $prefix == "{" then
+                            $postfix = "}"
+                        else
+                            $postfix = $prefix
+                        endif
+
+                        $url_to_rest = substr($cmdline, $url_pos, length($cmdline))
+                        $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                        if $url_to_postfix != null then
+                            $url = substr($url_to_rest, 0, $url_to_postfix)
+                        endif
+                    endif
+
+                    if find_substr($url, ";") != null then
+                        $bytenum = find_substr($url, ";")
+                        $first_url = substr($url, 0, $bytenum)
+                        $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                        if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                            $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                        endif
+                    elif find_substr($url, ",") != null then
+                        $bytenum = find_substr($url, ",")
+                        $first_url = substr($url, 0, $bytenum)
+                        $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                        if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                            $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                        endif
+                    endif
+
+                    if external_link == null then
+                        external_link = $url
+
+                    elif not (match(external_link, $url) or match(external_link, "*" + $url + " |*")) then
+                        external_link = join([external_link, $url], " | ")
+                    endif   
+
+                    $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                    $ipv4_in_url = ipv4($domain)
+
+                    if ($ipv4_in_url != null
+                        and external_dst.ip == null
+                        and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                        and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                        and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                        and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                        and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                        and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                        and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                        external_dst.ip = $domain
+
+                    elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                        $at = find_substr($domain, ".")
+
+                        if $at != null then
+                            external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                            external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                        else
+                            external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                        endif
+                    endif
+
+                    external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+                    if labels == null then
+                         labels = "url_extracted_from_subj_cmdline"
+
+                    elif not match(labels, "*url_extracted_from_subj_cmdline*") then
+                         labels = labels + "|url_extracted_from_subj_cmdline"
+                    endif
+
+                    $url_from_subj_cmdline = $url
+                endif
+
+                $raw_base64 = regex($cmdline, $base64_pattern, 1)
+
+                if $raw_base64 != null then
+                    $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                    if find_substr($decoded, "\u0000") != null then
+                        $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                    endif
+
+                    if find_substr($decoded, "\u0000") != null then
+                        $decoded = null
+                    endif
+
+                    if $decoded != null and find_substr($decoded, "�") == null then
+                        $base64_pattern = select_query_first("GetBase64Regex", ["base64_short"], "regex_value")
+                        $raw_base64 = regex($decoded, $base64_pattern, 1)
+
+                        if $raw_base64 != null then
+                            $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                            if find_substr($decoded, "\u0000") != null then
+                                $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                            endif
+
+                            if find_substr($decoded, "\u0000") != null then
+                                $decoded = null
+                            endif
+                        endif
+                    endif
+
+                    if $decoded != null and find_substr($decoded, "�") == null then
+                        subject.process.decoded_data = $decoded
+
+                        labels = labels + "|subj_proc_decoded_data_enriched"
+
+                        if table::Common_whitelist_for_labeling {
+                                column::rule == correlation_name or column::rule == "*"
+                                and column::specific_value == lower(subject.process.decoded_data)
+                                and column::tag == "subject_process_decoded_data"
+                            }
+                            or table::Common_whitelist_for_labeling_regex{
+                                column::rule == correlation_name or column::rule == "*"
+                                and regex_match(lower(subject.process.decoded_data), column::specific_value)
+                                and column::tag == "subject_process_decoded_data"
+                            }
+                        then
+                            drop
+                        endif
+
+                        $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+                        $url = regex($decoded, $url_pattern, 1)
+
+                        if $url != null then
+                            $url_pos = find_substr($decoded, $url)
+                            $prefix = substr($decoded, $url_pos - 1, 1)
+                 
+                            if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                                if $prefix == "(" then
+                                    $postfix = ")"
+                                elif $prefix == "[" then
+                                    $postfix = "]"
+                                elif $prefix == "{" then
+                                    $postfix = "}"
+                                else
+                                    $postfix = $prefix
+                                endif
+
+                                $url_to_rest = substr($decoded, $url_pos, length($decoded))
+                                $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                                if $url_to_postfix != null then
+                                    $url = substr($url_to_rest, 0, $url_to_postfix)
+                                endif
+                            endif
+
+                            if find_substr($url, ";") != null then
+                                $bytenum = find_substr($url, ";")
+                                $first_url = substr($url, 0, $bytenum)
+                                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                    $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                                endif
+                            elif find_substr($url, ",") != null then
+                                $bytenum = find_substr($url, ",")
+                                $first_url = substr($url, 0, $bytenum)
+                                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                    $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                                endif
+                            endif
+
+                            if external_link == null then
+                                external_link = $url
+
+                            elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                                external_link = join([external_link, $url], " | ")
+                            endif   
+
+                            $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                            $ipv4_in_url = ipv4($domain)
+
+                            if ($ipv4_in_url != null
+                                and external_dst.ip == null
+                                and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                                and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                                and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                                and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                                and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                                and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                                and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                                external_dst.ip = $domain
+
+                            elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                                $at = find_substr($domain, ".")
+
+                                if $at != null then
+                                    external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                                    external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                                else
+                                    external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                                endif
+                            endif
+
+                            external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+                            if labels == null then
+                                 labels = "url_extracted_from_subj_cmdline"
+
+                            elif not match(labels, "*url_extracted_from_subj_cmdline*") then
+                                 labels = labels + "|url_extracted_from_subj_cmdline"
+                            endif
+
+                            $url_from_decoded_subj_cmdline = $url
+                        endif
+                    endif
+                endif
+            endif
+
+            if subject.process.parent.cmdline != null and subject.process.parent.decoded_data == null and find_substr(lower(labels), "subj_proc_parent_cmdline_enriched") != null then
+
+                $base64_pattern = select_query_first("GetBase64Regex", ["base64"], "regex_value")
+                $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+
+                $cmdline = subject.process.parent.cmdline
+
+                $url = regex($cmdline, $url_pattern, 1)
+
+                if $url != null then
+                    $url_pos = find_substr($cmdline, $url)
+                    $prefix = substr($cmdline, $url_pos - 1, 1)
+         
+                    if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                        if $prefix == "(" then
+                            $postfix = ")"
+                        elif $prefix == "[" then
+                            $postfix = "]"
+                        elif $prefix == "{" then
+                            $postfix = "}"
+                        else
+                            $postfix = $prefix
+                        endif
+
+                        $url_to_rest = substr($cmdline, $url_pos, length($cmdline))
+                        $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                        if $url_to_postfix != null then
+                            $url = substr($url_to_rest, 0, $url_to_postfix)
+                        endif
+                    endif
+
+                    if find_substr($url, ";") != null then
+                        $bytenum = find_substr($url, ";")
+                        $first_url = substr($url, 0, $bytenum)
+                        $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                        if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                            $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                        endif
+                    elif find_substr($url, ",") != null then
+                        $bytenum = find_substr($url, ",")
+                        $first_url = substr($url, 0, $bytenum)
+                        $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                        if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                            $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                        endif
+                    endif
+
+                    if external_link == null then
+                        external_link = $url
+
+                    elif not (match(external_link, $url) or match(external_link, "*" + $url + " |*")) then
+                        external_link = join([external_link, $url], " | ")
+                    endif   
+
+                    $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                    $ipv4_in_url = ipv4($domain)
+
+                    if ($ipv4_in_url != null
+                        and external_dst.ip == null
+                        and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                        and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                        and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                        and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                        and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                        and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                        and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                        external_dst.ip = $domain
+
+                    elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                        $at = find_substr($domain, ".")
+
+                        if $at != null then
+                            external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                            external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                        else
+                            external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                        endif
+                    endif
+
+                    external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+                    if labels == null then
+                         labels = "url_extracted_from_subj_parent_cmdline"
+
+                    elif not match(labels, "*url_extracted_from_subj_parent_cmdline*") then
+                         labels = labels + "|url_extracted_from_subj_parent_cmdline"
+                    endif
+
+                    $url_from_subj_parent_cmdline = $url
+                endif
+
+                $raw_base64 = regex($cmdline, $base64_pattern, 1)
+
+                if $raw_base64 != null then
+                    $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                    if find_substr($decoded, "\u0000") != null then
+                        $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                    endif
+
+                    if find_substr($decoded, "\u0000") != null then
+                        $decoded = null
+                    endif
+
+                    if $decoded != null and find_substr($decoded, "�") == null then
+                        $base64_pattern = select_query_first("GetBase64Regex", ["base64_short"], "regex_value")
+                        $raw_base64 = regex($decoded, $base64_pattern, 1)
+
+                        if $raw_base64 != null then
+                            $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                            if find_substr($decoded, "\u0000") != null then
+                                $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                            endif
+
+                            if find_substr($decoded, "\u0000") != null then
+                                $decoded = null
+                            endif
+                        endif
+                    endif
+
+                    if $decoded != null and find_substr($decoded, "�") == null then
+                        subject.process.parent.decoded_data = $decoded
+
+                        labels = labels + "|subj_proc_parent_decoded_data_enriched"
+
+                        if table::Common_whitelist_for_labeling {
+                                column::rule == correlation_name or column::rule == "*"
+                                and column::specific_value == lower(subject.process.parent.decoded_data)
+                                and column::tag == "subject_process_parent_decoded_data"
+                            }
+                            or table::Common_whitelist_for_labeling_regex{
+                                column::rule == correlation_name or column::rule == "*"
+                                and regex_match(lower(subject.process.parent.decoded_data), column::specific_value)
+                                and column::tag == "subject_process_parent_decoded_data"
+                            }
+                        then
+                            drop
+                        endif
+
+                        $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+                        $url = regex($decoded, $url_pattern, 1)
+
+                        if $url != null then
+                            $url_pos = find_substr($decoded, $url)
+                            $prefix = substr($decoded, $url_pos - 1, 1)
+                 
+                            if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                                if $prefix == "(" then
+                                    $postfix = ")"
+                                elif $prefix == "[" then
+                                    $postfix = "]"
+                                elif $prefix == "{" then
+                                    $postfix = "}"
+                                else
+                                    $postfix = $prefix
+                                endif
+
+                                $url_to_rest = substr($decoded, $url_pos, length($decoded))
+                                $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                                if $url_to_postfix != null then
+                                    $url = substr($url_to_rest, 0, $url_to_postfix)
+                                endif
+                            endif
+
+                            if find_substr($url, ";") != null then
+                                $bytenum = find_substr($url, ";")
+                                $first_url = substr($url, 0, $bytenum)
+                                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                    $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                                endif
+                            elif find_substr($url, ",") != null then
+                                $bytenum = find_substr($url, ",")
+                                $first_url = substr($url, 0, $bytenum)
+                                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                    $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                                endif
+                            endif
+
+                            if external_link == null then
+                                external_link = $url
+
+                            elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                                external_link = join([external_link, $url], " | ")
+                            endif   
+
+                            $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                            $ipv4_in_url = ipv4($domain)
+
+                            if ($ipv4_in_url != null
+                                and external_dst.ip == null
+                                and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                                and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                                and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                                and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                                and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                                and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                                and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                                external_dst.ip = $domain
+
+                            elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                                $at = find_substr($domain, ".")
+
+                                if $at != null then
+                                    external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                                    external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                                else
+                                    external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                                endif
+                            endif
+
+                            external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+                            if labels == null then
+                                 labels = "url_extracted_from_subj_parent_cmdline"
+
+                            elif not match(labels, "*url_extracted_from_subj_parent_cmdline*") then
+                                 labels = labels + "|url_extracted_from_subj_parent_cmdline"
+                            endif
+
+                            $url_from_decoded_subj_parent_cmdline = $url
+                        endif
+                    endif
+                endif
+            endif
+        }        
+
+        insert_into URLs_Extraction_Stats if $url_from_obj_cmdline != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+        insert_into URLs_Extraction_Stats if $url_from_decoded_obj_cmdline != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+        insert_into URLs_Extraction_Stats if $url_from_obj_parent_cmdline != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+        insert_into URLs_Extraction_Stats if $url_from_decoded_obj_parent_cmdline != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+        insert_into URLs_Extraction_Stats if $url_from_subj_cmdline != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+        insert_into URLs_Extraction_Stats if $url_from_decoded_subj_cmdline != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+        insert_into URLs_Extraction_Stats if $url_from_subj_parent_cmdline != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+        insert_into URLs_Extraction_Stats if $url_from_decoded_subj_parent_cmdline != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }

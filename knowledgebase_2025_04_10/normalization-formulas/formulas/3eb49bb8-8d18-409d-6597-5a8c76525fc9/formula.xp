@@ -1,0 +1,32 @@
+EVENTLOG = ''
+COND = $Channel=="DNS Server" and $Provider["Name"]=="Microsoft-Windows-DNS-Server-Service" 
+       and ($EventID["text"]=="712" or $EventID=="712")
+
+action = "modify"
+object = "resource"
+status = "success"
+
+object.name = $Data["param1"]  # Zone name
+object.type = "DNS Zone"
+
+datafield2 = $Data["param2"]  # Zone file name
+datafield3 = $Data["param3"]  # Virtualization instance name
+
+time = $TimeCreated["SystemTime"]
+msgid = "712"
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "DNS server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_712_zone_storage_options_was_changed"

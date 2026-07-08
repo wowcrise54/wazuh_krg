@@ -1,0 +1,129 @@
+# Кейс, который ловит:
+# LocalGroup
+# RDP
+# DCOM
+# LocalAdmin
+# ComputerOnly
+ 
+event Subrule_SharpHound_Access_To_Samr_Srvsvc:
+    key:
+        subject.account.name, src.ip, reason
+    filter {
+        correlation_name == "Subrule_SharpHound_Access_To_Samr_Srvsvc"
+        and filter::CheckWL_Specific_Only("SharpHound_Groups_Collection", lower(join([subject.account.name, src.host], "|")))
+    }
+
+rule SharpHound_Groups_Collection: Subrule_SharpHound_Access_To_Samr_Srvsvc[2,] with different event_src.host timer 30s
+    
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+
+        $context_samr_srvsvc = []
+        $samr_srvsvc_events = 0
+    }
+    
+    on Subrule_SharpHound_Access_To_Samr_Srvsvc {
+
+        if $samr_srvsvc_events == 0 then
+            
+            $status = status
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id  # Разные для каждого узла
+
+            $object.path = object.path
+
+            $object.storage.id = object.storage.id
+            $object.storage.path = object.storage.path
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.guid = object.process.guid
+
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.mac = src.mac
+            $src.port = src.port
+            $src.asset = src.asset
+
+            # В $dst.* запишется информация только из первой сработки вспомогательного правила
+            $dst.host = dst.host
+            $dst.ip = dst.ip
+            $dst.hostname = dst.hostname
+            $dst.fqdn = dst.fqdn
+            $dst.asset = dst.asset
+            $dst.mac = dst.mac
+            $dst.port = dst.port
+            
+            $protocol = protocol
+            $direction = direction
+            
+            $datafield6 = datafield6            # Полученные права (коды)
+            $datafield9 = datafield9            # Полученные права (письменный вариант)
+
+            # В $event_src.* запишется информация только из первой сработки вспомогательного правила
+            # Остальные $event_src будут перечислены в $context_loggedon, который затем окажется в $alert.context
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.key = lower(join([subject.account.name, src.host], "|"))
+
+            $reason = if find_substr(reason, "srvsvc") != null then 
+                        "Multiple connections to samr and srvsvc pipes"
+                    else 
+                        "Multiple connections to samr pipe"
+                    endif        
+        endif
+
+        if not in_list($context_samr_srvsvc, event_src.host) then
+            $context_samr_srvsvc = append($context_samr_srvsvc, event_src.host)
+        endif
+        
+        $samr_srvsvc_events = $samr_srvsvc_events + 1
+    }
+
+emit {
+    if $reason == "Multiple connections to samr and srvsvc pipes" or $object.process.name != null then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+
+    $importance = "low"
+
+    $alert.context = join(
+    [
+        "process name: " + coalesce($object.process.name, "not identified"),
+        "connections to hosts: " + join($context_samr_srvsvc, ", ")
+    ], " | ")
+    # Количество уникальных узлов, к пайпам которых производились подключения
+    $numfield1 = $samr_srvsvc_events
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Permission Groups Discovery: Local Groups"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

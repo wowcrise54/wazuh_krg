@@ -1,0 +1,23 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} zorp/scb_rdp
+        {'['NUMBER']'?}: rdp.session({NUMBER}): ({object.value=UNTIL(')')}: {object.type=UNTIL(' applied;')} {$kv=REST}"
+
+action = "apply"
+object = "policy"
+status = "success"
+
+object.property = "session ID"
+
+importance = "info"
+
+event_src.vendor = "one_identity"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "safeguard_for_privileged_sessions"
+event_src.category = "Other"
+
+id = "PT_One_Identity_Safeguard_for_Privileged_Sessions_syslog_Client_policy"

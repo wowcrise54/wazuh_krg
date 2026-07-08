@@ -1,0 +1,28 @@
+JSON = 'Provider = "Microsoft-Windows-Win32k"'
+COND = $EventID == 1003
+
+subject = "process"
+action = "access"
+object = "module"
+status = "success"
+
+subject.process.id = $EventData["PID"]
+
+datafield1 = $ThreadID
+datafield2 = $EventData["BackgroundCallCount"]  # BackgroundCall count
+datafield3 = $EventData["MsSinceLastKeyEvent"]  # MsSinceLastKey event
+if $Name != "" then datafield4 = $Name endif    # process name if not empty
+
+time = $Timestamp
+msgid = $EventID
+importance = "info"
+
+category.generic = "Executable Module"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_ETW_Get_AsyncKeyState"

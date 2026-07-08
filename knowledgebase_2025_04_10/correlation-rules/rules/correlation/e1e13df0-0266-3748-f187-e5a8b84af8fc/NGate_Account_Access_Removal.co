@@ -1,0 +1,62 @@
+event Kill_Session_For_User_By_Admin:
+    key:
+    event_src.host, event_src.title, subject.account.name, object.value
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "cryptopro"
+        and event_src.title == "ngate"
+        and subject == "account"
+        and action == "close"
+        and object == "session"
+        and status == "success"
+        and subject.account.name != null
+        and number(object.value) > 4
+        and object.property == "number of sessions killed"
+    }
+
+rule NGate_Account_Access_Removal: Kill_Session_For_User_By_Admin
+
+    init {
+        $labels = "w_auto"
+    }
+    
+    on Kill_Session_For_User_By_Admin { 
+        $object.value = object.value
+        $object.property = object.property
+        
+        $subject.account.name = subject.account.name
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+    
+emit {
+    $importance = "medium"
+    
+    $subject = "account"
+    $action = "close"
+    $object = "session"
+    $status = "success"
+    
+    $correlation_type = "incident"
+
+    $alert.context = join([$object.value, "sessions killed"], " ")
+    $alert.key = lower(join([$event_src.title, $event_src.host, $subject.account.name, $src.host],"|"))
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Account Access Removal"
+    
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

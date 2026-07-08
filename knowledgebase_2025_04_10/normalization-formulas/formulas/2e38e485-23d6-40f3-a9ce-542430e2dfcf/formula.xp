@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} {event_src.subsys=WORD}:
+        {WORD}{"["NUMBER"]"?}: Sid {STRING} sat {NUMBER} {subject.id=NUMBER} {subject.name=STRING} {datafield1=STRING}
+        {NUMBER} s {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} add {object.type="station"} {object.id=WORD}
+        {$objproperty=UNTIL("|")?} {$oldvalue=UNTIL("|")?} {object.value=STRING*}'
+
+subject = "account"
+action = "configure"
+object = "resource"
+status = "success"
+
+object.state = "new"
+object.property = strip(replace($objproperty, "", "[:?]"), "", " ")
+
+# datafield1                                    # Вторичное имя пользователя
+datafield2 = strip($oldvalue, "", " ")          # Значение изменяемого параметра до изменения
+
+importance = "info"
+
+event_src.vendor = "avaya"
+event_src.title = "aura"
+event_src.category = "Voice over IP"
+
+id = "PT_Avaya_Aura_syslog_add_station"

@@ -1,0 +1,32 @@
+EVENTLOG = 'EventID="2006"'
+!COND = $Channel=="Microsoft-Windows-Windows Firewall With Advanced Security/Firewall" and $Provider["Name"]=="Microsoft-Windows-Windows Firewall With Advanced Security"
+
+subject = "account"
+action = "remove"
+object = "rule"
+status = "success"
+
+subject.id = $Data["ModifyingUser"]
+object.id = strip($Data["RuleId"],"{", "}")
+object.name = $Data["RuleName"]
+
+datafield1 = $Data["ModifyingApplication"]        # Приложение, удалившее правило
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "Firewall"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_2006_A_rule_has_been_deleted_in_the_Windows_Firewall_exception_list"

@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} {object.name="rsyncd"}
+        [{NUMBER}]: connect from {src.hostname=HOSTNAME} {"("} {src.ip=IPV4} {")"}'
+
+action = "connect"
+object = "service"
+status = "success"
+
+protocol = "RSYNC"
+
+importance = "info"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Backup server"
+
+id = "PT_UNIX_like_rsyncd_syslog_connect"

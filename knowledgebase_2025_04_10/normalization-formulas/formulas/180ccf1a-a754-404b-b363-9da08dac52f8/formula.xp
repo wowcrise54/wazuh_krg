@@ -1,0 +1,74 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        {$ip4=IPV4|$ip4=IPV6|$host4=HOSTNAME|}{","?}{$act="Allowed"|"Blocked"|$inf="Continue"},{"\\""?} 
+        {$md5=UNTIL(" - Целевой")|$subj_path_md5=UNTIL(" - ")|$subj_path_md5=UNTIL(",")}{"MD5 "?}
+        {"абонента="$hash=UNTIL(" - ")?}{"MD5="$hash=STRING?}{"Целевые аргументы=\'"|"Целевые аргументы=\'\'"|}{UNTIL("\\"")?}{","?}
+        {object.state=UNTIL(",")} Begin: {time=DATETIME},
+        End Time: {DATETIME},Rule: {datafield5=UNTIL(",")} {NUMBER}, {$obj_fullpath=UNTIL(",")} {NUMBER},{datafield6=UNTIL(",")}
+        {object.value=UNTIL(",")}{"\\""?}User Name: {datafield7=UNTIL("\\",")|datafield7=UNTIL(",")}Domain Name: {datafield8=UNTIL(",")}Action Type: {NUMBER?},File size (bytes):
+        {count.bytes=UNTIL(",")}Device ID: {$device=REST?}'
+        
+if $act != null then
+    action = "allow"
+    importance = "info"
+elif $inf != null then
+    action = "info"
+    importance = "info"
+else
+    action = "deny"
+    importance = "medium"
+endif
+object = "process"
+status = "success"
+
+if find_substr($obj_fullpath, "\\") != null then
+    $path_csv = csv($obj_fullpath, "\\", "~")
+elif find_substr($obj_fullpath, "/") != null then
+    $path_csv = csv($obj_fullpath, "/", "~")
+endif
+
+object.process.name = $path_csv[length($path_csv) - 1]
+if strip($obj_fullpath, "", object.process.name) != '' then
+    object.process.path = strip($obj_fullpath, "", object.process.name)
+endif
+object.process.fullpath = object.process.path + object.process.name
+
+if find_substr($subj_path_md5, "\\") != null then
+    $name_path = csv($subj_path_md5, "\\", "`")
+    subject.process.name = $name_path[length($name_path) - 1]
+    if strip($subj_path_md5, "", subject.process.name) != '' then
+        subject.process.path = strip($subj_path_md5, "", subject.process.name)
+    endif
+    subject.process.fullpath = subject.process.path + subject.process.name
+elif find_substr($subj_path_md5, "Device Control") != null or find_substr($subj_path_md5, "Модуль управления") != null then
+    object.type = strip(strip($subj_path_md5, "", " is ready"), "", " готов к работе")
+    object = "resource"
+else
+    object.process.hash = coalesce($hash, substr($subj_path_md5, find_substr($subj_path_md5, "=") + 1, length($subj_path_md5)))
+    reason = coalesce($md5, strip(substr($subj_path_md5, 0, find_substr($subj_path_md5, " - MD5")), "", "."))
+endif
+
+if object.value != null then
+    object.property = "used file"
+endif
+
+# datafield5 - Rule name
+# datafield6 - Module name
+# datafield7 - Logon user name
+# datafield8 - Domain name
+datafield9 = if $device == "" then null else $device endif  # Device id
+
+if $host3 != null or $ip3 != null or $host4 != null or $ip4 != null then
+    event_src.ip = coalesce($ip4, $ip3)
+    event_src.hostname = coalesce($host4, $host3)
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_File_launch_allowed_blocked"

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to an antivirus server. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="1bdc42d9-71b6-61d4-b234-ecb89a2f2c54">User {subject.account.name} from new host {src.host} logged in to an antivirus server on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="9d515c81-b2a9-0c23-3673-02f28548fe9d">User {subject.account.name} from host {src.host} logged in to an antivirus server and accessed a new object in shared network resource "{object.storage.name}" on host {event_src.host}. The object is missing from the collected profile.</EventDescription>
+    <EventDescription id="b686674c-890c-f482-a139-b13153d0f1e8">New user {subject.account.name} from host {src.host} logged in to an antivirus server on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="ba813946-ae27-210a-ffbd-0d3c9bf3ee24">User {subject.account.name} from host {src.host} used new logon type {logon_type} ({datafield6}) to log in to an antivirus server on host {event_src.host}. The logon type is missing from the collected profile.</EventDescription>
+    <EventDescription id="d48d8509-c2f4-fe9c-cb53-9cfbf07f88df">User {subject.account.name} from host {src.host} logged in to an antivirus server and accessed new shared network resource "{object.storage.path}" on host {event_src.host}. The network resource is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

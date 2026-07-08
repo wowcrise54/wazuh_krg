@@ -1,0 +1,27 @@
+!TEXT='{NUMBER}{"<"NUMBER">"} {NUMBER} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        syslog-ng {NUMBER} - [meta sequenceId="{NUMBER}"]
+        Syslog connection failed; fd=\'{NUMBER}\',
+        server=\'{WORD}({dst.ip=IPV4|dst.ip=IPV6}:{dst.port=NUMBER})\',
+        error=\'{$rs=STRING+}  time_reopen=\'{NUMBER}\''
+
+action = "enable"
+object = "logging"
+status = "failure"
+
+reason = strip ($rs,'','\',')
+
+importance = "medium"
+
+event_src.vendor = "alltel"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "alltel_neo"
+event_src.category = "Firewall"
+
+id = "PT_Alltel_Alltel_Neo_syslog_syslog_connection_failed"

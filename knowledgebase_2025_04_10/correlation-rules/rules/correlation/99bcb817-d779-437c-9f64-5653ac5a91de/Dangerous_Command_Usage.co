@@ -1,0 +1,170 @@
+query CheckCommand($commandline) from Malicious_Commands {
+    regex_match($commandline, column::command_value)
+}
+
+event Run_Command_In_Powershell_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(replace(lower(object.process.cmdline), "", "[\'\"\`+ ]"), "minidumpwritedump|\\biex\\b|(system\.net\.sockets\.tcpclient)|amsiinitfailed", 0) != null
+        and filter::CheckWL_Powershell("Dangerous_Command_Usage", lower(object.process.cmdline))
+    }
+
+event Run_Command_In_Powershell_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(replace(lower(object.process.cmdline), "", "[\'\"\`+ ]"), "minidumpwritedump|\\biex\\b|(system\.net\.sockets\.tcpclient)|amsiinitfailed", 0) != null
+        and filter::CheckWL_Powershell("Dangerous_Command_Usage", lower(object.process.cmdline))
+    }
+    
+rule Dangerous_Command_Usage: Run_Command_In_Powershell_Pipeline or Run_Command_In_Powershell_Command
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+    }
+
+    on Run_Command_In_Powershell_Pipeline {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        $object.process.parent.id = object.process.parent.id
+
+        $datafield8 = datafield8  # версия модуля
+
+        $chain_id = chain_id
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(object.process.cmdline)
+    }
+
+    on Run_Command_In_Powershell_Command {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+        
+        $object.process.cmdline = object.process.cmdline
+        $object.process.id = object.process.id
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(object.process.cmdline)
+    }
+
+emit {
+    $minidump_pattern = regex(replace(lower($object.process.cmdline), "", "[\'\"\`+ ]"), "minidumpwritedump", 0)
+
+    $iex_pattern = regex(replace(lower($object.process.cmdline), "", "[\'\"\`+ ]"), "iex", 0)
+
+    $tcpclient_pattern = regex(replace(lower($object.process.cmdline), "", "[\'\"\`+ ]"), "system\.net\.sockets\.tcpclient", 0)
+
+    $amsibypass_pattern = regex(replace(lower($object.process.cmdline), "", "[\'\"\`+ ]"), "amsiinitfailed", 0)
+    
+    $found_patterns = []
+    $obfuscated = []
+    if $minidump_pattern != null then
+        $found_patterns = append($found_patterns, $minidump_pattern)
+        if regex(lower($object.process.cmdline), "minidumpwritedump", 0) == null then
+            $obfuscated = append($obfuscated, $minidump_pattern)
+        endif
+    endif
+    
+    if $iex_pattern != null then
+        $found_patterns = append($found_patterns, $iex_pattern)
+        if regex(lower($object.process.cmdline), "\\biex\\b", 0) == null then
+            $obfuscated = append($obfuscated, $iex_pattern)
+        endif
+    endif
+    
+    if $tcpclient_pattern != null then
+        $found_patterns = append($found_patterns, $tcpclient_pattern)
+        if regex(lower($object.process.cmdline), "system\.net\.sockets\.tcpclient", 0) == null then
+            $obfuscated = append($obfuscated, $tcpclient_pattern)
+        endif
+    endif
+    
+    if $amsibypass_pattern != null then
+        $found_patterns = append($found_patterns, $amsibypass_pattern)
+        if regex(lower($object.process.cmdline), "amsiinitfailed", 0) == null then
+            $obfuscated = append($obfuscated, $amsibypass_pattern)
+        endif
+    endif
+    
+    $reason = join($found_patterns, " | ")
+    
+    if (exec_query("CheckCommand", [lower($object.process.cmdline)]) or exec_query("CheckCommand", [lower($reason)])) then
+        $event_description = select_query_first("CheckCommand", [lower($object.process.cmdline)], "command_description")
+        if $event_description == null then $event_description = select_query_first("CheckCommand", [lower($reason)], "command_description") endif
+    endif
+    
+    $alert.regex_match = $reason
+    $alert.context = $event_description
+    
+    if (in_list($found_patterns, "amsiinitfailed") or in_list($found_patterns, "minidumpwritedump")) and not in_list($obfuscated, "amsiinitfailed") and not in_list($obfuscated, "minidumpwritedump") then 
+        $correlation_type = "event"
+    elif length($obfuscated) > 0 then
+        $correlation_type = "incident"
+    else 
+        $correlation_type = "event"
+    endif    
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: PowerShell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}
+    

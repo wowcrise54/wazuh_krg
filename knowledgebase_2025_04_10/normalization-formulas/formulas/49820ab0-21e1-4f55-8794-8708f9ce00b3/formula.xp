@@ -1,0 +1,101 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} confluence_audit: {$json=REST}"
+COND = (
+    find_substr($json, '"actionI18nKey":"audit.logging.summary.blogpost.view.permission.added"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.blogpost.view.permission.removed"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.blogpost.edit.permission.added"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.blogpost.edit.permission.removed"') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+if $author["type"] == "user" then
+    subject = "account"
+elif $author["type"] == "system" then
+    subject = "system"
+endif
+
+$act_type = csv($auditType["actionI18nKey"], ".", "'")
+action = switch $act_type[6]
+    case "added" "grant"
+    case "removed" "revoke"
+endswitch
+
+if $changedValues[0]["i18nKey"] == "Group" then
+    object = "user_group"
+elif $changedValues[1]["i18nKey"] == "User" then
+    object = "account"
+endif
+
+status = "success"
+
+if $author["type"] == "user" then
+    subject.account.fullname = $author["name"]
+    subject.account.id = $author["id"]
+endif
+
+$cv_0 = $changedValues[0]
+$cv_1 = $changedValues[1]
+$cv_2 = $changedValues[2]
+
+# User
+if $cv_0["i18nKey"] == "User" then $obj_acct_name = $cv_0 endif
+if $cv_1["i18nKey"] == "User" then $obj_acct_name = $cv_1 endif
+if $cv_2["i18nKey"] == "User" then $obj_acct_name = $cv_2 endif
+
+object.account.name = coalesce($obj_acct_name["from"], $obj_acct_name["to"])
+
+# Group
+if $cv_0["i18nKey"] == "Group" then $obj_name = $cv_0 endif
+if $cv_1["i18nKey"] == "Group" then $obj_name = $cv_1 endif
+if $cv_2["i18nKey"] == "Group" then $obj_name = $cv_2 endif
+
+object.account.group = coalesce($obj_name["from"], $obj_name["to"])
+
+# Permission
+if $cv_0["i18nKey"] == "Permission" then $permission_info = $cv_0 endif
+if $cv_1["i18nKey"] == "Permission" then $permission_info = $cv_1 endif
+if $cv_2["i18nKey"] == "Permission" then $permission_info = $cv_2 endif
+
+object.group = $affectedObjects[0]["name"]  # Space Name
+object.name = $affectedObjects[1]["name"]  # Blog Post Name
+object.id = $affectedObjects[1]["id"]  # Blog Post ID
+
+switch strip($auditType["actionI18nKey"], "audit.logging.summary.blogpost.", "")
+    case "view.permission.added"
+        object.property = "added_permission"
+        object.new_value = $permission_info["to"]
+    case "view.permission.removed"
+        object.property = "removed_permission"
+        object.value = $permission_info["from"]
+    case "edit.permission.added"
+        object.property = "added_permission"
+        object.new_value = $permission_info["to"]
+    case "edit.permission.removed"
+        object.property = "removed_permission"
+        object.value = $permission_info["from"]
+endswitch
+
+src.ip = $source
+
+numfield1 = $affectedObjects[0]["id"]  # Space ID
+
+msgid = $auditType["actionI18nKey"]
+time = epoch_to_datetime($timestamp["epochSecond"])
+importance = "info"
+
+event_src.vendor = "atlassian"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_syslog_Audit_Blog_Post_Permissions"

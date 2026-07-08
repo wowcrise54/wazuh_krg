@@ -1,0 +1,26 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{event_src.hostname=HOSTNAME}{STRING}%SHELL-5:
+        {interface=WORD}:current user {subject.account.name=WORD} level has changed from 
+        {object.value=NUMBER} to {object.new_value=NUMBER}'
+
+if (numfield1 > numfield2) then
+    action = "deelevate"
+else
+    action = "elevate"
+endif
+
+object = "account"
+status = "success"
+
+object.property = "privilege"
+
+importance = "low"
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "yarus_networks"
+event_src.title = "yn"
+event_src.category = "Network device"
+
+id = "PT_Yarus_Networks_YN_syslog_user_level_changed"

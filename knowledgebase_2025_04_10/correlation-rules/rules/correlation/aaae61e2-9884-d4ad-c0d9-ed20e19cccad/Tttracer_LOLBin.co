@@ -1,0 +1,159 @@
+event Start_Tttracer_Process_With_Cmdline:
+    key:
+        event_src.host, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows("tttracer.exe")
+        and regex(lower(object.process.cmdline), 'tttracer\.exe(\s+\S+)?', 1) != null
+        and filter::CheckWL_Process_Creation("Tttracer_LOLBin", lower(object.process.cmdline))
+    }
+
+event Start_Process_With_Parent_Tttracer:
+    key:
+        event_src.host, object.process.parent.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and lower(object.process.parent.name) == "tttracer.exe"
+    }
+
+event File_Created_By_Tttracer:
+    key:
+        event_src.host, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and lower(subject.process.name) == "tttracer.exe"
+    }
+
+event LSASS_Dump_Via_Tttracer:
+    key:
+        event_src.host, subject.process.name
+    filter {
+        correlation_name == "LSASS_Memory_Dump"
+        and lower(subject.process.name) == "tttracer.exe"
+    }
+
+rule Tttracer_LOLBin: (Start_Tttracer_Process_With_Cmdline
+                       and Start_Process_With_Parent_Tttracer?
+                       and File_Created_By_Tttracer?
+                       and LSASS_Dump_Via_Tttracer?) timer 30s
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Start_Tttracer_Process_With_Cmdline {        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.process.cmdline)
+        if regex(lower(object.process.cmdline), '(-dumpfull|-attach)', 0) != null then
+            $alert.regex_match = regex(lower(object.process.cmdline), "(-dumpfull|-attach)", 0)
+            $alert.context = $subject.account.name
+        elif regex(lower(object.process.cmdline), 'tttracer\.exe\s+(\S+)', 1) != null then
+            $alert.regex_match = regex(lower(object.process.cmdline), "tttracer\.exe\s+(\S+)", 1)
+            $alert.context = $subject.account.name
+        else
+            $alert.context = $alert.context + " | " + object.process.cmdline
+        endif
+
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Start_Process_With_Parent_Tttracer {        
+        $alert.context = $alert.context + " | " + object.process.parent.name + " | " + object.process.cmdline
+    }
+
+    on File_Created_By_Tttracer {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $alert.context = $alert.context + " | " + subject.process.name + " | " +  object.fullpath
+    }
+
+    on LSASS_Dump_Via_Tttracer {
+        $lsass_dump_via_tttracer = true
+        
+        $alert.context = $alert.context + " | LSASS process dumped by " + subject.process.name
+
+        $category.high = "Credential Access"
+        $category.low = "OS Credential Dumping: LSASS Memory"
+
+        $labels = $labels + "|lsass_cache_to_correlation"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    $importance = "medium"
+
+    $alert.context = strip($alert.context, " | ", "")
+
+    $category.generic = "Attack"
+    $category.high = coalesce($category.high, "Defense Evasion")
+    $category.low = coalesce($category.low, "Trusted Developer Utilities Proxy Execution")
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.process.name], "|")
+    $incident.severity = $importance
+
+    if $lsass_dump_via_tttracer then
+        $incident.category = "UserCompromising"
+    else
+        $incident.category = "ProtectionBypassing"
+    endif
+
+    $incident.aggregation.timeout = 2h
+}

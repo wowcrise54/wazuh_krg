@@ -1,0 +1,62 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           {subject.account.domain=user_domain},
+           {subject.account.name=user_name}
+           "
+
+COND = string($event_id) == "1140"
+       and (
+        $event_category == "Управление"
+        or $event_category == "Management"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "create"
+object = "account"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Пользователь добавлен в локальную базу данных"|"User added to database"|"Добавлен пользователь"}.
+            {"Пользователь"|"User"}: {$username=STRING}'
+            
+    if find_substr($username, "\\") != null then
+        $domain_name = csv($username, "\\", "`")
+        object.account.name = $domain_name[1]
+        object.account.domain = $domain_name[0]
+    else
+        object.account.name = $username
+    endif
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Управление" then
+    event_src.subsys = "management"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1140_user_added"

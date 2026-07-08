@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Possible start of the Remote Registry service to remotely change the values of Windows registry keys, which can be used for lateral movement</Description>
+  <EventDescriptions>
+    <EventDescription id="32257273-bfd9-27f3-6cf6-4ccae81bc565">Possible start of the Remote Registry service on host {event_src.host}</EventDescription>
+    <EventDescription id="afc92c6d-f660-a138-c49d-efb3c70c4883">User {subject.account.name} may have started the Remote Registry service using command "{alert.regex_match}" on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

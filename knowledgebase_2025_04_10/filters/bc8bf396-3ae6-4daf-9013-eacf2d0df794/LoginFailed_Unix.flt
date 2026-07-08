@@ -1,0 +1,12 @@
+filter LoginFailed_Unix() {
+    filter::NotFromCorrelator()
+    and category.generic == "Access"
+    and category.high == "Authentication"
+    and action == "login"
+    and status == "failure"
+    and filter::OperatingSystem_UNIXLike()
+    and (
+        subject.name != null
+        or subject.id != null
+    )
+}

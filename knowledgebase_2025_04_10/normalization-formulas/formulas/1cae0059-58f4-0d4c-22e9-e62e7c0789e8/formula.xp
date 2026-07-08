@@ -1,0 +1,56 @@
+# INFO  [Native-Transport-Requests-1] 2023-11-26 16:58:42.013 FileAuditLogger.java:51 - user:dba|host:localhost/127.0.0.1:7000|source:/127.0.0.1|port:35850|timestamp:1701007121186|type:CREATE_VIEW|category:DDL|ks:auditlogkeyspace|scope:cyclist_by_age|operation:CREATE MATERIALIZED VIEW IF NOT EXISTS auditlogkeyspace.cyclist_by_age AS SELECT age, cid, birthday, country, name FROM auditlogkeyspace.cyclist_base WHERE age IS NOT NULL AND cid IS NOT NULL PRIMARY KEY (age, cid) WITH CLUSTERING ORDER BY (cid ASC) AND caching = {'keys' : 'ALL', 'rows_per_partition' : '100'} AND comment = 'Based on table cyclist';
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type']=='CREATE_VIEW')
+
+subject = "account"
+action = "create"
+object = "db_object"
+status = "success"
+
+subformula "parse_query"
+    TEXT = 'create materialized view {"if not exists"?} {$ks_name=UNTIL(".")?}{$table_name=WORD}{REST}'
+endsubformula
+
+subformula "parse_view_comment"
+    TEXT = '{$temp=UNTIL("comment = \'")?}{datafield2=UNTIL("\'")?}{REST}'
+endsubformula
+
+if $kv['scope'] != null then  
+    object.name = $kv['scope']
+else
+    submessage('TEXT', 'parse_query', lower($kv['operation']))
+    object.name = $table_name
+endif 
+
+if $kv['ks'] != null then  
+    object.path = $kv['ks']
+    object.fullpath = object.path + "." + object.name
+else
+    submessage('TEXT', 'parse_query', lower($kv['operation']))
+    object.fullpath = object.path + "." + object.name
+endif 
+
+object.property = "view"
+object.query = $kv['operation']
+
+datafield1 = $kv['category'] # Категория CQL-запроса
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+submessage('TEXT', 'parse_view_comment', lower($kv['operation'])) # Комментарий
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Create_view"

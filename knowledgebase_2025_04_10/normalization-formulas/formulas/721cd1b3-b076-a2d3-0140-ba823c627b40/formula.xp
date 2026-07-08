@@ -1,0 +1,40 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}usermgmt|{NUMBER}|cat= System:
+        User Managment{$kv=KEYVALUE(" ", "=", "\\"")}'
+        
+COND = $kv["act"] == "usermgmt_deluser"       
+
+subject = "account"
+action = "remove"
+object = "account"
+if  $kv["outcome"] == "success" then
+    status = "success"
+elif  $kv["outcome"] == "failed" then
+    status = "failure"
+endif
+
+subject.account.name = $kv["suser"]
+
+object.account.name = $kv["cs1"]
+object.account.fullname = $kv["cs2"]
+if $kv["cs3"] == "adminro" then
+    object.account.privileges = "admin"
+elif $kv["cs3"] == "admin" then   
+    object.account.privileges = "system admin"
+else
+    object.account.privileges = $kv["cs3"]
+endif    
+
+time = recv_time
+msgid = $kv["act"]
+importance = "info"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+    
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_cef_remove_user"

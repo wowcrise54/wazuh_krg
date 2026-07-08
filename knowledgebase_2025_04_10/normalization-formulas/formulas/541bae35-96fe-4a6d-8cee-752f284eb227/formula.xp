@@ -1,0 +1,40 @@
+TABULAR =  "{time=timegenerated},
+            objectpath,
+            publishername,
+            number,
+            {$tmp_subsys=channel},
+            loggingcomputer,
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "EventLog" and $number == 6006
+
+action = "stop"
+object = "service"
+status = "success"
+
+object.name = "Event log"
+
+# datafield2 - event collection rule name
+
+msgid = $number
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+$dot_pos = find_substr($loggingcomputer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($loggingcomputer)
+    event_src.hostname = lower(substr($loggingcomputer, 0, $dot_pos))
+else
+    event_src.hostname = lower($loggingcomputer)
+endif
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_6006_event_log_service_stopped"

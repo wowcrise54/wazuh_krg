@@ -1,0 +1,18 @@
+TEXT = '<{NUMBER}>[{time=DATETIME}]FW:ARP: prio={$prio=NUMBER} id={NUMBER} rev={NUMBER} event=
+        {msgid="arp_resolution_failed"} action=remove_entry ipaddr={src.ip=IPV4|src.ip=IPV6} iface={interface=STRING}'
+
+action = "alert"
+object = "arp_table"
+status = "success"
+
+importance = switch $prio
+    case 3 "high"
+    case 2 "medium"
+    case 1 "low"
+endswitch
+
+event_src.title = "dfl-1660"
+event_src.vendor = "d-link"
+event_src.category = "Firewall"
+
+id = "PT_D_Link_DFL_1660_syslog_ARP_resolution_failed"

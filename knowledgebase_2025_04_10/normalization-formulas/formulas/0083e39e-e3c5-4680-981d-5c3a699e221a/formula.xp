@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{"%"|"#"}{msgid="SYS-W-EVENT"}:
+        {reason="board commit confirmation timer expired"},configuration has
+        been {object.state = "reverted"}.' 
+
+action = "apply"
+object = "configuration"
+status = "failure"
+
+importance = "low"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_configuration_revert"

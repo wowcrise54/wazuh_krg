@@ -1,0 +1,111 @@
+TABULAR = '{msgid=auditType_actionI18nKey},
+           author_id,
+           author_name,
+           author_type,
+           affectedObjects,
+           changedValues,
+           extraAttributes,
+           timestamp_epochSecond'
+
+COND = in_list([
+           "audit.logging.summary.whitelist.url.added",
+           "audit.logging.summary.whitelist.url.updated",
+           "audit.logging.summary.whitelist.url.removed",
+           "audit.logging.summary.whitelist.turned.off",
+           "audit.logging.summary.whitelist.turned.on"
+       ], $auditType_actionI18nKey)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subject = switch $author_type
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+$act_type = csv($auditType_actionI18nKey, ".", "'")
+action = switch $act_type[5]
+    case "on" "enable"
+    case "off" "disable"
+    case "added" "create"
+    case "removed" "remove"
+    case "updated" "modify"
+endswitch
+
+object = switch $act_type[4]
+    case "turned" "resource"
+    case "url" "rule"
+endswitch
+
+status = "success"
+
+if $author_type == "user" then
+    subject.account.fullname = $author_name
+    subject.account.id = $author_id
+endif
+
+submessage("JSON", "parse_json", '{"changedValues_json": ' + $changedValues + '}')
+
+$cv_0 = $changedValues_json[0]
+$cv_1 = $changedValues_json[1]
+$cv_2 = $changedValues_json[2]
+$cv_3 = $changedValues_json[3]
+
+if $cv_0["i18nKey"] == "audit.logging.changed.value.whitelist.url.type" then $rule_type = $cv_0 endif
+if $cv_1["i18nKey"] == "audit.logging.changed.value.whitelist.url.type" then $rule_type = $cv_1 endif
+if $cv_2["i18nKey"] == "audit.logging.changed.value.whitelist.url.type" then $rule_type = $cv_2 endif
+if $cv_3["i18nKey"] == "audit.logging.changed.value.whitelist.url.type" then $rule_type = $cv_3 endif
+
+object.type = coalesce($rule_type["from"], $rule_type["to"])
+
+if $cv_0["i18nKey"] == "audit.logging.changed.value.whitelist.url.expression" then $exp = $cv_0 endif
+if $cv_1["i18nKey"] == "audit.logging.changed.value.whitelist.url.expression" then $exp = $cv_1 endif
+if $cv_2["i18nKey"] == "audit.logging.changed.value.whitelist.url.expression" then $exp = $cv_2 endif
+if $cv_3["i18nKey"] == "audit.logging.changed.value.whitelist.url.expression" then $exp = $cv_3 endif
+
+object.name = coalesce($exp["from"], $exp["to"])
+
+$property = ""
+$value = ""
+$new_value = ""
+
+if $cv_0 != null then
+    $property = $property + $cv_0["key"]
+    $value = $value + $cv_0["from"]
+    $new_value = $new_value + $cv_0["to"]
+endif
+if $cv_1 != null then
+    $property = $property + " | " + $cv_1["key"]
+    $value = $value + " | " + $cv_1["from"]
+    $new_value = $new_value + " | " + $cv_1["to"]
+endif
+if $cv_2 != null then
+    $property = $property + " | " + $cv_2["key"]
+    $value = $value + " | " + $cv_2["from"]
+    $new_value = $new_value + " | " + $cv_2["to"]
+endif
+if $cv_3 != null then
+    $property = $property + " | and " + string(length($changedValues_json) - 3) + " more"
+    $value = $value + " | and " + string(length($changedValues_json) - 3) + " more"
+    $new_value = $new_value + " | and " + string(length($changedValues_json) - 3) + " more"
+endif
+
+object.property = if $property != "" then $property else null endif
+if (substr($value, 0, 13) != " |  |  | and ") and (replace($value, "", " | ") != "") then
+    object.value = if $value != "" then $value else null endif
+endif
+if (substr($new_value, 0, 13) != " |  |  | and ") and (replace($new_value, "", " | ") != "") then
+    object.new_value = if $new_value != "" then $new_value else null endif
+endif
+
+src.ip = $source
+
+time = epoch_to_datetime($timestamp_epochSecond)
+importance = "medium"
+
+event_src.vendor = "atlassian"
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_odbc_Audit_Allowlist_Management"

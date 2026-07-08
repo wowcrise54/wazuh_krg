@@ -1,0 +1,74 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} info hostd[{WORD}] [Originator@{NUMBER} {$kv=UNTIL("]")} Event {NUMBER} : 
+User {$data=STRING+} logged out (login time: {$login_time=UNTIL(", number of API invocations: ")}{NUMBER}, user agent: {$user_agent=REST}'
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$list = csv($data, "@", "'")
+$ip_address = $list[length($list)-1]
+$user_name = strip($data, "", "@" + $ip_address)
+
+submessage("TEXT", "parse_user", $user_name)
+
+subject.account.name = $username
+subject.account.domain = $domain
+subject.process.meta = strip($user_agent, "", ")")  # User-Agent
+
+if in_list(["127.0.0.1", "[::1]", recv_ipv4], $ip_address) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+    
+    src.ip = $ip_address
+endif
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+dst.ip = event_src.ip
+dst.hostname = $Computer
+dst.fqdn = event_src.fqdn
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+chain_id = $kv_msg["opID"]  # opID field of header
+
+msgid = "UserLogoutSessionEvent"
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_6_0_syslog_User_logout"

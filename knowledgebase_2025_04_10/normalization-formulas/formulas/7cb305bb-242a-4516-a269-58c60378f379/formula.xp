@@ -1,0 +1,92 @@
+# {"class":"vim.event.AlarmSnmpCompletedEvent","key":108722,"chainId":108722,"createdTime":"2022-03-03 10:45:23.289999+00:00","userName":"","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"Datacenter","datacenter":"vim.Datacenter:datacenter-3"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"10.125.4.3","computeResource":"vim.ComputeResource:domain-s8"},"host":{"class":"vim.event.HostEventArgument","name":"10.125.4.3","host":"vim.HostSystem:host-10"},"vm":{"class":"vim.event.VmEventArgument","name":"New Virtual Machine","vm":"vim.VirtualMachine:vm-3001"},"fullFormattedMessage":"Alarm 'MyAlarm': an SNMP trap for entity New Virtual Machine was sent","alarm":{"class":"vim.event.AlarmEventArgument","name":"MyAlarm","alarm":"vim.alarm.Alarm:alarm-7102"},"entity":{"class":"vim.event.ManagedEntityEventArgument","name":"New Virtual Machine","entity":"vim.VirtualMachine:vm-3001"}}
+
+JSON = ''
+COND = in_list([
+           "AlarmEmailCompletedEvent",
+           "AlarmEmailFailedEvent",
+           "AlarmSnmpCompletedEvent",
+           "AlarmSnmpFailedEvent",
+           "AlarmScriptCompleteEvent",
+           "AlarmScriptFailedEvent"
+       ], strip($class, "vim.event.", ""))
+ 
+action = switch strip($class, "vim.event.", "")
+    case "AlarmEmailCompletedEvent" "send"
+    case "AlarmEmailFailedEvent" "send"
+    case "AlarmSnmpCompletedEvent" "send"
+    case "AlarmSnmpFailedEvent" "send"
+    case "AlarmScriptCompleteEvent" "execute"
+    case "AlarmScriptFailedEvent" "execute"
+endswitch
+
+subject = "rule"
+object = if find_substr($class, "Script") != null then "command" else "message" endif
+status = if find_substr($class, "Failed") != null then "failure" else "success" endif
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+subject.name = $alarm["name"]
+subject.id = strip($alarm["alarm"], "vim.alarm.Alarm:", "")
+
+if $class == "vim.event.AlarmScriptCompleteEvent" then
+    $script_list = csv($script, "/", "")
+
+    if length($script_list) > 1 then
+        object.name = $script_list[length($script_list)-1]
+        object.path = strip($script, "", object.name)
+    else
+        object.name = $script
+    endif
+    object.fullpath = $script
+endif
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield2 = $ds["name"]  # Datastore Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = $entity["name"]  # Entity Name
+datafield5 = $vm["name"]  # Virtual Machine Name
+datafield6 = $host["name"]  # Host Name
+datafield7 = $parent["name"]  # Parent Entity Name
+datafield8 = $dvs["name"]  # vCenter Distributed Switch Name
+datafield9 = $net["name"]  # vCenter Distributed Switch Port Group Name
+datafield10 = substr($entity["entity"], find_substr($entity["entity"], ":") + 1, length($entity["entity"]))  # Internal Entity ID
+ 
+chain_id = $chainId
+
+reason = $reason["msg"]
+ 
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "low"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_Alarm_Actions"

@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys=WORDDASH}: [{NUMBER}]: debug: cib_native_signon_raw: Connection to CIB successful'
+
+action = "connect"
+object = "resource"
+status = "success"
+
+object.type = "Cluster Information Base"
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pacemaker"
+event_src.category = "Other"
+
+id = "PT_Opensource_Pacemaker_syslog_cib_native_signon"

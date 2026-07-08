@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+{UNTIL("[")?}{NUMBER"]:"?}{$temp_time=UNTIL(",")?}{NUMBER?} 
+{"[salt.daemons.masterapi"?}{":"?}{msgid = "220"?}{"]"?}{"["?}{WORD?}{"]["?}{object.process.id=NUMBER?}] 
+Preparing the {object.account.name=STRING} key for local communication'
+
+action = "modify"
+object = "virtual_key"
+status = "success"
+
+if $temp_time != null then
+    time = datetime($temp_time)
+endif
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "saltstack"
+event_src.category = "Other"
+
+id = "PT_Opensource_SaltStack_syslog_220_preparing_key_for_user"

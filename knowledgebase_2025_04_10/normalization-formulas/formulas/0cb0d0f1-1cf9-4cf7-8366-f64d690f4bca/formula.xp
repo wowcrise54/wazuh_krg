@@ -1,0 +1,45 @@
+EVENTLOG = 'Channel = "Netwrix Auditor"'
+
+COND = $EventID["text"] == "5026" or $EventID["text"] == "5034" or $EventID["text"] == "6106" or
+       $EventID["text"] == "6107" or $EventID["text"] == "6110" or $EventID["text"] == "6115"
+
+if $EventID["text"] == "5034" or $EventID["text"] == "6115" then
+    action = "modify"
+    status = "ongoing"
+    object.property = "modify details"
+    object.value = $Data[6]
+elif $EventID["text"] == "6110"  then
+    action = "modify"
+    status = "failure"
+    reason = strip($Data[6],"",".")
+else
+    action = "check"
+    status = "failure"
+    reason = strip($Data[6],"",".")
+endif
+
+object = "policy"
+
+datafield1 = $Data[0]  # monitoring plan name
+datafield2 = $Data[1]  # monitored item in monitoring plan
+datafield3 = $Data[5]  # monitored object
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($Provider["Name"])
+event_src.category = "Other"
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_Policies_actions"

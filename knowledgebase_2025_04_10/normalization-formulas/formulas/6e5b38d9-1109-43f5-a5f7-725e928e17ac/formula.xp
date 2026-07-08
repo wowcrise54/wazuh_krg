@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        %{"%"?}10{$tmp_subsys="DHCPS"}/{NUMBER}/{msgid="ALLOCATE_IP"}:
+        DHCP server received a DHCP client\'s request packet on interface {$iface=STRING}
+        and allocated an IP address {assigned_src_ip=IPV4}(lease {datafield2 = NUMBER} seconds) for the DHCP client
+        (MAC{$mac=WORDDASH}) from {object.value=STRING+} pool{REST}'
+
+action = "assign"
+object = "ip_address"
+status = "success"
+
+object.property = "address pool"
+
+# Divide the mac by inner dashes into a list and then concatenate it:
+$mac = csv($mac, "-", "'")
+src.mac = macaddr($mac[0] + $mac[1] + $mac[2])
+interface = strip($iface, "", ",")
+protocol = "DHCP"
+
+# datafield2 - lease time
+
+
+importance = "info"
+
+event_src.title = "vsr"
+event_src.subsys = lower($tmp_subsys)
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.category = "Network device"
+
+id = "PT_HPE_VSR_syslog_DHCPS_allocate_ip"

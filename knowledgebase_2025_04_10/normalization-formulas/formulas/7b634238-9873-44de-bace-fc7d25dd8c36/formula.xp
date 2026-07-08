@@ -1,0 +1,14 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}{$ip2=IPV4|$ip2=IPV6|event_src.hostname=STRING|} 
+        {"%%"}{WORD+}/{NUMBER}/{msgid="SYS_RESTART"}{"(l)"?}{"["NUMBER"]"?}:System restarted {REST}'
+
+action = "restart"
+object = "system"
+status = "success"
+
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_System_restarted"

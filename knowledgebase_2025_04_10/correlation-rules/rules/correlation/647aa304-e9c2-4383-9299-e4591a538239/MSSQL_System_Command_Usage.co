@@ -1,0 +1,104 @@
+event Execute_Xp_Cmdshell:
+    key:
+        event_src.host
+    filter {
+        filter::MSSQL_Query("EX", "X")
+        and datafield6 != null
+        and match(lower(object.query), "*xp_cmdshell*")
+        and filter::CheckWL_Database_Actions("MSSQL_System_Command_Usage", lower(datafield6))
+    }
+
+event Execute_Sp_Oamethod:
+    key:
+        event_src.host
+    filter {
+        filter::MSSQL_Query("EX", "X")
+        and datafield6 != null
+        and match(lower(object.query), "*sp_oamethod*@shell*run*")
+        and filter::CheckWL_Database_Actions("MSSQL_System_Command_Usage", lower(datafield6))
+    }
+
+rule MSSQL_System_Command_Usage: (Execute_Xp_Cmdshell or Execute_Sp_Oamethod)
+    
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Execute_Xp_Cmdshell {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        
+        # пример значения, которое может приходить в имя команды:
+        # EXEC(UTE?) xp_cmdshell 'ipconfig'
+        $object.value = datafield6
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower(datafield6)
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+    on Execute_Sp_Oamethod {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        # Пример строки, которая попадает в поле, описанное ниже
+        # EXEC sp_oamethod @shell, 'run', null, 'sc start XboxGipSvc', '0','True'
+        $object.value = datafield6
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower(datafield6)
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {    
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Windows Command Shell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

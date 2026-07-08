@@ -1,0 +1,76 @@
+event Invoke_Wmimethod_4103:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and object == "command"
+        and event_src.title == "windows"
+        and regex(lower(object.process.cmdline), "invoke\-wmimethod.*?\-class\s+[\"\'\`]?win32_process\\b", 0) != null
+        and regex(lower(object.process.cmdline), "invoke\-wmimethod.*?\-name\s+[\"\'\`]?create\\b", 0) != null
+        and regex(lower(object.process.cmdline), "invoke\-wmimethod.*?\-argumentlist\s+[\"\'\`]?powershell.exe", 0) != null
+        and filter::CheckWL_Powershell("Subrule_PowerShell_CLM_Bypass_4103", lower(object.process.cmdline))
+    }
+
+event Set_Environment_Temp_Property_4103:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and object == "command"
+        and event_src.title == "windows"
+        and regex(lower(object.process.cmdline), "set\-itemproperty.*?\-path\s+[\"\'\`]?hkcu\:\\\\environment", 0) != null
+        and regex(lower(object.process.cmdline), "set\-itemproperty.*?\-name\s+[\"\'\`]?(temp|tmp)\\b", 0) != null
+    }
+
+rule Subrule_PowerShell_CLM_Bypass_4103: (Invoke_Wmimethod_4103 and Set_Environment_Temp_Property_4103) within 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+    }
+
+    on Invoke_Wmimethod_4103 {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+
+        $object = object
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.context = "powershell commands 4103: set environment temp property + run powershell via Invoke-WmiMethod"
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $action = "execute"
+    $status = "success"
+
+    $importance = "info"
+}

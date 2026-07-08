@@ -1,0 +1,47 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Аутентификация и идентификация"
+       and $event_id == 67108870
+       and find_substr($event_message, "successfully authenticated") != null
+
+action = "login"
+object = "system"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    TEXT = "Группа событий аутентификации\n\r\n\rxdm:auth : Token with serial
+    number '{datafield1=WORD}' successfully authenticated{'\n'?}"
+endsubformula
+
+logon_service = "token"
+logon_auth_method = 'local'
+
+# datafield1 - token serial number
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_token_login_system"

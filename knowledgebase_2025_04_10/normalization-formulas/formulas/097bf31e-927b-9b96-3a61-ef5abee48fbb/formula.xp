@@ -1,0 +1,35 @@
+EVENTLOG = 'EventID.text="16390"'
+
+COND = (
+         $Channel == "ViPNet Administrator KCA"
+         and $Provider["Name"] == "Key and Certification Authority"
+         and $Keywords == '0x80000000000000'
+       )
+
+action = "stop"
+object = "application"
+status = "success"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Application"
+category.low = "Control"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_kca"
+event_src.subsys = lower($Channel)
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_KCA_eventlog_16390_normal_shutdown_of_KCA"

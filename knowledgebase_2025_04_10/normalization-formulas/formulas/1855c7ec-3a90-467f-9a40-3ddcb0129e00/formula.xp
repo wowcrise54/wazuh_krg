@@ -1,0 +1,57 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER} {time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} ERAServer {NUMBER} - - LEEF:1.0|
+        ESET|RemoteAdministrator|{UNTIL("|")} {UNTIL("|")}
+        cat={msgid="ESET RA Audit Event"}{$kv=KEYVALUE("\t", "=")}'   
+        
+subject = "account"
+switch $kv["action"]
+    case "Login attempt"
+        action = "login"
+        $subject = strip($kv["detail"], "Authenticating native user '", "'.")
+    case "Logout"
+        action = "logout"
+        $subject = $kv["user"]
+endswitch
+object = "application"
+if $kv["result"] == "Success" then
+    status = "success"
+    importance = "info"
+else
+    status = "failure"
+    importance = "low"
+endif
+
+if find_substr($subject, "\\") != null then
+    $csv_subject_domain_name = csv($subject, "\\", "'")
+    subject.account.name = $csv_subject_domain_name[length($csv_subject_domain_name)-1]
+    subject.account.domain = strip($subject, "", "\\" + subject.account.name) 
+else
+    subject.account.name = $subject
+endif
+
+object.type = $kv["domain"]
+
+dst.ip = $kv["src"]
+dst.hostname = $Computer
+
+logon_auth_method = "remote"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+if event_src.ip == null then
+    event_src.ip = $kv["src"]
+endif
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_security_management_center"
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_security_management_center_syslog_user_login_logout"

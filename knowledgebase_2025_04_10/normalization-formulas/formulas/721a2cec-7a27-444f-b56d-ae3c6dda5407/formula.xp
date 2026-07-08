@@ -1,0 +1,82 @@
+!TABULAR = "severity,
+            {msgid=event_type},
+            {time=event_time},
+            description,
+            hostname,
+            {datafield1=group_name}"
+
+!COND = $event_type == "KLAUD_EV_SERVERCONNECT"
+
+$description = replace($description, " ", "\t")
+if find_substr($description, "\r\n") != null then
+    $kv = keyvalue($description, "\r\n", ":")
+else
+    $kv = keyvalue($description, " ", ": ")
+endif
+
+subject = "account"
+action = "login"
+object = "application"
+
+if $par4 != null then
+    status = "failure"
+    reason = $par4
+else
+    status = "success"
+endif
+
+
+object.name = "Kaspersky Security Center"
+
+subject.account.fullname = lower($par3)
+$domain = substr($par3, 0, find_substr($par3, '\\'))
+subject.account.domain = lower($domain)
+subject.account.name = lower(strip($par3, $domain + '\\', ''))
+
+src.ip = $par5
+
+# datafield1 - имя группы, в которую входит узел-источник
+
+importance = switch $severity
+    case 1 "info"
+    case 2 "low"
+    case 3 "medium"
+    case 4 "high"
+endswitch
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+event_src.subsys = $task_name
+if $ip_address != "127.0.0.1" then
+    event_src.ip = $ip_address
+    dst.ip = event_src.ip
+endif
+if ipv4($fqdn) == null and find_substr($fqdn, ".") != null then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_odbc_KLAUD_EV_SERVERCONNECT"
+
+# -- DEPRECATED --
+# lines from here will be deleted in future releases
+
+subject.name = subject.account.name
+subject.domain = subject.account.domain

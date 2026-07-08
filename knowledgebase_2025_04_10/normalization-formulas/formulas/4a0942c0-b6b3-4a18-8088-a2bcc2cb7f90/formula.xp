@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {NUMBER?}{":"?} {"AAA"} {"-"?} {$temp_status="DISCONNECT"|$temp_status="CONNECT"}{":"?} - {WORD?} {protocol="http"}
+        connection for user {subject.name=UNTIL(",")} source {src.ip=IPV4|src.ip=IPV6} destination {dst.ip=IPV4|dst.ip=IPV6}
+        {WORD}{LITERAL?}{"aggregated""("NUMBER")"?}'
+
+subject = "account"
+
+if $temp_status == "DISCONNECT" then
+    action = "close"
+else
+    action = "open"
+endif
+
+object = "session"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "small_business_solution"
+event_src.category = "Network device"
+
+id = "PT_Cisco_SBS_syslog_http_connect_disconnect"

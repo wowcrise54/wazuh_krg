@@ -1,0 +1,107 @@
+query CheckIfWhitelisted($rule, $value, $tag) from Common_whitelist_for_labeling {
+    (rule == $rule or rule == "*")
+    and specific_value == $value
+    and tag == $tag
+}
+
+query CheckIfWhitelisted_regex($rule, $value, $tag) from Common_whitelist_for_labeling_regex {
+    (rule == $rule or rule == "*")
+    and regex_match($value, column::specific_value)
+    and tag == $tag
+}
+
+event Correlation:
+    filter {
+       correlation_name != null
+       and correlation_type != "subrule"
+       and regex(lower(alert.context), "(^|\|( )?)(ioc_|ioc:|rstfeed_ioc|tisci_ioc)", 0) == null
+    }
+
+event Correlation_detect:
+    filter {
+       correlation_name != null
+       and not match(lower(correlation_name), "*abnormal_access")
+       and detect == "drop"
+    }
+
+enrichment Correlation_Whitelisting_by_Default_Values
+
+    enrich Correlation:
+        enrich_fields {
+            # Вайтлист по alert.context
+            if alert.context != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(alert.context), "alert_context"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(alert.context), "alert_context"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по alert.regex_match
+            if alert.regex_match != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(alert.regex_match), "alert_regex_match"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(alert.regex_match), "alert_regex_match"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по alert.key
+            if alert.key != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(alert.key), "alert_key"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(alert.key), "alert_key"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по detect
+            if detect != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(detect), "detect"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(detect), "detect"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по object.process.decoded_data
+            if object.process.decoded_data != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(object.process.decoded_data), "object_process_decoded_data"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(object.process.decoded_data), "object_process_decoded_data"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по object.process.parent.decoded_data
+            if object.process.parent.decoded_data != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(object.process.parent.decoded_data), "object_process_parent_decoded_data"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(object.process.parent.decoded_data), "object_process_parent_decoded_data"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по subject.process.decoded_data
+            if subject.process.decoded_data != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.process.decoded_data), "subject_process_decoded_data"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(subject.process.decoded_data), "subject_process_decoded_data"])
+                then
+                    drop
+                endif
+            endif
+
+            # Вайтлист по subject.process.parent.decoded_data
+            if subject.process.parent.decoded_data != null then
+                if exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.process.parent.decoded_data), "subject_process_parent_decoded_data"])
+                or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower(subject.process.parent.decoded_data), "subject_process_parent_decoded_data"])
+                then
+                    drop
+                endif
+            endif
+        }
+
+    enrich Correlation_detect:
+        enrich_fields {
+            drop
+        }

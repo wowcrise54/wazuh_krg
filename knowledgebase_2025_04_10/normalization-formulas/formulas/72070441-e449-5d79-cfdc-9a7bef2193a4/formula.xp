@@ -1,0 +1,83 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "UserGroup"
+
+subject = "account"
+
+action = switch $type
+    case "Create" "create"
+    case "Update" "modify"
+    case "Remove" "remove"
+endswitch
+
+object = "user_group"
+status = "success"
+
+subject.account.id = $author
+subject.account.name = $authorPresentation
+
+object.id = $targetId
+object.name = $targetPresentation
+
+if $type == "Create" then
+    if $change["projectRoles"]["fieldType"] != null then
+        object.property = $change["projectRoles"]["fieldType"]
+        object.value = $property["added"]["presentation"]
+    endif
+
+    object.group = $change["parent"]["added"]["presentation"]
+
+elif $type == "Remove" then
+    object.property = $change["projectRoles"]["fieldType"]
+
+    $csv_roles = csv($change["projectRoles"]["removed"]["presentation"], " ,", "")
+    object.value = join($csv_roles, "|")
+
+    $csv_role_ids = csv($change["projectRoles"]["removed"]["id"], ",", "")
+    datafield1 = join($csv_role_ids, "|") # Role IDs
+
+    $csv_users = csv(strip($change["users"]["removed"]["presentation"], "", " "), " ,", "")
+    datafield2 = join($csv_users, "|")  # Users
+
+    $csv_user_ids = csv($change["users"]["removed"]["id"], ",", "")
+    datafield3 = join($csv_user_ids, "|")  # User IDs
+
+elif $type == "Update" and $change["type"] == "LinkChangeJSON" then
+    object.property = join([$change["operation"], $change["fieldName"]], " ")
+
+    if $change["presentation"] != null then
+        $value = $change["presentation"]
+
+        datafield4 = $change["id"]  # ID subresource
+    else
+        $value = $change["id"]
+    endif
+
+    switch $change["operation"]
+        case "added"
+            object.new_value = $value
+        case "removed"
+            object.value = $value
+    endswitch
+
+elif $type == "Update" and $change["type"] == "PrimitiveChangeJSON" then
+    object.property = $change["fieldName"]
+    object.value = $change["oldValue"]
+    object.new_value = $change["newValue"]
+endif
+
+chain_id = $id
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "low"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_UserGroup_Manage"

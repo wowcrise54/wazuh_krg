@@ -1,0 +1,54 @@
+JSON = ''
+
+COND = $event["trace"] != null 
+
+subject = "process"
+action = "modify"
+object = "process"
+status = "ongoing"
+
+subject.account.id = $process["audit_token"]["ruid"]
+subject.account.session_id = $process["session_id"]
+
+subject.process.id = $process["audit_token"]["pid"]
+subject.process.parent.id = $process["ppid"] 
+subject.process.fullpath = $process["executable"]["path"]
+$temp_name = csv(subject.process.fullpath, "/", "'")
+subject.process.name = $temp_name[length($temp_name) - 1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+subject.process.hash = "UNKNOWN:" + $process["cdhash"]
+
+object.account.session_id = $event["trace"]["target"]["session_id"]
+
+object.fullpath = $event["trace"]["target"]["executable"]["path"]
+$temp_name = csv(object.fullpath, "/", "'")
+object.name = $temp_name[length($temp_name) - 1]
+object.path = strip(object.fullpath, "", object.name)
+
+datafield1 = $process["audit_token"]["euid"]  # effective user ID
+datafield2 = $process["audit_token"]["rgid"]  # real group ID
+datafield3 = $process["audit_token"]["auid"]  # audit user ID
+datafield4 = $process["audit_token"]["egid"]  # effective group ID
+datafield5 = $process["is_platform_binary"]          # является ли исполняемый файл предустановленным Apple в ОС
+datafield6 = $process["is_es_client"]                # имеет ли данный процесс разрешение на работу с EndpointSecurity API
+datafield7 = $process["signing_id"]                  # идентификатор подписи кода исполняемого файла
+datafield8 = $process["codesigning_flags"]           # флаги подписи кода исполняемого файла
+datafield9 = $process["tty"]                         # tty ассоциированный с процессом
+datafield10 = $process["audit_token"]["pid"]         # audit token pid
+datafield11 = $process["team_id"]                    # идентификатор разработчика исполняемого файла
+datafield12 = $event["trace"]["target"]["team_id"]    # идентификатор разработчика исполняемого файла
+datafield13 = $process["group_id"]                   # group id
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Application"
+
+msgid = $event_type
+time = $time
+importance = "info"
+
+event_src.category = "Host security"
+event_src.vendor = "positive_technologies"
+event_src.title = "edr"
+
+id = "PT_Positive_Technologies_XDR_es_logger_process_attempt_to_attach_to_process"

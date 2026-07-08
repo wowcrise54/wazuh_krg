@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        Category: {NUMBER},{$tmp_subsys="Symantec AntiVirus"},{"\\""?}{"Event Description: "?}
+        \"[Отправка сведений о расширенном эвристическом обнаружении вирусов]
+        Информация о файле отправлена в Symantec. Файл:  \' {$op=UNTIL(",")}
+        Размер (байты): {$objvalue=WORD}  {REST}'
+
+action = "send"
+object = "report"
+status = "success"
+
+datafield8 = $objvalue           # file size
+datafield9 = strip($op,'','\'')  # file path
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_send_info_about_file_ev_en_ru"

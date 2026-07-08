@@ -1,0 +1,33 @@
+!JSON = 'event.originator.module.name="Tickets"'
+!COND =  $event["actionType"]=="Tickets:ticketRead"
+
+subject = "account"
+action = "view"
+object = "resource"
+status = "success"
+
+subject.name = $userLogin
+object.id = $event["originator"]["id"]["id"]
+object.name = $event["originator"]["id"]["displayName"]
+object.type = "ticket"
+
+src.ip = $userIp
+
+time = $datetime
+importance = "info"
+
+$dot_pos = find_substr($systemIp, '.')
+if maybe_ipv4($systemIp) != null then
+   event_src.ip = $systemIp
+elif $dot_pos != null then
+   event_src.fqdn = $systemIp
+   event_src.hostname = substr($systemIp, 0, $dot_pos)
+else
+   event_src.hostname = $systemIp
+endif
+
+event_src.title = "fcsp"
+event_src.vendor = "positive_technologies"
+event_src.category = "Other"
+
+id = "PT_Positive_Technologies_Operators_Participants_Portal_filemonitor_Tickets_ticket_read"

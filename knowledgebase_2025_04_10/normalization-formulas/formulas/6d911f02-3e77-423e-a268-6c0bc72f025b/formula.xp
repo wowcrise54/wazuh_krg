@@ -1,0 +1,43 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           user_domain,
+           user_name
+           "
+
+COND = string($event_id) == "1002"
+       and $event_category == "Общие события"
+       and (
+        $event_type == "Error"
+        or $event_type == "Ошибка"
+       )
+
+action = "alert"
+object = "process"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+subformula "message"
+    TEXT = 'Ошибка. Имя процесса: {object.name=STRING+} Данные: {reason=STRING+}'
+endsubformula
+
+msgid = $event_id
+importance = "high"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.subsys = lower($event_category)
+if $event_category == "Общие события" then
+    event_src.subsys = "common events"
+endif
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_odbc_1002_process_error"

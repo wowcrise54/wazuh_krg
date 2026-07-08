@@ -1,0 +1,13 @@
+Category:
+EventDescriptions:
+- Criteria: 'correlation_name = "KSMG_Malware_Detect_And_Clean" and action = "modify"'
+  LocalizationId: 4b247327-660f-1bc7-8bca-9ecf2943c63f
+- Criteria: 'correlation_name = "KSMG_Malware_Detect_And_Clean" and action = "deny" and object.state != "quarantined"'
+  LocalizationId: a41e0fb9-d822-4721-33ab-e45423f7d275
+- Criteria: 'correlation_name = "KSMG_Malware_Detect_And_Clean" and action = "remove"'
+  LocalizationId: b32bb584-1b51-854e-d723-259ab4ae0618
+- Criteria: 'correlation_name = "KSMG_Malware_Detect_And_Clean" and object.state = "quarantined" or action = "quarantine"'
+  LocalizationId: ea63912b-3ba1-97c7-9dd9-7c0ff7b06c68
+PtkbId: 27de38df-1897-e99d-74f9-06895651b2e7
+ObjectId: PT-CR-2080
+Origin: PT

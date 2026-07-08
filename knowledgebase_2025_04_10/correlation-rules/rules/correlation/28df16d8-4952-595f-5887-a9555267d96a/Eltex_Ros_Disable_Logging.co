@@ -1,0 +1,68 @@
+event Disable_Logging:
+    key:
+        event_src.host
+    filter {   
+        filter::NotFromCorrelator()
+        and event_src.vendor == "eltex"
+        and event_src.title == "ros"
+        and (match(lower(object.process.cmdline), "*no logging*")
+            or (action == "stop"
+                and object == "service"
+                and object.type == "logging service"))
+        and filter::CheckWL_Specific_Only("Eltex_Ros_Disable_Logging", lower(join([subject.account.name, object.process.cmdline, src.host], "|")))
+
+    }
+rule Eltex_Ros_Disable_Logging: Disable_Logging
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Disable_Logging {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+
+        $object.name = object.name
+        $object.process.cmdline = object.process.cmdline
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline, src.host], "|"))
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "disable"
+    $object = "service"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Command History Logging"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $object.process.cmdline, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 3h
+}

@@ -1,0 +1,25 @@
+id = "PT_Cisco_IOS_XR_syslog_PKT_INFRA_LINK_CHANGED_UPDOWN"
+
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {STRING?} {WORD}/{WORD}/{WORD}/{WORD}: {time=DATETIME}{":"?}
+        {WORDDASH?}{"[" NUMBER "]" ?}{":"?} %PKT_INFRA-LINK-{$msg_number=WORD}-{$result="CHANGED"|$result="UPDOWN"}:
+        Interface {$interface_tmp=STRING} changed state to {$prefix="Administratively"?} {$state="Down"|$state="Up"}'
+
+action = lower($state)
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+if $prefix != null then
+    reason = "By user"
+endif
+
+interface = strip($interface_tmp, "", ",")
+
+msgid = "PKT_INFRA-LINK-" + $msg_number + "-" + $result
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "ios_xr"
+event_src.category = "Network device"

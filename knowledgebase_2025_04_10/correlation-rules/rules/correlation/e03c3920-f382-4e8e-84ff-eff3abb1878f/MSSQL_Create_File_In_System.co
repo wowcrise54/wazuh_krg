@@ -1,0 +1,65 @@
+event Create_File_Sp_Oamethod:
+    key:
+        event_src.host
+    filter {
+        filter::MSSQL_Query("EX", "X")
+        and match(lower(object.query), "*sp_oamethod*createtextfile*")
+        and filter::CheckWL_Database_Actions("MSSQL_Create_File_In_System", lower(string(regex(object.query, ", '(.*?)',", 1))))
+    }
+
+rule MSSQL_Create_File_In_System: Create_File_Sp_Oamethod
+    
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Create_File_Sp_Oamethod {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        # Пример строки, которая попадает под регулярное выражение, описанное ниже
+        # exec sp_oamethod @o, 'createtextfile', @f out, 'C:\\\\ForHacker\\\\HuckFile.txt', 1
+        $object.value = string(regex(object.query, ", '(.*?)',", 1))
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower($object.value)
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "create"
+    $object = "file_object"
+
+    $object.property = "command name"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Ingress Tool Transfer"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

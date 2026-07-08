@@ -1,0 +1,78 @@
+event Event_Disabling_Protective_VM:
+    key:
+        event_src.host, subject.account.name, subject.account.domain, status
+    filter {
+        correlation_name == "Disabling_Protective_VM"
+    }
+
+rule Mass_Disabling_Protective_VM: Event_Disabling_Protective_VM[3,] with different object.name timer 10m
+
+    init {
+        $first_event = true
+        $disabled_vms = []
+        $guests = []
+        $esxis = []
+    }
+
+    on Event_Disabling_Protective_VM {
+        if $first_event then
+            $subject = subject
+            $action = action
+            $object = object
+            $status = status
+            
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+                        
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            
+            $labels = $labels + "|event_source_to_related_assets"
+
+            $first_event = false
+        endif
+        
+        if coalesce(subject.account.name, subject.name) != null then
+            $subject.account.name = coalesce(subject.account.name, subject.name)
+            $subject.account.domain = coalesce(subject.account.domain, subject.domain)
+            if find_substr($labels, "subject_account_to_attacking_assets") == null then
+                $labels = $labels + "|subject_account_to_attacking_assets"
+            endif
+        endif
+        
+        $disabled_vms = append($disabled_vms, object.name)
+        
+        if datafield8 != null and datafield9 != null then
+            $guest_data = datafield8 + " : " + datafield9
+            $guests = append($guests, $guest_data)
+        endif
+        
+        if datafield11 != null and datafield12 != null then
+            $esxi_data = datafield11 + " : " + datafield12
+            $esxis = append($esxis, $esxi_data)
+        endif
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $datafield5 = join($disabled_vms, "|")  # Перечень имен виртуальных машин
+    $datafield7 = join($guests, "|")        # Перечень guest_data
+    $datafield8 = join($esxis, "|")         # Перечень esxi_data
+        
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name, $subject.account.domain], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

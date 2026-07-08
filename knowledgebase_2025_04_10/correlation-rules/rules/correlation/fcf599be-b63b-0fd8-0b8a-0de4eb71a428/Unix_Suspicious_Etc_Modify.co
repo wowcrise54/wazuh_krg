@@ -1,0 +1,165 @@
+query Check_File_Creation($host, $file_name) from Unix_Suspicious_Created_Files {
+    host == $host
+    and file_name == $file_name
+}
+
+query Get_File_Info($host, $file_name) from Unix_Suspicious_Created_Files {
+    host == $host
+    and file_name == $file_name
+}
+    qhandler {
+        $cmdline = cmdline
+        $process_name = process_name
+        $file_name = file_name
+    }
+
+event Syscall_Etc_Modify:
+    key:
+        event_src.host, subject.process.id, object.path
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::FileModify_Linux("^\/etc\/(passwd|shadow|group|sudoers|security\/opasswd|sudoers\.d|ld\.so\.conf\.d)")
+        and (
+            regex(subject.process.fullpath, "bin/(sed|vi|vim.*|mc(edit|view|diff)?|dd|cp|mv|.*awk|emacs|nano|python|perl|ruby|php|java|[^/s]*sh|diff)$", 0) != null
+            or exec_query("Check_File_Creation", [event_src.host, subject.process.name])
+        )
+        and status == "success"
+        and filter::CheckWL_Linux_File_Operations("Unix_Suspicious_Etc_Modify",
+            lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|")))
+    }
+
+rule Unix_Suspicious_Etc_Modify: Syscall_Etc_Modify+ timer 10s
+
+    init {
+        $first_event = true
+        $count.subevents = 0
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+        $context = ""
+    }
+
+    on Syscall_Etc_Modify {
+        if $first_event then  # блок выполняется только при первом событии инстанса
+            $subject.type = subject.type
+
+            $action = action  # create, modify, access, remove
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            
+            if subject != null then
+                $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+            else
+                $prefix = "[sys] "
+            endif
+
+            $subject.process.name = subject.process.name
+            $subject.process.id = subject.process.id
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.cmdline = subject.process.cmdline
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.meta = subject.process.meta
+            $subject.process.parent.id = subject.process.parent.id
+            
+            $context = $context + "[" + string(subject.process.id) + "] " + subject.process.name + " → "
+
+            $object.name = object.name
+            $object.type = object.type
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.state = object.state            # open mode
+            $object.property = object.property
+
+            $result = exec_query("Get_File_Info", [event_src.host, subject.process.name])
+
+            $object.process.name = $result["$process_name"]
+            $object.process.cmdline = $result["$cmdline"]
+            
+            $files = object.fullpath
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+            
+            $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → " 
+
+            $logon_service = logon_service
+            
+            $datafield1 = datafield1  # Executable Name
+            $datafield2 = datafield2  # Owner User Name
+            $datafield3 = datafield3  # File Access Mode
+
+            $numfield2 = numfield2  # Owner User ID
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $first_event = false
+
+            $alert.key = lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|"))
+        else
+            if $action != action then
+                $action = null
+            endif
+            # если событий пришло два и более то эти поля зануляются так как они дублируются первым
+            $object.name = null
+            $object.type = null
+            $object.fullpath = null
+            $object.state = null
+            $object.property = null
+            
+            $files = string($count.subevents + 1) + " files in " + object.path
+            
+            $datafield1 = null  # Executable Name
+            $datafield2 = null  # Owner User Name
+            $datafield3 = null  # File Access Mode
+
+            $numfield2 = null  # Owner User ID
+        endif
+        
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    if $result["$process_name"] != null then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif   
+
+    $subject = "account"
+    $action = coalesce($action, "modify")
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $alert.context = $prefix + $context + $files 
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

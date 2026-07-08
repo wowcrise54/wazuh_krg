@@ -1,0 +1,62 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER}: {"default"?}
+        {msgid = "SSLVPN HTTPREQUEST"} {NUMBER+} : Context {$user_info=STRING+} - SessionId: {datafield1=NUMBER} -
+        {dst.ip=IPV4|dst.ip=IPV6|dst.fqdn=HOSTNAME} User {$obj_user_info=UNTIL(" :")|$obj_user_info=UNTIL(":")}
+        Group(s) {$groups=STRING+} : Vserver {event_src.ip=IPV4}:{NUMBER} - {$req_time1=STRING} {$req_time2=STRING?}
+        {":"?} {UNTIL(":")?} {datafield3=WORD} {datafield4=STRING} {REST}'
+
+object = "request"
+action = "allow"
+status = "success"
+
+src.ip = csv($user_info, "@", "")[1]
+
+protocol.layer7 = "http"
+
+# datafield1 - session ID
+# datafield2 - defining the account name
+# datafield3 - request method
+# datafield4 - url
+# datafield6 - defining the account domain
+
+if find_substr($obj_user_info, "\\") != null then
+    datafield2 = csv($obj_user_info, "\\", "")[1]
+    datafield6 = csv($obj_user_info, "\\", "")[0]
+elif find_substr($obj_user_info, "@") != null then
+    datafield2 = csv($obj_user_info, "@", "")[0]
+    datafield6 = csv($obj_user_info, "@", "")[1]
+else
+    datafield2 = $obj_user_info
+endif
+
+datafield5 = join(csv($groups, ",", ""), "|")  # группы
+
+$ev_time = coalesce($req_time1 + $req_time2, $sys_time)
+# Converting time to mm/dd/yyyy:hh:mm:ss format
+if find_substr($ev_time, "/") == 4 then
+    $yyyy = substr($ev_time, 0, 4)
+    $mm_dd = substr($ev_time, 5, 5)
+    $ev_time = $mm_dd + "/" + $yyyy + substr($ev_time, 10, 20)
+endif
+# Adding\removing a space in $start_time depending on the time zone format
+if find_substr($ev_time, " ") != null and (find_substr($ev_time, "+") != null or find_substr($ev_time, "-") != null) then
+    $ev_time = substr($ev_time, 0, 19) + substr($ev_time, 20, 10)
+elif find_substr($ev_time, " ") == null and find_substr($ev_time, "+") == null and find_substr($ev_time, "-") == null then
+    $ev_time = substr($ev_time, 0, 19) + " " + substr($ev_time, 19, 10)
+endif
+
+time = $ev_time
+importance = "info"
+
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "netscaler"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Citrix_NetScaler_syslog_sslvpn_httprequest"

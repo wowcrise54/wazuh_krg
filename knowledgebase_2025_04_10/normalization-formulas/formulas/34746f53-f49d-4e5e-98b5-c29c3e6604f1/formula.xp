@@ -1,0 +1,52 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$hostname_src=client_name}"
+
+COND = $journal_id == "CONNECT" and $event_on_connect == 11
+
+action = "close"
+object = "connection"
+status = "success"
+
+$csv = csv($process_name, "\\", "")
+if length($csv) > 1 then
+    object.process.fullpath = $process_name
+    object.process.name = $csv[length($csv) - 1]
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+else 
+    object.process.name = $process_name
+endif
+
+object.account.name = $user_name 
+
+object.state = "closed"
+
+if $dns_name != "" then
+    dst.hostname = $dns_name
+endif
+
+if in_list([2, 23], $address_type) then
+    src.ip = $local_address
+    dst.ip = $remote_address
+    src.port = $local_port
+    dst.port = $remote_port
+endif
+count.bytes_in = $in_bytes
+count.bytes_out = $out_bytes
+direction = "egress"
+
+protocol = $protocol
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.hostname = lower($hostname_src)
+event_src.rule = $rule_id
+event_src.vendor = "confident"
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_connect_outgoing_connection_closed"

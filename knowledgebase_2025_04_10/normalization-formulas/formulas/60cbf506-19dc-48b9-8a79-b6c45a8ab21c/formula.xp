@@ -1,0 +1,27 @@
+!TABULAR = "{time = EventDate}, {$title = Title}, {$state = InOut}"
+
+subject = "account"
+action = if $InOut == "Выход" then "logout" else "login" endif
+object = "resource"
+status = "success"
+
+$u_d = csv($NTUsername, "@", "")
+$d_u = csv($NTUsername, "\\", "")
+
+subject.account.session_id = $CurrentVisitID
+subject.account.name = coalesce($d_u[1], $u_d[0])
+subject.account.domain = coalesce($u_d[1], $d_u[0])
+
+object.type = "security perimeter"
+
+$addr = csv($Title, ",", " ")
+dst.geo.org = coalesce($addr[0])
+dst.geo.city = coalesce($addr[1])
+
+importance = "info"
+
+event_src.vendor = "insyres"
+event_src.title = "visitorcontrol"
+event_src.category = "Physical security"
+
+id = "PT_Insyres_VisitorControl_odbc_pass"

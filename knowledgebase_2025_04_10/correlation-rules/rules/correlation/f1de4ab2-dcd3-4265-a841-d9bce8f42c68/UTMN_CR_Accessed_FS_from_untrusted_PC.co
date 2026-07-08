@@ -1,0 +1,93 @@
+query Check_is_host_trusted_for_user($ip,$user) from UTMN_TL_Critical_hosts_and_users {
+        (
+            column::ip == $ip and 
+            column::ip != null
+        )
+        and
+        (
+            column::user == $user and 
+            column::user != null
+        )
+}
+
+query Check_is_critical_user($user) from UTMN_TL_Critical_hosts_and_users {
+        column::user == $user
+}
+
+query Check_is_terminal_server($ip) from UTMN_TL_Terminal_servers_static {
+		column::ip == $ip
+}
+
+    event A_network_share_object_was_accessed:
+    key:
+        event_src.host, subject.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows" 
+        and msgid == "5140"
+        #and exec_query("Check_is_terminal_server", [dst.hostname])
+        and not filter::Loopback_Address(src.ip)
+        and subject.account.privileges != null
+        and exec_query("Check_is_critical_user", [subject.name])
+        and not exec_query("Check_is_host_trusted_for_user", [src.ip,subject.name])
+        and not exec_query("Check_is_terminal_server", [src.ip])
+#       and table::Critical_hosts_by_manual {
+#           column::fqdn == lower(event_src.fqdn)}
+    }
+    
+rule UTMN_CR_Accessed_FS_from_untrusted_PC: A_network_share_object_was_accessed
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on A_network_share_object_was_accessed {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = datafield1
+
+        $object.name = object.name
+        
+        $src.ip = src.ip
+        
+        $dst.host = event_src.host
+        $dst.fqdn = event_src.fqdn
+        $dst.hostname = event_src.hostname
+        $dst.asset = event_src.asset
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    
+        $alert.key = lower(src.host)
+
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $category.generic = "Access"
+    $category.high = "Authentication"
+    $category.low = "Default Credentials"
+
+    $importance = "high"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $object.name], "|")
+    $incident.severity = "high"
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 10m
+}

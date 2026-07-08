@@ -1,0 +1,71 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {STRING?} {time=DATETIME}|{chain_id=UNTIL("|")?}{src.ip=IPV4|src.ip=IPV6|"UNKNOWN"}|{$user=UNTIL("|")}{$logged_principal=UNTIL("|")}{$entity_name=UNTIL("|")}{$event_type="C"|$event_type="U"|$event_type="D"}|TKN|{$data_changed=REST}'
+
+subject = "account"
+action = switch $event_type
+    case "C" "create"
+    case "U" "modify"
+    case "D" "remove"
+endswitch
+object = "resource"
+status = "success"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $data_changed)
+
+if ($user != "UNKNOWN") then
+    subject.account.name = $user
+else
+    subject.account.name = $logged_principal  # на основе экспериментов
+endif
+subject.account.privileges = $logged_principal
+
+object.type = coalesce(
+    $added["type"], 
+    $removed["type"], 
+    $updated["type"]["oldEntry"]
+    ) + "_token"
+object.name = $entity_name
+object.id = coalesce(
+    $added["id"], 
+    $removed["id"], 
+    $updated["id"]["oldEntry"]
+)
+object.group = coalesce(
+    $added["scope"], 
+    $removed["scope"], 
+    $updated["scope"]["oldEntry"]
+)
+object.account.name = coalesce(
+    $added["username"], 
+    $removed["username"], 
+    $updated["username"]["oldEntry"]
+)
+
+datafield1 = coalesce(
+    epoch_ms_to_datetime(number($added["created"])),
+    epoch_ms_to_datetime(number($removed["created"])),
+    epoch_ms_to_datetime(number($updated["created"]["oldEntry"]))
+)  # Creation Date
+datafield2 = coalesce(
+    epoch_ms_to_datetime(number($added["expirationTime"])),
+    epoch_ms_to_datetime(number($removed["expirationTime"])) ,
+    epoch_ms_to_datetime(number($updated["expirationTime"]["oldEntry"]))
+)  # Expiration Date
+
+importance = "medium"
+
+event_src.vendor = "jfrog"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "artifactory"
+event_src.category = "Other"
+
+id = "PT_JFrog_Artifactory_syslog_SA_Token_Management"

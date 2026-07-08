@@ -1,0 +1,612 @@
+JSON = ''
+COND = (
+    $eventid != null
+    and $node != null
+    and $timestamp != null
+    and (
+        (
+            find_substr($items["SYSCALL"][0], "arch=c000003e") != null
+            and (
+                find_substr($items["SYSCALL"][0], "syscall=82") != null      # rename
+                or find_substr($items["SYSCALL"][0], "syscall=264") != null  # renameat
+                or find_substr($items["SYSCALL"][0], "syscall=316") != null  # renameat2
+            )
+        )
+        or (
+            find_substr($items["SYSCALL"][0], "arch=40000003") != null
+            and (
+                find_substr($items["SYSCALL"][0], "syscall=38") != null      # rename
+                or find_substr($items["SYSCALL"][0], "syscall=302") != null  # renameat
+                or find_substr($items["SYSCALL"][0], "syscall=353") != null  # renameat2
+            )
+        )
+    )
+)
+
+$kv_syscall = keyvalue($items['SYSCALL'][0], ' ', '=')
+
+if $kv_syscall["auid"] != "4294967295" then
+    subject = "account"
+endif
+
+object = "file_object"
+
+if $kv_syscall["success"] == "yes" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+# Декодируем HEX, если требуется
+$auid_en = strip($kv_syscall["AUID"], '"', '"')
+if $auid_en == $kv_syscall["AUID"] then
+    $auid_en = hex_to_string($kv_syscall["AUID"])
+endif
+
+$auid_list = csv($auid_en, "@", "")
+
+# Декодируем HEX, если требуется
+$euid_en = strip($kv_syscall["EUID"], '"', '"')
+if $euid_en == $kv_syscall["EUID"] then
+    $euid_en = hex_to_string($kv_syscall["EUID"])
+endif
+
+$euid_list = csv($euid_en, "@", "")
+
+if $kv_syscall["auid"] != "4294967295" then
+    subject.account.name = $auid_list[0]
+    subject.account.domain = $auid_list[1]
+
+    subject.account.id = $kv_syscall["auid"]
+else
+    subject.account.name = $euid_list[0]
+    subject.account.domain = $euid_list[1]
+
+    subject.account.id = $kv_syscall["euid"]
+endif
+
+subject.account.privileges = $kv_syscall["euid"]
+subject.account.session_id = $kv_syscall["ses"]
+
+subject.process.id = $kv_syscall["pid"]
+subject.process.parent.id = $kv_syscall["ppid"]
+
+# SYSCALL::exe
+if not in_list(["<no_memory>", "<too_long>", "(null)"], $kv_syscall["exe"]) then
+    # Декодируем HEX, если требуется
+    $exe = strip($kv_syscall["exe"], '"', '"')
+    if $exe == $kv_syscall["exe"] then
+        $exe = hex_to_string($kv_syscall["exe"])
+    endif
+endif
+
+$process_path_and_name = csv($exe, "/", "")
+$process_fullpath = $exe
+$process_name = $process_path_and_name[length($process_path_and_name) - 1]
+$process_path = strip($exe, "", $process_name)
+
+subject.process.fullpath = $process_fullpath
+subject.process.name = $process_name
+subject.process.path = $process_path
+
+# CWD
+if $items["CWD"] != null then
+    $kv_cwd = keyvalue($items['CWD'][0], ' ', '=', '"')
+    
+    if not in_list(["<no_memory>", "<too_long>", "(null)"], $kv_cwd["cwd"]) then
+        # Декодируем HEX, если требуется
+        $cwd_raw = strip($kv_cwd["cwd"], '"', '"')
+        if $cwd_raw == $kv_cwd["cwd"] then
+            $cwd_raw = hex_to_string($kv_cwd["cwd"])
+        endif
+        
+        if substr($cwd_raw, -1, 1) != "/" then
+            $cwd = $cwd_raw + "/"
+        else
+            $cwd = $cwd_raw
+        endif
+    endif
+endif
+
+subject.process.cwd = $cwd_raw
+
+# PROCTITLE
+if $items["PROCTITLE"] != null then
+    $kv_proctitle = keyvalue($items["PROCTITLE"][0], ' ', '=')
+ 
+    $process_proctitle = strip($kv_proctitle["proctitle"], '"', '"')
+    if $process_proctitle == "(null)" then
+        $process_proctitle = null
+    elif $process_proctitle == $kv_proctitle["proctitle"] then
+        $cmdline_raw = hex_to_string($kv_proctitle["proctitle"])
+ 
+        # stripping corrupted char
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 254))
+        endif
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 253))
+        endif
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 252))
+        endif
+ 
+        $process_proctitle = replace($cmdline_raw, " ", "\u0000")
+    endif
+endif
+
+subject.process.meta = $process_proctitle  # PROCTITLE
+
+# Декодируем HEX, если требуется
+$egid_en = strip($kv_syscall["EGID"], '"', '"')
+if $egid_en == $kv_syscall["EGID"] then
+    $egid_en = hex_to_string($kv_syscall["EGID"])
+endif
+
+object.account.group = coalesce($egid_en, $kv_syscall["egid"])
+
+object.account.name = $euid_list[0]
+object.account.domain = $euid_list[1]
+
+object.account.id = $kv_syscall["euid"]
+
+# PATH
+$path_list = if $items["PATH"] != null then $items["PATH"] else [] endif
+ 
+if (number($kv_syscall["items"]) != length($path_list)) and not in_list(["0", null], $kv_syscall["items"]) then
+    drop
+endif
+
+$kv_path_0 = keyvalue($path_list[0], ' ', '=')
+$kv_path_1 = keyvalue($path_list[1], ' ', '=')
+$kv_path_2 = keyvalue($path_list[2], ' ', '=')
+$kv_path_3 = keyvalue($path_list[3], ' ', '=')
+$kv_path_4 = keyvalue($path_list[4], ' ', '=')
+$kv_path_5 = keyvalue($path_list[5], ' ', '=')
+$kv_path_6 = keyvalue($path_list[6], ' ', '=')
+$kv_path_7 = keyvalue($path_list[7], ' ', '=')
+
+switch $kv_path_0["item"]
+    case "0" $item_0 = $kv_path_0
+    case "1" $item_1 = $kv_path_0
+    case "2" $item_2 = $kv_path_0
+    case "3" $item_3 = $kv_path_0
+    case "4" $item_4 = $kv_path_0
+    case "5" $item_5 = $kv_path_0
+    case "6" $item_6 = $kv_path_0
+    case "7" $item_7 = $kv_path_0
+endswitch
+switch $kv_path_1["item"]
+    case "0" $item_0 = $kv_path_1
+    case "1" $item_1 = $kv_path_1
+    case "2" $item_2 = $kv_path_1
+    case "3" $item_3 = $kv_path_1
+    case "4" $item_4 = $kv_path_1
+    case "5" $item_5 = $kv_path_1
+    case "6" $item_6 = $kv_path_1
+    case "7" $item_7 = $kv_path_1
+endswitch
+switch $kv_path_2["item"]
+    case "0" $item_0 = $kv_path_2
+    case "1" $item_1 = $kv_path_2
+    case "2" $item_2 = $kv_path_2
+    case "3" $item_3 = $kv_path_2
+    case "4" $item_4 = $kv_path_2
+    case "5" $item_5 = $kv_path_2
+    case "6" $item_6 = $kv_path_2
+    case "7" $item_7 = $kv_path_2
+endswitch
+switch $kv_path_3["item"]
+    case "0" $item_0 = $kv_path_3
+    case "1" $item_1 = $kv_path_3
+    case "2" $item_2 = $kv_path_3
+    case "3" $item_3 = $kv_path_3
+    case "4" $item_4 = $kv_path_3
+    case "5" $item_5 = $kv_path_3
+    case "6" $item_6 = $kv_path_3
+    case "7" $item_7 = $kv_path_3
+endswitch
+switch $kv_path_4["item"]
+    case "0" $item_0 = $kv_path_4
+    case "1" $item_1 = $kv_path_4
+    case "2" $item_2 = $kv_path_4
+    case "3" $item_3 = $kv_path_4
+    case "4" $item_4 = $kv_path_4
+    case "5" $item_5 = $kv_path_4
+    case "6" $item_6 = $kv_path_4
+    case "7" $item_7 = $kv_path_4
+endswitch
+switch $kv_path_5["item"]
+    case "0" $item_0 = $kv_path_5
+    case "1" $item_1 = $kv_path_5
+    case "2" $item_2 = $kv_path_5
+    case "3" $item_3 = $kv_path_5
+    case "4" $item_4 = $kv_path_5
+    case "5" $item_5 = $kv_path_5
+    case "6" $item_6 = $kv_path_5
+    case "7" $item_7 = $kv_path_5
+endswitch
+switch $kv_path_6["item"]
+    case "0" $item_0 = $kv_path_6
+    case "1" $item_1 = $kv_path_6
+    case "2" $item_2 = $kv_path_6
+    case "3" $item_3 = $kv_path_6
+    case "4" $item_4 = $kv_path_6
+    case "5" $item_5 = $kv_path_6
+    case "6" $item_6 = $kv_path_6
+    case "7" $item_7 = $kv_path_6
+endswitch
+switch $kv_path_7["item"]
+    case "0" $item_0 = $kv_path_7
+    case "1" $item_1 = $kv_path_7
+    case "2" $item_2 = $kv_path_7
+    case "3" $item_3 = $kv_path_7
+    case "4" $item_4 = $kv_path_7
+    case "5" $item_5 = $kv_path_7
+    case "6" $item_6 = $kv_path_7
+    case "7" $item_7 = $kv_path_7
+endswitch
+
+$item_0_type = coalesce($item_0["nametype"], $item_0["objtype"])
+$item_1_type = coalesce($item_1["nametype"], $item_1["objtype"])
+$item_2_type = coalesce($item_2["nametype"], $item_2["objtype"])
+$item_3_type = coalesce($item_3["nametype"], $item_3["objtype"])
+$item_4_type = coalesce($item_4["nametype"], $item_4["objtype"])
+$item_5_type = coalesce($item_5["nametype"], $item_5["objtype"])
+$item_6_type = coalesce($item_6["nametype"], $item_6["objtype"])
+$item_7_type = coalesce($item_7["nametype"], $item_7["objtype"])
+
+$items_len = number($kv_syscall["items"])
+$items_list = [$item_0, $item_1, $item_2, $item_3, $item_4, $item_5, $item_6, $item_7]
+$items_types = [$item_0_type, $item_1_type, $item_2_type, $item_3_type, $item_4_type, $item_5_type, $item_6_type, $item_7_type]
+
+# Проблемы с директорией исходного файла
+if ($items_len == 1) and ($items_types[0] == "UNKNOWN") then
+    $delete = $items_list[0]
+endif
+
+# Проблемы с директорией назначения или исходным файлом
+if ($items_len == 2) and ($items_types[0] == "PARENT") and in_list(["UNKNOWN", "PARENT"], $items_types[1]) then
+    $parent_delete = $items_list[0]
+    $parent_create = $items_list[1]
+endif
+
+$cnt = 2
+
+# Информация о старом файле
+if ($items_types[$cnt] == "PARENT") and ($items_types[$cnt+1] == "DELETE") then
+    $parent_1 = $items_list[0]
+    $parent_2 = $items_list[1]
+    
+    if $items_list[$cnt]["inode"] == $parent_1["inode"] then
+        $parent_delete = $parent_1
+    elif $items_list[$cnt]["inode"] == $parent_2["inode"] then
+        $parent_delete = $parent_2
+    # По умолчанию
+    else
+        $parent_delete = $parent_1
+    endif
+    
+    $delete = $items_list[$cnt+1]
+    
+    $cnt = $cnt + 2
+elif ($items_types[$cnt] == "DELETE") then
+    $parent_delete = $items_list[0]
+    
+    $delete = $items_list[$cnt]
+    
+    $cnt = $cnt + 1
+endif
+
+# Информация о новом файле
+if ($items_types[$cnt] == "PARENT") and ($items_types[$cnt+1] == "CREATE") then
+    $parent_1 = $items_list[0]
+    $parent_2 = $items_list[1]
+    
+    if $items_list[$cnt]["inode"] == $parent_1["inode"] then
+        $parent_create = $parent_1
+    elif $items_list[$cnt]["inode"] == $parent_2["inode"] then
+        $parent_create = $parent_2
+    else
+        $parent_create = $parent_2
+    endif
+    
+    if $items_list[$cnt+1]["inode"] != null then
+        $create = $items_list[$cnt+1]
+    endif
+    
+    $cnt = $cnt + 2
+elif ($items_types[$cnt] == "CREATE") then
+    $parent_create = $items_list[1]
+    
+    if $items_list[$cnt]["inode"] != null then
+        $create = $items_list[$cnt]
+    endif
+    
+    $cnt = $cnt + 1
+endif
+
+# Информация о заменяемом файле
+if ($items_types[$cnt] == "PARENT") and ($items_types[$cnt+1] == "DELETE") then
+    $parent_1 = $items_list[0]
+    $parent_2 = $items_list[1]
+    
+    if $items_list[$cnt]["inode"] == $parent_1["inode"] then
+        $parent_create = $parent_1
+    elif $items_list[$cnt]["inode"] == $parent_2["inode"] then
+        $parent_create = $parent_2
+    else
+        $parent_create = $parent_2
+    endif
+    
+    $cnt = $cnt + 2
+elif ($items_types[$cnt] == "DELETE") then
+    $parent_create = $items_list[0]
+    
+    $cnt = $cnt + 1
+endif
+
+# Информация о новом файле (подстраховочная)
+if ($items_types[$cnt] == "PARENT") and ($items_types[$cnt+1] == "CREATE") then
+    $parent_1 = $items_list[0]
+    $parent_2 = $items_list[1]
+    
+    if $items_list[$cnt]["inode"] == $parent_1["inode"] then
+        $parent_create = $parent_1
+    elif $items_list[$cnt]["inode"] == $parent_2["inode"] then
+        $parent_create = $parent_2
+    # По умолчанию
+    else
+        $parent_create = $parent_2
+    endif
+    
+    if $items_list[$cnt+1]["inode"] != null then
+        $create = $items_list[$cnt+1]
+    endif
+elif ($items_types[$cnt] == "CREATE") then
+    # По умолчанию
+    $parent_create = $items_list[1]
+    
+    if $items_list[$cnt]["inode"] != null then
+        $create = $items_list[$cnt]
+    endif
+endif
+
+# PATH::PARENT_DELETE
+if not in_list(["<no_memory>", "<too_long>", "(null)", null], $parent_delete["name"]) then
+    # Декодируем HEX, если требуется
+    $parent_delete_name = strip($parent_delete["name"], '"', '"')
+    if $parent_delete_name == $parent_delete["name"] then
+        $parent_delete_name = hex_to_string($parent_delete["name"])
+    endif
+    
+    # Обрабатываем относительные пути
+    if (substr($parent_delete_name, 0, 2) == "./") or (substr($parent_delete_name, 0, 1) != "/") then
+        $parent_delete_name = $cwd + strip($parent_delete_name, "./", "")
+    endif
+    
+    # Добавляем в конец '/', если его нет
+    if substr($parent_delete_name, -1, 1) != "/" then
+        $parent_delete_name = $parent_delete_name + "/"
+    endif
+    
+    $delete_file_path = $parent_delete_name
+endif
+
+# PATH::PARENT_CREATE
+if not in_list(["<no_memory>", "<too_long>", "(null)", null], $parent_create["name"]) then
+    # Декодируем HEX, если требуется
+    $parent_create_name = strip($parent_create["name"], '"', '"')
+    if $parent_create_name == $parent_create["name"] then
+        $parent_create_name = hex_to_string($parent_create["name"])
+    endif
+    
+    # Обрабатываем относительные пути
+    if (substr($parent_create_name, 0, 2) == "./") or (substr($parent_create_name, 0, 1) != "/") then
+        $parent_create_name = $cwd + strip($parent_create_name, "./", "")
+    endif
+    
+    # Добавляем в конец '/', если его нет
+    if substr($parent_create_name, -1, 1) != "/" then
+        $parent_create_name = $parent_create_name + "/"
+    endif
+    
+    $create_file_path = $parent_create_name
+endif
+    
+# PATH::DELETE
+if not in_list(["<no_memory>", "<too_long>", "(null)", null], $delete["name"]) then
+    # Декодируем HEX, если требуется
+    $delete_name = strip($delete["name"], '"', '"')
+    if $delete_name == $delete["name"] then
+        $delete_name = hex_to_string($delete["name"])
+    endif
+    
+    # Обрабатываем относительные пути
+    if (substr($delete_name, 0, 2) == "./") or (substr($delete_name, 0, 1) != "/") then
+        $delete_name = $cwd + strip($delete_name, "./", "")
+    endif
+    
+    $delete_file_fullpath = $delete_name
+    
+    $delete_list = csv($delete_file_fullpath, "/", "")
+    $delete_file_name = $delete_list[length($delete_list)-1]
+    $delete_file_path = strip($delete_file_fullpath, "", $delete_file_name)
+endif
+    
+# PATH::CREATE
+if not in_list(["<no_memory>", "<too_long>", "(null)", null], $create["name"]) then
+    # Декодируем HEX, если требуется
+    $create_name = strip($create["name"], '"', '"')
+    if $create_name == $create["name"] then
+        $create_name = hex_to_string($create["name"])
+    endif
+    
+    # Обрабатываем относительные пути
+    if (substr($create_name, 0, 2) == "./") or (substr($create_name, 0, 1) != "/") then
+        $create_name = $cwd + strip($create_name, "./", "")
+    endif
+    
+    $create_file_fullpath = $create_name
+    
+    $create_list = csv($create_file_fullpath, "/", "")
+    $create_file_name = $create_list[length($delete_list)-1]
+    $create_file_path = strip($create_file_fullpath, "", $create_file_name)
+endif
+
+object.fullpath = $delete_file_fullpath
+object.path = $delete_file_path
+object.name = $delete_file_name
+object.id = $delete["inode"]
+
+if length($path_list) == 2 then
+    if $delete_file_path == $create_file_path then
+        action = "rename"
+    else
+        action = "move"
+    endif
+    
+    object.property = "path"
+    object.new_value = $create_file_path
+else
+    $old_list = csv($delete_file_fullpath, "/", "")
+    $old_name = $old_list[length($old_list)-1]
+    $old_path = strip($delete_file_fullpath, "", $old_name)
+    
+    $new_list = csv($create_file_fullpath, "/", "")
+    $new_name = $new_list[length($new_list)-1]
+    $new_path = strip($create_file_fullpath, "", $new_name)
+    
+    if $old_path == $new_path then
+        action = "rename"
+    else
+        action = "move"
+    endif
+    
+    object.property = "fullpath"
+    object.new_value = $create_file_fullpath
+endif
+
+# PATH::mode
+$u_triplet = number(substr($delete["mode"], -3, 1))
+$g_triplet = number(substr($delete["mode"], -2, 1))
+$o_triplet = number(substr($delete["mode"], -1, 1))
+
+$file_type = switch substr($delete["mode"], 0, length($delete["mode"]) - 4)
+    case "04"  "directory"
+    case "010" "regular_file"
+    case "012" "symlink"
+endswitch
+
+if ($file_type == "regular_file") and ((mod($u_triplet, 2) == 1) or (mod($g_triplet, 2) == 1) or (mod($o_triplet, 2) == 1)) then
+    $file_type = "executable_file"
+endif
+
+object.type = $file_type
+
+if $kv_syscall["tty"] != "(none)" then
+    $tty = $kv_syscall["tty"]
+
+    if (substr($tty, 0, 3) == "pts") and (substr($tty, 3, 1) != "/") then
+        logon_service = "pts/" + substr($tty, 3, length($tty) - 3)
+    else
+        logon_service = $tty
+    endif
+endif
+
+# Декодируем HEX, если требуется
+$comm = strip($kv_syscall["comm"], '"', '"')
+if $comm == $kv_syscall["comm"] then
+    $comm = hex_to_string($kv_syscall["comm"])
+endif
+
+datafield1 = $comm  # Executable Name
+
+# Декодируем HEX, если требуется
+$ouid_en = strip($delete["OUID"], '"', '"')
+if $ouid_en == $delete["OUID"] then
+    $ouid_en = hex_to_string($delete["OUID"])
+endif
+
+datafield2 = $ouid_en  # Owner User Name
+datafield3 = substr($delete["mode"], -4, 4)  # File Access Mode
+
+numfield2 = $delete["ouid"]  # Owner User ID
+
+chain_id = $eventid  # AuditD Event ID
+
+reason = switch $kv_syscall["exit"]
+    case "-1"   "Operation not permitted"
+    case "-2"   "No such file or directory"
+    case "-9"   "Bad file descriptor"
+    case "-12"  "Cannot allocate memory"
+    case "-13"  "Permission denied"
+    case "-14"  "Bad address"
+    case "-16"  "Device or resource busy"
+    case "-17"  "File exists"
+    case "-18"  "Invalid cross-device link"
+    case "-20"  "Not a directory"
+    case "-21"  "Is a directory"
+    case "-22"  "Invalid argument"
+    case "-28"  "No space left on device"
+    case "-30"  "Read-only file system"
+    case "-31"  "Too many links"
+    case "-36"  "File name too long"
+    case "-39"  "Directory not empty"
+    case "-40"  "Too many levels of symbolic links"
+    case "-122" "Disk quota exceeded"
+endswitch
+
+time = epoch_ms_to_datetime(number($timestamp + $timestampfractional))
+
+msgid = switch $kv_syscall["syscall"]
+    case "82" "rename"
+    case "38" "rename"
+    case "264" "renameat"
+    case "302" "renameat"
+    case "316" "renameat2"
+    case "353" "renameat2"
+endswitch
+
+importance = "low"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.subsys = "auditd"
+
+# Декодируем HEX, если требуется
+$key_raw = strip($kv_syscall["key"], '"', '"')
+if $key_raw == $kv_syscall["key"] then
+    $key_raw = hex_to_string($kv_syscall["key"])
+endif
+
+event_src.rule = if $key_raw != "(null)" then $key_raw else null endif
+
+if $node != "" then
+    if maybe_ipv4($node) != null or maybe_ipv6($node) != null then
+        if (in_subnet($node, "127.0.0.0/8") == False and $node != "::1") then
+            event_src.ip = $node
+            labels = "node_contains_ext_ip"
+        else
+            event_src.ip = recv_ipv4
+        endif
+    else
+        $first_dot = find_substr($node, ".")
+        if $first_dot != null then
+            event_src.fqdn = $node
+            event_src.hostname = substr($node, 0, $first_dot)
+        else
+            event_src.hostname = $node
+        endif
+    endif
+else
+    event_src.ip = recv_ipv4
+endif
+
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_auditd_syslog_structured_syscall_resource_rename"

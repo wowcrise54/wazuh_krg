@@ -1,0 +1,34 @@
+!TABULAR = "master_server_key,
+            {datafield3=policy_name},
+            {datafield4=schedule_name},
+            {time=start_time}"
+
+!COND = $job_type == 18
+
+action = "update"
+object = "application"
+if $job_status == 0 then
+    status = "success"
+else
+    status = "failure"
+    reason = $job_status
+endif
+
+if $client_name != "" then
+    dst.hostname = $client_name
+endif
+
+datafield1 = $master_server_key  # ID мастер-сервера
+# datafield3 - имя управляющей политики
+# datafield4 - имя расписания
+
+duration = datetime_to_epoch(datetime($end_time)) - datetime_to_epoch(datetime($start_time))
+msgid = $job_type
+importance = "info"
+
+event_src.vendor = "veritas"
+event_src.title = "netbackup"
+event_src.subsys = "nbdb"
+event_src.category = "Backup server"
+
+id = "PT_Veritas_Netbackup_NBDB_Jobd_odbc_18_LiveUpdate"

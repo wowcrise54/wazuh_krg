@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{time=DATETIME}{":"?} {WORD":"?}
+        %{msgid="CRYPTO-5-SESSION_STATUS"}: Crypto tunnel is {$tmp_action="UP"|$tmp_action="DOWN"}.  Peer {src.ip=IPV4}:{src.port=NUMBER}
+        Id: {datafield4=STRING}'
+
+subject = "account"
+action = if $tmp_action=="UP" then "start" else "stop" endif
+object = "session"
+status = "success"
+
+# datafield4 - group policy
+
+reason = "Crypto tunnel changed state"
+
+importance = "info"
+
+if ($origin_id_ip == "127.0.0.1" or $origin_id_ip == "0.0.0.0") then
+    $origin_id_ip = null
+endif
+
+event_src.vendor = "cisco"
+event_src.title = "ios"
+event_src.subsys = "vpn-gateway"
+if number($hostname) == null then
+    event_src.hostname = coalesce($hostname, $origin_id_hostname)
+    event_src.ip = coalesce($ip, $origin_id_ip)
+endif
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_syslog_CRYPTO_SESSION_STATUS"

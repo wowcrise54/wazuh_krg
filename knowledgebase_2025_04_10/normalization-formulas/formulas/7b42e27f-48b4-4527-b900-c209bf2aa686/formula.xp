@@ -1,0 +1,16 @@
+TEXT = '{time=DATETIME} {STRING} ({WORD}) {WORD+} {msgid="2138"} {WORD}
+        The SharePoint Health Analyzer detected a condition requiring your attention. {$tmp_reason=CSV(".","`")}'
+
+action = "detect"
+object = "alert"
+status = "success"
+
+reason = $tmp_reason[0]
+
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Health_report_warning"

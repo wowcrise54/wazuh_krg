@@ -1,0 +1,147 @@
+query Check_Domain($file_prefix) from Known_Windows_Domains {
+    fullname == $file_prefix
+    or netbios == $file_prefix
+}
+
+event Network_Connect:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and event_src.subsys == "auditd"
+        and object == "connection"
+        and msgid == "connect"
+        and action == "open"
+        and (
+            status == "success"
+            or reason == "Operation now in progress"
+        )
+        and direction == "egress"
+        and in_list([389, 636, 3269], dst.port)
+        and filter::CheckWL_Linux_Networking("Unix_MsLDAPDump_Usage", join([subject.account.name, subject.process.name, dst.host], "|"))
+    }
+
+event File_Create:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::FileModify_Linux("\.(ldapdump|laps|users|groups|adminusers|kerberoast|asreproast|unconstrained|constrained|computers|servers|deprecated_os|domaincontrollers|domaintrusts|mssqlservers|exchangeservers|gpo|admincount)\.\w+$")
+        and exec_query("Check_Domain", [regex(lower(object.name), "(\\\\|^)(\w+(\.\w+)+?)\.(ldapdump|laps|users|groups|adminusers|kerberoast|asreproast|unconstrained|constrained|computers|servers|deprecated_os|domaincontrollers|domaintrusts|mssqlservers|exchangeservers|gpo|admincount)\.\w+$", 2)])
+    }
+
+rule Unix_MsLDAPDump_Usage: (File_Create[3,] and Network_Connect) timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Networking"
+        $first_event = true
+    }
+       
+    on Network_Connect {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+                
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+        
+        # Socket info
+        $datafield4 = object.domain
+        $datafield5 = object.type
+        $datafield6 = object.property
+        $datafield7 = object.value
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+        
+        $logon_service = logon_service
+        
+        $protocol = protocol
+        
+        $direction = direction
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+               
+        $alert.key = join([subject.account.name, subject.process.name, dst.host], "|")
+    }
+
+    on File_Create {
+        if $first_event then
+            $subject.process.name = subject.process.name
+            $subject.process.id = subject.process.id
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.meta = subject.process.meta
+            $subject.process.parent.id = subject.process.parent.id
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.id = object.id
+            $object.type = object.type
+
+            $datafield1 = datafield1  # Executable Name
+            $datafield2 = datafield2  # Owner User Name
+            $datafield3 = datafield3  # File Access Mode
+
+            $numfield2 = numfield2  # Owner User ID
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+            
+            $alert.regex_match = regex(lower(object.name), "(\\\\|^)(\w+(\.\w+)+?)\.(ldapdump|laps|users|groups|adminusers|kerberoast|asreproast|unconstrained|constrained|computers|servers|deprecated_os|domaincontrollers|domaintrusts|mssqlservers|exchangeservers|gpo|admincount)\.\w+$", 2)
+        endif
+    }
+
+emit {  
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "open"
+    $object = "connection"
+    $status = "success"
+
+    $alert.context = "Connect to LDAP port: " + string($dst.port) + " → " + "Domain in filename: " + $alert.regex_match
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Remote System Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "NetworkScan"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,47 @@
+TEXT = '{UNTIL("CEF:0")}|AO Kaspersky Lab|{object.name="Kaspersky Anti Targeted Attack Platform"}|6.{$ver=UNTIL("|")}
+        {msgid="user_account"}|Managing user accounts|{$level=WORD}| {"dvc"|"dvchost"}={event_src.ip=IPV4|$Computer=HOSTNAME}
+        {$kv=KEYVALUE(" ", "=")}'
+
+subject = "account" 
+       
+if $kv["cs1"] == "log on" then
+    action = "login"    
+elif $kv["cs1"] == "log off" then
+    action = "logout"
+else
+    action = "info"
+endif
+
+object = "application"
+status = "success"
+
+subject.account.name = lower($kv["suser"])
+
+object.version = "6." + $ver
+
+src.ip = $kv["src"]
+
+time = datetime($kv["rt"])
+
+importance = switch $level
+    case "Low" "low"
+    case "Medium" "medium"
+    case "High" "high"
+endswitch
+
+if importance == null then
+    importance = "info"
+endif
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v6_user_account"

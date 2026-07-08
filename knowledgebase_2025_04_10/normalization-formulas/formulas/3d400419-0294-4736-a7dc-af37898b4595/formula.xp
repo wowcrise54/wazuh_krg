@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{event_src.hostname=HOSTNAME|STRING}  :Web server
+        starts service on port {src.port=NUMBER}'
+
+action = "start"
+object = "service"
+status = "success"
+
+object.type = "web server"
+if src.port == "443" then
+    object.name ="https"
+else
+    object.name ="http"
+endif
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "avaya"
+event_src.title = "ers_5500"
+event_src.category = "Network device"
+
+id = "PT_Avaya_ERS_5500_syslog_services_web_server_started"

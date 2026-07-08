@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{event_src.hostname=HOSTNAME} COPY - FILECPY - {"#"|"%"|}
+        {msgid="COPY-I-FILECPY"?}{":"?} Files Copy - source URL {$filename=STRING} destination URL {object.value=STRING}'
+
+action = "copy"
+if $filename == "running-config" then
+    object = "configuration"
+else
+    object = "file"
+    object.name = $filename
+endif
+status = "success"
+
+object.property = "destination path"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "small_business_solution"
+event_src.category = "Network device"
+
+id = "PT_Cisco_SBS_syslog_file_copy"

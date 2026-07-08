@@ -1,0 +1,26 @@
+event Token_Request:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teamcity"
+        and object == "request"
+        and regex(object.query, "/app/rest/users/((name:\w+)|(id:\d+))/tokens/\w+", 0) != null
+        and object.type == "POST"
+        and status == "success"        
+    }
+
+enrichment Teamcity_Get_TokenName_and_Username
+    
+    enrich Token_Request:
+        enrich_fields {
+            if object.account.id != null then
+                subject.account.id = object.account.id
+            endif
+
+            $user = regex(object.query, "/app/rest/users/((name:\w+)|(id:\d+))/tokens/\w+", 1)
+            if find_substr($user, "name:") != null then
+                object.account.name = strip($user, "name:", "")
+            else
+                object.account.id = strip($user, "id:", "")
+            endif
+            object.name = substr(object.query, find_substr(object.query, "/tokens/") + 8, length(object.query))
+        }

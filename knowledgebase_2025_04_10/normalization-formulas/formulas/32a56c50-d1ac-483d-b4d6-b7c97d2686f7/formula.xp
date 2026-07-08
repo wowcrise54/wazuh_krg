@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}: %{msgid="OSPF-5-ADJCHANGE"}: {STRING} [{NUMBER}] Nbr {dst.ip=IPV4|dst.ip=IPV6}
+        on {interface=STRING} went {$state=STRING}'
+
+if $state == "DOWN" then
+    action = "stop"
+else
+    action = "start"
+endif
+
+object = "session"
+
+if $state == "FULL" or $state == "DOWN" then
+    status = "success"
+else
+    status = "ongoing"
+endif
+
+object.state = $state
+
+protocol = "ospf"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_ospf_neighbor_up_down"

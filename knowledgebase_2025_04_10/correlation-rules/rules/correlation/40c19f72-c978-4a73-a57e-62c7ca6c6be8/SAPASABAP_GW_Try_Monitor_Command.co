@@ -1,0 +1,89 @@
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid
+    and group == "Production"
+}
+
+event Monitor_Call:
+    key:
+        event_src.host, event_src.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and event_src.subsys == "gateway log"
+        and object.type == "monitor command"
+        and exec_query("SAP_Check_Groups", [event_src.id])
+        and filter::CheckWL_Specific_Only("SAPASABAP_GW_Try_Monitor_Command", lower(join([event_src.id, object.name, src.host], "|")))
+    }
+
+rule SAPASABAP_GW_Try_Monitor_Command: (Monitor_Call[4,] with different object.name) timer 2m
+
+    init {
+        $first_event = true
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Monitor_Call {
+        if $first_event then
+            $alert.key = lower(join([event_src.id, object.name, src.host], "|"))
+
+            $event_src.id = event_src.id
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $count_subevents_success = 0
+            $count_subevents_failure = 0
+
+            $first_event = false
+        endif
+
+        if status == "success" then
+            $count_subevents_success = $count_subevents_success + 1
+        else
+            $count_subevents_failure = $count_subevents_failure + 1
+        endif
+
+        $object_name_list = append($object_name_list, object.name)
+
+        if src.host != null and not in_list($src_host_list, src.host) then
+            $src_host_list = append($src_host_list, src.host)
+        endif
+    }
+
+emit {
+    if $count_subevents_success != 0 then
+        $correlation_type = "incident"
+        $status = "success"
+    else
+        $correlation_type = "event"
+        $status = "failure"
+    endif
+    
+    $action = "execute"
+    $object = "command"
+
+    $object.name = join($object_name_list, "|")
+
+    if $src_host_list != null then
+        $alert.context = join(["success command execution count: " + string($count_subevents_success), "failure command execution count: " + string($count_subevents_failure), "source addresses: " + join($src_host_list, ", ")], " | ")
+    else
+        $alert.context = join(["success command execution count: " + $count_subevents_success, "failure command execution count: " + $count_subevents_failure], " | ")
+    endif
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "System Service Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,28 @@
+TEXT = "<{NUMBER}>{DATETIME} {STRING} {$date=NUMBER} {$Computer=STRING} {NUMBER} {NUMBER} fw-audit[{NUMBER?}] [{NUMBER}]
+        SNLSP-Firewall audit service {$action_taken=WORD}"
+        
+if $action_taken == 'started' then
+    action = "start"
+    importance = "info"
+elif $action_taken == 'stopped' then
+    action = "stop"
+    importance = "low"
+endif
+
+object = "service"
+status = "success"
+
+time = epoch_to_datetime($date)
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "secretnet_lsp"
+event_src.category = "Host security"
+
+id = "PT_Securitycode_SecretNet_LSP_syslog_snlsp_firewall_service_state_changed"

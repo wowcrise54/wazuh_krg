@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>One of the types of delegation is configured in the domain: unlimited delegation, limited delegation, limited resource-based delegation. An attacker can use this setting to obtain users TGT or TGS tickets. After that, an attacker can elevate privileges and horizontally move to other infrastructure nodes</Description>
+  <EventDescriptions>
+    <EventDescription id="3291f299-b1bf-40eb-8b00-428699d5106c">User {subject.account.name} configured resource-based constrained delegation (RBCD) for host {src.hostname} to host {object.value}</EventDescription>
+    <EventDescription id="7197b152-e25e-4d03-bf74-9455f5634b67">User {subject.account.name} configured constrained delegation from the host {src.hostname} to the host {object.value}</EventDescription>
+    <EventDescription id="9e3b3f5c-92ab-4b8d-8ae3-82cf4e4ee98d">User {subject.account.name} configured unconstrained delegation in the domain from the host {src.hostname}</EventDescription>
+  </EventDescriptions>
+</Localization>

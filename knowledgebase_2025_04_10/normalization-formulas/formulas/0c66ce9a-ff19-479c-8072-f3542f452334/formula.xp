@@ -1,0 +1,20 @@
+TEXT = '{time=DATETIME} [{WORD}] info: {$start="Запуск"|"Остановка"} процесса проверки целостности: {"{"} {$raw_kv=STRING+}'
+
+subject = "account"
+action = if $start != null then "start" else "stop" endif
+object = "check"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.type = "integrity"
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_start_stop_integrity_check"

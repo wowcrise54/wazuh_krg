@@ -1,0 +1,183 @@
+event Child_From_AT:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and in_list(['osk.exe', 'narrator.exe', 'sethc.exe', 'magnify.exe', 'displayswitch.exe', 'utilman.exe', 'atbroker.exe'], lower(object.process.parent.name))
+        and filter::CheckWL_Process_Creation("Accessibility_Feature_Tool_Abuse", lower(join([object.process.parent.name, object.process.cmdline], "|")))
+    }
+
+event Connection_From_AT:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+                (
+                    msgid == "3"
+                    and event_src.title == "sysmon"
+                ) or (
+                    msgid == "5156"
+                    and event_src.title == "windows"
+                )
+            )
+        and in_list(['osk.exe', 'narrator.exe', 'sethc.exe', 'magnify.exe', 'displayswitch.exe', 'utilman.exe', 'atbroker.exe'], lower(object.process.name))
+        and filter::CheckWL_Networking("Accessibility_Feature_Tool_Abuse", lower(object.process.fullpath))
+    }
+
+rule Accessibility_Feature_Tool_Abuse: Child_From_AT or Connection_From_AT
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Child_From_AT {
+        $subject = subject  # account
+        $action = action  # start
+        $object = object  # process
+        $status = status  
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $alert.key = lower(join([object.process.parent.name, object.process.cmdline], "|"))
+        $alert.context = join([object.process.parent.name, "start", object.process.name], " ")
+        $alert.regex_match = lower(object.process.parent.name)
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.process.parent.fullpath
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Connection_From_AT {
+        $subject = subject  # rule
+        $action = action  # detect
+        $object = object  # connection
+        $status = status
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.mac = src.mac
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.mac = dst.mac
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        $direction = direction
+
+        if direction == "egress" then
+            $alert.context = lower(object.process.name) + " create connection to " + dst.ip + ":" + string(dst.port)
+        else
+            $alert.context = lower(object.process.name) + " receive connection from " + src.ip + ":" + string(src.port)
+        endif
+
+        $alert.key = lower(object.process.fullpath)
+        $alert.regex_match = lower(object.process.name)
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.process.fullpath
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Event Triggered Execution: Accessibility Features"
+
+    $importance = "medium"
+
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $incident_fullpath], "|")
+}

@@ -1,0 +1,72 @@
+# {"class":"vim.event.VmConnectedEvent","key":"623402925","chainId":"623402925","createdTime":"2022-02-03 17:12:02.726999+00:00","userName":"","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"DCenter","datacenter":"vim.Datacenter:datacenter-2"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"esx-053.vi.domain.ru","computeResource":"vim.ComputeResource:domain-s10967"},"host":{"class":"vim.event.HostEventArgument","name":"esx-053.vi.domain.ru","host":"vim.HostSystem:host-10969"},"vm":{"class":"vim.event.VmEventArgument","name":"template_Windows_2016_x64","vm":"vim.VirtualMachine:vm-17717"},"fullFormattedMessage":"Virtual machine template_Windows_2016_x64 is connected","template":"True"}
+
+JSON = ''
+COND = in_list([
+           "VmConnectedEvent",
+           "VmDisconnectedEvent"
+       ], strip($class, "vim.event.", ""))
+ 
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+action = "info"
+object = "virtual_machine"
+status = "success" 
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.name = $vm["name"]
+object.id = strip($vm["vm"], "vim.VirtualMachine:", "")
+
+object.state = switch $class
+    case "vim.event.VmConnectedEvent" "connected"
+    case "vim.event.VmDisconnectedEvent" "disconnected"
+endswitch
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+ 
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield2 = $ds["name"]  # Datastore Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = object.name  # Entity Name
+datafield5 = $vm["name"]  # Virtual Machine Name
+datafield6 = $host["name"]  # Host Name
+datafield7 = $parent["name"]  # Parent Entity Name
+datafield10 = object.id  # Internal Entity ID
+ 
+chain_id = $chainId
+ 
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "low"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_VM_Connection"

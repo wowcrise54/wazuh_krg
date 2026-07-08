@@ -1,0 +1,43 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{WORDDASH|STRING} vault[{NUMBER}]: {$json=REST}' 
+COND = find_substr($json, "auth/token/create") != null 
+       and find_substr($json, "\"operation\":\"update\"") != null
+
+submessage("JSON","json_in_syslog_token_created", $json)
+
+subformula 'json_in_syslog_token_created'
+    JSON = ''
+    
+    if $error != null then
+        status = "failure"
+        reason = $error
+        importance = "low"
+    else
+        status = "success"
+        importance = "medium"
+    endif
+    
+    subject.account.name = $auth["display_name"]
+    subject.account.privileges = join($auth["policies"], ", ")
+    
+    if ($response["auth"]["display_name"] != null and $response["auth"]["policies"] != null) then
+        object.name = $response["auth"]["display_name"]
+        object.account.privileges = join($response["auth"]["policies"], ", ")
+    endif
+    
+    src.ip = $request["remote_address"]
+    src.port = $request["remote_port"]
+endsubformula
+
+subject = "account"
+action = "create"
+object = "virtual_key"
+
+category.high = "Access Management"
+category.generic = "Virtual Key"
+category.low = "Manipulation"
+
+event_src.vendor = "hashicorp"
+event_src.title = "vault"
+event_src.category = "Application security"
+
+id = "PT_Hashicorp_Vault_syslog_Token_created"

@@ -1,0 +1,67 @@
+JSON = "AUDIT_RECORD.RECORD_ID"
+
+COND = in_list(["Query", "TableInsert", "TableRead"], $AUDIT_RECORD["NAME"])
+       and in_list(["select", "insert"], $AUDIT_RECORD["COMMAND_CLASS"])
+        
+subject = "account"
+
+if $AUDIT_RECORD["COMMAND_CLASS"] == "select" then
+    action = "view"
+
+    importance = "info"
+else
+    action = "modify"
+
+    importance = "low"
+endif
+
+object = "db_object"
+
+if in_list([0, null], number($AUDIT_RECORD["STATUS"])) then
+    status = "success"
+else
+    status = "failure"
+
+    reason = $AUDIT_RECORD["STATUS"]
+endif
+
+$square_bracket = find_substr($AUDIT_RECORD["USER"], "[")
+$user = substr($AUDIT_RECORD["USER"], 0, $square_bracket)
+subject.account.id = $user
+subject.account.name = $user
+
+subject.account.session_id = $AUDIT_RECORD["CONNECTION_ID"] 
+
+object.name = $AUDIT_RECORD["TABLE"]
+object.query = $AUDIT_RECORD["SQLTEXT"]
+
+if $AUDIT_RECORD["HOST"] != "localhost" then
+    $first_dot = find_substr($AUDIT_RECORD["HOST"], '.')
+
+    if $first_dot != null then
+        src.fqdn = lower($AUDIT_RECORD["HOST"])
+        src.hostname = lower(substr($AUDIT_RECORD["HOST"], 0, $first_dot))
+    else
+        src.hostname = lower($AUDIT_RECORD["HOST"])
+    endif
+endif
+
+if $AUDIT_RECORD["IP"] == "::1" then
+    src.ip = recv_ipv4
+else
+    src.ip = $AUDIT_RECORD["IP"]
+endif
+
+dst.ip = recv_ipv4
+
+datafield1 = $AUDIT_RECORD["DB"]  # имя БД
+
+time = strip($AUDIT_RECORD["TIMESTAMP"], "", " UTC")
+msgid = $AUDIT_RECORD["COMMAND_CLASS"]
+
+event_src.ip = dst.ip
+event_src.title = "mysql"
+event_src.vendor = "oracle"
+event_src.category = "Database server"
+
+id = "PT_Oracle_MySQL_filemonitor_request_operation"

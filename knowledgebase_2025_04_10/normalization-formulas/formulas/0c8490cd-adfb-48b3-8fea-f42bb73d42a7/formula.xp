@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER":"?} {time=DATETIME?} {$host=HOSTNAME?} {event_src.subsys="cs_console"}{":"?}
+        {msgid="00727001"} Start interpreting command: \"{object.process.cmdline=UNTIL("\\"")}'
+
+action = "execute"
+object = "command"
+status = "ongoing"
+
+if time == null then
+    time = recv_time
+endif
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "s_terra"
+event_src.title = "csp_vpn_gate"
+if ($host != null) and ($host != 'localhost') then
+  event_src.hostname = $host
+endif
+event_src.category = "VPN"
+
+id = "PT_S_Terra_CSP_VPN_Gate_syslog_00727001_MSG_ID_CSCONF_CMD_START"

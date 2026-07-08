@@ -1,0 +1,79 @@
+query Check_TeamCity_Groups($group) from SupplyChain_TeamCity_Important_Groups {
+    group == $group
+}
+    qhandler {
+          $group = group
+     }
+
+event Modify_Group:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teamcity"
+        and in_list(["user_add_to_group", "group_add_to_group", "group_add_role"], lower(msgid))
+        and filter::CheckWL_Specific_Only("SupplyChain_TeamCity_Modify_Group", lower(join([subject.account.name, subject.account.id, object.name, object.new_value], "|")))
+    }
+
+rule SupplyChain_TeamCity_Modify_Group: Modify_Group
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"        
+    }
+
+    on Modify_Group {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+            
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+        $subject.account.fullname = subject.account.fullname
+        
+        $object.name = object.name
+        $object.id = object.id
+        $object.property = object.property
+        $object.new_value = object.new_value
+        
+        $event_src.ip = event_src.ip
+        $event_src.id = event_src.id
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([subject.account.name, subject.account.id, object.name, object.new_value], "|"))
+        $alert.context = msgid
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    if $alert.context == "group_add_to_group" then
+        $group_name = replace(lower($object.new_value), "", "|*")
+        $result = exec_query ("Check_TeamCity_Groups", [lower($group_name)])
+    else
+        $result = exec_query ("Check_TeamCity_Groups", [lower($object.name)])
+    endif
+
+    if $result["$group"] != null then
+        $importance = "medium"
+    else
+        $importance = "low"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id, $object.name], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

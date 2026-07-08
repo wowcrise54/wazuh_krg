@@ -1,0 +1,153 @@
+query IsCriticalUserDefined($datacenter, $name) from VSphere_Critical_VMs_Custom {
+    (
+        datacenter == $datacenter
+        or datacenter == "*"
+    )
+    and (
+        name == $name
+        or name == "*"
+    )
+}
+
+query IsCriticalSystemDefined($datacenter, $name) from VSphere_Critical_VMs_Assets {
+    dc_name == $datacenter
+    and vm_name == $name
+}
+
+query Get_Data_Sphere_Critical_VMs_Assets($datacenter, $name) from VSphere_Critical_VMs_Assets {
+    dc_name == $datacenter
+    and vm_name == $name
+}
+qhandler {
+    $guest_hostid = guest_hostid
+    $guest_ip = guest_ip
+    $esxi_hostid = esxi_hostid
+    $esxi_ip = esxi_ip
+}
+
+event Event_Downloading_Files_Critical_VM:
+    key:
+        object.fullpath, datafield5, msgid
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "vsphere"
+        and action == "download"
+        and object == "file_object"
+        and msgid == "DatastoreFileDownloadEvent"
+        and datafield1 != null
+        and datafield5 != null
+        and (
+            exec_query("IsCriticalUserDefined", [datafield1, datafield5])
+            or exec_query("IsCriticalSystemDefined", [datafield1, datafield5])
+        )
+        and filter::CheckWL_Specific_Only("Downloading_Files_Of_Critical_VM", lower(join([object.fullpath, datafield5], "|")))
+    }
+
+rule Downloading_Files_Of_Critical_VM: Event_Downloading_Files_Critical_VM+ timer 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $first_event = true
+    }
+
+    on Event_Downloading_Files_Critical_VM {
+        if $first_event then
+            $subject = subject
+            $action = action
+            $object = object
+            $status = status
+            
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $labels = $labels + "|subject_account_to_attacking_assets"
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+            if (src.host != null) and (find_substr($labels, "src_to_attacking_assets") == null) then
+                $labels = $labels + "|src_to_attacking_assets"
+            endif
+            
+            $datafield1 = datafield1  # Datacenter Name
+            $datafield2 = datafield2  # Datastore Name
+            $datafield5 = datafield5  # Virtual Machine Name
+            
+            $asset_grid_data = exec_query("Get_Data_Sphere_Critical_VMs_Assets", [datafield1, datafield5])
+            $datafield8 = $asset_grid_data["$guest_hostid"]
+            $datafield9 = $asset_grid_data["$guest_ip"]
+            $datafield11 = $asset_grid_data["$esxi_hostid"]
+            $datafield12 = $asset_grid_data["$esxi_ip"]
+            
+            $msgid = msgid
+
+            $user_reason = select_query_first("IsCriticalUserDefined", [datafield1, datafield5], "reason")
+            if $user_reason != null then
+                $reason = $user_reason
+
+                $alert.context = "user-defined"
+            else
+                $alert.context = "system-defined"
+            endif
+
+            $alert.key = lower(join([object.fullpath, datafield5], "|"))
+
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            
+            $labels = $labels + "|event_source_to_related_assets"
+            
+            $first_event = false
+        endif
+        
+        if dst.host != null then
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.port = dst.port
+            $dst.asset = dst.asset
+            if find_substr($labels, "dst_to_related_assets") == null then
+                $labels = $labels + "|dst_to_related_assets"
+            endif
+        endif
+        
+        if datafield6 != null then
+            $datafield6 = datafield6  # Host Name
+        endif
+        
+        if find_substr(id, "vsphereeventlog") != null then
+            $datafield3 = datafield3  # Cluster Name
+            $datafield7 = datafield7  # Parent Entity Name
+        endif
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Data from Local System"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name, $subject.account.domain], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

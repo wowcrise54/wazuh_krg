@@ -1,0 +1,76 @@
+ # <14>1 2020-06-16T14:17:33.127757+00:00 vsa-m-ulb vpxd 4024 - -  Event [6174] [1-1] [2020-06-16T14:17:33.127549Z] [vim.event.EventEx] [error] [VSPHERE.LOCAL\Administrator] [Datacenter-I] [6173] [The execution state of the virtual machine photon_1337 on host 10.10.10.13, in compute resource cluster-II has been reverted to the state of snapshot VM Snapshot 6%252f16%252f2020, 5:17:22 PM, with ID 1]
+
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+[{$prefix="The"|$prefix="Failed to revert the"} execution state of the virtual machine {$vm_name=STRING+} on host {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}, in compute resource {$compute_resource_name=STRING+} {"has been reverted to the state of"|"to"} snapshot {$arguments_snapshot_name=STRING+} with ID {NUMBER}]'
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+action = "restore"
+object = "virtual_machine"
+
+switch $prefix
+    case "The" 
+        status = "success" 
+        $event_class = "com.vmware.vc.vm.VmStateRevertedToSnapshot"
+    case "Failed to revert the" 
+        status = "failure"
+        $event_class = "com.vmware.vc.vm.VmStateFailedToRevertToSnapshot"
+endswitch
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+object.property = "snapshot_name"
+object.value = strip($arguments_snapshot_name, "", ",")
+
+if coalesce(ipv4($host_name), ipv6($host_name)) != null then
+    dst.ip = coalesce(ipv4($host_name), ipv6($host_name))
+else
+    dst.hostname = $host_name
+endif
+
+datafield1 = $def_dc_name  # Datacenter Name
+datafield3 = $compute_resource_name  # Cluster Name
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $host_name  # Host Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Revert_From_Snapshot"

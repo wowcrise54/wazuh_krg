@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.hostname=HOSTNAME?} {event_src.subsys=STRING?}
+        {$raw_time=STRING+} {$timestamp=STRING} INFO Event {msgid="ClientRegistered"} 
+        {$json=UNTIL("|||")} {$kv=KEYVALUE(";", "=", "*")}'
+
+action = "create" 
+object = "client"
+status = "success"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+  
+submessage('JSON', 'parse_json', $json)
+
+object.process.id = $kv["@pid"]
+
+object.name = $Client["Name"]
+object.type = $Client["Type"]
+
+time = maybe_datetime($raw_time + $timestamp)
+importance = "low"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "iam"
+event_src.category = "AAA"
+
+id = "PT_Positive_Technologies_iam_filemonitor_client_registered"

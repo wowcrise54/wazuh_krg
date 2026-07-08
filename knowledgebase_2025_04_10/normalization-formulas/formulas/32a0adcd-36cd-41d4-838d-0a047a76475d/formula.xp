@@ -1,0 +1,33 @@
+!TABULAR = "{time=CREATION_DATE},
+            {datafield2=VENDOR_CODE},
+            {datafield1=VENDOR_NAME},
+            {$subject_name=USER_NAME},
+            {src.ip=IP_ADDR}"
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+$name_domain = csv($subject_name, "@", "~")
+
+subject.account.name = $name_domain[0]
+subject.account.domain = $name_domain[1]
+
+object.id = strip(string($AUCTION_HEADER_ID), '', '.0')  # идентификатор аукциона
+
+# datafield1 - название организации, которое ассоциировано с  пользователем
+# datafield2 - внутренний код организации, который ассоциирован с  пользователем
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "mmk"
+event_src.title = "kis"
+event_src.subsys = "auction"
+event_src.category = "Application server"
+
+id = "PT_MMK_KIS_odbc_auction_login"

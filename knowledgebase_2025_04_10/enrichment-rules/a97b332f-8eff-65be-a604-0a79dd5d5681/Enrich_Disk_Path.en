@@ -1,0 +1,15 @@
+event Device_Mounted:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "13"
+        and object.path == "\\registry\\machine\\system\\mounteddevices\\\\dosdevices\\"
+        and regex(object.name, "^[a-z]:", 0) != null
+    }
+
+enrichment Enrich_Disk_Path
+    
+    enrich Device_Mounted:
+        enrich_fields {
+            datafield5 = object.name + "\\"
+        }

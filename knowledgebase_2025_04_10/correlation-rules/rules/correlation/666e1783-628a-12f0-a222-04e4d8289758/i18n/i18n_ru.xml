@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>В Redis сработали механизмы предупреждения. Это может быть вызвано межсайтовым скриптингом или подозрительным изменением параметра конфигурации "maxmemory"</Description>
+  <EventDescriptions>
+    <EventDescription id="3b1b5bc4-0da3-457e-b6d3-069b01afb966">Значение параметра "maxmemory" меньше 1 МБ на узле {event_src.host}</EventDescription>
+    <EventDescription id="571613d8-ab3a-4fa4-8ab3-08dcb879af8e">Значение параметра "maxmemory" уменьшено на узле {event_src.host}. Причина: {reason}</EventDescription>
+    <EventDescription id="c7b2e279-4f65-487c-aaae-946625f8e3db">Возможная атака через POST- или HOST-запрос на узле {event_src.host}, в результате соединение со злоумышленником прервано. Контекст события: {reason}</EventDescription>
+  </EventDescriptions>
+</Localization>

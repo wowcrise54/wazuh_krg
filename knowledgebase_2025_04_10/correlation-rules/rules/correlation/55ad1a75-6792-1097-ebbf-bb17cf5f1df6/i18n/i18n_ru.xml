@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Возможная принудительная аутентификация пользователя с помощью файлов с расширением .scf или .url. Такая аутентификация позволяет злоумышленникам получить NTLM-хеши паролей пользователей, которые откроют общий сетевой ресурс с этими файлами с помощью Проводника Windows. Злоумышленники могут использовать полученные хеши для таких атак, как Pass-the-Hash, либо подобрать пароли в открытом виде и использовать их для доступа к другим системам</Description>
+  <EventDescriptions>
+    <EventDescription id="1e425c62-61ac-46ae-ade5-fc798a2aabd3">Пользователь {subject.account.name} с узла {src.host} перенаправлен для принудительной аутентификации на узел {dst.host} после открытия общего сетевого ресурса с файлом "{object.storage.name}" на узле {datafield5}</EventDescription>
+    <EventDescription id="7842e99a-959b-42d2-b5ca-61fcf49ae43b">Возможная принудительная аутентификация пользователя {subject.account.name} с узла {src.host} после открытия общего сетевого ресурса с файлом "{object.storage.name}" на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

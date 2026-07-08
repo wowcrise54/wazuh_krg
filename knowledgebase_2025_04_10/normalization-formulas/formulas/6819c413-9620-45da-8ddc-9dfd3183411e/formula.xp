@@ -1,0 +1,20 @@
+# VARIABLES { backupJobName, vmName, sourceHostName, vmBackupResult, vmBackupComment }
+#    DESCRIPTION
+
+TABULAR= ' .1.3.6.1.2.1.1.3.0, .1.3.6.1.6.3.1.1.4.1.0, {datafield1=.1.3.6.1.4.1.31023.1.1.102}, {object.name=.1.3.6.1.4.1.31023.1.1.105}, {src.ip=.1.3.6.1.4.1.31023.1.1.106}, .1.3.6.1.4.1.31023.1.1.107, {reason=.1.3.6.1.4.1.31023.1.1.108}, {$dst=.1.3.6.1.6.3.18.1.3.0}, .1.3.6.1.6.3.18.1.4.0, .1.3.6.1.6.3.1.1.4.3.0'
+
+COND = (find_substr($[".1.3.6.1.4.1.31023.1.1.107"], "Success")!=null)
+
+time = recv_time
+
+object = "virtual_machine"
+action = "backup"
+status = "success"
+dst.ip = strip($dst, "IpAddress: ","")
+
+event_src.vendor = "veeam"
+event_src.title = "backup_replication"
+event_src.category = "Backup server"
+
+id = "PT_Veeam_Backup_Replication_snmp_VmBackupSuccess"
+importance = "info"

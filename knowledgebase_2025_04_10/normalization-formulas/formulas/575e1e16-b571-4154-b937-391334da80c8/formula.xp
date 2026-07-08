@@ -1,0 +1,101 @@
+TABULAR = '{$time_raw=unixtime},
+           {event_src.hostname=server_name},
+           {src.ip=user_ip},
+           {$subject_name_raw=auth_name},
+           {dst.hostname=request_host},
+           {object.path=request_path},
+           {datafield1=port_name},
+           {protocol=protocol},
+           {object.state=http_code},
+           {datafield2=rule_name},
+           {object.type=content_name},
+           {object.group=category},
+           {count.bytes_in=bytes_in},
+           {count.bytes_out=bytes_out}'
+
+# http коды успешного доступа
+$access_success = ["100", "101", "200", "201", "202", "203", "206", "302", "304"]
+
+# http коды неуспешного доступа
+$access_failure = ["301", "302", "305", "307", "308", "400", "401", "403", "404",
+                   "405", "406", "407", "413", "415", "418", "423", "429",
+                   "431", "495", "496", "497", "500", "501", "502", "503",
+                   "504", "505", "507", "508"]
+
+# http коды высокой важности
+$importance_low = ["400", "401", "403", "407", "405", "413", "415", "418",
+                   "429", "495", "500", "501", "502", "503", "504", "507", "508"]
+
+if $subject_name_raw != "Неизвестен" then
+    subject = "account"
+    subject.name = $subject_name_raw
+endif
+
+action = "access"
+object = "resource"
+
+if in_list($access_success, object.state) then
+    status = "success"
+elif in_list($access_failure, string(object.state)) then
+    status = "failure"
+else
+    # Остановка работы формулы если неизвесный HTTP код
+    drop
+endif
+
+# datafield1 - port name
+# datafield2 - proxy's rule name
+
+reason = switch object.state
+    case "101" "Switching Protocols"
+    case "100" "Continue"
+    case "200" "OK"
+    case "201" "Created"
+    case "202" "Accepted"
+    case "203" "Non-Authoritative Information"
+    case "206" "Partial Content"
+    case "301" "Moved Permanently"
+    case "302" "Found"
+    case "304" "Not Modified"
+    case "305" "Use Proxy"
+    case "307" "Temporary Redirect"
+    case "308" "Permanent Redirect"
+    case "400" "Bad Request"
+    case "401" "Unauthorized"
+    case "403" "Forbidden"
+    case "404" "Not Found"
+    case "405" "Method Not Allowed"
+    case "406" "Not Acceptable"
+    case "407" "Proxy Authentication Required"
+    case "413" "Payload Too Large"
+    case "415" "Unsupported Media Type"
+    case "418" "I'm a teapot"
+    case "423" "Locked"
+    case "429" "Too Many Requests"
+    case "431" "Request Header Fields Too Large"
+    case "495" "SSL Certificate Error (nginx specific)"
+    case "496" "SSL Certificate Required (nginx specific)"
+    case "497" "HTTP Request Sent to HTTPS Port (nginx specific)"
+    case "500" "Internal Server Error"
+    case "501" "Not Implemented"
+    case "502" "Bad Gateway"
+    case "503" "Service Unavailable"
+    case "504" "Gateway Timeout"
+    case "505" "HTTP Version Not Supported"
+    case "507" "Insufficient Storage"
+    case "508" "Loop Detected"
+endswitch
+
+time = epoch_to_datetime($time_raw)
+
+if in_list($importance_low, object.state) then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_request_through_proxy"

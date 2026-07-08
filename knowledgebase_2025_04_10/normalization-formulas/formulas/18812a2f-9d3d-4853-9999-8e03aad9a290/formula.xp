@@ -1,0 +1,64 @@
+EVENTLOG = ''
+
+COND = (
+            $Channel == "Kaspersky Endpoint Security"
+            and $Provider["Name"] == "avp"
+            and in_list(["702", "703"], $EventID["text"])
+        )
+        or
+        (
+            $Channel == "Kaspersky Event Log"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "4660"
+            and find_substr($Data[0], "Запуск программы запрещен") != null
+        )
+
+subject = "rule"
+action = "deny"
+object = "application"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+subject.name = $kv["Правило\\Категория"]
+subject.type = $kv["Правило\\Тип правила"]
+
+$csv_object = csv($kv["Объект\\Путь к файлу"], "\\", "'")
+object.name = $csv_object[length($csv_object) - 1]
+object.path = strip($kv["Объект\\Путь к файлу"], "", object.name)
+object.version = $kv["Объект\\Версия файла"]
+object.type = coalesce($kv["Объект\\KL-категория"], $kv["KL-категория\\Название"])
+object.vendor = $kv["Объект\\Производитель"]
+object.hash = $kv["Объект\\Хеш"]
+
+datafield1 = substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' ('))     # Имя пользователя
+datafield3 = $kv["Объект\\Название файла"]                                              # Название файла
+
+reason = $kv["Результат\\Описание"]
+
+time = $TimeCreated["SystemTime"]
+
+msgid = switch $EventID["text"]
+    case "4660" $kv["Тип события"]
+    case "702" $EventID["text"]
+    case "703" $EventID["text"]
+endswitch
+
+importance = switch $kv["Тип события"]
+    case "Запуск программы запрещен в тестовом режиме" "low"
+    case "Запуск программы запрещен" "medium"
+endswitch
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_702_703_application_startup_prohibited"

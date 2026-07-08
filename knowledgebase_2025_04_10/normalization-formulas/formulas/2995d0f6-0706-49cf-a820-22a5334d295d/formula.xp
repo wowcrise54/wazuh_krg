@@ -1,0 +1,217 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL(']')} INFO - {$class=STRING} - {$tag=WORD}: {$raw_message=REST}"
+COND = in_list([
+           "project_create", "project_remove",
+           "project_edit_settings", 
+           "project_copy", "project_move", 
+           "project_archive", "project_dearchive",
+           "project_external_id_change"
+       ], $tag)
+
+subject = "account"
+object = "resource"
+status = "success"
+
+subformula "parse_user"
+    TEXT = "'{$user_name=UNTIL('\\'')} {'('$user_fullname=UNTIL(')')?} {'{'}id={$user_id=NUMBER}{'}'}"
+endsubformula
+
+subformula "parse_user"
+    # since version 2023
+    TEXT = "user with id={$user_id=NUMBER}"
+endsubformula
+
+subformula "parse_project_info"
+    TEXT = "id={$project_id=LITERAL*}, internal id={$project_int_id=STRING}"
+endsubformula
+
+subformula "parse_project_info"
+    TEXT = "id={$project_id=LITERAL*}/{$project_int_id=STRING}"
+endsubformula
+
+subformula "parse_project"
+    TEXT = "{$project_fullpath=UNTIL(' {')} {$project_info=REST}"
+    
+    $project_info = strip($project_info, "", "}")
+    submessage("TEXT", "parse_project_info", $project_info)
+    
+    $project_list = csv($project_fullpath, " / " , "'")
+    $project_name = $project_list[length($project_list)-1]
+    $project_path = strip($project_fullpath, "", $project_name)
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\" with comment \"')} {$comment=REST}"
+    
+    reason = strip($comment, '', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\"')}"
+endsubformula
+
+subformula "by_comment"
+    TEXT = "with comment {$comment=REST}"
+    
+    reason = strip($comment, '"', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "{REST}"
+endsubformula
+
+subformula "create"
+    TEXT = "Project \"{$project=UNTIL('\" was created')} {$by_comment=REST}"
+    
+    action = "create"
+endsubformula
+
+subformula "edit_settings"
+    TEXT = "\"{$project=UNTIL('\" project settings were edited (')} {$changes=UNTIL(') ')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    $changes = keyvalue(strip($changes, '"', '"'), ",", ":", "'")
+    object.version = $changes["version before"]
+endsubformula
+
+subformula "copy"
+    TEXT = "Project \"{$project_target=UNTIL('\" was copied from \"')} {$project=UNTIL('}\"')} {$by_comment=REST}"
+    
+    action = "copy"
+endsubformula
+
+subformula "move"
+    TEXT = "Project \"{$project_target=UNTIL('\" was moved from parent project \"')} {$project_source_parent=UNTIL('}\"')} {$by_comment=REST}"
+    
+    action = "move"
+endsubformula
+
+subformula "archive"
+    TEXT = "Project \"{$project=UNTIL('\" was archived')} {$by_comment=REST}"
+    
+    action = "disable"
+endsubformula
+
+subformula "dearchive"
+    TEXT = "Project \"{$project=UNTIL('\" was dearchived')} {$by_comment=REST}"
+    
+    action = "enable"
+endsubformula
+
+subformula "remove"
+    TEXT = "Project \"{$project_fullpath=UNTIL('\" was removed')} {$by_comment=REST}"
+    
+    action = "remove"
+    
+    $project_list = csv($project_fullpath, " / " , "'")
+    $project_name = $project_list[length($project_list)-1]
+endsubformula
+
+subformula "external_id_change"
+    TEXT = "\"{$project=UNTIL('\" project ID was changed from \"')} {$old_project_id=UNTIL('\"')} to \"{$new_project_id=UNTIL('\"')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    object.property = "id"
+    object.new_value = $new_project_id
+endsubformula
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+switch $tag
+    case "project_create" submessage("TEXT", "create", $raw_message)
+    case "project_edit_settings" submessage("TEXT", "edit_settings", $raw_message)
+    case "project_copy" submessage("TEXT", "copy", $raw_message)
+    case "project_move" submessage("TEXT", "move", $raw_message)
+    case "project_archive" submessage("TEXT", "archive", $raw_message)
+    case "project_dearchive" submessage("TEXT", "dearchive", $raw_message)
+    case "project_remove" submessage("TEXT", "remove", $raw_message)
+    case "project_external_id_change" submessage("TEXT", "external_id_change", $raw_message)
+endswitch
+
+submessage("TEXT", "by_comment", $by_comment)
+submessage("TEXT", "parse_user", $user)
+submessage("TEXT", "parse_project", $project)
+
+subject.account.fullname = $user_fullname
+subject.account.name = $user_name
+subject.account.id = $user_id
+
+object.type = "project"
+
+if $tag == "project_external_id_change" then
+    object.id = $old_project_id
+else
+    object.id = $project_id
+endif
+
+object.name = $project_name
+object.fullpath = $project_fullpath
+
+if $tag == "project_copy" then
+    object.property = "fullpath|id"
+    object.value = $project_fullpath + " | " + $project_id
+    
+    $project_fullpath = null
+    $project_name = null
+    $project_id = null
+    
+    submessage("TEXT", "parse_project", $project_target)
+    object.new_value = $project_fullpath + " | " + $project_id
+elif $tag == "project_move" then
+    submessage("TEXT", "parse_project", $project_source_parent)
+    if ($project_name != "<Root project>") then
+        $obj_fullpath = $project_fullpath + " / "
+    endif
+    
+    $project_fullpath = null
+    $project_name = null
+    $project_id = null
+    
+    submessage("TEXT", "parse_project", $project_target)
+    object.fullpath = $obj_fullpath + $project_name
+    object.name = $project_name
+    
+    object.property = "fullpath"
+    object.value = $obj_fullpath + $project_name
+    object.new_value = $project_fullpath
+    
+    datafield1 = $obj_fullpath + $project_name  # Project Fullpath
+endif
+    
+datafield1 = $project_fullpath  # Project Fullpath
+datafield5 = $project_id  # Project ID
+
+if substr($project_int_id, 0, 7) == "project" then
+    numfield1 = number(strip($project_int_id, "project", ""))  # Project Internal ID
+elif $project_int_id == "_Root" then
+    numfield1 = -1
+endif
+
+if $comment != "" then
+    reason = strip($comment, 'with comment "', '"')
+endif
+
+time = replace($time, ".", ",")
+msgid = $tag
+importance = "low"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Activities_Project_Management"

@@ -1,0 +1,26 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}login|{NUMBER}|cat=System: User Action
+        {$kv=KEYVALUE(" ", "=", "\\"")}'
+          
+COND = $kv["act"] == "login_suspend"
+
+subject = "system"
+action = "lock"
+object = "account"
+status = "success"
+
+object.account.name = $kv["suser"]
+
+src.ip = $kv["src"]
+
+logon_service = $kv["dproc"]
+
+time = recv_time  
+msgid = $kv["act"]
+importance = "info"
+    
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_cef_user_blocked"

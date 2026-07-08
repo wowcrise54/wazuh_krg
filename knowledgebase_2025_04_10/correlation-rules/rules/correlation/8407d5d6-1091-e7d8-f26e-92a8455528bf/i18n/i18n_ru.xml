@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Подозрительная активность с использованием списка отозванных сертификатов (CRL). Используя доступ к CRL, злоумышленник может вынудить сервер центра сертификации пройти аутентификацию на удаленном сервере или получить возможность удаленного выполнения кода на сервере центра сертификации. Для работы правила необходимо заполнить табличный список "CRL_Publication_Time"</Description>
+  <EventDescriptions>
+    <EventDescription id="05d0b9bc-416f-249e-96a0-94bc667117a5">Пользователь {subject.account.name} отправил подозрительный запрос на публикацию списка отозванных сертификатов на сервер центра сертификации {event_src.host}</EventDescription>
+    <EventDescription id="4a8a641f-e6d6-ec69-49c7-59a9e989ec1e">Для удаленного выполнения кода создан запрос на размещение подозрительного файла "{object.name}" на сервере центра сертификации {event_src.host}</EventDescription>
+    <EventDescription id="df5420f8-ceba-0fee-17eb-3fa0822727ab">Для удаленного выполнения кода на узле {alert.regex_match} создан запрос на размещение на этом узле подозрительного файла "{object.name}" через центр сертификации {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,38 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME} {$Computer=HOSTNAME} [{$time_date=DATETIME},{$time_rest=NUMBER}] WARN 
+        Session {object.account.session_id=WORD} for server {$hostname=UNTIL('/')}{$dest=IPV4}:{dst.port=NUMBER},
+        Closing socket connection. Attempting reconnect except it is a {reason=WORD}. ({datafield1=UNTIL(')')}"
+
+action = "terminate"
+object = "session"
+status = "success"
+
+object.account.session_id = maybe_number16(object.account.session_id)
+
+if $hostname == "localhost" then
+    dst.hostname = $Computer
+else
+    dst.hostname = $hostname
+endif
+
+if $dest != "127.0.0.1" then
+    dst.ip = $dest
+endif
+
+# datafield1 module created event
+
+time = epoch_ms_to_datetime(datetime_to_epoch_ms($time_date) + $time_rest)
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache_kafka"
+event_src.category = "Other"
+
+id = "PT_Opensource_ASF_Apache_Kafka_syslog_server_session_terminated"

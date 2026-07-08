@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {$dt=STRING} INFO 
+        [{UNTIL("]")} com.vmware.vcops.adminui.action.ClusterManagementAction:{NUMBER} - 
+        Request {$obj_name=WORDDASH} {"execution took"?} {$req_dur=NUMBER?} {"milliseconds."?}'
+
+action = "execute"
+object = "request"
+
+if $req_dur == null then
+    status = "ongoing"
+    dst.ip = coalesce(recv_ipv4, recv_ipv6) 
+else
+    status = "success"
+    duration = div($req_dur, 1000)
+endif
+
+object.name = lower($obj_name)
+
+time = datetime(replace($dt, ".", ","))
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_request_execution"

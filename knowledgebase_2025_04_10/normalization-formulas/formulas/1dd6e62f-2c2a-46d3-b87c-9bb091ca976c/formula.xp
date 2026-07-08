@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME}
+        View - {NUMBER} [View@{NUMBER} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["EventType"] == "BROKER_MACHINE_ALLOCATED"
+        or $kv["EventType"] == "BROKER_DESKTOP_REQUEST"
+
+subject = "account"
+action = "bind"
+object = "resource"
+status = switch $kv["EventType"]
+    case "BROKER_MACHINE_ALLOCATED" "success"
+    case "BROKER_DESKTOP_REQUEST" "ongoing"
+endswitch
+
+# разделение имени пользователя на домен и имя
+$csv = csv($kv["UserDisplayName"], "\\\\", "'")
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+subject.id = $kv["UserSID"]
+object.name = $kv["DesktopId"]
+object.type = "desktop pool"
+
+dst.hostname = $kv["MachineName"]
+
+msgid = $kv["EventType"]
+importance = "low"
+
+event_src.vendor = "vmware"
+event_src.title = "horizon"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_Horizon_View_syslog_Pool_requested"

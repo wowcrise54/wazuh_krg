@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}: %{msgid="VRRP-ENG-5-VR_STATE_CHANGE"}: VR ID {object.group=STRING} on interface
+        {interface=STRING} state changed to {$state=STRING} event {REST}'
+
+action = "info"
+object = "service"
+status = "success"
+
+object.state = strip($state, '', ',')
+object.type = "FHRP"
+
+protocol = "vrrp"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_vrrp_change_state"

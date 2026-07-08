@@ -1,0 +1,31 @@
+EVENTLOG = 'Channel="Application"'
+!COND = $EventID["text"] == "2300" and $Provider["Name"] == "KSHSecurityService"
+
+action = "stop"
+object = "service"
+status = "success"
+
+submessage("TEXT","SPLIT",$Data[0])
+
+subformula "SPLIT"
+    TEXT='{object.process.name=UNTIL("\r\n")} {reason=UNTIL(".")} Выполнено переключение в неактивный режим.'
+endsubformula
+
+object.name = "Kaspersky Security для SharePoint Server"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "high"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_sharepoint_server"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Security_for_SharePoint_Server_eventlog_2300_service_has_switched_to_inactive_mode"

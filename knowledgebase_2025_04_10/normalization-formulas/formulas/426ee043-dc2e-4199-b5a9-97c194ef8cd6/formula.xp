@@ -1,0 +1,50 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$Computer=HOSTNAME} NSI:
+        {object.type="Unapproved Connection"|object.type="Unapproved Client"|object.type="Unapproved Server"}:
+        {subject.name=UNTIL(",")}{$kv=KEYVALUE(",",":")}'
+
+subject = "rule"
+action = "detect"
+object = "alert"
+status = "success"
+
+object.property = "description"
+object.value = $kv["URL"]
+
+src.ip = maybe_ipv4($kv["Client"])
+dst.ip = maybe_ipv4($kv["Server"])
+
+$space = find_substr($kv["Service"], " ")
+if $space != null then
+    $csv = csv(substr($kv["Service"], 0, $space), "/", "'")
+else
+    $csv = csv($kv["Service"], "/", "'")
+endif
+
+protocol = $csv[0]
+if protocol == "ICMP" then
+    datafield1 = $csv[1]     # Тип ICMP
+    datafield2 = $csv[2]     # Код ICMP
+elif protocol == "TCP" or protocol == "UDP" then
+    dst.port = $csv[1]
+endif
+
+if number($kv["Severity"]) =< 3  then
+    importance = "low"
+elif number($kv["Severity"]) > 3 and number($kv["Severity"]) =< 7 then
+    importance = "medium"
+else
+    importance = "high"
+endif
+
+event_src.vendor = "pravail_nsi"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "arbor_networks"
+event_src.category = 'IDS/IPS'
+
+id = "PT_Arbor_Networks_Pravail_NSI_syslog_unapproved_traffic"

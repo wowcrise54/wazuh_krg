@@ -1,0 +1,131 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VDS_MAINTENANCE",  # 15
+           "VDS_MAINTENANCE_FAILED",  # 17
+           "VDS_MAINTENANCE_MANUAL_HA",  # 10,452
+           "USER_VDS_MAINTENANCE",  # 600
+           "USER_VDS_MAINTENANCE_WITHOUT_REASON",  # 620
+           "USER_VDS_MAINTENANCE_MANUAL_HA",  # 10,453
+           "USER_VDS_MAINTENANCE_MIGRATION_FAILED",  # 602
+           "STORAGE_DOMAIN_MOVED_TO_MAINTENANCE"  # 1,029
+       ], $event_class)
+
+subject = "account"
+action = "configure"
+object = "resource"
+
+if $event_class == "VDS_MAINTENANCE_FAILED" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subformula "parse_body"
+    # VDS_MAINTENANCE
+    TEXT = "Host {$vds_name=STRING+} was switched to Maintenance Mode."
+endsubformula
+
+subformula "parse_body"
+    # VDS_MAINTENANCE_FAILED
+    TEXT = "Failed to switch Host {$vds_name=STRING+} to Maintenance mode."
+endsubformula
+
+subformula "parse_body"
+    # VDS_MAINTENANCE_MANUAL_HA
+    TEXT = "Host {$vds_name=STRING+} was switched to Maintenance mode, but Hosted Engine HA maintenance could not be enabled. Please enable it manually."
+endsubformula
+
+subformula "parse_body"
+    # USER_VDS_MAINTENANCE_MIGRATION_FAILED
+    TEXT = "Host {$vds_name=STRING+} cannot change into maintenance mode - not all Vms have been migrated successfully. Consider manual intervention: stopping/migrating Vms running on this host. (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # STORAGE_DOMAIN_MOVED_TO_MAINTENANCE
+    TEXT = "Storage Domain {$storage_domain_name=STRING+} (Data Center {$storage_pool_name=STRING+} successfully moved to Maintenance as it's no longer accessed by any Host of the Data Center."
+    
+    $storage_pool_name = strip($storage_pool_name, "", ")")
+endsubformula
+
+subformula "600"
+    # USER_VDS_MAINTENANCE
+    TEXT = "Host {$vds_name=STRING+} was switched to Maintenance mode by {$user=STRING+} (Reason: {$reason_raw=REST}"
+endsubformula
+
+subformula "620"
+    # USER_VDS_MAINTENANCE_WITHOUT_REASON
+    TEXT = "Host {$vds_name=STRING+} was switched to Maintenance mode by {$user=REST}"
+endsubformula
+
+subformula "10453"
+    # USER_VDS_MAINTENANCE_MANUAL_HA
+    TEXT = "Host {$vds_name=STRING+} was switched to Maintenance mode by {$user=STRING+} but Hosted Engine HA maintenance could not be enabled. Please enable it manually."
+    
+    $user = strip($user, "", ",")
+endsubformula
+
+if $event_class == "USER_VDS_MAINTENANCE" then
+    submessage("TEXT", "600", $raw_message)
+elif $event_class == "USER_VDS_MAINTENANCE_WITHOUT_REASON" then
+    submessage("TEXT", "620", $raw_message)
+elif $event_class == "USER_VDS_MAINTENANCE_MANUAL_HA" then
+    submessage("TEXT", "10453", $raw_message)
+else
+    submessage("TEXT", "parse_body", $raw_message)
+endif
+
+if $event_class == "USER_VDS_MAINTENANCE_MIGRATION_FAILED" then
+    $user = strip($user, "", ").")
+elif $event_class == "USER_VDS_MAINTENANCE_WITHOUT_REASON" then
+    $user = strip($user, "", ".")
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+if $event_class == "STORAGE_DOMAIN_MOVED_TO_MAINTENANCE" then
+    object.type = "storage_domain"
+    object.name = $storage_domain_name
+else
+    object.type = "vds"
+    object.name = $vds_name
+endif
+object.property = "mode"
+object.new_value = "maintenance"
+
+logon_service = $authz_provider
+
+reason = strip($reason_raw, "", ").")
+
+datafield1 = $storage_pool_name  # Data Center Name
+datafield2 = $storage_domain_name  # Storage Domain Name
+datafield6 = $vds_name  # VDS (Host) Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_Maintenance_Mode"

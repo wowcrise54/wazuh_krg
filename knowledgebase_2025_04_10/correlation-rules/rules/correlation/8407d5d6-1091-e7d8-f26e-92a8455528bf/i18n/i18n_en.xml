@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious activity with a certificate revocation list (CRL). Access to a CRL allows attackers to force the CA server to authenticate on a remote server or remotely execute code on the CA server. For this rule to work, you must complete the "CRL_Publication_Time" tabular list.</Description>
+  <EventDescriptions>
+    <EventDescription id="05d0b9bc-416f-249e-96a0-94bc667117a5">User {subject.account.name} sent a suspicious request to publish a certificate revocation list to CA server {event_src.host}</EventDescription>
+    <EventDescription id="4a8a641f-e6d6-ec69-49c7-59a9e989ec1e">For remote code execution, a request was created to place suspicious file "{object.name}" on CA server {event_src.host}</EventDescription>
+    <EventDescription id="df5420f8-ceba-0fee-17eb-3fa0822727ab">For remote code execution on host {alert.regex_match}, a request was created to place suspicious file "{object.name}" on this host via CA {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

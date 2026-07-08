@@ -1,0 +1,132 @@
+event Confluence_GET_Request:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "confluence"
+        and event_src.vendor == "atlassian"
+        and action == "execute"
+        and object == "request"
+        and object.type == "GET"
+        and object.state == "200"
+        and subject.account.name == null
+        and match(lower(object.path), "*bootstrapstatusprovider.applicationconfig.setupcomplete=false")
+    }
+
+event Confluence_POST_Request:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "confluence"
+        and event_src.vendor == "atlassian"
+        and action == "execute"
+        and object == "request"
+        and object.type == "POST"
+        and subject.account.name == null
+        and find_substr(lower(object.path), "setupadministrator.action") != null
+    }
+
+event Confluence_User_Created:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "confluence"
+        and event_src.vendor == "atlassian"
+        and action == "create"
+        and object == "account"
+        and lower(subject.account.fullname) == "anonymous"
+        and filter::CheckWL_Web_Access("CVE_2023_22515_Confluence", lower(join([object.account.fullname, src.host], "|")))
+    }
+
+event Confluence_Admin_Added:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "confluence"
+        and event_src.vendor == "atlassian"
+        and object == "user_group"
+        and object.property == "added_user"
+        and object.name == "confluence-administrators"
+        and lower(subject.account.fullname) == "anonymous"
+    }
+
+rule CVE_2023_22515_Confluence: Confluence_GET_Request and Confluence_POST_Request and Confluence_User_Created and Confluence_Admin_Added within 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Web_Access"
+    }
+
+    on Confluence_User_Created {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        
+        $object.account.name = object.account.name
+        $object.account.id = object.account.id
+        $object.account.fullname = object.account.fullname
+
+        $object.new_value = object.new_value
+        $object.property = object.property 
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([object.account.fullname, src.host], "|"))
+        $alert.context = "added user: " + object.account.name
+    }
+
+    on Confluence_Admin_Added {
+        $object.name = object.name
+    }
+
+    on Confluence_GET_Request {
+        $subject.account.session_id = subject.account.session_id
+
+        $subject.process.meta = subject.process.meta
+
+        $object.type = object.type
+        $object.path = object.path
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+
+        $alert.regex_match = regex(lower(object.path), "bootstrapstatusprovider\.applicationconfig\.setupcomplete=false$", 0)
+    }
+
+
+emit {  
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "create"
+    $object = "account"
+    $status = "success"
+
+    $detect = "CVE-2023-22515"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

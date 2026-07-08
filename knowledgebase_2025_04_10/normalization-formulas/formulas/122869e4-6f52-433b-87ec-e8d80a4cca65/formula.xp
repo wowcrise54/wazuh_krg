@@ -1,0 +1,59 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {STRING} CEF:{NUMBER}|Infotecs|IDS HS|{UNTIL("|")}{msgid=NUMBER}|
+        {$desc=UNTIL("|")}{$priority=NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+COND = in_list(["300000", "300001", "300047", "300048", "300049", "300050",
+                "300051", "300052", "300053", "300054", "300055", "300056",
+                "300057", "300058", "300059", "300060", "300061", "300062",
+                "300063", "302045", "300045", "300044", "300043"], msgid)
+
+subject = "account"
+action = "start"
+object = "process"
+status = "success"
+
+subject.account.name = $kv['suser']
+subject.account.domain = $kv['sntdom']
+subject.account.id = $kv['suid']
+
+object.account.name = subject.account.name
+object.account.domain = subject.account.domain
+object.account.id = subject.account.id
+
+$tmp_list = csv($kv['sproc'], "\\", "")
+
+object.process.fullpath = $tmp_list
+object.process.name = $tmp_list[length($tmp_list) - 1]
+if length($tmp_list) > 1 then
+    object.process.path = strip($kv['sproc'], '', object.process.name)
+endif
+object.process.cmdline = $kv['InfotecsIDSHSCommandLine']
+
+$tmp_list = csv($kv['InfotecsIDSHSParentProcessName'], "\\", "")
+object.process.parent.name = $tmp_list[length($tmp_list) - 1]
+object.process.parent.path = strip($kv['InfotecsIDSHSParentProcessName'], '', object.process.parent.name)
+
+time = epoch_ms_to_datetime(number($kv['rt']))
+
+if $priority < 6 then
+    importance = "info"
+elif $priority >= 6 and $priority < 8 then
+    importance = "low"
+elif $priority >= 8 and $priority < 10 then
+    importance = "medium"
+elif $priority >= 10 then
+    importance = "high"
+endif
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids_hs"
+event_src.subsys = lower($kv['deviceFacility'])
+event_src.ip = $kv['dvc']
+event_src.hostname = $kv['InfotecsIDSHShost']
+event_src.category = "IDS/IPS"
+event_src.id = $kv['InfotecsIDSHShostId']
+
+id = "PT_Infotecs_VipNet_IDS_HS_syslog_cef_start_process"

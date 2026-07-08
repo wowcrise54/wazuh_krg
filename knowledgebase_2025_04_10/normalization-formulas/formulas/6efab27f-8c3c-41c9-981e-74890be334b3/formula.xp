@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} audispd:
+        node={IPV4|IPV6|HOSTNAME} type=SERVICE_START msg={STRING} {"user"?} pid={NUMBER}
+        uid={subject.account.id=NUMBER} auid={NUMBER} ses={NUMBER} subj={STRING} msg=\'
+        {$service=STRING?} comm={STRING} exe="{subject.process.fullpath=UNTIL("\\"")} hostname={src.hostname=HOSTNAME|"?"}
+        addr={src.ip=IPV4|src.ip=IPV6|"?"} terminal={STRING} res=success{REST}'
+
+subject = "account"
+action = "start"
+object = "service"
+status = "success"
+
+$process_path_and_name = csv(subject.process.fullpath, "/", "")
+subject.process.name = $process_path_and_name[length($process_path_and_name) - 1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+
+object.name = strip($service, "unit=", "")
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_auditd_syslog_service_start"

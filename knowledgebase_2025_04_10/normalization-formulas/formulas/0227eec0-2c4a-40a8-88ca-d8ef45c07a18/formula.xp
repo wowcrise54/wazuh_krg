@@ -1,0 +1,44 @@
+TABULAR =  "recordid,
+            {datafield3 = module_name},
+            severity,
+            event_id,
+            {time = time},
+            {datafield1 = site_code},
+            hostname,
+            {datafield2 = component},
+            params
+            "
+
+COND = $event_id == 11802
+
+action = "start"
+object = "process"
+status = "failure"
+
+msgid = string($event_id)
+
+submessage ("TEXT", "add_info", $params)
+subformula "add_info"
+    TEXT = '{$csv=CSV}'
+
+    object.process.id = $csv[1]
+endsubformula
+
+# datafield1 - идентификатор сайта
+# datafield2 - название подсистемы
+# datafield3 - название модуля
+
+reason = "Applicaton .Net framework version 2.0 didn't install"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "high"
+
+id = "PT_Microsoft_SCCM_odbc_11802_cannot_run_process"

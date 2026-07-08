@@ -1,0 +1,56 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        CEF:0|IT-Bastion LLC|SKDPU-NT|{datafield5=UNTIL("|")}{msgid="SKDPUNT.AUTH.00004"}
+        |{WORD}|{NUMBER}|act={$temp_action=WORD} {$kv=KEYVALUE(" ", "=")}'
+        
+subject = "account"
+if $temp_action == "RoleDelete" then
+    action = "remove"
+elif $temp_action == "RoleCreate" then
+    action = "create"
+elif $temp_action == "RoleChange" then
+    action = "modify"
+endif
+
+object = "profile"
+status = "success"
+
+if find_substr($kv["suser"], "@") != null then
+    $temp_acc = csv($kv["suser"], "@", "")
+    subject.application.account.domain = $temp_acc[length($temp_acc) - 1]
+    subject.application.account.name = $temp_acc[0]
+else
+    subject.application.account.name = $kv["suser"]
+endif
+
+if $kv["name"] != null then
+    object.name = $kv["name"]
+else
+    object.name = $kv["msg"]
+endif
+
+if coalesce(maybe_ipv4($kv["dst"]),maybe_ipv6($kv["dst"])) != null then
+    dst.ip = $kv["dst"]
+else    
+    dst.fqdn = strip($kv["dst"], "https://", "")
+    $temp_csv = csv(dst.fqdn, ".", "")
+    dst.hostname = $temp_csv[0]
+endif
+
+datafield1 = $kv["cat"]               # action category
+
+# datafield5 skdpu nt version
+
+importance = "info"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_cef_role_actions"

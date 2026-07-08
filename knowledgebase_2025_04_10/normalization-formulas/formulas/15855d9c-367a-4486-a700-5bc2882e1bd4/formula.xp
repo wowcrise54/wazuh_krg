@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|}
+        login{"["?}{NUMBER?}{"]"?}: login on {WORD} as {subject.account.name=WORD}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+logon_auth_method = "local"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "freebsd"
+event_src.category = "Operating system"
+
+id = "PT_Opensource_FreeBSD_syslog_console_login"

@@ -1,0 +1,97 @@
+# {"class":"vim.event.ResourcePoolDestroyedEvent","key":29168,"chainId":29167,"createdTime":"2022-02-24 18:56:28.960000+00:00","userName":"VSPHERE.LOCAL\\Administrator","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"Datacenter","datacenter":"vim.Datacenter:datacenter-3"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"10.125.4.4","computeResource":"vim.ComputeResource:domain-s1026"},"fullFormattedMessage":"Removed resource pool New Pool on 10.125.4.4 in Datacenter","resourcePool":{"class":"vim.event.ResourcePoolEventArgument","name":"New Pool","resourcePool":"vim.ResourcePool:resgroup-2002"}}
+
+JSON = ''
+COND = in_list([
+           "ResourcePoolCreatedEvent",
+           "ResourcePoolReconfiguredEvent",
+           "ResourcePoolMovedEvent",
+           "ResourcePoolDestroyedEvent"
+       ], strip($class, "vim.event.", ""))
+       or ($eventTypeId == "com.vmware.vc.rp.ResourcePoolRenamedEvent")
+ 
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+action = switch strip(coalesce($eventTypeId, $class), "vim.event.", "")
+    case "ResourcePoolCreatedEvent" "create"
+    case "ResourcePoolReconfiguredEvent" "configure"
+    case "ResourcePoolMovedEvent" "move"
+    case "ResourcePoolDestroyedEvent" "remove"
+    case "com.vmware.vc.rp.ResourcePoolRenamedEvent" "modify"
+endswitch
+
+object = "resource"
+status = "success"
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.type = "resource_pool"
+object.name = coalesce($objectName, $resourcePool["name"])
+object.id = coalesce($objectId, strip($resourcePool["resourcePool"], "vim.ResourcePool:", ""))
+
+$modified = replace($configChanges["modified"], "", "\n")
+$modified = replace($modified, "'", '"')
+$added = replace($configChanges["added"], "", "\n")
+$added = replace($added, "'", '"')
+$deleted = replace($configChanges["deleted"], "", "\n")
+$deleted = replace($deleted, "'", '"')
+
+switch strip($class, "vim.event.", "")
+    case "ResourcePoolReconfiguredEvent"
+        object.property = "configuration"
+        object.new_value = "Modified: " + $modified + "  Added: " + $added + "  Deleted: " + $deleted
+    case "EventEx"
+        object.property = "name"
+        object.value = $arguments["oldName"]
+        object.new_value = $arguments["newName"]
+    case "ResourcePoolMovedEvent"
+        object.property = "parent"
+        object.value = $oldParent["name"]
+        object.new_value = $newParent["name"]
+endswitch
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+ 
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = object.name  # Entity Name
+datafield6 = $host["name"]  # Host Name
+datafield7 = $parent["name"]  # Parent Entity Name
+datafield10 = object.id  # Internal Entity ID
+ 
+chain_id = $chainId
+ 
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "low"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_Resource_Pool_Management"

@@ -1,0 +1,22 @@
+JSON = 'category=37'
+
+COND = $data["ID"] == "BREAK_LINK" and $cg_cssid != 0
+
+action = "terminate"
+object = "session"
+status = "success"
+
+datafield1 = $cg_name   # узел безопасности
+datafield2 = $cg_cssid  # идентификатор узла безопасности
+
+time = $time
+msgid = $data["ID"]
+
+importance = "high"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+
+id = "PT_Security_Code_Kontinent_odbc_break_link"

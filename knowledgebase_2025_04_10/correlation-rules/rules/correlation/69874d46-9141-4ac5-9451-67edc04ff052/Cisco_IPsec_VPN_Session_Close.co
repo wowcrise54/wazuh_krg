@@ -1,0 +1,83 @@
+# Cisco ASA PIX FWSM
+
+event Session_Disconnected:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "113019"
+        and event_src.vendor == "cisco"
+        and filter::CheckWL_Networking("Cisco_IPsec_VPN_Session_Close", lower(subject.account.name))
+    }
+
+event IPSEC_Deleted_Inbound:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "602304"
+        and event_src.vendor == "cisco"
+        and direction == "ingress"
+    }
+
+event IPSEC_Deleted_Outbound:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "602304"
+        and event_src.vendor == "cisco"
+        and direction == "egress"
+    }
+
+rule Cisco_IPsec_VPN_Session_Close: (Session_Disconnected and IPSEC_Deleted_Inbound and IPSEC_Deleted_Outbound) within 3s
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Session_Disconnected {
+        $subject.account.name = subject.account.name
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $datafield4 = datafield4  # tunnel group
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(subject.account.name)
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "stop"
+    $object = "session"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "External Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

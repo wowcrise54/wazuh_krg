@@ -1,0 +1,103 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} [{WORD} info \'Vimsvc.ha-eventmgr\' {$kvs=UNTIL("] ")} Event {NUMBER}:
+{$act="Permission created"|$act="Permission changed"|$act="--> Role changed"|$act="Permission rule removed"}{$rest=REST}'
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subformula "perm_create"
+    TEXT = 'for {$principal=STRING+} on {$entity_name=UNTIL(", role is ")} {$role_name=UNTIL(", propagation is ")}{$propagate=REST}'
+    
+    object.property = "role|propagation"
+    object.new_value = $role_name + " | " + strip($propagate, "", "]")
+    msgid = "PermissionAddedEvent"
+endsubformula
+
+subformula "perm_remove"
+    TEXT = 'for {$principal=STRING+} on {$entity_name=REST}'
+    
+    msgid = "PermissionRemovedEvent"
+endsubformula
+
+subformula "perm_change_p1"
+    TEXT = 'for {$principal=STRING+} on {$entity_name=REST}'
+    
+    $principal = strip($principal, "'", "'")
+    msgid = "PermissionUpdatedEvent"
+endsubformula
+
+subformula "perm_change_p2"
+    TEXT = 'from \'{$prev_role_name=UNTIL("\' to role ")} \'{$role_name=UNTIL("\'. Propagate changed from ")} \'{$prev_propagate=UNTIL("\' to \'")}{$propagate=REST}'
+    
+    object.property = "role|propagation"
+    object.value = $prev_role_name + " | " + $prev_propagate
+    object.new_value = $role_name + " | " + strip($propagate, "", "'.")
+    msgid = "PermissionUpdatedEvent"
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kvs, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+if ($act == "Permission created") then
+    submessage("TEXT", "perm_create", $rest)
+elif ($act == "Permission rule removed") then
+    submessage("TEXT", "perm_remove", $rest)
+elif ($act == "Permission changed") then
+    submessage("TEXT", "perm_change_p1", $rest)
+else
+    submessage("TEXT", "perm_change_p2", $rest)
+endif
+
+submessage("TEXT", "parse_user", strip($principal, "'", "'"))
+
+object.account.name = $username
+object.account.domain = $domain
+
+datafield4 = strip(strip($entity_name, "'", "'."), "", "]")  # Entity Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_5_0_syslog_Permissions_Management"

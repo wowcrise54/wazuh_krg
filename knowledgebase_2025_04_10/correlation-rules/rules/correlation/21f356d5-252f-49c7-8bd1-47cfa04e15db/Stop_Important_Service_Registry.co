@@ -1,0 +1,145 @@
+query CheckServiceSignificant($event_src, $service_name) from Significant_Services {
+    event_src == $event_src
+    and regex_match($service_name, column::service_name)
+}
+
+event Modify_Registry_Value:
+    key:
+        event_src.host, subject.process.fullpath, object.path
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and find_substr(lower(object.path), "\\registry\\machine\\system\\currentcontrolset\\services") != null
+        and object.name == "start"
+        and in_list(["dword (0x00000003)", "dword (0x00000004)"], object.new_value) #startup type: dword (0x00000003) - manual, dword (0x00000004) - disabled  
+        and exec_query("CheckServiceSignificant", [lower(event_src.vendor), string(regex(lower(object.path), "\\\\registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.+?)\\\\", 1))])
+        and filter::CheckWL_Registry_Actions("Stop_Important_Service_Registry", lower(join([event_src.host, regex(lower(object.path), "\\\\registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.+?)\\\\", 1), object.new_value, action], "|")))
+    }
+    
+event Delete_Registry_Value:
+    key:
+        event_src.host, subject.process.fullpath, object.path
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "12"
+        and event_src.title == "sysmon"
+        and find_substr(lower(object.path), "\\registry\\machine\\system\\currentcontrolset\\services") != null
+        and object.name == "start"
+        and exec_query("CheckServiceSignificant", [lower(event_src.vendor), string(regex(lower(object.path), "\\\\registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.+?)\\\\", 1))])
+        and filter::CheckWL_Registry_Actions("Stop_Important_Service_Registry", lower(join([event_src.host, regex(lower(object.path), "\\\\registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.+?)\\\\", 1), action], "|")))
+    }
+
+rule Stop_Important_Service_Registry: (Modify_Registry_Value+ or Delete_Registry_Value+) timer 1m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+    
+    on Modify_Registry_Value {
+        if $first_event then
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+
+            $object.path = object.path
+            $object.name = regex(lower(object.path), "\\\\registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.+?)\\\\", 1)
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.new_value = object.new_value
+            $object.state = object.state
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        
+            $action = action
+
+            $alert.key = lower(join([$event_src.host, $object.name, $object.new_value, $action], "|"))
+            $alert.context = lower(join([subject.process.fullpath, object.fullpath, if object.new_value == "dword (0x00000003)" then "startup type: manual" else "startup type: disabled" endif], " | "))
+            $labels = $labels + "|CheckWL_Registry_Actions"
+
+            $first_event = false
+        endif
+    }
+
+    on Delete_Registry_Value {
+        if $first_event then
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+
+            $object.account.id = object.account.id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.session_id = object.account.session_id
+            $object.account.privileges = object.account.privileges
+
+            $object.path = object.path
+            $object.name = regex(lower(object.path), "\\\\registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.+?)\\\\", 1)
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.new_value = object.new_value
+            $object.state = object.state
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        
+            $action = action
+
+            $alert.key = lower(join([$event_src.host, $object.name, $action], "|"))
+            $alert.context = lower(join([subject.process.fullpath, object.fullpath, "remove reg key"], " | "))
+            $labels = $labels + "|CheckWL_Registry_Actions"
+
+            $first_event = false
+        endif
+    }
+    
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Service Stop"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ServiceMalfunction"
+    $incident.aggregation.timeout = 2h
+}

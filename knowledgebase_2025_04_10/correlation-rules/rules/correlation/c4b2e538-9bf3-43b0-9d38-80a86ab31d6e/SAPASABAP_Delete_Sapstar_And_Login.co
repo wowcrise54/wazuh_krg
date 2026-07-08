@@ -1,0 +1,84 @@
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid
+    and (
+             group == "Production"
+             or group == "Test"
+             or group == "Development"
+        )
+}
+
+event Delete_SAPstar:
+    key:
+        event_src.host, event_src.id, src.host, datafield1
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and msgid == "AU8"
+        and src.host != null
+        and datafield1 != null
+        and object.account.name == "SAP*"
+        and exec_query("SAP_Check_Groups", [event_src.id])
+    }
+
+event Login_SAPstar_DIAG:
+    key:
+        event_src.host, event_src.id, src.host, datafield1
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and in_list(["AU1", "AU5"], msgid)
+        and subject.account.id == "SAP*"
+    }
+
+rule SAPASABAP_Delete_Sapstar_And_Login: (Delete_SAPstar -> Login_SAPstar_DIAG) within 1d
+
+    on Delete_SAPstar {
+        $subject.account.id = subject.account.name
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $datafield1 = datafield1  # SAP Client
+
+        $alert.context = join(["The user", subject.account.name, "previously removed the SAP* account"], " ")
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on Login_SAPstar_DIAG {
+        $object.account.id = subject.account.id
+        $object.account.privileges = "SAP_ALL"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "elevate"
+    $object = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Valid Accounts: Default Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id, $src.host, $datafield1], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

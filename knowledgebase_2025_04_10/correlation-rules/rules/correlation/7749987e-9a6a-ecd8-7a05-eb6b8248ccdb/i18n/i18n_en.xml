@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Windows Registry abuse. This is often used by attackers for persistence, privilege escalation, lateral movement, defense evasion, data collection, and other malicious activity.</Description>
+  <EventDescriptions>
+    <EventDescription id="1fef9d91-cbd9-0b7d-ec8b-2b5d33659164">Process {subject.process.name} added Base64-encoded registry key value "{object.name}" on host {event_src.host}. This indicates bypassing protection with intent to execute the encoded file.</EventDescription>
+    <EventDescription id="43115d6c-b31d-4908-02b0-966942b058f7">Process {subject.process.name} added a registry key value "{object.name}" that has the structure of a Base64 encoded message, but with an invalid decoding result on host {event_src.host}. This indicates bypassing protection with intent to execute the encoded file.</EventDescription>
+    <EventDescription id="7bbfbeab-6326-f972-b962-6ade74f9b532">Process {subject.process.name} added a very long registry key value "{object.name}" on host {event_src.host}. This indicates bypassing protection with intent to execute the encoded file.</EventDescription>
+    <EventDescription id="943ccafa-93f9-91b3-725b-ad7fece36594">Artifacts in registry key "{object.name}" injected by process {subject.process.name} indicate possible {datafield1} attack on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

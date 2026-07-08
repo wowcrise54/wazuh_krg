@@ -1,0 +1,30 @@
+!TABULAR = "master_server_key,
+            {subject.name=job_owner},
+            {time=start_time}"
+
+!COND = $job_type == 17
+
+subject = "account"
+action = "clean"
+object = "resource"
+if $job_status == 0 then
+    status = "success"
+else
+    status = "failure"
+    reason = $job_status
+endif
+
+object.type = "outdated backups"
+
+datafield1 = $master_server_key  # ID мастер-сервера
+
+duration = datetime_to_epoch(datetime($end_time)) - datetime_to_epoch(datetime($start_time))
+msgid = $job_type
+importance = "info"
+
+event_src.vendor = "veritas"
+event_src.title = "netbackup"
+event_src.subsys = "nbdb jobd"
+event_src.category = "Backup server"
+
+id = "PT_Veritas_Netbackup_NBDB_Jobd_odbc_17_Image_cleanup"

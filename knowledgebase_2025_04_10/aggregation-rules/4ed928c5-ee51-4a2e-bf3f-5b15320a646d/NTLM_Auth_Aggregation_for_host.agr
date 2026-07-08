@@ -1,0 +1,9 @@
+event NTLM_Account_used_for_logon:
+	key:
+   		!src.host, !dst.host, subject.account.name, event_src.host
+    msgid = "4776"
+    status = "success"
+    id = "PT_Microsoft_Windows_eventlog_4776_Account_used_for_logon"
+    
+    
+aggregate NTLM_Auth_Aggregation_for_host: NTLM_Account_used_for_logon[2,500] within 30s

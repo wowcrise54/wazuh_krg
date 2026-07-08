@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?} date={$date=WORDDASH} time={$time=STRING} device_id={event_src.id=WORDDASH} log_id={msgid=WORD}
+        type=kevent subtype=config pri=information user={subject.name=WORD} ui={WORD?}{"("?}{src.ip=IPV4}{")"?}
+        {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$colon = find_substr($kv["msg"], ":")
+object.state = substr($kv["msg"], 0, $colon)  # объект конфигурации, в который вносились изменения
+
+time = $date + " " + $time
+importance = "low"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortimail"
+event_src.category = "Application security"
+
+id = "PT_Fortinet_Fortimail_syslog_Kevent_config"

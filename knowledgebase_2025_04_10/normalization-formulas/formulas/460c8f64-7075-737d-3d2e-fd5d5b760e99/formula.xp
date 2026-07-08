@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {"EFROS_CI"|event_src.ip=IPV4|event_src.ip=IPV6|$ev_src_host=HOSTNAME}
+        Ошибка аутентификации аккаунта \'{subject.account.name=UNTIL("\'")} к серверу. {reason=UNTIL(".")}
+        Хост {src.ip=IPV4|src.ip=IPV6|$src_host=HOSTNAME}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+if find_substr($src_host, ".") != null then
+    src.hostname = substr($src_host, 0, find_substr($src_host, "."))
+    src.fqdn = $src_host
+else
+    src.hostname = $src_host
+endif
+
+if find_substr($ev_src_host, ".") != null then
+    dst.fqdn = $ev_src_host
+    dst.hostname = substr($ev_src_host, 0, find_substr($ev_src_host, "."))
+else
+    dst.hostname = $ev_src_host
+endif
+
+logon_auth_method = "remote"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+importance = "low"
+
+event_src.vendor = "gazinformservice"
+event_src.title = "efros_config_inspector"
+event_src.fqdn = dst.fqdn
+event_src.hostname = dst.hostname
+event_src.ip = dst.ip
+event_src.category = "Network security"
+
+id = "PT_Gazinformservice_Efros_Config_Inspector_syslog_user_not_connected"

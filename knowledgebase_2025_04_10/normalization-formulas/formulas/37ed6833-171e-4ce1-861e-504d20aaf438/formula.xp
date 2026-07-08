@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="TCP_kbind"} {WORDDASH} {$status="OK"|"FAIL"|"FAILURE"} {subject.process.name=STRING}
+        {WORDDASH} {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME} {protocol.layer7=STRING}'
+
+subject = "application"
+action = "assign"
+object = "socket"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+importance = "info"
+
+category.generic = "Socket"
+category.high = "Network Management"
+category.low = "Manipulation"
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_tcp_kbind"

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Обновление конфигурации базы данных PostgreSQL может затронуть параметры безопасности хранимых данных</Description>
+  <EventDescriptions>
+    <EventDescription id="0abbece6-90a3-996a-2525-1d8601000993">Пользователь {subject.application.account.name} обновил конфигурацию базы данных PostgreSQL c помощью SQL-команды на узле {event_src.host}</EventDescription>
+    <EventDescription id="5fb06d26-0119-b186-daf8-ce4a7f74b3ea">Пользователь {subject.account.name} изменил конфигурационный файл {object.name} базы данных PostgreSQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="97332174-f5a6-f054-5d66-8cb035ae4c40">Пользователь {subject.account.name} изменил конфигурационный файл {object.name} базы данных PostgreSQL, а пользователь базы данных {subject.application.account.name} применил изменения на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

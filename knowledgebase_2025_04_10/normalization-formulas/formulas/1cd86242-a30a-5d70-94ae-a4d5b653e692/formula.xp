@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{$Computer=WORDDASH}
+        SCANNER DROP:{datafield11=WORD}: in:
+        {"("?}{datafield2 =WORDDASH|datafield2=UNTIL(")")}
+        out:{"("?}{datafield4=WORDDASH|datafield4=UNTIL(")")},
+        proto{$proto=WORD}{"("?}{datafield6=UNTIL(")")?},{src.ip=IPV4|IPV6}{":"?}
+        {src.port=NUMBER?}->{dst.ip=IPV4|IPV6}{":"?}{dst.port=NUMBER?}
+        ,len{datafield10=NUMBER}'
+
+subject = "system"
+action = "deny"
+object = "connection"
+status = "success"
+
+protocol = lower($proto)
+
+# datafield2 - Идентификатор входящего интерфейса
+# datafield4 - Идентификатор исходящего интерфейса
+# datafield6 - Дополнительная информация о протоколе, такая как TCP флаг или ICMP код
+# datafield10 - Длина пакета в байтах
+# datafield11 - Название цепочки iptables
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "mikrotik"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "routeros"
+event_src.category = "Network device"
+
+id = "PT_Mikrotik_RouterOS_syslog_bsd_port_scanner"

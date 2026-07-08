@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"} {STRING} [{$mon=WORD}/{$day=WORD}/{$year=NUMBER}
+        {$h=STRING} SNMP INFO Link Down({$int=STRING} due to admin status down'
+
+action = "down"
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+$hs = strip ($h,"","]")
+$ys = string($year+2000)
+time= $mon+"/"+$day+"/"+$ys+" "+$hs
+interface = strip($int,"",")")
+
+reason = "By user"
+importance = "info"
+
+event_src.title = "ers_8600_8300"
+event_src.vendor = "avaya"
+event_src.category = "Network device"
+
+id = "PT_Avaya_ERS_8600_8300_syslog_Interface_state_down"

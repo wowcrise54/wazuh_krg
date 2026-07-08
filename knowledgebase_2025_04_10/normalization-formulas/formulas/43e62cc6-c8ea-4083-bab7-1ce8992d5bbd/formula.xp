@@ -1,0 +1,32 @@
+TEXT = '{time=DATETIME} [{WORD}] info: Изменение маршрута: {"{"} {$raw_kv=STRING}'
+
+subject = "account"
+action = "modify"
+object = "resource"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.type = "route"
+object.id = $kv['"routeIndex"']
+
+interface = $kv['"interface"']
+
+datafield1 = $kv['"src_net"']        # сеть назначения
+if $kv['"src_mask"'] == null then 
+    datafield2 = "24"                # маска сети назначения
+else 
+    datafield2 = $kv['"src_mask"']   # маска сети назначения
+endif
+datafield3 = $kv['"dst_ip"']         # шлюз
+datafield4 = $kv['"dst_interface"']  # исходящий интерфейс
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_modify_route"

@@ -1,0 +1,48 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4} {event_src.hostname=HOSTNAME}
+        - {'Log'|'Alert'} [Fields@{STRING} Action=\"{$action='authcrypt'|$action='authcrypt_failed'}\" UUid={STRING} {$kv=REST}"
+
+$kv = keyvalue($kv, " ", "=", "\"")
+
+if $kv["cvpn_category"] == null then
+    drop
+endif
+
+subject = "account"
+action = "start"
+object = "session"
+switch $action
+    case "authcrypt"
+        status = "success"
+        importance = "info"
+    case "authcrypt_failed"
+        status = "failure"
+        importance = "medium"
+endswitch
+
+subject.account.name = substr($kv["User"], 0, find_substr($kv["User"], " ("))
+subject.group = $kv["$user_group"]
+
+object.application.name = $kv["client_name"]
+
+src.ip = $kv["src"]
+
+if $kv["s_port"] != "0" then
+    src.port = $kv["s_port"]
+endif
+
+dst.port = $kv["service"]
+
+protocol = upper($kv["tunnel_protocol"])
+
+datafield1 = $kv["user_dn"]           # ldap object
+
+reason = $kv["reason"]
+
+msgid = $kv["event_type"]
+
+event_src.vendor = "checkpoint"
+event_src.title = "connectra"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Checkpoint_Connectra_syslog_Authentication"

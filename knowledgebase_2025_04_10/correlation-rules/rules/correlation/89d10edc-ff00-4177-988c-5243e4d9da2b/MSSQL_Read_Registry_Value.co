@@ -1,0 +1,65 @@
+event Regread_Executed:
+    key:
+        event_src.host
+    filter {
+        filter::MSSQL_Query("EX", "X")
+        and match(lower(object.query), "*xp_instance_regread*")
+        and filter::CheckWL_Database_Actions("MSSQL_Read_Registry_Value", lower(join([object.value, object.path], "|")))
+    }
+
+rule MSSQL_Read_Registry_Value: Regread_Executed
+    
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Regread_Executed {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.value = object.value
+        $object.path = object.path
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower(join([object.value, object.path], "|"))
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {    
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "view"
+    $object = "resource"
+
+    $object.property = "command name"
+    $object.type = "registry"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Query Registry"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

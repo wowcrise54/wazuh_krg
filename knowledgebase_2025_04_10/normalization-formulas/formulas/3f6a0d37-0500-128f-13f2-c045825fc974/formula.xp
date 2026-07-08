@@ -1,0 +1,41 @@
+JSON = ''
+
+COND = $event["exit"] != null
+
+action = "stop"
+object = "process"
+status = "success"
+
+object.account.id = $process["audit_token"]["ruid"]
+object.account.session_id = $process["session_id"]
+
+object.state = $event["exit"]["stat"]  # exit status of the process
+
+object.process.id = $process["audit_token"]["pid"]
+object.process.parent.id = $process["ppid"] 
+object.process.fullpath = $process["executable"]["path"]
+$temp_name = csv(object.process.fullpath, "/", "'")
+object.process.name = $temp_name[length($temp_name) - 1]
+object.process.path = strip(object.process.fullpath, "", object.process.name)
+subject.process.hash = "UNKNOWN:" + $process["cdhash"]
+
+datafield1 = $process["audit_token"]["euid"]  # effective user ID
+datafield2 = $process["audit_token"]["rgid"]  # real group ID
+datafield3 = $process["audit_token"]["auid"]  # audit user ID
+datafield4 = $process["audit_token"]["egid"]  # effective group ID
+datafield5 = $process["is_platform_binary"]          # является ли исполняемый файл предустановленным Apple в ОС
+datafield6 = $process["is_es_client"]                # имеет ли данный процесс разрешение на работу с EndpointSecurity API
+datafield7 = $process["signing_id"]                  # идентификатор подписи кода исполняемого файла
+datafield8 = $process["codesigning_flags"]           # флаги подписи кода исполняемого файла
+datafield9 = $process["tty"]                         # tty ассоциированный с процессом
+datafield11 = $process["team_id"]                    # идентификатор разработчика исполняемого файла
+
+msgid = $event_type
+time = $time
+importance = "info"
+
+event_src.category = "Host security"
+event_src.vendor = "positive_technologies"
+event_src.title = "edr"
+
+id = "PT_Positive_Technologies_XDR_es_logger_process_exiting"

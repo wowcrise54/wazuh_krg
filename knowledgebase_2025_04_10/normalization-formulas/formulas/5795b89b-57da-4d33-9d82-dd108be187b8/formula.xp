@@ -1,0 +1,28 @@
+!TEXT = '{time=DATETIME}|INFO|{$tpm_subsys="altxLogger"}|[Signout]|{$subject_domain_name=NTUSER}
+         |Successful signout'
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+if find_substr($subject_domain_name, "\\") != null then
+    $csv_subject_domain_name = csv($subject_domain_name, "\\", "'")
+    subject.account.domain = $csv_subject_domain_name[0]
+    subject.account.name = $csv_subject_domain_name[1]
+else
+    subject.account.name = $subject_domain_name
+endif
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "altx_soft"
+event_src.title = "redcheck"
+event_src.category = "Host security"
+event_src.subsys = lower($tpm_subsys)
+
+id = "PT_Altx_soft_RedCheck_filemonitor_Logout_web"

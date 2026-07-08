@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="LACP_STATE_DOWN"}
+        ({WORD}){"["NUMBER"]"?}: {"VS=Admin-VS-"?}{"CID="UNTIL(";")?} The LACP state is down.
+        ({$kv=UNTIL(")")}'
+
+$kv = keyvalue($kv, ',', '=', '"')
+
+action = "alert"
+object = "interface"
+status = "success"
+
+object.name = $kv["TrunkName"]
+object.type = "trunk"
+
+interface = $kv["PortName"]
+
+reason = strip($kv["Reason"], '', '.')
+
+importance = "medium"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_LACP_went_down_on_an_interface"

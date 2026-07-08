@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        {event_src.subsys=WORDDASH}{"["NUMBER"]"}: NOQUEUE:
+        SYSERR ({WORD}): {$object_path_raw=STRING} line {object.value=NUMBER}:
+        {reason="unknown configuration line"} {REST}'
+
+action = "apply"
+object = "configuration"
+status = "failure"
+
+object.path = strip($object_path_raw, "", ":")
+object.property = "line"
+
+importance = "medium"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "sendmail"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Sendmail_syslog_configuration_syntax_error"

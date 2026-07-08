@@ -1,0 +1,34 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Управление контролем целостности"
+       and $event_id == 603979776
+       and find_substr($event_message, "default configuration written succesfully") != null
+
+action = "apply"
+object = "configuration"
+status = "success"
+
+object.type = "default for integrity control"
+
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_apply_default_config_integrity_control"

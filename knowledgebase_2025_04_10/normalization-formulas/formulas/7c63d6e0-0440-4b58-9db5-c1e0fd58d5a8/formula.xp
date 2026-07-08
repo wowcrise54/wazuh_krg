@@ -1,0 +1,39 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="admd"}[{NUMBER}]: msg_id="{msgid="1100-0004"}"
+         Authentication of {subject.account.group=WORD} user [{subject.account.name=WORDDASH}{"@"?}
+         {subject.account.domain=WORDDASH?}] from {$source=STRING} accepted'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+if maybe_ipv4($source) != null or maybe_ipv6($source) != null then
+    src.ip = $source
+
+    dst.hostname = $Computer
+    dst.ip = event_src.ip
+
+    logon_auth_method = 'remote'
+elif $source == "console" then
+    logon_auth_method = 'local'
+endif
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_11000004_User_authentication_succeeded"

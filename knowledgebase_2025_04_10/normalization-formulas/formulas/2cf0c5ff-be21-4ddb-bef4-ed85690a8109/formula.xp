@@ -1,0 +1,58 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           {subject.account.id=user_id},
+           {subject.account.domain=user_domain},
+           {subject.account.name=user_name}
+           "
+
+COND = string($event_id) == "1231"
+       and (
+        $event_category == "Контроль приложений"
+        or $event_category == "Application control"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "stop"
+object = "process"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Завершение процесса"|"Process end"}.{"Имя процесса"|"Process name"}: {$path=STRING+}
+    {"Идентификатор"|"ID"|"PID"} {"процесса"?}: {object.process.id=STRING+} {"Имя пользователя"|"User name"}: {REST}'
+endsubformula
+$tmp = csv($path, '\\', '')
+object.process.name = $tmp[length($tmp) - 1]
+object.process.path = strip($path, '', object.process.name)
+object.process.fullpath = $path
+
+msgid = $event_id
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Контроль приложений" then
+    event_src.subsys = "application control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1231_process_stopped"

@@ -1,0 +1,9 @@
+event TCP_UDP_request_discarded:
+    key:
+        event_src.host, src.host, src.port, dst.host, dst.port, protocol,
+        reason, action, object, status, importance,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Cisco_ASA_FWSM_PIX_syslog_710005_TCP_UDP_request_discarded"
+
+aggregate Cisco_FW_TCP_UDP_request_discarded: TCP_UDP_request_discarded[3,100] within 5m

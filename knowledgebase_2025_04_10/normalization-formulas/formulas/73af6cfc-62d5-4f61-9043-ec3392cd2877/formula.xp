@@ -1,0 +1,87 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}{$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}{":"?}
+        mgd{"["NUMBER"]"?}: {"%CHANGE-6-UI_CFG_AUDIT_OTHER"|"UI_CFG_AUDIT_OTHER"}:
+		User \'{$uname = STRING} {$acti = WORDDASH}: {$re = REST}'
+
+subject.name = strip ($uname, "", "\'")
+
+$penstr = find_substr($re, ']')+1
+$lenstr = length($re)
+
+if find_substr($re, '[') != null then
+    if $penstr == $lenstr then
+        object.value = strip($re, '[', ']')
+    else
+        $endstr = substr($re, find_substr($re, "] "), length($re))
+        $endstrstrip = strip ($endstr, '] \"', '\"')
+        $beforeend = substr($re, find_substr($re, "["), find_substr($re, "] ") )
+        $beforeendstrip = strip($beforeend, '[', '')
+        object.value = $beforeendstrip + ' ' + $endstrstrip
+    endif
+else
+    object.value = $re
+endif
+
+if find_substr ($re, "[system login user") != null then
+    submessage ("TEXT", "parse_rest", $re)	
+elif find_substr ($re, "[interfaces")!=null and find_substr ($re, "arp")!=null then
+    submessage ("TEXT", "parse_rest2", $re)
+elif find_substr($re, "[system services") != null then
+    submessage ("TEXT", "parse_rest3", $re)
+endif
+
+subformula "parse_rest"
+  !TEXT = "{$csv=CSV(' ', '\"')}"
+  datafield1 = strip($csv[3], '' ,']')
+  if find_substr($csv[3], ']')!= null and $acti == 'delete' then
+      reason = "delete user"
+  elif find_substr($csv[3], ']') == null and $acti == 'delete' then
+      reason = "delete user attributes"
+  endif
+endsubformula
+
+subformula "parse_rest2"
+  !TEXT = '[interfaces {$iface=WORD} unit {$subiface=NUMBER} family {WORD}
+           address {IPV4}/{NUMBER} arp {dst.ip=IPV4}]'
+           interface = $iface + "." + string($subiface)
+endsubformula
+
+subformula "parse_rest3"
+  !TEXT = '[system services {$datafield1 = REST}'
+           datafield1 = strip ($datafield1, '', ']')
+endsubformula
+
+if find_substr($re, "[system login user")!= null and $acti == "set" then
+    reason = "change user attributes"
+elif find_substr($re, "[system root-authentication")!= null then
+    reason = "change root authentication"
+elif $acti == "override" then
+    reason = "override configuration"
+elif $acti == "update" then
+    reason = "update configuration"
+elif $acti == "rollback" then
+    reason = "rollback configuration"
+elif find_substr($re, "[interfaces")!= null and find_substr ($re, "arp")!=null then
+    reason = "arp info deleted"
+elif find_substr($re, "[system services")!= null and $acti == "set" then
+    reason = "service enabled"
+elif find_substr($re, "[system services")!= null and $acti == "delete" then
+    reason = "service disabled"
+elif reason == null then
+    reason = "set configuration value"
+endif
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+		
+subject = "account"
+object = "configuration"
+action = "modify"
+status = "success"	
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+importance = "info"
+
+id = "PT_Juniper_Junos_syslog_ui_cfg_audit_other"

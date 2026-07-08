@@ -1,0 +1,51 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "516"
+       and (
+        $event_category == "Сервис обновлений"
+        or $event_category == "Download service"
+       )
+       and (
+        $event_type == "Failure Audit"
+        or $event_type == "Аудит отказов"
+        or $event_type == "Audit failure"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+action = "download"
+object = "update"
+status = "failure"
+
+subformula "message"
+    TEXT = '{"Многократная ошибка получения пакета"|"Multiple errors during package download"}.
+            {$kv=KEYVALUE("\n", ": ", ".")}'
+
+    object.property = "component"
+    object.value= strip(coalesce($kv["Компонент"], $kv["Component"]), ".", ".")
+    datafield1 = coalesce($kv["Число неудачных попыток скачать пакет"],
+                          $kv["Number of failed attempts of package downloading"])  # количество неудачных попыток
+endsubformula
+
+msgid = $event_id
+importance = "low"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Сервис обновлений" or $event_category == "Сервис загрузки" then
+    event_src.subsys = "download service"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_516_update_download_failed_many_times"

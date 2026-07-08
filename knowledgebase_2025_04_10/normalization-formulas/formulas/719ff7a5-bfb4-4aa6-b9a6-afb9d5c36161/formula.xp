@@ -1,0 +1,27 @@
+!TABULAR = "{subject.name=subject_name},
+            {subject.domain=subject_domain},
+            {object.name=additional_info_1},
+            {time=time_create},
+            {event_src.hostname=master_server_name}"
+
+!COND = in_list([901, 902], $msgid)
+
+subject = "account"
+action = switch $msgid
+    case 901 "create"
+    case 902 "remove"
+endswitch
+object = "resource"
+status = "success"
+
+object.type = "certificate reissue token"
+
+msgid = $msgid
+importance = "medium"
+
+event_src.vendor = "veritas"
+event_src.title = "netbackup"
+event_src.subsys = "nbdb audit"
+event_src.category = "Backup server"
+
+id = "PT_Veritas_Netbackup_NBDB_Audit_901_902_Token_action"

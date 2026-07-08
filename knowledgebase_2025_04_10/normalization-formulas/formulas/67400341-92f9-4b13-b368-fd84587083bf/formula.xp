@@ -1,0 +1,44 @@
+EVENTLOG = 'Channel="Application"'
+
+!COND = $EventID["text"] == "112" and $Provider["Name"] == "dwmrcs"
+
+subject = "account"
+action = "stop"
+object = "session"
+status = "success"
+
+$kv = keyvalue($Data[0], "\r\n", ":", "\t")
+
+subject.name = $kv["User ID"]
+subject.domain = $kv["Domain"]
+src.hostname = $kv["Computer Name"]
+src.ip = $kv["Peer IP Address"]
+
+if find_substr($kv["Host Name"], ".") != null then
+    dst.fqdn = $kv["Host Name"]
+    dst.hostname = substr($kv["Host Name"], 0, find_substr($kv["Host Name"], "."))
+else
+    dst.hostname = $kv["Host Name"]
+endif
+
+dst.ip = $kv["Host IP Address"]
+dst.port = $kv["Host Port Number"]
+
+datafield1 = $kv["System Error"]                  # код ошибки
+reason = strip($kv["System Message"], "", ".")
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "solarwinds"
+event_src.title = "dameware_mrc"
+if find_substr($Computer, ".") != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, find_substr($Computer, "."))
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Terminal services"
+
+id = "PT_SolarWinds_DameWare_MRC_eventlog_112_user_disconnected_session"

@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        edgeconfigprovisioning {NUMBER|"-"} - [meta sequenceId="{NUMBER}"] {DATETIME} {STRING} {STRING}
+        Level="WARN" Service="UDSManager" Detail="UDS clusterUser request failed" Reason="{reason=UNTIL("\\"")}
+        {UNTIL("Identity")}="({$user_raw=UNTIL(")")}" {REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+$user_csv = csv($user_raw, ",", "'")
+$domain_name = csv($user_csv[1], "@", "`")
+
+subject.account.name = $domain_name[0]
+subject.account.domain = $domain_name[1]
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "cisco"
+event_src.title = "expressway"
+event_src.category = "Other"
+
+id = "PT_Cisco_Expressway_syslog_uds_auth_failure"

@@ -1,0 +1,131 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "NETWORK_ADD_NETWORK",  # 942
+           "NETWORK_ADD_NETWORK_STARTED",  # 9,421
+           "NETWORK_ADD_NETWORK_START_ERROR",  # 9,422
+           "NETWORK_ADD_NOTHING_TO_DO",  # 9,423
+           "NETWORK_ADD_NETWORK_FAILED",  # 943
+           "NETWORK_UPDATE_NETWORK",  # 1,114
+           "NETWORK_UPDATE_NETWORK_STARTED",  # 11,141
+           "NETWORK_UPDATE_NETWORK_START_ERROR",  # 11,142
+           "NETWORK_UPDATE_NOTHING_TO_DO",  # 11,143
+           "NETWORK_UPDATE_NETWORK_FAILED",  # 11,144
+           "NETWORK_REMOVE_NETWORK",  # 944
+           "NETWORK_REMOVE_NETWORK_FAILED",  # 9,441
+           "NETWORK_REMOVE_NETWORK_STARTED",  # 9,442
+           "NETWORK_REMOVE_NETWORK_START_ERROR",  # 9,443
+           "NETWORK_REMOVE_NOTHING_TO_DO"  # 9,444
+       ], $event_class)
+
+if substr($event_class, 0, 12) == "NETWORK_ADD_" then
+    action = "create"
+elif substr($event_class, 0, 15) == "NETWORK_REMOVE_" then
+    action = "remove"  
+else
+    action = "modify"
+endif
+
+object = "network"
+
+if substr($event_class, -15, 15) == "NETWORK_STARTED" then
+    status = "ongoing"
+elif (substr($event_class, -7, 7) == "NETWORK") or (substr($event_class, -13, 13) == "NOTHING_TO_DO") then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # NETWORK_ADD_NETWORK
+    # NETWORK_UPDATE_NETWORK (v4.3)
+    TEXT = "Network {$network_name=STRING+} was {'added to'|'updated on'} Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_ADD_NETWORK (v4.4)
+    TEXT = "Finished adding Network {$network_name=STRING+} to Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+
+subformula "parse_body"
+    # NETWORK_ADD_NETWORK_STARTED
+    # NETWORK_ADD_NETWORK_START_ERROR
+    # NETWORK_ADD_NOTHING_TO_DO
+    TEXT = "Start adding Network {$network_name=STRING+} to Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_ADD_NETWORK_FAILED
+    TEXT = "Failed to add Network {$network_name=STRING+} to Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_UPDATE_NETWORK (v4.4)
+    TEXT = "Finished Network {$network_name=STRING+} update on Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_UPDATE_NETWORK_STARTED
+    # NETWORK_UPDATE_NETWORK_START_ERROR
+    # NETWORK_UPDATE_NOTHING_TO_DO
+    TEXT = "Start Network {$network_name=STRING+} update on Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_UPDATE_NETWORK_FAILED
+    TEXT = "Failed to update Network {$network_name=STRING+} on Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_REMOVE_NETWORK (v4.3)
+    TEXT = "Network {$network_name=STRING+} was removed from Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_REMOVE_NETWORK (v4.4)
+    TEXT = "Finished Network {$network_name=STRING+} removal from Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_REMOVE_NETWORK_FAILED
+    TEXT = "Failed to remove Network {$network_name=STRING+} from Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_REMOVE_NETWORK_STARTED
+    # NETWORK_REMOVE_NETWORK_START_ERROR
+    # NETWORK_REMOVE_NOTHING_TO_DO
+    TEXT = "Start Network {$network_name=STRING+} removal from Data Center: {$storage_pool_name=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+object.name = $network_name
+
+if substr($event_class, -19, 19) == "NETWORK_START_ERROR" then
+    $storage_pool_name = strip($storage_pool_name, "", ", encountered internal server error")
+    reason = "Encountered internal server error"
+elif substr($event_class, -13, 13) == "NOTHING_TO_DO" then
+    $storage_pool_name = strip($storage_pool_name, "", "; no hosts affected")
+    reason = "No hosts affected"
+endif
+
+datafield1 = $storage_pool_name  # Data Center Name
+datafield8 = $network_name  # Network Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_Network_Management"

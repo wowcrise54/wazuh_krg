@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in OpenVPN. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="59c83d86-ba9f-118d-6b9e-395d0bb53ab5">Successful password spraying from host {src.host} in application {event_src.title} on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="808008c2-0ad8-dc9d-cdc3-677863bf8945">Password spraying attempts from host {src.host} in application {event_src.title} on host {event_src.host}. Number of login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="cb435eeb-2685-3ea2-d468-02a68bf4f0ec">Successful password spraying from host {src.host} in application {event_src.title} on host {event_src.host}. Attackers obtained the passwords of the following users: {datafield2}. Number of failed login attempts: {datafield1}.</EventDescription>
+  </EventDescriptions>
+</Localization>

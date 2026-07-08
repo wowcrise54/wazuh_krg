@@ -1,0 +1,38 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}login|{NUMBER}|cat=System:
+        User Action{$kv=KEYVALUE(" ", "=", "\\"")}'
+           
+COND = $kv["act"] != "login_suspend"          
+
+subject = "account"
+if $kv["act"] == "login_login" then
+    action = "login"
+elif $kv["act"] == "login_logout" then
+    action = "logout"
+endif    
+object = "system"
+if  $kv["outcome"] == "success" then
+    status = "success"
+elif  $kv["outcome"] == "failed" then
+    status = "failure"
+endif
+
+subject.account.name = $kv["suser"]
+              
+src.ip = $kv["src"]
+
+logon_service = $kv["dproc"]
+
+time = recv_time  
+msgid = $kv["act"]
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+    
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_cef_login_system"

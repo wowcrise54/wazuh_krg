@@ -1,0 +1,27 @@
+TABULAR = ".1.3.6.1.2.1.1.3.0,
+           {msgid=.1.3.6.1.6.3.1.1.4.1.0},
+           .1.3.6.1.6.3.18.1.3.0,
+           .1.3.6.1.6.3.18.1.4.0,
+           .1.3.6.1.6.3.1.1.4.3.0"
+
+# .1.3.6.1.4.1.318.0.636 - apcTestTrap
+COND = $.1.3.6.1.6.3.1.1.4.1.0 == ".1.3.6.1.4.1.318.0.636"
+
+action = "info"
+object = "device"
+status = "success"
+
+object.type = "snmp"
+
+$ip = strip($.1.3.6.1.6.3.18.1.3.0, 'IpAddress: ', '')
+src.ip = $ip
+
+time = recv_time
+importance = "info"
+
+event_src.vendor = "apc"
+event_src.title = "smart_ups_rt"
+event_src.ip = $ip
+event_src.category = "Other"
+
+id = "PT_APC_SMART_UPS_RT_snmp_apcTestTrap"

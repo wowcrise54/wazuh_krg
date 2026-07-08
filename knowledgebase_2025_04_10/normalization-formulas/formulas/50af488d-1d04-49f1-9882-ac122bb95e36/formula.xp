@@ -1,0 +1,26 @@
+!TEXT='{"<"NUMBER">"} {NUMBER?} {DATETIME}
+       {IPV4|IPV6|$Computer=HOSTNAME} integrity - -
+       [ {STRING+?} timestamp="{time=DATETIME}" {STRING+?}
+       SourceModuleName="syslog_dbi_in_{event_src.ip=IPV4}" SourceModuleType="{WORD}"]
+       [integrity] Началось создание БД целостности ПО и конфигурации'
+
+action = "create"
+object = "database"
+status = "ongoing"
+
+object.type = "БД целостности ПО и конфигурации"
+
+importance = "info"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kontinent"
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_syslog_Creation_database_of_software_integrity_and_configuration"

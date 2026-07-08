@@ -1,0 +1,148 @@
+event Syscall_Home_Modify_Evil:
+    key:
+        event_src.host, subject.account.name, object.path, numfield2
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::FileModify_Linux("^\/home\/")
+        and (
+            regex(coalesce(object.fullpath, object.path), "/home/(.*?)(/|$)", 1) != subject.account.name  # модификация чужой домашней директории
+            or subject.account.id != string(numfield2)  # file ouid
+        )
+        and not (  # исключает кейс с изменением чужого файла в своей директории
+            regex(coalesce(object.fullpath, object.path), "/home/(.*?)(/|$)", 1) == subject.account.name
+            and subject.account.id != string(numfield2)
+        )
+        and status == "success"
+        and filter::CheckWL_Linux_File_Operations("Unix_Suspicious_Home_Modify",
+            lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|")))
+    }
+
+rule Unix_Suspicious_Home_Modify: Syscall_Home_Modify_Evil+ timer 10s
+
+    init {
+        $first_event = true
+        $count.subevents = 0
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+        $context = ""
+    }
+
+    on Syscall_Home_Modify_Evil {
+        if $first_event then  # блок выполняется только при первом событии инстанса
+            $action = action  # create, modify, access, remove
+
+            $subject.type = subject.type
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            
+            if subject != null then
+                $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+            else
+                $prefix = "[sys] "
+            endif
+
+            $subject.process.name = subject.process.name
+            $subject.process.id = subject.process.id
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.cmdline = subject.process.cmdline
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.meta = subject.process.meta
+            $subject.process.parent.id = subject.process.parent.id
+            
+            $context = $context + "[" + string(subject.process.id) + "] " + subject.process.name + " → "
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.id = object.id
+            $object.type = object.type
+            $object.state = object.state
+
+            $files = "[owner: " + coalesce(datafield2, "<unknown>") + "(" + string(numfield2) + ")] " + object.fullpath
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+            
+            $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "  
+
+            $logon_service = logon_service
+            
+            $datafield1 = datafield1  # Executable Name
+            $datafield2 = datafield2  # Owner File User Name
+            $datafield3 = datafield3  # File Access Mode
+            $datafield4 = regex(coalesce(object.fullpath, object.path), "/home/(.*?)(/|$)", 1)  # Owner Directory User Name
+
+            $numfield2 = numfield2  # Owner File User ID
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $first_event = false
+            
+            $alert.key = lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|"))
+        else
+            if $action != action then
+                $action = null
+            endif
+            # если событий пришло два и более то эти поля зануляются так как они дублируются первым
+            $object.name = null
+            $object.fullpath = null
+            $object.id = null
+            $object.type = null
+            $object.state = null
+            
+            $files = "[owner: " + coalesce(datafield2, "<unknown>") + "(" + string(numfield2) + ")] " + string($count.subevents + 1) + " files in " + object.path
+            
+            $datafield1 = null  # Executable Name
+            $datafield3 = null  # File Access Mode
+        endif
+        
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    if match($object.path, "/root/*") then
+        $correlation_type = "incident"
+        $datafield4 = "root"  # Owner Directory User Name
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+    $action = coalesce($action, "modify")
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "high"
+
+    $alert.context = $prefix + $context + $files
+    
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Manipulation: Stored Data Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

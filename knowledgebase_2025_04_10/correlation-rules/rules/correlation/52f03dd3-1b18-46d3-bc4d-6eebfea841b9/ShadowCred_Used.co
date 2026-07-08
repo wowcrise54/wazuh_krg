@@ -1,0 +1,146 @@
+event Shadow_Credentials:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and lower(object.type) == "computer"
+        and lower(object.state) == "value added"
+        and lower(object.property) == "msds-keycredentiallink"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("ShadowCred_Used", join([lower(subject.account.name),lower(object.value)], "|"))
+    }
+
+event TGT_Request_With_ShadowCred:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4768"
+        and logon_type == 16
+        and lower(subject.account.name) == lower(datafield7)
+        and lower(logon_service) == "krbtgt"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("ShadowCred_Used", join([lower(subject.account.name), src.ip], "|"))
+    }
+
+event LDAP_Query_Keycredentiallink:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "1644"
+        and event_src.title == "windows"
+        and find_substr(lower(object.query), "msds-keycredentiallink") != null
+    }
+    
+rule ShadowCred_Used: ((Shadow_Credentials or TGT_Request_With_ShadowCred) and LDAP_Query_Keycredentiallink?) timer 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Shadow_Credentials {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.state = object.state
+        
+        $event_src.host = event_src.host
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.asset = event_src.asset
+
+        $reason = "Shadow Credentials"
+
+        $src.hostname = regex(lower(object.name), "cn=(.*?),", 1)
+        
+        $alert.key = join([lower(subject.account.name),lower(object.value)], "|")       
+        $alert.context = "Shadow Credentials attribute add for " + $src.hostname
+    }
+ 
+    on TGT_Request_With_ShadowCred {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+    
+        $logon_type = logon_type
+        $logon_service = logon_service
+
+        $datafield2 = datafield2
+        $datafield4 = datafield4
+        $datafield7 = datafield7
+        $datafield8 = datafield8    # Ticket Options
+        $datafield9 = datafield9
+
+        $event_src.host = event_src.host
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.asset = event_src.asset
+
+
+        $reason = "TGT request with Shadow Credentials"
+
+        $alert.key = join([lower(subject.account.name), src.ip], "|")
+        $alert.context = "TGT Request with Shadow Credentials"
+    }
+
+    on LDAP_Query_Keycredentiallink {
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name        
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $datafield1 = "LDAP query: " + object.query
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "ds_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Modify Authentication Process"
+    
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

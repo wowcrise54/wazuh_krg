@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{event_src.hostname=HOSTNAME?} clish[{UNTIL("]")}:
+        {"ReadCfgFile"|"ReadFile"}: {$state=UNTIL("the")}{object.storage.fullpath= UNTIL(":")}
+        {reason=REST}'
+
+action = "open"
+object = "file_object"
+status = "failure"
+
+object.state = strip($state, '', ' ')
+
+time = recv_time
+importance = "low"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_Common_Clish_file_open"

@@ -1,0 +1,53 @@
+# INFO  [Native-Transport-Requests-1] 2023-11-24 00:23:45.544 FileAuditLogger.java:51 - user:dba|host:localhost/127.0.0.1:7000|source:/127.0.0.1|port:35604|timestamp:1700774625042|type:CREATE_FUNCTION|category:DDL|ks:auditlogkeyspace|scope:average_state|operation:CREATE OR REPLACE FUNCTION auditlogkeyspace.average_state (state tuple<int, bigint>, val int) CALLED ON NULL INPUT RETURNS tuple<int, bigint> LANGUAGE java AS $$ if (val != null) {state.setInt(0, state.getInt(0) + 1); state.setLong(1, state.getLong(1) + val.intValue());} return state; $$;
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type']=='CREATE_FUNCTION')
+
+subject = "account"
+action = "create"
+object = "db_object"
+status = "success"
+
+subformula "parse_function_name"
+    TEXT = 'create {"or replace"?} function {"if not exists"?} {$temp=UNTIL(".")?}{object.name=WORD}{REST}'
+endsubformula
+
+subformula "parse_function_path"
+    TEXT = 'create {"or replace"?} function {"if not exists"?} {object.path=UNTIL(".")?}{REST}'
+endsubformula
+
+if $kv['scope'] != null then  
+    object.name = $kv['scope']
+else
+    submessage('TEXT', 'parse_function_name', lower($kv['operation']))
+endif 
+
+if $kv['ks'] != null then  
+    object.path = $kv['ks']
+    object.fullpath = object.path + "." + object.name
+else
+    submessage('TEXT', 'parse_function_path', lower($kv['operation']))
+    object.fullpath = object.path + "." + object.name
+endif 
+
+object.property = "aggregate"
+object.query = $kv['operation']
+
+datafield1 = $kv['category'] # Категория CQL-запроса
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Create_function"

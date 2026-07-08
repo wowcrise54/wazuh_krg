@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} evtlog: Event log {$tmp_status="enabled"|$tmp_status="disabled"}'
+
+if $tmp_status=="enabled" then
+    action = "enable"
+elif $tmp_status=="disabled" then
+    action = "disable"
+endif
+object = "logging"
+status = "success"
+
+if time == null then
+    time = recv_time
+endif
+importance = "info"
+
+event_src.vendor = "allied_telesis"
+event_src.title = "switch"
+event_src.category = "Network device"
+
+id = "PT_Allied_Telesis_Switch_syslog_logging_status"

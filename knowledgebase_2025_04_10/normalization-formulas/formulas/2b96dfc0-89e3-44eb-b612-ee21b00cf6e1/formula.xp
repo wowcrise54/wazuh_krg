@@ -1,0 +1,36 @@
+!JSON = "EventCode=4931"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+action = "modify"
+object = "ds_object"
+status = "success"
+
+object.name = $InsertionStrings[3]
+object.state = $InsertionStrings[5]
+
+if $InsertionStrings[2] != '-' then
+    datafield1 = $InsertionStrings[2]  # SourceAddr
+endif
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "low"
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Directory service"
+event_src.title = "active_directory"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_4931_Active_Directory_replica_source_naming_context_modified"

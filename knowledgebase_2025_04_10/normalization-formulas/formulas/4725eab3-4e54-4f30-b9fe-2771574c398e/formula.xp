@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="PIX"|$event_src.title="FWSM"}{"-session"?}-{NUMBER}-{msgid="303002"}:
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} {$act="Retrieved"|$act="Stored"}
+        {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}:{object.name=REST}'
+
+subject = "account"
+
+action = switch $act
+    case "Retrieved" "download"
+    case "Stored" "upload"
+endswitch
+
+object = "file"
+status = "success"
+
+protocol = "FTP"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_303002_Retrieved_Stored_files_fwsm_pix"

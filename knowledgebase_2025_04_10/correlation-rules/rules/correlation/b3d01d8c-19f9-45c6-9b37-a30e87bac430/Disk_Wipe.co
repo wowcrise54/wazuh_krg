@@ -1,0 +1,181 @@
+event Syscall_Start_Process:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and (
+            in_list(["shred", "scrub", "wipe"], lower(object.process.name))
+            or (
+                lower(object.process.name) == "dd"
+                and match(lower(object.process.cmdline), "*dd*of=*")
+            )
+        )
+        and filter::CheckWL_Linux_Process_Creation("Disk_Wipe", lower(join([coalesce(subject.account.name, subject.account.id), object.process.fullpath, object.process.cmdline], "|")))
+    }
+
+event Disk_Wipe_By_Sdelete_Diskpart:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::ProcessStart_Windows_cmd_meta("sdelete.exe", "\s-(s|r)\s", "description:secure file delete | product:sysinternals sdelete | company:sysinternals - www.sysinternals.com")
+            or filter::ProcessStart_Windows_cmd_meta("sdelete64.exe", "\s-(s|r)\s", "description:secure file delete | product:sysinternals sdelete | company:sysinternals - www.sysinternals.com")
+            or filter::ProcessStart_Windows_cmd_meta("diskpart.exe", "\\bclean\\b|\\bdelete\\b", "description:diskpart | product:microsoft® windows® operating system | company:microsoft corporation")
+        )
+        and filter::CheckWL_Process_Creation("Disk_Wipe", lower(join([object.process.parent.name, object.process.fullpath, object.process.cmdline], "|")))
+    } 
+
+rule Disk_Wipe: Syscall_Start_Process or Disk_Wipe_By_Sdelete_Diskpart
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Syscall_Start_Process {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.type = subject.type
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.property = object.property
+        $object.value = object.value
+
+        $logon_service = logon_service
+
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+        $datafield8 = datafield8  # Количество аргументов при запуске команды
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), object.process.fullpath, object.process.cmdline], "|"))
+        $alert.context = join([event_src.host, subject.account.id, object.process.fullpath], " | ")
+        $labels = $labels + "|CheckWL_Linux_Process_Creation"
+    }
+
+    on Disk_Wipe_By_Sdelete_Diskpart {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $datafield6 = datafield6    # Идентификатор сессии субъекта в формате UUID
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline 
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([object.process.parent.name, object.process.fullpath, object.process.cmdline], "|"))
+        if in_list(["sdelete.exe", "sdelete64.exe"], lower(object.process.name)) then
+            $alert.regex_match = regex(lower(object.process.cmdline), "\s-(s|r)\s", 0)
+            $alert.context = $alert.regex_match
+        elif lower(object.process.name) == "diskpart.exe" then
+            $alert.regex_match = regex(lower(object.process.cmdline), "clean|delete", 0)
+            $alert.context = $alert.regex_match
+        endif 
+        
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    if $event_src.title != "unix_like" then
+        $correlation_type = "incident"
+    endif
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Disk Wipe"
+
+    $importance = "medium"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name, $object.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataDeletion"
+    $incident.aggregation.timeout = 2h
+}

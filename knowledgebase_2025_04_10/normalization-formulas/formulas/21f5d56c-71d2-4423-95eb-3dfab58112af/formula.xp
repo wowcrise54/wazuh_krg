@@ -1,0 +1,27 @@
+TABULAR =  "id,
+            account_name,
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name},
+            {datafield1=object_type}
+            "
+
+COND = $gr_name == "Восстановление конфигурации"
+       and $ev_desc == "Начало создания резервной копии"
+       and $status == "Успешно"
+
+action = "backup"
+object = "configuration"
+status = "ongoing"
+
+# datafield1 - Тип объекта резервная копяи которого создается
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_backup_network"

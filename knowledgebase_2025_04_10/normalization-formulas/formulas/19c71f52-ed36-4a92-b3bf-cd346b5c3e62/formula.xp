@@ -1,0 +1,62 @@
+JSON = 'doc_type = "flow_attrs"'
+
+COND = $flow_id != null and $data != null and $data['errors'] == null and $data['ts_end'] != null
+
+action = "info"
+object = "session"
+status = "success"
+
+object.id = $flow_id
+
+src.ip = coalesce($data['src']['ip'], $data['src']['ip6'])
+src.port = $data['src']['port']
+src.fqdn = $data['src']['dns']
+# Тут будет логически неверный MAC
+src.geo.country = $data['src']['geo']['country']
+src.geo.city = $data['src']['geo']['city']
+src.geo.org = $data['src']['geo']['org']
+src.geo.asn = $data['src']['geo']['asn']
+
+dst.ip = coalesce($data['dst']['ip'], $data['dst']['ip6'])
+dst.port = $data['dst']['port']
+dst.fqdn = $data['dst']['dns']
+# Тут будет логически неверный MAC
+dst.geo.country = $data['dst']['geo']['country']
+dst.geo.city = $data['dst']['geo']['city']
+dst.geo.org = $data['dst']['geo']['org']
+dst.geo.asn = $data['dst']['geo']['asn']
+
+tcp_flag = replace(lower(join($data['tcp']['flags'], "|")), "psh", "push")
+
+protocol = lower($data['proto'])
+if $data['app_proto'] != "" then
+    protocol.layer7 = lower($data['app_proto'])  # Протокол прикладного уровня
+endif
+
+datafield2 = join($data['banner']['client'], ", ")  # Баннер клиента
+
+$banner_server = join($data['banner']['server'], ", ")
+# Баннер сервера необходимо предварительно очищать от переменных значений
+$exchange_banner_date_pos = find_substr($banner_server, " ready at")  # Microsoft Exchange
+if $exchange_banner_date_pos != null then
+    $banner_server = substr($banner_server, 0, $exchange_banner_date_pos) + " ready at <DATE>"
+endif
+datafield3 = $banner_server  # Баннер сервера
+datafield4 = $data['os']['client'][0]  # ОС клиента
+datafield5 = $data['os']['server'][0]  # ОС сервера
+
+if in_list($data['state'], "ESTABLISHED") then
+    object.state = "established"
+endif
+
+datafield7 = $data['credentials'][0]['login']       # Логин, встретившийся в потоке
+datafield8 = $data['credentials'][0]['password']    # Пароль, встретившийся в потоке
+
+time = $data['ts_end']
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "nad"
+event_src.category = "DPI"
+
+id = "PT_Positive_Technologies_NAD_filemonitor_flow_attrs"

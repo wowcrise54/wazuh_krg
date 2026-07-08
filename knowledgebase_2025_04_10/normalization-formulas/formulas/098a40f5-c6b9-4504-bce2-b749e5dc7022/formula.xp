@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"}CEF:0|NetIQ|AA|6.{NUMBER}.{NUMBER}.{NUMBER}|{msgid="301"}|{reason="No rights to join endpoint"}|7|
+        ep_addr={src.ip=IPV4|src.ip=IPV6} ep_id={datafield4=WORD} ep_name={src.hostname=WORD} tenant_name={datafield2=WORD} 
+        user_name={$temp_subject=STRING}'
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "failure"
+
+$temp_csv = csv($temp_subject, "\\\\", "`")  
+subject.account.domain = $temp_csv[0]
+subject.account.name = $temp_csv[1]
+
+object.type = "source host"
+
+# datafield2 - tenant name
+# datafield4 - endpoint id
+
+time = recv_time
+
+importance = "low"
+
+event_src.vendor = "netiq"
+event_src.title = "advanced_authentication"
+event_src.category = "AAA"
+
+id = "PT_NetIQ_AA_syslog_No_rights_to_join_endpoint"

@@ -1,0 +1,84 @@
+TEXT = '{"<"NUMBER">"?}{$dtime=DATETIME?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        CEF:{NUMBER}|Palo Alto Networks|PAN-OS|
+        {NUMBER}{"."?}{NUMBER?}{"."?}{NUMBER?}{WORDDASH?}|
+        {$tmp_act=WORD}|TRAFFIC|{WORD}|{$kv=REST}'
+
+$kv = keyvalue($kv, " ", "=", "~")
+
+subject = "rule"
+action = switch $tmp_act
+     case "start" "open"
+     case "drop" "deny"
+     case "end" "close"
+endswitch
+object = "connection"
+status = "success"
+
+subject.name = $kv['cs1']
+
+object.account.name = $kv['suser']
+object.state = $kv['act']
+
+src.ip = coalesce(ipv4($kv['src']), ipv6($kv['src']))
+assigned_src_ip = coalesce(ipv4($kv['sourceTranslatedAddress']), ipv6($kv['sourceTranslatedAddress']))
+assigned_src_port = $kv['sourceTranslatedPort']
+src.port = $kv['spt']
+
+dst.ip = coalesce(ipv4($kv['dst']), ipv6($kv['dst']))
+assigned_dst_ip = coalesce(ipv4($kv['destinationTranslatedAddress']), ipv6($kv['destinationTranslatedAddress']))
+assigned_dst_port = $kv['destinationTranslatedPort']
+dst.port = $kv['dpt']
+
+protocol = $kv['proto']
+
+count.bytes = $kv['flexNumber1']
+count.bytes_in = $kv['in']
+count.bytes_out = $kv['out']
+count.packets = $kv['сn2']
+count.packets_in = coalesce($kv['ad.PanOSPacketsReceived'], $kv['PanOSPacketsReceived'])
+count.packets_out = coalesce($kv['ad.PanOSPacketsSent'], $kv['PanOSPacketsSent'])
+duration = $kv['сn3']
+
+# datafield1 - Ingress zone. Destination zone
+# datafield2 - Ingress interface. Destination interface
+# datafield3 - Egress zone. Source zone
+# datafield4 - Egress interface. Source interface
+# datafield5 - идентификатор пользователя назначения, также может быть почта
+# datafield8 - Application associated with the session
+# numfield1 -  поле Flags детали сессии
+datafield1 = $kv['cs5']
+datafield2 = $kv['deviceOutboundInterface']
+datafield3 = $kv['cs4']
+datafield4 = $kv['deviceInboundInterface']
+datafield5 = $kv['duser']
+datafield8 = $kv['app']
+numfield1 = strip($kv['flexString1'], '0x', '')
+
+$tmp_reason = $kv['reason']
+if($tmp_reason != null) then
+    reason = 'The reason a session terminated is ' + $tmp_reason
+endif
+time = coalesce(epoch_ms_to_datetime(number($kv['rt'])), $dtime)
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+if action == "deny" then
+    category.low = "Control"
+else
+    category.low = "Communication"
+endif
+
+event_src.category = "Network security"
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_CEF_Events_Traffic"

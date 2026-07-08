@@ -1,0 +1,59 @@
+#LEEF:1.0|KasperskyLab|SecurityCenter|14.2.0.26967|GNRL_EV_WEB_URL_BLOCKED|cat=KLSC	EVC_EV_DESC=Тип события: Доступ запрещен\r\nПриложение: Google Chrome\r\nНазвание: chrome.exe\r\nПуть к приложению: C:\Program Files\Google\Chrome\Application\r\nID процесса: 12012\r\nПользователь: STUDY\student (Инициатор)\r\nЗапрашиваемый веб-адрес: https://bar.lov	devTime=2023-11-21 10:52:46	devTimeFormat=yyyy-MM-dd HH:mm:ss	EVC_EV_GROUP_NAME=Не в домене EVC_EV_DISP_HOST_NAME=PC-04-002-01	src=10.104.108.108	identSrc=10.104.108.108	identNetBios=PC-04-002-01	EVC_EV_KL_PRODUCT_DISPVER=11.11.0.452	EVC_EV_KL_PRODUCT_NAME=KES	EVC_EV_KL_PRODUCT_VER=11.0.0.0	EVC_EV_TASK_NAME=Веб-Контроль	url=https://bar.love.mail.ru/jsonp/bar?&_=1701212952237	usrName=STUDY\student	EVC_EV_RULE_NAME=Блокировка
+
+TEXT = "LEEF:1.0|KasperskyLab|SecurityCenter|{UNTIL('|')}{msgid='GNRL_EV_WEB_URL_BLOCKED'}|{STRING}{$kv=KEYVALUE('\t','=', '')}"
+
+subject = "account"
+action = "access"
+object = "resource"
+status = "failure"
+
+$event_description_kv = keyvalue($kv['EVC_EV_DESC'],"\\r\\n",": ", "`")
+
+$domain_user = csv($kv['usrName'], "\\", "'")
+if length($domain_user) == 2 then
+    subject.account.name = lower($domain_user[1])
+    subject.account.domain = lower($domain_user[0])
+else
+    subject.account.name = lower($kv['usrName'])
+endif
+
+subject.application.name = lower($event_description_kv["Название"])
+subject.process.fullpath = lower($event_description_kv["Путь к приложению"])
+
+$temp_object = replace($kv["url"], "//", "\\\\")
+$csv_path = csv($temp_object, '/', '')
+if length($csv_path) > 1 then
+    object.fullpath = $temp_object
+    object.name = $csv_path[length($csv_path) - 1]
+    object.path = strip(object.fullpath, '', object.name)
+else
+    object.name = $temp_object
+endif
+
+datafield1 = $kv['EVC_EV_GROUP_NAME']   # имя группы администрирования, в которую входит узел-источник
+datafield2 = $kv['EVC_EV_TASK_NAME']    # имя задачи
+
+time = $kv['devTime']
+importance = "high"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $kv['EVC_EV_KL_PRODUCT_NAME']
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+event_src.subsys = $kv['EVC_EV_TASK_NAME']
+if $kv['src'] != "127.0.0.1" then
+    event_src.ip = $kv['src']
+endif
+event_src.hostname = lower($kv['EVC_EV_DISP_HOST_NAME'])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_GNRL_EV_WEB_URL_BLOCKED"

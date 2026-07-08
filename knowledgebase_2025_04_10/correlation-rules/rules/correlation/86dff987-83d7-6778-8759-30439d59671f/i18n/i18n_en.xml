@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Exploitation of vulnerability CVE-2024-27198 in TeamCity. The vulnerability allows an attacker to bypass authentication to create a new TeamCity user with administrator permissions or access token for a user. This can be used to remotely execute commands.</Description>
+  <EventDescriptions>
+    <EventDescription id="49855d05-82b0-7bd8-825f-5c725b870f0e">Exploitation of vulnerability {detect} in TeamCity. The user with ID {subject.account.id} and administrator permissions is created on host {event_src.host}.</EventDescription>
+    <EventDescription id="56182d4b-5bdb-07be-b338-f482622d495c">Exploitation of vulnerability {detect} in TeamCity. Access token {object.value} is created for the user with ID {subject.account.id} on host {event_src.host}.</EventDescription>
+    <EventDescription id="799a5b72-bd1a-8299-9fb6-8a4cb901d254">Possible exploitation of vulnerability {detect} in TeamCity. Commands are executed on behalf of the TeamCity user with ID {subject.account.id} on host {event_src.host}.</EventDescription>
+  </EventDescriptions>
+</Localization>

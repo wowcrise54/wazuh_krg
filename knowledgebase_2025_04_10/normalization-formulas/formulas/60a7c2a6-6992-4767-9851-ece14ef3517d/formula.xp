@@ -1,0 +1,38 @@
+JSON = 'atype="authCheck"'
+
+COND = $ts["$date"] != null and $param["command"] == "dropDatabase"
+
+subject = "account"
+action = "remove"
+object = "database"
+
+if $result == 0 then 
+    status = "success"
+else
+    status = "failure"
+    reason = $result
+endif
+
+subject.account.id = $users[0]["user"]
+subject.account.name = $users[0]["user"]
+subject.privileges = join(remove([$roles[0]["db"] + ":" + $roles[0]["role"], $roles[1]["db"] + ":" + $roles[1]["role"], $roles[2]["db"] + ":" + $roles[2]["role"], $roles[3]["db"] + ":" + $roles[3]["role"], $roles[4]["db"] + ":" + $roles[4]["role"], $roles[5]["db"] + ":" + $roles[5]["role"], $roles[6]["db"] + ":" + $roles[6]["role"], $roles[7]["db"] + ":" + $roles[7]["role"], $roles[8]["db"] + ":" + $roles[8]["role"], $roles[9]["db"] + ":" + $roles[9]["role"]], ":"), "|")
+
+object.name = $param["ns"]
+
+src.ip = $remote["ip"]
+src.port = $remote["port"]
+dst.ip = $local["ip"]
+dst.port = $local["port"]
+
+datafield1 = $users[0]["db"]    # БД пользователя субъекта
+
+msgid = $param["command"]
+time = $ts["$date"]
+importance = "medium"
+
+event_src.vendor = "opensource"
+event_src.title = "mongodb"
+event_src.category = "Database server"
+event_src.ip = $local["ip"]
+
+id = "PT_Opensource_MongoDB_filemonitor_Drop_Database"

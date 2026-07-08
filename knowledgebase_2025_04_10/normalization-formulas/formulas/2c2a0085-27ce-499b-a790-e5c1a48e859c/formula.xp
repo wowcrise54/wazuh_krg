@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} info tmm[{NUMBER}]: {NUMBER} {"\\""} {$rest=REST}'
+
+subject = "rule"
+action = "open"
+object = "session"
+
+if find_substr ($rest, "BLOCK") != null then
+    status = "failure"
+    subject.type = "BLOCK"
+elif find_substr ($rest, "ALARM") != null then
+    status = "success"
+    subject.type = "ALARM"
+endif
+
+submessage("TEXT", "SPLIT", $rest)
+
+subformula "SPLIT"
+    # Извлечение src.ip,src.port,dst.ip,dst.port,protocol,name of virtual server из $rest
+    TEXT = '{$csv=CSV("\\"", "\'")}'
+    src.ip = $csv[4]                  # source ip address
+    src.port = $csv[6]                # source port
+    dst.ip = $csv[10]                 # destination ip address
+    dst.port = $csv[12]               # destination port
+    protocol = $csv[16]               # protocol
+    datafield1 = $csv[0]              # name of virtual server
+endsubformula
+
+importance = "info"
+
+event_src.title = "big_ip_virtual_edition"
+event_src.vendor = "f5_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network device"
+
+id = "PT_F5_Networks_BIG_IP_Virtual_Edition_syslog_connection_block_alarm"

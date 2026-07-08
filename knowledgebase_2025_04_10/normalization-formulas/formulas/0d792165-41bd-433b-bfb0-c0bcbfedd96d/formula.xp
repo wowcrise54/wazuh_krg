@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        rpd[{NUMBER}]: {"%DAEMON-6:"?} EVENT UpDown {interface=STRING} index {NUMBER} {IPV4}/{NUMBER} -> {IPV4}
+        <{$first_flag=WORD} {REST}'
+
+action = if $first_flag == "Up" then "up" else "down" endif
+object = "interface"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "juniper"
+event_src.title = "junos"
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_iface_state_rpd_event_3"

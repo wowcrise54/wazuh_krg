@@ -1,0 +1,50 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {msgid='USER_VDC_SESSION_TERMINATED'}{STRING} User {$sub_user=STRING+} forcibly logged out user {$obj_user=STRING+} connected from '{src.ip=IPV4|src.ip=IPV6}' using session '{$session_id=UNTIL('.')}"
+
+subject = "account"
+action = "logout"
+object = "account"
+status = "success"
+
+$user_list = csv($sub_user, "@", "'")
+if length($user_list) == 2 or length($user_list) == 3 then
+    subject.account.name = $user_list[0]
+    subject.account.domain = $user_list[1]
+else
+    subject.account.name = $user
+endif
+
+$user_list = csv($obj_user, "@", "'")
+if length($user_list) == 2 then
+    object.account.name = $user_list[0]
+    object.account.domain = $user_list[1]
+elif length($user_list) == 3 then
+    object.account.name = $user_list[0]
+    object.account.domain = $user_list[1]
+    logon_service = $user_list[2]
+else
+    object.account.name = $user
+endif
+
+object.account.session_id = strip($session_id, "'", "'")
+
+if in_list(["127.0.0.1", "::1"], string(src.ip)) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+importance = "medium"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_User_VDC_Session_Terminated"

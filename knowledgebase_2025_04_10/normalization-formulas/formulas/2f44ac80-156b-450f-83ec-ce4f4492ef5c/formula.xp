@@ -1,0 +1,44 @@
+EVENTLOG = 'EventID.text="307"'
+COND = $Channel == "Security" and
+       in_list(["AD FS 2.0 Auditing", "AD FS Auditing"], $Provider["Name"])
+
+# событие порождает ещё одно событие с идентификатором:
+#   PT_Microsoft_Windows_eventlog_510_configuration_changed_addinfo
+# группировка выполняется по полю datafield1
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+subject.id = $Data[1]
+# разбираем домен и имя пользователя
+$slashes = find_substr($Data[2], "\\")
+if $slashes != null then
+    subject.domain = lower(substr($Data[2], 0, $slashes))
+    subject.name = lower(substr($Data[2], $slashes+1, length($Data[2])))
+else
+    subject.name = lower($Data[2])
+endif
+
+# идентификатор группы событий
+datafield1 = $Data[0]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "low"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "ad fs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_307_Configuration_changed"

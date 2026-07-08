@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?} {$time1=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys=WORDDASH}{"["NUMBER"]"?}: {$time2=DATETIME?} {STRING?}
+        [ {$name=STRING} Logout - - {$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+subject.account.name = strip($name,'',']:')
+subject.account.group = $kv['group']
+
+src.ip = $kv['ip']
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+reason = $kv['trigger_event']
+
+time = coalesce($time2, $time1)
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "infoblox"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ddi"
+event_src.category = "Network monitoring system"
+
+id = "PT_Infoblox_DDI_syslog_logout"

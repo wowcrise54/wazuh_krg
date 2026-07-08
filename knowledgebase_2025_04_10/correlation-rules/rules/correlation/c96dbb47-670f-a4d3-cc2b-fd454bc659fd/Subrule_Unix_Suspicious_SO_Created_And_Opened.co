@@ -1,0 +1,120 @@
+event Suspicious_File_Created:
+    key:
+        event_src.host, object.account.name, subject.process.fullpath, object.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and event_src.subsys == "auditd"
+        and action == "create"
+        and object == "file_object"
+        and status == "success"
+        and lower(object.account.name) == "nobody"
+        and lower(subject.process.name) == "smbd"
+        and regex(lower(object.name), "\.so$", 0) != null
+        and strip(lower(subject.process.cwd), null, "/") == strip(lower(object.path), null, "/") # отсекает "/" в конце object.path, добавил аналогично и в subject.process.cwd на всякий случай
+    }
+
+event File_Attributes_Modified:
+    key:
+        event_src.host, object.account.name, subject.process.fullpath, object.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and event_src.subsys == "auditd"
+        and action == "modify"
+        and object == "file_object"
+        and status == "success"
+        and lower(object.account.name) == "nobody"
+        and lower(subject.process.name) == "smbd"
+        and regex(lower(object.name), "\.so$", 0) != null
+        and strip(lower(subject.process.cwd), null, "/") == strip(lower(object.path), null, "/") # отсекает "/" в конце object.path, добавил аналогично и в subject.process.cwd на всякий случай
+        and lower(msgid) == "chmod"
+    }
+
+event Suspicious_File_Opened:
+    key:
+        event_src.host, object.account.name, subject.process.fullpath, object.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and event_src.subsys == "auditd"
+        and action == "access"
+        and object == "file_object"
+        and status == "success"
+        and lower(object.account.name) == "nobody"
+        and lower(subject.process.name) == "smbd"
+        and regex(lower(object.name), "\.so$", 0) != null
+        and lower(object.state) == "r"
+        and match(lower(subject.process.cwd), "/tmp*") # Важно для связывания с основным правилом
+    }
+
+rule Subrule_Unix_Suspicious_SO_Created_And_Opened: (Suspicious_File_Created and File_Attributes_Modified and Suspicious_File_Opened) within 5s
+
+    on Suspicious_File_Created {
+        $subject.account.name = subject.account.name # smbd's account name
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.meta = subject.process.meta
+
+        $object.account.name = object.account.name # nobody
+        $object.account.id = object.account.id
+        $object.account.domain = object.account.domain
+        $object.account.group = object.account.group
+
+        $object.name = object.name
+        $object.id = object.id
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+        $object.storage.fullpath = object.storage.fullpath
+        $object.storage.path = object.storage.path
+        $object.storage.name = object.storage.name
+        $object.storage.id = object.storage.id
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        $event_src.fqdn = event_src.fqdn
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $alert.key = lower(join([event_src.host, object.account.name, subject.process.fullpath, object.fullpath], "|"))
+    }
+
+    on Suspicious_File_Opened {
+        $subject.process.id = subject.process.id # Важно для связывания с основным правилом
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.parent.id = subject.process.parent.id
+
+        $object.state = object.state
+    }
+
+emit {
+    $correlation_type = "subrule"
+    
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Exploitation of Remote Services"
+}

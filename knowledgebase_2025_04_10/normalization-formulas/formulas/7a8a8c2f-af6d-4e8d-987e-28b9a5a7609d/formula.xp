@@ -1,0 +1,38 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL(']')} {WORD} [{UNTIL(']')} - 
+Login for username {$user_name=STRING+} failed, see details below"
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+subject.account.name = strip($user_name, '"', '"')
+
+time = replace($time, ".", ",")
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Auth_Login_Failed_NoDetails"

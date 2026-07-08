@@ -1,0 +1,65 @@
+event Successful_Login:
+    key:
+        src.host
+    filter {
+        filter::Login_except_Windows()
+        and event_src.title == "zabbix"
+        and status == "success"
+        and not in_list([subject.account.name, src.host], null)
+        and filter::CheckWL_Specific_Only("Zabbix_Logon_Different_Users_On_Same_Terminal", lower(src.host))
+    }
+
+rule Zabbix_Logon_Different_Users_On_Same_Terminal: (Successful_Login[3,] with different subject.account.name) timer 15m
+
+    init {
+        $first_event = true
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Successful_Login {
+        if $first_event  then
+            $first_event = false
+            
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.asset = src.asset
+
+            $alert.key = lower(src.host)
+            $alert.context = "Logged in accounts: "
+
+            $event_src.id = event_src.id
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        endif
+
+        $alert.context = $alert.context + subject.account.name + "|"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "login"
+    $object = "application"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Valid Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

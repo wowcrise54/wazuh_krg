@@ -1,0 +1,209 @@
+JSON = ''
+
+COND = in_list(["yandex.cloud.audit.ydb.StartDatabase",
+                "yandex.cloud.audit.ydb.StopDatabase",
+                "yandex.cloud.audit.ydb.CreateDatabase",
+                "yandex.cloud.audit.ydb.UpdateDatabase",
+                "yandex.cloud.audit.ydb.MoveDatabase",
+                "yandex.cloud.audit.ydb.DeleteDatabase"], $event_type)
+
+subject = "account"
+
+$operation = strip($event_type, "yandex.cloud.audit.ydb.", "")
+
+action = switch $operation
+    case "StartDatabase" "start"
+    case "StopDatabase" "stop"
+    case "CreateDatabase" "create"
+    case "UpdateDatabase" "modify"
+    case "MoveDatabase" "move"
+    case "DeleteDatabase" "remove"
+endswitch
+
+object = "database"
+
+status = switch $event_status
+    case "DONE" "success"
+    case "STARTED" "ongoing"
+    case "ERROR" "failure"
+    case "CANCELLED" "failure"
+endswitch
+
+subformula "item_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $next = bool($array[$current + 1])   
+endsubformula
+
+subject.account.id = $authentication["subject_id"]
+
+$at_sign = find_substr($authentication["subject_name"], "@")
+if $at_sign != null then
+    $account = substr($authentication["subject_name"], 0, $at_sign)
+    subject.account.name = $account
+    subject.account.domain = strip($authentication["subject_name"], $account + "@", "")
+else
+    subject.account.name = $authentication["subject_name"]
+endif
+
+subject.account.group = $authentication["federation_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+$cloud = $resource_metadata["path"][1]["resource_name"] 
+$folder = $resource_metadata["path"][2]["resource_name"]
+object.storage.fullpath = join([$organization, $cloud, $folder], "|")
+
+object.id = $request_parameters["database_id"]
+object.name = $request_parameters["name"]
+object.path = $details["endpoint"]
+object.property = $request_parameters["update_mask"]
+object.state = $details["status"]
+
+$remote_address = coalesce(ipv4($request_metadata["remote_address"]), ipv6($request_metadata["remote_address"]))
+if $remote_address != null then
+    src.ip = $remote_address
+else
+    logon_service = $request_metadata["remote_address"]
+endif
+
+datafield1 = $organization  # Наименование организации
+datafield2 = $cloud         # Наименование облака
+datafield3 = $folder        # Наименование каталога
+
+if $request_parameters["serverless_database"]["throttling_rcu_limit"] != null then
+    $serverless_db = append($serverless_db, "throttling rcu limit: " + $request_parameters["serverless_database"]["throttling_rcu_limit"])
+endif
+if $request_parameters["serverless_database"]["storage_size_limit"] != null then
+    $serverless_db = append($serverless_db, "storage size limit: " + $request_parameters["serverless_database"]["storage_size_limit"])
+endif
+if $request_parameters["serverless_database"]["enable_throttling_rcu_limit"] != null then
+    $serverless_db = append($serverless_db, "enable throttling rcu limit: " + $request_parameters["serverless_database"]["enable_throttling_rcu_limit"])
+endif
+datafield4 = join($serverless_db, " | ")  # Параметры базы данных
+
+$array = $details["backup_config"]["backup_settings"]
+$current = -1
+submessage("TEXT", "item_handler", "")
+if bool($item) then
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $backup_conf = append($backup_conf, join(remove([strip("next backup: " + $item["backup_schedule"]["next_execute_time"], "", "next backup: "), 
+                                                     strip("backup name: " + $item["name"], "", "backup name: "), 
+                                                     strip("backup time to live: " + $item["backup_time_to_live"], "", "backup time to live: "), 
+                                                     strip("backup type: " + $item["type"], "", "backup type: ")], ""), ", "))
+endif
+
+datafield5 = join($backup_conf, " | ")  # Параметры резервного копирования
+
+external_link = $details["document_api_endpoint"]
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = $operation
+
+importance = switch $operation
+    case "StartDatabase" "info"
+    case "StopDatabase" "medium"
+    case "CreateDatabase" "info"
+    case "UpdateDatabase" "low"
+    case "MoveDatabase" "low"
+    case "DeleteDatabase" "medium"
+endswitch
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = $event_source
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_YDB_Database_Manage"

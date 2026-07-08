@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} %{msgid="AUTHPRIV-6-SYSTEM_MSG"}: START: ssh pid={NUMBER} from={"::ffff:"?}
+        {src.ip=IPV4} - dcos-xinetd[{NUMBER}]'
+
+subject = "account"
+action = "start"
+object = "session"
+status = "ongoing"
+
+importance = "info"
+
+event_src.category = "Network device"
+event_src.title = "nexus"
+event_src.vendor = "cisco"
+
+id = "PT_Cisco_Nexus_syslog_AUTHPRIV_6_SYSTEM_MSG_Session_start_ongoing"

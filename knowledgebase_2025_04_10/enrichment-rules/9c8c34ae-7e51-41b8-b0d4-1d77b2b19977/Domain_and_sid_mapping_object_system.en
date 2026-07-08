@@ -1,0 +1,54 @@
+event Any_Windows_event_with_object_system:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "microsoft"
+        and in_list(["active_directory", "sysmon", "windows"], event_src.title)
+        and (
+            object.account.domain == "nt authority"
+            or in_list(["S-1-5-7", "S-1-5-17", "S-1-5-18", "S-1-5-19", "S-1-5-20"], object.account.id)
+        )
+    }
+    
+enrichment Domain_and_sid_mapping_object_system
+    enrich Any_Windows_event_with_object_system:
+        enrich_fields {
+            object.account.provider = "local"
+            
+            if object.account.domain == "nt authority" and (object.account.id == null or find_substr(object.account.id, "synthetic:") == 0) then
+               object.account.id = switch lower(object.account.name)
+                    case "anonymous logon" "S-1-5-7"
+                    case "iusr"            "S-1-5-17"
+                    case "system"          "S-1-5-18"
+                    case "local service"   "S-1-5-19"
+                    case "network service" "S-1-5-20"
+                    case "анонимный вход"  "S-1-5-7"
+                    case "система"         "S-1-5-18"
+                    case "центр nt"        "S-1-5-19"
+                    case "сетевая служба"  "S-1-5-20"
+                endswitch
+                $translated_object_account = switch lower(object.account.name)
+                    case "анонимный вход"  "anonymous logon"
+                    case "система"         "system"
+                    case "центр nt"        "local service"
+                    case "сетевая служба"  "network service"
+                endswitch
+                object.account.name = coalesce($translated_object_account, object.account.name)
+            elif in_list(["S-1-5-7", "S-1-5-17", "S-1-5-18", "S-1-5-19", "S-1-5-20"], object.account.id) then
+                object.account.domain = "nt authority"
+                object.account.name = switch object.account.id
+                        case "S-1-5-7"  "anonymous logon"
+                        case "S-1-5-17" "iusr"
+                        case "S-1-5-18" "system"
+                        case "S-1-5-19" "local service"
+                        case "S-1-5-20" "network service"
+                    endswitch
+            endif
+            if object.account.session_id == null then 
+                object.account.session_id = switch object.account.id
+                    case "S-1-5-7"  "998"
+                    case "S-1-5-18" "999"
+                    case "S-1-5-19" "997"
+                    case "S-1-5-20" "996"
+                endswitch
+            endif
+        }

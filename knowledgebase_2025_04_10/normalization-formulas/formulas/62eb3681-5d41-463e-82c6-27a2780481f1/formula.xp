@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {$time_raw=DATETIME?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|}
+        sshd{"["?}{object.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+        Connection closed by {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} port {src.port=NUMBER} [preauth]{REST}'
+        
+action = "validate"
+object = "system"
+status = "failure"
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+time = coalesce($time_raw, recv_time)
+importance = "medium"
+
+event_src.title = "openssh"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Opensource_OpenSSH_syslog_conn_closed_by_client_before_auth"

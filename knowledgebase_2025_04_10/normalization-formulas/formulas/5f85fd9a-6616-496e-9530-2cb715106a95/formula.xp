@@ -1,0 +1,122 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {object.name=UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "Anti Malware"
+       and $kv["cs1Label"] == "Threat Prevention Rule Name"
+
+subject = "rule"
+action = "detect"
+object = "malware"
+status = "success"
+
+subformula "user_long"
+TEXT = '{object.account.fullname=UNTIL(" (")}{object.account.name=WORD}@{object.account.domain=UNTIL(")")}{subject.account.fullname=UNTIL(" (")} {subject.account.name=WORD}@{subject.account.domain=UNTIL(")")}'
+endsubformula
+
+subformula "user_long"
+TEXT = '{object.account.name=WORD}@{object.account.domain=STRING} {subject.account.fullname=UNTIL(" (")} {subject.account.name=WORD}@{subject.account.domain=UNTIL(")")}'
+endsubformula
+
+subformula "user_long"
+TEXT = '{subject.account.fullname=UNTIL(" (")}
+        {subject.account.name=WORD}@{subject.account.domain=UNTIL(")")}'
+endsubformula
+
+subformula "user_long"
+TEXT = '{object.account.name=WORD}@{object.account.domain=STRING} {subject.account.fullname=REST}'
+
+if subject.account.fullname == "" then subject.account.fullname = null endif
+endsubformula
+
+subformula "user_long"
+    TEXT = '{object.account.name=WORDDASH}'
+endsubformula
+
+subformula "user_long"
+    TEXT = '{REST}'
+endsubformula
+
+submessage('TEXT', 'user_long', coalesce($kv["suser"], $kv["duser"]))
+
+subject.group = $kv["policy"]
+
+object.name = $kv["cs4"]
+object.id = $kv["cs2"]
+object.value = $kv["cs3"]
+object.property = $kv["cs3Label"]
+object.group = $kv["cs6"]
+object.state = lower($kv["act"])
+
+src.ip = $kv["src"]
+$shost = $kv["shost"]
+if find_substr($shost, '@') != null then
+    src.fqdn = $shost
+    src.hostname = substr($shost, 0, find_substr($shost, "@"))
+else
+    src.hostname = $shost
+endif
+$spt = $kv["spt"]
+if ($spt != 0) then src.port = $spt endif
+
+dst.ip = $kv["dst"]
+$dhost = $kv["dhost"]
+if find_substr($dhost, '@') != null then
+    dst.fqdn = $dhost
+    dst.hostname = substr($dhost, 0, find_substr($dhost, "@"))
+else
+    dst.hostname = $dhost
+endif
+$dpt = $kv["dpt"]
+if ($dpt != 0) then dst.port = $dpt endif
+
+$tmp_assigned_src_ip = coalesce(ipv4($kv['sourceTranslatedAddress']), ipv6($kv['sourceTranslatedAddress']))
+if (($tmp_assigned_src_ip != null) and ($tmp_assigned_src_ip != "0.0.0.0")) then
+    assigned_src_ip = $tmp_assigned_src_ip
+endif
+
+interface = $kv["ifname"]
+protocol = $kv["proto"]
+
+count.bytes_in = $kv["in"]
+count.bytes_out = $kv["out"]
+
+datafield2 = $kv["policy"]              # имя политики
+datafield3 = switch $kv["flexNumber1"]  # уровни достоверности. Example: Low: 
+                 case "5" "High"        # высокая вероятность ложноположительного события
+                 case "4" "Medium-High"
+                 case "3" "Medium"
+                 case "2" "Medium-Low"
+                 case "1" "Low"
+                 case "0" "Not Available"
+             endswitch
+datafield7 =  $kv["originsicname"]      # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+reason = $kv["flexString2"]
+time = epoch_ms_to_datetime(number($kv["rt"]))
+$cp_severity = $kv["cp_severity"]
+if ($cp_severity != null) then
+    importance = switch lower($cp_severity)
+        case "unknown" "info"
+        case "very low" "info"
+        case "very-low" "info"
+        case "low" "low"
+        case "medium" "medium"
+        case "high" "high"
+        case "very high" "high"
+        case "very-high" "high"
+        case "critical" "high"
+    endswitch
+else
+    importance = "medium"
+endif
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Anti_malware_detect"

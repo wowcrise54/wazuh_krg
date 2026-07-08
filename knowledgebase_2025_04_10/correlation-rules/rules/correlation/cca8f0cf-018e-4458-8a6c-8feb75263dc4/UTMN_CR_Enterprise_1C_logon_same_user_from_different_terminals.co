@@ -1,0 +1,146 @@
+event Login_attempt_1c:
+    key:
+        subject.application.account.id, subject.application.account.name
+    filter {
+        filter::FromCorrelator()
+        and event_src.title == "1c_enterprise"
+        and not in_list([subject.application.account.name, src.host], null)
+        and filter::CheckWL_Specific_Only("UTMN_CR_Enterprise_1C_logon_same_user_from_different_terminals", lower(subject.application.account.name))
+        and correlation_name != "App_1C_Enterprise_Abnormal_Access"
+    }
+
+rule UTMN_CR_Enterprise_1C_logon_same_user_from_different_terminals: Login_attempt_1c[2] with different src.host
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Login_attempt_1c {
+
+		$subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.privileges = subject.application.account.privileges
+        $subject.application.account.session_id = subject.application.account.session_id
+
+        $subject.account.fullname = subject.account.fullname  # Application account
+
+        $src_asset = src.asset
+
+        $alert.key = lower(subject.application.account.name)
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        if subject.account.name != null then
+            $os_account = join(remove([subject.account.name, subject.account.domain], null), "@")
+
+            if not in_list($os_accounts, $os_account) then
+                $os_accounts = append($os_accounts, $os_account)
+            endif
+        endif
+
+        if subject.process.name != null and not in_list($processes, subject.process.name) then
+            $processes = append($processes, subject.process.name)
+        endif
+
+        if subject.process.meta != null and not in_list($processes_meta, subject.process.meta) then
+            $processes_meta = append($processes_meta, subject.process.meta)
+        endif
+
+        if object.name != null and not in_list($applications, object.name) then
+            $applications = append($applications, object.name)
+        endif
+
+        if src.host != null and not in_list($sources, src.host) then
+            $sources = append($sources, src.host)
+        endif
+
+        if reason != null and not in_list($reasons, reason) then
+            $reasons = append($reasons, reason)
+        endif
+
+        if logon_auth_method != null and not in_list($methods, logon_auth_method) then
+            $methods = append($methods, logon_auth_method)
+        endif
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $status = "success"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+
+    if length($os_accounts) > 0 then
+        $os_accounts_joined = join($os_accounts, "|")
+
+        if length($os_accounts) == 1 then
+            $at = find_substr($os_accounts_joined, "@")
+            $name = substr($os_accounts_joined, 0, $at)
+            $subject.account.name = $name
+            $subject.account.domain = strip($os_accounts_joined, $name + "@", "")
+        else
+            $datafield1 = $os_accounts_joined
+        endif
+    endif
+
+    if length($processes) > 0 then
+        $subject.process.name = join($processes, "|")
+    endif
+
+    if length($processes_meta) > 0 then
+        $subject.process.meta = join($processes_meta, "|")
+    endif
+
+    if length($applications) > 0 then
+        $object.name = join($applications, "|")
+    endif
+
+    if length($sources) > 0 then
+         $sources_joined = join($sources, "|")
+
+        if length($sources) == 1 then
+            $src.asset = $src_asset
+            $src.host = $sources_joined
+        else
+            $datafield2 = $sources_joined
+        endif
+    endif
+
+    if length($reasons) > 0 then
+        $reason = join($reasons, "|")
+    endif
+
+    if length($methods) > 0 then
+         $methods_joined = join($methods, "|")
+
+        if length($methods) == 1 then
+            $logon_auth_method = $methods_joined
+        else
+            $datafield3 = $methods_joined
+        endif
+    endif
+
+    $alert.context = join(remove([$os_accounts_joined, $sources_joined, $object.name, $logins_count], null), " | ")
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Brute Force"
+    
+    $incident.aggregation.key = join([$correlation_name, $subject.application.account.name], "|")
+    $incident.severity = "medium"
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

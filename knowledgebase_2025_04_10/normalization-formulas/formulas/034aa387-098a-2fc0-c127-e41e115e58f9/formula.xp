@@ -1,0 +1,77 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VM_SET_TO_UNKNOWN_STATUS",  # 142
+           "VM_STATUS_RESTORED",  # 163
+           "VM_ALREADY_IN_REQUESTED_STATUS",  # 254
+           "VM_RECOVERED_FROM_PAUSE_ERROR"  # 196
+       ], $event_class)
+
+action = "modify"
+object = "virtual_machine"
+
+if $event_class == "VM_ALREADY_IN_REQUESTED_STATUS" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subformula "parse_body"
+    # VM_SET_TO_UNKNOWN_STATUS
+    TEXT = "VM {$vm_name=STRING+} was set to the {object.new_value='Unknown'} status."
+endsubformula
+
+subformula "parse_body"
+    # VM_STATUS_RESTORED
+    TEXT = "VM {$vm_name=STRING+} status was restored to {$vm_status=REST}"
+    
+    object.new_value = strip($vm_status, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # VM_ALREADY_IN_REQUESTED_STATUS
+    TEXT = "VM {$vm_name=STRING+} is already {$vm_status_action=STRING+} was skipped. User: {$user=REST}"
+    
+    $user = strip($user, "", ".")
+    $vm_list = csv($vm_status_action, ", ", "'")
+    $vm_status = $vm_list[0]
+    $action_raw = $vm_list[1]
+    
+    object.state = $vm_status
+    object.value = $vm_status
+    object.new_value = $vm_status
+    object.query = $action_raw
+    
+    reason = "Already in requested status"
+endsubformula
+
+subformula "parse_body"
+    # VM_RECOVERED_FROM_PAUSE_ERROR
+    TEXT = "VM {$vm_name=STRING+} has recovered from paused back to up."
+    
+    object.value = "Paused"
+    object.new_value = "Up"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+object.name = $vm_name
+object.property = "status"
+
+datafield5 = $vm_name  # Virtual Machine Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_VM_Status"

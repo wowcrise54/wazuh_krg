@@ -1,0 +1,119 @@
+event Process_Start_By_User:
+    key:
+        event_src.host, object.process.name, object.process.id, object.process.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and object.process.parent.name == "cmd.exe"                                        # Выбираем процессы с родителем cmd.exe, запущенные не от системы с идентичными атрибутами, указанными в key
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and in_list(["tokenelevationtypelimited", "medium"], lower(subject.account.privileges))
+        and filter::CheckWL_Process_Creation("CVE_2024_26229_CSC_Service_PrivEsc", lower(join([event_src.host, subject.account.id, object.process.name], "|") ))
+    }
+
+event Process_Start_By_System:
+    key:
+        event_src.host, object.process.parent.name, object.process.parent.id, object.process.parent.fullpath
+    filter {
+        filter::NotFromCorrelator()                                                         # Событие используется при успешной эксплуатации уязвимости
+        and filter::ProcessStart_Windows_any()                                              # Добавляются события запуска процесса с привилегиями системы при условии идентичности указанных в key атрибутах во всех событиях
+        and object.process.name == "cmd.exe"                                                
+        and (
+            in_list(["система", "system"], lower(object.account.name))  # Проверка наличия привилегий SYSTEM или Local Service у пользователя, в контексте которого запущена cmd.exe
+            or
+            lower(object.account.id) == "s-1-5-18"                          
+        )
+        and regex(lower(object.process.parent.fullpath), "^([a-z]{1}|\\\\\\\\)(\:|\?)\\\\(windows|program\sfiles|volume)", 0) == null # Исключение системных процессов
+        # Проверка характерного cmdline, возникающего при последующем запуске cmd от SYSTEM
+        and regex(lower(object.process.cmdline), "^[a-z]{1}\:\\\\windows\\\\system32\\\\cmd\.exe\s+\/c\s+cmd\.exe", 0) != null
+    }
+
+rule CVE_2024_26229_CSC_Service_PrivEsc: (Process_Start_By_User and Process_Start_By_System) within 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Process_Start_By_User {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+       
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $datafield18 = datafield18 # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19 # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([event_src.host, subject.account.id, object.process.name], "|") )
+        $alert.context = join([lower(subject.account.name), lower(object.process.parent.name), lower(object.process.name)], "|") # Имя пользователя, родитель вредоносного процесса, имя вредоносного процесса
+    }
+
+    on Process_Start_By_System {
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $reason = "get_system_privileges"           # Получение привилегий "СИСТЕМА"
+
+        $alert.regex_match = regex(lower(object.process.cmdline), "\w:\\\\windows\\\\system32\\\\cmd\.exe\s+\/c\s+cmd\.exe", 0) # Cmdline, после выполнения которого запустилась оболочка системы в текущем сеансе командной строки
+    }
+
+emit {
+
+    $correlation_type = "incident"
+    $importance = "medium"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $detect = "CVE-2024-26229"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

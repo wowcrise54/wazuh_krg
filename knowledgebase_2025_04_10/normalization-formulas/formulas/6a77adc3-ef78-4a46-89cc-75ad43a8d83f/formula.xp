@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"}CEF:0|NetIQ|AA|6.{NUMBER}.{NUMBER}.{NUMBER}|{msgid="1001"}|Global setting was changed|9|
+        session_id={subject.account.session_id=WORD} setting_name={object.name=WORD}'
+
+subject = "account"
+action = "update"
+object = "configuration"
+status = "success"
+
+object.type = "global setting"
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "netiq"
+event_src.title = "advanced_authentication"
+event_src.category = "AAA"
+
+id = "PT_NetIQ_AA_syslog_Global_setting_was_changed"

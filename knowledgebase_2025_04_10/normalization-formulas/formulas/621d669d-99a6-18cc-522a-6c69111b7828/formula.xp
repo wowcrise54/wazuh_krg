@@ -1,0 +1,75 @@
+JSON = 'ENTITY_TYPE'
+COND = ($ENTITY_TYPE == "LdapGroup"
+        and in_list(["create","create_contact","delete","delete_contact","export","import","update"], $OPERATION))
+
+subject = "account"
+switch $OPERATION 
+    case "create"
+        action = "create"
+        object.type = "LdapGroup"
+    case "create_contact"
+        action = "create"
+        object.type = "Contact in LdapGroup"
+    case "delete"
+        action = "remove"
+        object.type = "LdapGroup"
+    case "delete_contact"
+        action = "remove"
+        object.type = "Contact in LdapGroup"
+    case "export"
+        action = "upload"
+        object.type = "LdapGroup"
+    case "import"
+        action = "download"
+        object.type = "LdapGroup"
+    case "update"
+        action = "modify"
+        object.type = "LdapGroup"
+endswitch
+object = "user_group"
+status = "success"
+
+subject.account.id = $USER_ID
+subject.account.name = $user_or_token['USERNAME']
+subject.account.fullname = $user_or_token['DISPLAY_NAME']
+subject.account.contact = $user_or_token['EMAIL']
+
+if object.type == "Contact in LdapGroup" then
+    object.group = $ENTITY_DISPLAY_NAME
+    object.name = $PROPERTY_CHANGES['contact']['ENTITY_DISPLAY_NAME']
+    object.id = $PROPERTY_CHANGES['contact']['ENTITY_ID']
+else    
+    if $PROPERTY_CHANGES['new']['parents'][0]['DISPLAY_NAME'] != null then
+        $group_name = 'new'
+    else
+        $group_name = 'old'
+    endif
+    object.group = join(remove([$PROPERTY_CHANGES[$group_name]['parents'][0]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][1]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][2]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][3]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][4]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][5]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][6]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][7]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][8]['DISPLAY_NAME'],
+                                $PROPERTY_CHANGES[$group_name]['parents'][9]['DISPLAY_NAME']], null),' | ')
+    if object.group == "" then object.group = null endif
+    object.name = $ENTITY_DISPLAY_NAME
+    object.id = $ENTITY_ID
+endif
+
+time = $CHANGE_DATE
+msgid = $ENTITY_TYPE
+importance = "info"
+
+category.high = "Users And Rights Management"
+category.generic = "Group"
+category.low = "Manipulation"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_9_customeventcollector_LdapGroup_actions"

@@ -1,0 +1,31 @@
+<!--
+  Native Wazuh port of the AppInit DLL branches of MaxPatrol SIEM PT-CR-269
+  (Windows_Autorun_Modification). MITRE ATT&CK T1546.010.
+  Data source: Microsoft Sysmon Event ID 13 (Registry value set).
+-->
+<group name="windows,appinit_dlls,t1546_010,">
+
+  <!-- AppInit_DLLs contains the DLLs loaded into user32.dll processes. -->
+  <rule id="110270" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\Windows NT\\CurrentVersion\\Windows\\AppInit_DLLs$</field>
+    <description>AppInit DLL list modified by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.010</id>
+    </mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,appinit_dlls,</group>
+  </rule>
+
+  <!-- LoadAppInit_DLLs=1 enables loading DLLs from AppInit_DLLs. -->
+  <rule id="110271" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\Windows NT\\CurrentVersion\\Windows\\LoadAppInit_DLLs$</field>
+    <field name="win.eventdata.details" type="pcre2">(?i)^(?:DWORD\s*\(0x0*1\)|0x0*1|0*1)$</field>
+    <description>AppInit DLL loading enabled by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.010</id>
+    </mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,appinit_dlls,</group>
+  </rule>
+
+</group>

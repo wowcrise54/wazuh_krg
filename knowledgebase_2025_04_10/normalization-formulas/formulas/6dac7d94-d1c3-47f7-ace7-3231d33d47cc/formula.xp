@@ -1,0 +1,31 @@
+!TABULAR = "{subject.name=job_owner},
+            {src.hostname=client_name},
+            master_server_key,
+            {time=start_time}"
+
+!COND = $job_type == 5
+
+subject = "account"
+action = "copy"
+object = "resource"
+if $job_status == 0 then
+    status = "success"
+else
+    status = "failure"
+    reason = $job_status
+endif
+
+object.type = "backup files"
+
+datafield1 = $master_server_key  # ID мастер-сервера
+
+duration = datetime_to_epoch(datetime($end_time)) - datetime_to_epoch(datetime($start_time))
+msgid = $job_type
+importance = "low"
+
+event_src.vendor = "veritas"
+event_src.title = "netbackup"
+event_src.subsys = "nbdb jobd"
+event_src.category = "Backup server"
+
+id = "PT_Veritas_Netbackup_NBDB_Jobd_odbc_5_Import"

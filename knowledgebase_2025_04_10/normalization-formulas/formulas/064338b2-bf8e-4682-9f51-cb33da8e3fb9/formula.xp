@@ -1,0 +1,59 @@
+!TABULAR = '{$status_number=_1},
+            {$computer_name=_2},
+            {$create_time=_3},
+            {$act=_5},
+            {$message=_7},
+            {$user_name=_8},
+            {$process_raw = _10},
+            {msgid=_11}'
+
+!COND = $_11 == 84
+
+action = "detect"
+object = "session"
+status = "success"
+
+submessage ("TEXT", "parse_message", $message)
+
+subformula "parse_message"
+    !TEXT = "{STRING} {STRING} {dst.ip=IPV4|dst.ip=IPV6}:{dst.port=NUMBER}({dst.hostname=HOSTNAME}:{$proto=WORD})"
+    protocol = lower($proto)
+endsubformula
+
+$csv = csv($user_name, "\\", "'")
+object.account.domain = $csv[0]
+object.account.name = $csv[1]
+
+$csv_path = csv($process_raw, "\\", "'")
+object.process.name = $csv_path[length($csv_path) - 1]
+object.process.path = strip($process_raw, "", object.process.name)
+
+object.state = switch($status_number)
+    case 8 "open success"
+    case 16 "open failure"
+endswitch
+
+if maybe_ipv4($computer_name) != null or maybe_ipv6($computer_name) != null then
+    src.ip = $computer_name
+    event_src.ip = $computer_name
+else
+    src.hostname = $computer_name
+    $dot_pos = find_substr($computer_name, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($computer_name)
+        event_src.hostname = lower(substr($computer_name, 0, $dot_pos))
+    else
+        event_src.hostname = lower($computer_name)
+    endif
+endif
+
+direction = "egress"
+time = win_ticks_to_datetime($create_time)
+
+importance = "info"
+
+event_src.vendor = "smart_line"
+event_src.title = "devicelock"
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_odbc_Connection_status"

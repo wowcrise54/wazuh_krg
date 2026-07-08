@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{WORDDASH}|{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "Anti Malware"
+       and  $kv["cs2Label"] == "Update Status"
+       and $kv["subscription_stat"] == "valid"
+
+subject = "application"
+action = "install"
+object = "update"
+status = "success"
+
+subject.name = $kv["contract_name"]
+
+object.type = $kv["deviceCustomDate2Label"]
+
+datafield7 = $kv["deviceCustomDate2"]  # время истечения подписки
+datafield8 = $kv["originsicname"]      # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+$cp_severity = $kv["cp_severity"]
+if ($cp_severity != null) then
+    importance = switch lower($cp_severity)
+        case "unknown" "info"
+        case "very low" "info"
+        case "very-low" "info"
+        case "low" "low"
+        case "medium" "medium"
+        case "high" "high"
+        case "very high" "high"
+        case "very-high" "high"
+        case "critical" "high"
+    endswitch
+else
+    importance = "low"
+endif
+reason = $kv["subscription_stat_desc"]
+time = epoch_ms_to_datetime(number($kv["rt"]))
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Anti_malware_Update"

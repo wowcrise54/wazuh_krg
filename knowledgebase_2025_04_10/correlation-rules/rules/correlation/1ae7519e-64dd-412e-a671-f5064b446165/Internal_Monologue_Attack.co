@@ -1,0 +1,116 @@
+event Set_Register_Object_Value:
+    key:
+        event_src.host, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                msgid == "4657"
+                and event_src.title == "windows"
+            ) or (
+                msgid == "13"
+                and event_src.title == "sysmon"
+            )
+        )
+        and object == "reg_object"
+        and in_list (["restrictsendingntlmtraffic", "lmcompatibilitylevel"], lower(object.name))
+        and action == "modify"
+        and filter::CheckWL_Registry_Actions("Internal_Monologue_Attack", lower(event_src.host + "|" + subject.process.fullpath)) 
+    }
+
+event Remove_Register_Object:
+    key:
+        event_src.host, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                msgid == "4657"
+                and event_src.title == "windows"
+            ) or (
+                msgid == "12"
+                and event_src.title == "sysmon"
+            )
+        )
+        and object == "reg_object"
+        and in_list (["restrictsendingntlmtraffic", "lmcompatibilitylevel"], lower(object.name))
+        and action == "remove"
+    }
+
+event Set_Object_Value_NtlmMinClientSec:
+    key:
+        event_src.host, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon" 
+        and msgid == "13"
+        and object == "reg_object"
+        and lower(object.name) == "ntlmminclientsec"
+        and action == "modify"
+    }
+
+rule Internal_Monologue_Attack: ((Set_Register_Object_Value[2] with different object.name) and (Remove_Register_Object[2] with different object.name) and (Set_Object_Value_NtlmMinClientSec[2])) timer 2m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on Set_Register_Object_Value {
+        if $first_event == true then
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+            $object.new_value = object.new_value
+
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.id = subject.process.id
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = lower($event_src.host + "|" + $subject.process.fullpath)
+            $alert.context = lower(subject.account.name)
+            $first_event = false
+            $labels = $labels + "|CheckWL_Registry_Actions"
+        endif
+        $object.name = $object.name + "|" + object.name
+    }
+
+    on Set_Object_Value_NtlmMinClientSec {        
+            $object.name = $object.name + "|" + object.name
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Modify Registry"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

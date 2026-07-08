@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Access to database credentials (passwords, hashes, or both) can lead to compromise of PostgreSQL data</Description>
+  <EventDescriptions>
+    <EventDescription id="153eb54c-6fff-0a11-a60b-1383f57927bb">Password hashes of the PostgreSQL database users are extracted on host {event_src.host} using an SQL command</EventDescription>
+    <EventDescription id="ab97a7ad-8e96-8698-1f86-1b5dcd724c0d">Access to the gadmin4.db file that can contain PostgreSQL database passwords stored in the pgAdmin application on host {event_src.host}</EventDescription>
+    <EventDescription id="ed226113-e7a7-9510-1b11-34afd176890c">Access to the credentials (passwords, hashes, or both) of the PostgreSQL database on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

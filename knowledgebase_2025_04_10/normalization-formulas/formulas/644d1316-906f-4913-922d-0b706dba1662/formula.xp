@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?}{":"?} {":"IPV4":"?} {$time1=DATETIME?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {":"?}
+        {WORD":" ?} {"*"|"."|} {$time2=DATETIME?} {":"?} {WORD":" ?} %
+        {msgid="FMANFP-6-IPACCESSLOGP"|msgid="FMANFP-6-IPACCESSLOGNP"|msgid="FMANFP-6-IPACCESSLOGDP"}:
+        {WORD}: {event_src.subsys=WORDDASH}: list {subject.name=WORDDASH}
+        {$action_packet="permitted"|$action_packet="denied"} {$protocol=WORD}
+        {src.ip=IPV4|src.ip=IPV6} {"("?} {src.port=NUMBER?}{")"?} {$int=STRING}
+        {dst.ip=IPV4|dst.ip=IPV6} {"("?} {$addtitonal_info=UNTIL(")")?}, {count.packets=NUMBER} packet{"s"?}'
+
+subject = "rule"
+action = switch $action_packet
+    case "permitted" "allow"
+    case "denied" "deny"
+endswitch
+object = "connection"
+status = "success"
+
+if find_substr($addtitonal_info, '/') != null then
+    datafield1 = $addtitonal_info  # ICMP-флаг назначения пакета
+else
+    dst.port = number($addtitonal_info)
+endif
+
+if $int != "->" then
+    interface = strip($int, "", "->")
+endif
+
+protocol = $protocol
+
+time = coalesce($time2, $time1)
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.category = "Network device"
+event_src.title = "ios_xe"
+event_src.vendor = "cisco"
+
+id = "PT_Cisco_IOS_XE_syslog_FMANFP_6_IPACCESSLOGP"

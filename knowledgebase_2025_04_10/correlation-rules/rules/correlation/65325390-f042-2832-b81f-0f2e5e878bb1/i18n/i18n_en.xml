@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Configuration files of the pluggable authentication module were changed and moved. Attackers can change pluggable authentication module configuration to access user credentials or log in without a password.</Description>
+  <EventDescriptions>
+    <EventDescription id="6308cf1a-5359-0e54-3df9-fc93122e6aed">A configuration file of pluggable authentication module {object.name} on host {event_src.host} was changed</EventDescription>
+    <EventDescription id="75912bb4-3669-69a2-13b1-95e768e22a86">User {subject.account.name} moved file "{object.name}" to the folder containing configuration files of the pluggable authentication module on host {event_src.host}</EventDescription>
+    <EventDescription id="7967895d-29d0-8a03-215b-67b3fe217b08">File "{object.name}" was moved to the folder containing configuration files of the pluggable authentication module on host {event_src.host}</EventDescription>
+    <EventDescription id="98d0b1a1-cc92-a7d1-4146-6ba5592122d8">User {subject.account.name} changed a configuration file of pluggable authentication module {object.name} on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

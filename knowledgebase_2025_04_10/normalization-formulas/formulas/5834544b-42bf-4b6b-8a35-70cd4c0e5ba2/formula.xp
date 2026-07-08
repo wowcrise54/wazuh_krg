@@ -1,0 +1,29 @@
+!TABULAR = "id,
+            {time = start_time},
+            {datafield1 = node_name},
+            {event_src.ip = ip},
+            rule_name,
+            message"
+
+!COND = $rule_name == "Загрузка одного из сетевых интерфейсов превысила норму"
+
+action = "alert"
+object = "interface"
+status = "success"
+
+submessage("TEXT", "type", $message)
+
+subformula "type"
+    # Извлечение interface из $message
+    !TEXT = 'Загрузка одного из сетевых интерфейсов превысила норму {NUMBER}.{NUMBER} {interface=REST}'
+endsubformula
+
+# datafield1 = имя узла
+
+importance = "medium"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_statewatcher"
+event_src.category = "Network monitoring system"
+
+id = "PT_Infotecs_VipNet_StateWatcher_odbc_Exceed_interface_norm"

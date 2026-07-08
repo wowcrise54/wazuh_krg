@@ -1,0 +1,33 @@
+TABULAR =  "id,
+            {subject.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {datafield1=source_name},
+            {datafield2=object_type},
+            source_identifier
+            "
+
+COND = $gr_name == "Межсетевое взаимодействие"
+       and $ev_desc == "Создание МСИ"
+       and $status == "Успешно"
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "success"
+
+object.type = "gateway information"
+
+# datafield1 - имя доверернной сети
+# datafield2 - тип
+datafield3 = $source_identifier  # идентификатор
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_create_gw_info"

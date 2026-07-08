@@ -1,0 +1,49 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "1311"
+       and $event_category == "Discretionary access"
+       and $event_type == "Audit failure"
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "access"
+object = "resource"
+status = "failure"
+
+subject.name = $user_name
+subject.domain = $user_domain
+
+subformula "message"
+    TEXT = 'Access blocked to the file or catalog. Process name: {datafield2=UNTIL("\n")} Process ID: {NUMBER} Object name:
+            {$object=UNTIL("\n")} 
+            Requested access:{UNTIL(" Granted ")}
+            access: {REST}'
+endsubformula
+$csv = csv($object, "\\", "'")
+object.name = $csv[length($csv) - 1]
+object.path = strip($object, "", object.name)
+
+# datafield2 - имя процесса
+
+msgid = $event_id
+importance = "medium"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Дискреционный доступ" then
+    event_src.subsys = "discretionary access"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1311_access_blocked_to_file_or_catalog"

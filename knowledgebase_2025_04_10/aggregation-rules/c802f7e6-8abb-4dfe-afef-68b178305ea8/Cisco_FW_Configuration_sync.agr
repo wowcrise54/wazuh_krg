@@ -1,0 +1,15 @@
+event Configuration_sync:
+    key:
+        event_src.host, id, importance, event_src.title
+
+    object.account.name = "Config"
+
+    subject = "account"
+    action = "execute"
+    object = "command"
+    status = "success"
+
+    event_src.category = "Firewall"
+    event_src.vendor = "cisco"
+
+aggregate Cisco_FW_Configuration_sync: Configuration_sync[3,400] within 10m

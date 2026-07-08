@@ -1,0 +1,93 @@
+event A_Directory_Service_Object_Was_Modified:
+    key:
+        event_src.host, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "microsoft"
+        and event_src.title == "active_directory" 
+        and msgid == "5136" 
+        and lower(object.state) == "value added"
+        and find_substr(lower(object.name), "cn=adminsdholder") == 0
+        and lower(object.property) == "ntsecuritydescriptor"
+        and regex(lower(object.value), "(ccdclcswrpwpdtlocrsdrcwdwo|00299570-246d-11d0-a768-00aa006e0529|ab721a53-1e2f-11d0-9819-00aa0040529b)\W+s-1-5-21-.*?\)", 0) != null       
+        and filter::CheckWL_Specific_Only("AdminSDHolder_Modification_Attack", lower(object.name))
+    }
+
+rule AdminSDHolder_Modification_Attack: A_Directory_Service_Object_Was_Modified+ timer 1m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on A_Directory_Service_Object_Was_Modified {
+        if $first_event then
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+            $object.property = object.property
+            $object.state = object.state
+
+            $chain_id = chain_id
+
+            $alert.key = lower(object.name)
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $first_event = false
+        endif
+
+        if not in_list($object_name, object.name) then
+            $object_name = append($object_name, object.name)
+        endif
+
+        if not in_list($object_type, object.type) then
+            $object_type = append($object_type, object.type)
+        endif
+
+        if not in_list($object_value, object.value) then
+            $object_value = append($object_value, object.value)
+            $alert.regex_match = regex(lower(object.value),"((ccdclcswrpwpdtlocrsdrcwdwo|00299570-246d-11d0-a768-00aa006e0529|ab721a53-1e2f-11d0-9819-00aa0040529b)\W+s-1-5-21-.*?)\)", 1)
+            $alert_context = append($alert_context, $alert.regex_match)
+        endif
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }       
+    
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "ds_object"
+    $status = "success"
+
+    $object.name = join($object_name, "|")
+    $object.type = join($object_type, "|")
+    $object.value = join($object_value, "|")
+
+    $alert.context = join($alert_context, "|")
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} %{msgid="DAEMON-6-SYSTEM_MSG"}: Connection from {src.ip=IPV4} port
+        {src.port=NUMBER} - sshd[{NUMBER}]'
+
+action = "open"
+object = "session"
+status = "success"
+
+importance = "info"
+
+event_src.category = "Network device"
+event_src.title = "nexus"
+event_src.vendor = "cisco"
+
+id = "PT_Cisco_Nexus_syslog_DAEMON_6_SYSTEM_MSG_Open_connection"

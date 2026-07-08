@@ -1,0 +1,37 @@
+TABULAR =  "id,
+            {subject.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name},
+            {object.type=object_type},
+            network_number,
+            {object.value=participant_object_name},
+            {datafield1=participant_object_type}
+            "
+
+COND = $gr_name == "Управление группами СУ"
+       and $ev_desc == "Добавление сетевых узлов в группу"
+       and $status == "Успешно"
+
+subject = "account"
+action = "modify"
+object = "resource"
+status = "success"
+
+object.state = "host added to host group"
+
+object.id = $source_identifier
+object.property = "host"
+
+# datafield1 - тип узла
+datafield2 = $participant_source_identifier  # идентификатор узла
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_add_host_to_group"

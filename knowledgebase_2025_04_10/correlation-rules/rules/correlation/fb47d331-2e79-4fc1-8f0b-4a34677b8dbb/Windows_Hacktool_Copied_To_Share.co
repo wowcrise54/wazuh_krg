@@ -1,0 +1,112 @@
+query Check_Hacktool_By_Name($object_name) from Windows_Hacktools {
+    (binary_name == $object_name)
+}
+
+query Get_Hacktool_Info_By_Name($object_name) from Windows_Hacktools {
+    (binary_name == $object_name)
+}
+    qhandler {
+        $binary_name = binary_name
+        $binary_description = binary_description
+        $event_type = event_type
+        $event_importance = event_importance
+        $event_description = event_description
+    }
+
+event Copy_Hacktool_To_Share:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and status == "success"
+        and lower(object.storage.id) == "\\\\*\\c$"
+        and match(subject.account.privileges, "*%%4417*")
+        and exec_query("Check_Hacktool_By_Name", [lower(object.name)])
+        and filter::CheckWL_Windows_Shares("Windows_Hacktool_Copied_To_Share", lower(join([subject.account.name, src.host, dst.host, object.name], "|")))
+    }
+
+rule Windows_Hacktool_Copied_To_Share: Copy_Hacktool_To_Share
+
+    init {
+        $labels = "w_auto|CheckWL_Windows_Shares"
+    }
+
+    on Copy_Hacktool_To_Share {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.fullpath = object.fullpath 
+        $object.name = object.name
+        $object.path = object.path
+        $object.type = object.type
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $result = exec_query("Get_Hacktool_Info_By_Name", [object.name])
+
+        $datafield6 = datafield6  # Access Mask
+        $datafield9 = datafield9  # Расшифровка поля subject.account.privileges
+        $datafield11 = $result["$event_description"]  # Здесь будет описание утилиты для локализации
+
+        $alert.key = lower(join([subject.account.name, src.host, dst.host, object.name], "|"))
+        $alert.context = object.storage.fullpath
+
+        if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+            $importance = $result["$event_importance"]
+        else
+            $importance = "medium"
+        endif
+        if in_list(["event", "incident"], lower($result["$event_type"])) then
+            $correlation_type = $result["$event_type"]
+        else
+            $correlation_type = "event"
+        endif
+    }
+
+emit {
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Lateral Tool Transfer"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance 
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

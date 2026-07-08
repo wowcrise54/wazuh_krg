@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME}
+        View - {NUMBER} [View@{NUMBER} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["EventType"] == "ADMIN_RESTART_VM"
+        or $kv["EventType"] == "ADMIN_RESET_VM"
+
+subject = "account"
+action = switch $kv["EventType"]
+        case "ADMIN_RESTART_VM" "restart"
+        case "ADMIN_RESET_VM" "reset"
+endswitch
+object = "virtual_machine"
+status = "success"
+
+# разделение имени пользователя на домен и имя
+$csv = csv($kv["UserDisplayName"], "\\\\", "'")
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+subject.id = $kv["UserSID"]
+object.name = $kv["MachineName"]
+object.id = $kv["MachineId"]
+
+msgid = $kv["EventType"]
+importance = "low"
+
+event_src.vendor = "vmware"
+event_src.title = "horizon"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_Horizon_View_syslog_Machine_restarted_reseted"

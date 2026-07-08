@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        {STRING} {NUMBER} - - Node.{numfield1=NUMBER}-Unit.{numfield2=NUMBER}:PRI [event], Dell EMC (OS10) 
+        %{msgid="PM_PROC_UTIL_LO"|msgid="PM_PROC_UTIL_HI"}: Process .clish({NUMBER})
+        CPU Utilization 1-minute {$low="Low"|$high="High"} Threshold event {$raised="Raised"|$cleared="Cleared"}:
+        {NUMBER}.{NUMBER}({NUMBER}-{NUMBER})'
+
+subject = "system"
+action = "info"
+object = "alert"
+status = "success"
+
+if $low != null and $raised != null then
+    object.type = "CPU Utilization 1-minute Low Threshold event Raised"
+elif $high != null and $raised != null then
+    object.type = "CPU Utilization 1-minute High Threshold event Raised"
+elif $high != null and $cleared != null then
+    object.type = "CPU Utilization 1-minute High Threshold event Cleared"
+endif
+
+object.state = coalesce($cleared, $raised)
+
+# numfield1 - node
+# numfield2 - unit
+
+importance = "low"
+
+event_src.vendor = "dell"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "s4128"
+event_src.category = "Network device"
+
+id = "PT_Dell_S4128_syslog_CPU_utilization_thresholds"

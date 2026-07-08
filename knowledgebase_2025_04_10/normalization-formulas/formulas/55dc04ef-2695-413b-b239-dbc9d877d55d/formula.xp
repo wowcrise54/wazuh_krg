@@ -1,0 +1,35 @@
+EVENTLOG = 'EventID.text="6029"'
+COND =  $Channel == "System"
+        and $Provider["Name"] == "Microsoft-Windows-DirectoryServices-LSADB"
+
+subject = "application"
+action = "modify"
+object = "reg_object"
+status = "failure"
+
+subject.name = "LSA"
+
+reason = $Data[0]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.generic = "Registry Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_Microsoft_Windows_eventlog_6029_could_not_update_domain_information_in_registry"

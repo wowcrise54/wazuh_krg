@@ -1,0 +1,34 @@
+TABULAR =  "id,
+            {subject.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.value=source_name},
+            {object.property=object_type},
+            network_number,
+            {datafield1=participant_object_name},
+            {datafield2=participant_object_type}
+            "
+
+COND = $gr_name == "Изменение связей"
+       and $ev_desc == "Добавление связи между группами узлов"
+       and $status == "Успешно"
+
+subject = "account"
+action = "create"
+object = "link"
+status = "success"
+
+# datafield1 - имя группы
+# datafield2 - тип группы
+datafield3 = $participant_source_identifier  # идентификатор группы
+datafield4 = $source_identifier              # идентификатор группы к которой создается связь
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_create_link_host_group"

@@ -1,0 +1,59 @@
+TABULAR = '{chain_id=TransactionId},
+           {datafield2=SequenceId},
+           {time=OccurredAt},
+           {$selector=ObjectSelector},
+           {$login=Login},
+           {$workstation=Workstation},
+           {$account=NTAccount},
+           SequenceNumber,
+           {$temp_action=Action},
+           {msgid=ObjectType},
+           {$server=Server},
+           ServerIsPrimary'
+
+COND = $ObjectType == "SignatureCategory"
+
+subject = "account"
+
+action = switch $temp_action
+    case "Insert" "create"
+    case "Update" "rename"
+    case "Delete" "remove"
+endswitch
+
+object = "resource"
+status = "success"
+
+subject.account.name = lower($login)
+
+$csv_account = csv(lower($account), "\\", "")
+subject.name = $csv_account[1]    # Имя системного пользователя
+subject.domain = $csv_account[0]  # Домен системного пользователя
+
+$slash = find_substr($selector, "/") + 0
+object.name = strip(substr($selector, $slash, length($selector)), "/", "")
+object.type = "signature category"
+
+src.hostname = lower($workstation)
+dst.hostname = lower($server)
+
+# datafield2 - Номер действия в рамках текущей транзакции
+
+if $temp_action == "Update" then
+    object.new_value = $NewValue
+endif
+
+if lower($workstation) == lower($server) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+importance = "info"
+
+event_src.vendor = "infowatch"
+event_src.title = "device_monitor"
+event_src.hostname = lower($server)
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Device_Monitor_odbc_signature_category"

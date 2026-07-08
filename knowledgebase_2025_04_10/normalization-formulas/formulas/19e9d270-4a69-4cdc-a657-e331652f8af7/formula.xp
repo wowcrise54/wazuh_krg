@@ -1,0 +1,51 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "1051"
+       and $event_category == "Application execution control"
+       and $event_type == "Audit success"
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "start"
+object = "process"
+status = "success"
+
+subject.account.name = $user_name
+subject.account.domain = $user_domain
+
+object.account.name = subject.account.name
+object.account.domain = subject.account.domain
+
+subformula "message"
+    TEXT = 'Program start. Program name: {STRING} Process: {$path=STRING} Mode: {STRING}'
+    $csv = csv($path, "\\", "'")
+    object.process.name = $csv[length($csv) - 1]
+    object.process.path = strip($path, "", object.process.name)
+endsubformula
+
+msgid = $event_id
+importance = "low"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Замкнутая программная среда" then
+    event_src.subsys = "application execution control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1051_program_start"

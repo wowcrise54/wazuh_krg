@@ -1,0 +1,185 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL(']')} INFO - {$class=STRING} - {$tag=WORD}: {$raw_message=REST}"
+COND = in_list([
+           "user_group_create", "user_group_delete", 
+           "group_add_role", "group_remove_role_in_scope", 
+           "user_add_to_group", "user_remove_from_group", 
+           "group_add_to_group", "group_remove_from_group"
+       ], $tag)
+
+subject = "account"
+object = "user_group"
+status = "success"
+
+subformula "parse_user"
+    TEXT = "'{$user_name=UNTIL('\\'')} {'('$user_fullname=UNTIL(')')?} {'{'}id={$user_id=NUMBER}{'}'}"
+endsubformula
+
+subformula "parse_user"
+    # since version 2023
+    TEXT = "user with id={$user_id=NUMBER}"
+endsubformula
+
+subformula "parse_group"
+    TEXT = "{$group_name=STRING+} {'{'}key={$group_id=REST}"
+    
+    $group_name = strip($group_name, '"', '"')
+    $group_id = strip($group_id, '', '}')
+    $group_id = strip($group_id, '"', '"')
+endsubformula
+
+subformula "parse_role"
+    TEXT = "{$role_name=STRING+} {'{'}id={$role_id=REST}"
+    
+    $role_name = strip($role_name, '"', '"')
+    $role_id = strip($role_id, '', '}')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$subj=UNTIL('\" with comment \"')} {$comment=REST}"
+    
+    reason = strip($comment, '', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$subj=UNTIL('\"')}"
+endsubformula
+
+subformula "by_comment"
+    TEXT = "with comment {$comment=REST}"
+    
+    reason = strip($comment, '"', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "{REST}"
+endsubformula
+
+subformula "user_group_create"
+    TEXT = "User group \"{$group=UNTIL('\" was created')} {$by_comment=REST}"
+    
+    action = "create"
+endsubformula
+
+subformula "user_group_delete"
+    TEXT = "User group \"{$group=UNTIL('\" was deleted')} {$by_comment=REST}"
+    
+    action = "remove"
+endsubformula
+
+subformula "group_add_role"
+    TEXT = "User role \"{$role=UNTIL('\" was added to \"')} {$group=UNTIL('\" in \"')} {$scope=UNTIL('\" scope')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    submessage("TEXT", "parse_role", $role)
+    object.property = "role_name|role_id"
+    object.new_value = $role_name + "|" + $role_id
+endsubformula
+
+subformula "group_remove_role_in_scope"
+    TEXT = "User role \"{$role=UNTIL('\" was removed from \"')} {$group=UNTIL('\" in \"')} {$scope=UNTIL('\" scope')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    submessage("TEXT", "parse_role", $role)
+    object.property = "role_name|role_id"
+    object.value = $role_name + "|" + $role_id
+endsubformula
+
+subformula "user_add_to_group"
+    TEXT = "User \"{$user=UNTIL('\" was added to \"')} {$group=UNTIL('}\"')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    submessage("TEXT", "parse_user", $user)
+    object.property = "user_name|user_id"
+    object.new_value = $user_name + "|" + string($user_id)
+endsubformula
+
+subformula "user_remove_from_group"
+    TEXT = "User \"{$user=UNTIL('\" was removed from \"')} {$group=UNTIL('}\"')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    submessage("TEXT", "parse_user", $user)
+    object.property = "user_name|user_id"
+    object.value = $user_name + "|" + string($user_id)
+endsubformula
+
+subformula "group_add_to_group"
+    TEXT = "User group \"{$group_obj=UNTIL('\" was added to \"')} {$group=UNTIL('}\"')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    submessage("TEXT", "parse_group", $group_obj)
+    object.property = "group_name|group_id"
+    object.new_value = $group_name + "|" + $group_id
+endsubformula
+
+subformula "group_remove_from_group"
+    TEXT = "User group \"{$group_obj=UNTIL('\" was removed from \"')} {$group=UNTIL('}\"')} {$by_comment=REST}"
+    
+    action = "modify"
+    
+    submessage("TEXT", "parse_group", $group_obj)
+    object.property = "group_name|group_id"
+    object.value = $group_name + "|" + $group_id
+endsubformula
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+switch $tag
+    case "user_group_create" submessage("TEXT", "user_group_create", $raw_message)
+    case "user_group_delete" submessage("TEXT", "user_group_delete", $raw_message)
+    case "group_add_role" submessage("TEXT", "group_add_role", $raw_message)
+    case "group_remove_role_in_scope" submessage("TEXT", "group_remove_role_in_scope", $raw_message)
+    case "user_add_to_group" submessage("TEXT", "user_add_to_group", $raw_message)
+    case "user_remove_from_group" submessage("TEXT", "user_remove_from_group", $raw_message)
+    case "group_add_to_group" submessage("TEXT", "group_add_to_group", $raw_message)
+    case "group_remove_from_group" submessage("TEXT", "group_remove_from_group", $raw_message)
+endswitch
+
+$user_fullname = null
+$user_name = null
+$user_id = null
+
+submessage("TEXT", "by_comment", $by_comment)
+submessage("TEXT", "parse_user", $subj)
+subject.account.fullname = $user_fullname
+subject.account.name = $user_name
+subject.account.id = $user_id
+
+$group_name = null
+$group_id = null
+
+submessage("TEXT", "parse_group", $group)
+object.name = $group_name
+object.id = $group_id
+
+time = replace($time, ".", ",")
+msgid = $tag
+importance = "medium"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Activities_Group_Management"

@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        nsd[{NUMBER}]: [{time=DATETIME}] nsd[{NUMBER}]: error: {$zonename=STRING}
+        Could not tcp connect to {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}: {reason=REST}'
+
+action = "upload"
+object = "resource"
+status = "failure"
+
+object.type = "DNS zone"
+object.name = strip($zonename, "", ":")
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nsd"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_NSD_syslog_zone_upload_failed"

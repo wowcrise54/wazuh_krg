@@ -1,0 +1,39 @@
+TEXT = '<{NUMBER}>[{time=DATETIME}]FW:ARP: prio={$prio=NUMBER} id={NUMBER} rev={NUMBER} event=
+        {$msg_id="no_sender_ip"|$msg_id="invalid_arp_sender_ip_address"}action=drop {$kv=KEYVALUE(" ", "=", "")}'
+
+subject = "rule"
+action = "deny"
+object = "packet"
+status = "success"
+
+subject.name = $kv['rule']
+
+src.ip = $kv['srcip']
+src.mac = $kv['hwsender']
+dst.ip = $kv['destip']
+dst.mac = $kv['hwdest']
+
+interface = $kv['recvif']
+
+reason = switch $msg_id
+    case "no_sender_ip" "source ip address is 0.0.0.0"
+    case "invalid_arp_sender_ip_address" "source permissions could not be verified"
+endswitch
+
+msgid = $msg_id
+
+importance = switch $prio
+    case 3 "high"
+    case 2 "medium"
+    case 1 "low"
+endswitch
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.title = "dfl-1660"
+event_src.vendor = "d-link"
+event_src.category = "Firewall"
+
+id = "PT_D_Link_DFL_1660_syslog_ARP_request_drop"

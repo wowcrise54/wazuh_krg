@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {$subsys=WORDDASH} - - -{STRING?}
+        {subject.account.name=WORDDASH} - INSERT INTO LocalGroups VALUES {$kv=KEYVALUE}'
+
+subject = "account"
+action = "create"
+object = "user_group"
+status = "success"
+
+object.id = $kv["UUID"]
+object.name = $kv["Name"]
+
+importance = "low"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.title = "kerio_control"
+event_src.subsys = lower($subsys)
+event_src.vendor = "kerio_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network security"
+
+id = "PT_Kerio_Technologies_Kerio_Control_syslog_create_new_group"

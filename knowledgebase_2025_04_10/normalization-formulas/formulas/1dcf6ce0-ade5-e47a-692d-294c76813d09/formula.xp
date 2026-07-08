@@ -1,0 +1,93 @@
+TABULAR = '{object.value=resource}, 
+           {object.type=method}, 
+           user,
+           host,
+           {object.process.meta=userAgent},
+           {src.ip=remoteIpAddress},
+           {src.port=remotePort},
+           code,  
+           {time=datetime},
+           product'
+
+
+COND = in_list([200, 400, 404], $code) and $product == "MECM AdminService"
+
+     
+subject = "account"
+action = "send"
+object = "request"
+
+if $code == 200 then 
+   status = "success"
+else
+   status = "failure"
+endif
+
+subformula "result"
+    TEXT = "User {$user2=STRING} successfully created a job to deploy a CMPivot script to device {datafield2=NUMBER} ({WORDDASH}). Job ID is {object.process.id=NUMBER}."
+endsubformula
+
+subformula "result"
+    TEXT = "CMPivot result is not available yet. OperationId is {object.process.id=NUMBER}."
+endsubformula
+
+subformula "result"
+    TEXT = "Query failed on device. Run vSMS_CMPivotStatus view for more details. OperationId is {object.process.id=NUMBER}."
+endsubformula
+
+subformula "result"
+    TEXT = "Successfully deployed script simulation to device {datafield2=NUMBER}"
+endsubformula
+
+subformula "result"
+    TEXT = "{REST}"
+endsubformula
+
+if $result != null then
+    datafield1 = $result
+    submessage("TEXT", "result", $result)
+endif
+
+if find_substr($user2, "\\") != null then
+    $login = csv($user2, "\\", '')
+    subject.account.domain = $login[0]
+    subject.account.name = $login[1]
+elif find_substr($user, "\\") != null then
+    $login = csv($user, "\\", '')
+    subject.account.domain = $login[0]
+    subject.account.name = $login[1]
+else
+    subject.account.name = $user
+endif
+
+if $inputQuery != null then
+    object.process.cmdline = $inputQuery
+endif
+
+object.query = $method + " " + $resource
+object.property = "resource path"
+
+$dot_pos = find_substr($host, '.')
+if ipv4($host) != null or ipv6($host) != null then
+    dst.ip = $host
+elif $dot_pos != null then
+    dst.fqdn = lower($host)
+    dst.hostname = lower(substr($host, 0, $dot_pos))
+else
+    dst.hostname = lower($host)
+endif
+
+# datafield1 - результат выполнения запроса
+# datafield2 - id устройства
+
+if $reason != null and $code != 200 then
+    reason = $reason
+endif
+  
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "mecm"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_MECM_customeventcollector_AdminService_Request"

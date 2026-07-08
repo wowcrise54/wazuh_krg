@@ -1,0 +1,90 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} application_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"message":"Successful Login:') != null
+    or find_substr($json, '"message":"Failed Login:') != null
+    or find_substr($json, '"message":"Failed Admin Mode Login:') != null
+    or find_substr($json, '"message":"User Logout:') != null
+)
+
+subject = "account"
+object = "application"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_message"
+    TEXT = '{$prefix="Failed Login"|$prefix="Successful Login"|$prefix="User Logout"}: {$kv=KEYVALUE(" ", "=", "\'")}'
+    
+    switch $prefix
+        case "Failed Login" 
+            action = "login"
+            status = "failure"
+        case "Failed Admin Mode Login"
+            action = "login"
+            status = "failure"
+        case "Successful Login"
+            action = "login"
+            status = "success"
+        case "User Logout"
+            action = "logout"
+            status = "ongoing"
+    endswitch
+
+    subject.account.name = coalesce($kv["username"], $kv["user"], $meta.user)
+
+    if ($prefix == "Successful Login") then  
+        if ($kv["admin"] == "true") then
+            subject.account.privileges = "admin"
+        else
+            subject.account.privileges = "regular"
+        endif
+    endif
+    
+    src.ip = $kv["ip"]
+    
+    logon_auth_method = "remote"
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+submessage("TEXT", "parse_message", $message)
+
+subject.account.id = $meta.user_id
+
+logon_service = $kv["method"]
+
+chain_id = $correlation_id
+
+# For whitelisting by subnets in CR
+if bool(ipv4(src.ip)) then
+    $csv_address = csv(src.ip, ".", "")
+    $octet_1 = $csv_address[0]
+    $octet_2 = $csv_address[1]
+    $octet_3 = $csv_address[2]
+
+    datafield11 = join([src.ip, "32"], "/")
+    datafield12 = join([$octet_1, $octet_2, $octet_3, "0/24"], ".")
+    datafield13 = join([$octet_1, $octet_2, "0.0/16"], ".")
+    datafield14 = join([$octet_1, "0.0.0/8"], ".")
+endif
+
+time = $time
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "application"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Application_JSON_Login_Logout"

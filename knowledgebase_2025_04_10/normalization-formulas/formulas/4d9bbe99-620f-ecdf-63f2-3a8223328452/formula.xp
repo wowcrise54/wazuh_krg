@@ -1,0 +1,53 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?} {$mh=UNTIL(",")}{$ms=STRING}
+ {"-"?} {WORD} {"-"?} [{HOSTNAME}] {"-"?} {"("?}{HOSTNAME}{")"?} {"-"?} {$data=REST}'
+
+COND = find_substr($data, "type=USER_INFO_REQUEST") != null
+
+$kv = keyvalue(strip($data, "", " -"), ", ", "=", "")
+
+subject = "account"
+action = "access"
+object = "resource"
+status = "success"
+
+if find_substr($kv["username"], "@") != null then
+    subject.account.name = csv($kv["username"], "@", "")[0]
+    subject.account.domain = csv($kv["username"], "@", "")[1]
+else
+    subject.account.name = $kv["username"]
+endif
+if $kv["userId"] != "null" then
+    subject.account.id = $kv["userId"]
+endif
+
+object.type = "user info"
+object.storage.id = $kv["realmId"]
+object.application.name = $kv["clientId"]
+
+if in_list(["127.0.0.1", "::1"], $kv["ipAddress"]) then
+    logon_auth_method = "local"
+    src.ip = event_src.ip
+    src.hostname = $Computer
+else
+    logon_auth_method = "remote"
+    src.ip = $kv["ipAddress"]
+endif
+
+datafield1 = $kv["auth_method"]  # Метод аутентификации
+
+time = string($mh) + '.' + string($ms)
+msgid = $kv["type"]
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "keycloak"
+event_src.category = "AAA"
+
+id = "PT_Opensource_Keycloak_syslog_USER_INFO_REQUEST"

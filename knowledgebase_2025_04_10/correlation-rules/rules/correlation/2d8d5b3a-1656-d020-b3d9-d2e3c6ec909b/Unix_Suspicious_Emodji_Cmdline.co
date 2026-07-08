@@ -1,0 +1,106 @@
+event Start_Process:
+    key:
+        event_src.host, object.process.id, subject.account.session_id
+    filter { 
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and object.process.cmdline != null
+        and regex(lower(object.process.cmdline), "[😀😅😆😉😊😎😍🙂😵🤔🤨🥰😐😶🙄😗😙😑💀🤗😂😋😗😙😃😘🚀💻😱🤓😵🤢😁🤠😵😅🤣😃😑😃😂👽🐚]", 0) != null
+        and filter::CheckWL_Linux_Process_Creation("Unix_Suspicious_Emodji_Cmdline", lower(join([subject.account.name, object.process.cmdline], "|")))   
+}
+
+event Socket_Connection:
+    key:
+        event_src.host, subject.process.id, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and object == "connection"
+        and action == "open"
+        and direction == "egress"
+        and not filter::Loopback_Address(dst.ip)
+        and subject.process.meta != null
+        and regex(lower(subject.process.meta), "[😀😅😆😉😊😎😍🙂😵🤔🤨🥰😐😶🙄😗😙😑💀🤗😂😋😗😙😃😘🚀💻😱🤓😵🤢😁🤠😵😅🤣😃😑😃😂👽🐚]", 0) != null
+    }
+
+rule Unix_Suspicious_Emodji_Cmdline: (Start_Process and Socket_Connection?) timer 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Start_Process {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd 
+        $object.process.parent.id = object.process.parent.id
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "[😀😅😆😉😊😎😍🙂😵🤔🤨🥰😐😶🙄😗😙😑💀🤗😂😋😗😙😃😘🚀💻😱🤓😵🤢😁🤠😵😅🤣😃😑😃😂👽🐚]", 0)  
+    }
+
+    on Socket_Connection {
+        $src.host = src.host
+        $src.hostname = src.hostname
+
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.host = dst.host
+        $dst.asset = dst.asset
+    }
+
+emit {
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    if $dst.ip != null then
+        $alert.context = $object.process.name + " | " + $dst.ip
+        $correlation_type = "incident"
+    else
+        $alert.context = $object.process.name
+        $correlation_type = "event"
+    endif
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Obfuscated Files or Information: Command Obfuscation"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

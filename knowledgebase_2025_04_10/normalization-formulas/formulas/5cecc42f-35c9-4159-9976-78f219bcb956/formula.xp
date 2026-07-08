@@ -1,0 +1,17 @@
+id = "PT_Avaya_ERS_5500_syslog_interface_operation_status"
+
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{event_src.hostname=HOSTNAME|STRING}
+        :Link {$act = "Up"|$act = "Down"} Trap for Port: {interface = NUMBER}'
+
+action = lower($act)
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+importance = "info"
+
+event_src.vendor = "avaya"
+event_src.title = "ers_5500"
+event_src.category = "Network device"

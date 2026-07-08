@@ -1,0 +1,7 @@
+filter HasHash() {
+    object.hash != null
+    or object.process.hash != null
+    or object.process.parent.hash != null
+    or subject.process.hash != null
+    or subject.process.parent.hash != null
+}

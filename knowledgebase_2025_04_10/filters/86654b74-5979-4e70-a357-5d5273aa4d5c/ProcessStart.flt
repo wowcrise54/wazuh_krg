@@ -1,0 +1,8 @@
+filter ProcessStart(string $name) {
+    filter::NotFromCorrelator()
+    and action == "start"
+    and match(object.process.name, $name)
+    and category.generic == "Process"
+    and category.high == "Availability Management"
+    and category.low == "Control"
+}

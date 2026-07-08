@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        CEF:{NUMBER}|Avanpost|{$tpm_subsys="IDM"}||{msgid="1330513525"}|Назначение роли 
+        "{object.new_value=UNTIL("\\"")} сотруднику "{object.account.fullname=UNTIL("\\"")}
+        (PersonId={object.account.id=NUMBER})|{NUMBER}|{$kv=KEYVALUE(" ", "=", "")}'
+
+subject = "account"
+action = "grant"
+object = "account"
+status = "success"
+
+if find_substr($kv["suser"], "\\") != null then
+    $csv_subject_domain_name = csv($kv["suser"], "\\", "")
+    subject.account.domain = $csv_subject_domain_name[0]
+    subject.account.name = $csv_subject_domain_name[1]
+else
+    subject.account.fullname = $kv["suser"]
+endif
+
+object.property = $kv["cs1"]
+
+importance = "low"
+
+event_src.vendor = "avanpost"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "avanpost_idm"
+event_src.subsys = lower($tpm_subsys)
+event_src.category = "AAA"
+
+id = "PT_Avanpost_Avanpost_IDM_syslog_CEF_IDM_Grant_role"

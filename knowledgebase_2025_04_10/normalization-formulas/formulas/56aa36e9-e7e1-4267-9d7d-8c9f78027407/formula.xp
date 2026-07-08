@@ -1,0 +1,44 @@
+TEXT = "{'<'NUMBER'>'?}{':'?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        mysql-server_auditing: {IPV4|IPV6|HOSTNAME},{$account=WORDDASH},{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME|},
+        {subject.account.session_id=NUMBER},{datafield2=NUMBER},QUERY,{'`'WORDDASH'`'?},\'CREATE USER \\\'{$object_account=WORDDASH}\\\'
+        @\\\'{$dataf4=STRING+} IDENTIFIED {$data=CSV}"
+
+subject = "account"
+action = "create"
+object = "account"
+
+if $data[1] == "0" then
+    status = "success"
+else
+    status = "failure"
+
+    reason = $data[1]
+endif
+
+subject.account.id = $account
+subject.account.name = $account
+
+object.account.id = $object_account
+object.account.name = $object_account
+
+# datafield2 - queryid
+datafield4 = strip($dataf4,'','\\\'')  # allowed hosts
+
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.title = "mysql"
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Database server"
+
+id = "PT_Oracle_MySQL_syslog_create_user"

@@ -1,0 +1,30 @@
+JSON = 'event_desc = "Аутентификация администратора с выдачей ID"'
+
+subject = "account"
+action = "login"
+object = "application"
+if $event_result == "Успешное завершение" then
+    status = "success"
+elif $event_result == "Ошибка аутентификации" then
+    status = "failure"
+endif
+
+subject.account.name = lower($adm_login)
+subject.account.contact = lower($adm_email)
+subject.account.fullname = join([lower($adm_surname), lower($adm_name), lower($adm_patronymic)], " ")
+
+reason = $event_result
+
+importance = "info"
+
+time = $event_ts
+
+category.high = "Access Management"
+category.generic = "Application"
+category.low = "Communication"
+
+event_src.vendor = "pt_niisokb"
+event_src.title = "uem_safemobile"
+event_src.category = "Mobile"
+
+id = "PT_NIISOKB_UEM_SafeMobile_syslog_admin_login"

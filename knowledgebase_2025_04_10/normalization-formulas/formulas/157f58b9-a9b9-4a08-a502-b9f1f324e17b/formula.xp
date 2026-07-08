@@ -1,0 +1,61 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["device_id"] != null
+       and $kv["devname"] != null
+       and $kv["log_id"] == "0211008192"
+
+action = "detect"
+object = "malware"
+status = "success"
+
+if $kv["user"] != "N/A" then object.account.name = $kv["user"] endif
+if $kv["group"] != "N/A" then object.account.group = $kv["group"] endif
+
+object.process.meta = $kv["agent"]
+
+if $kv["file"] != "N/A" then object.name = $kv["file"] endif
+
+if $kv["checksum"] != "N/A" then
+    $hash_length = length($kv["checksum"])
+    $hash_type = switch $hash_length
+        case 32 "md5"
+        case 40 "sha1"
+        case 64 "sha256"
+    endswitch
+    object.hash = join(remove([$hash_type, $kv["checksum"]], null), ":")
+endif
+
+object.type = $kv["virus"]
+object.state = $kv["status"]
+
+src.ip = $kv["src"]
+src.port = $kv["src_port"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dst_port"]
+protocol.layer7 = $kv["service"]
+
+datafield1 = $kv["ref"]                                           # The URL of the FortiGuard IPS database entry for the attack
+if $kv["srcintf"] != null then datafield2 = $kv["srcintf"] endif  # Ingress interface
+datafield3 = $kv["quarskip"]                                      # Quarantine skip explanation
+if $kv["dstintf"] != null then datafield4 = $kv["dstintf"] endif  # Egress interface
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")             # Event type
+
+external_link = $kv["url"] 
+reason = strip($kv["msg"], "", ".")
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["log_id"]
+importance = "medium"
+
+category.high = "Information Security"
+category.generic = "Malware"
+category.low = "Mitigation"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["device_id"]
+event_src.rule = $kv["policyid"]
+event_src.category = "Anti-virus"
+
+id = "PT_Fortinet_Fortigate_syslog_8192_Virus_activity"

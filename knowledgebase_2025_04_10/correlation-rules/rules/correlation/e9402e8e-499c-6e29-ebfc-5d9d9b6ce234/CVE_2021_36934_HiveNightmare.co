@@ -1,0 +1,89 @@
+event Registry_Access:
+    key:
+        event_src.host, subject.account.name, subject.account.session_id, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and event_src.title == "windows"
+        and msgid == "4663"
+        and status == "success"
+        and regex(lower(object.fullpath), "^\\\\device\\\\harddiskvolumeshadowcopy\d+\\\\windows\\\\system32\\\\config\\\\(sam|system|security)$", 0) != null
+        and filter::CheckWL_Specific_Only("CVE_2021_36934_HiveNightmare", lower(join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|")))
+    }
+
+rule CVE_2021_36934_HiveNightmare: Registry_Access[2,] with different object.name timer 2s
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $first_event = true
+        $context = []
+        $count.subevents = 0
+    }
+
+    on Registry_Access {
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.type = object.type
+
+            $datafield1 = datafield1  # handle id
+            $datafield5 = datafield5  # Маска для запрошенной или выполненной операции
+            $datafield9 = datafield9  # Расшифровка subject.account.privileges
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.rule = event_src.rule
+
+            $first_event = false
+
+            $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|"))
+        endif
+        
+        $regex_match = append($regex_match, regex(lower(object.fullpath), "^\\\\device\\\\harddiskvolumeshadowcopy\d+\\\\windows\\\\system32\\\\config\\\\(sam|system|security)$", 0))
+        $context = append($context, regex(lower(object.fullpath), "^\\\\device\\\\harddiskvolumeshadowcopy\d+\\\\windows\\\\system32\\\\config\\\\(sam|system|security)$", 1))
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $detect = "CVE-2021–36934"
+
+    $alert.regex_match = join($regex_match, "|")
+    $alert.context = join($context, "|")
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: Security Account Manager"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

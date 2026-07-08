@@ -1,0 +1,167 @@
+event Run_Msdt:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("msdt.exe","ms-msdt:")
+        and find_substr(lower(object.process.cmdline), "pcwdiagnostic") != null
+        and filter::CheckWL_Process_Creation("MSDT_CVE_2022_30190", lower(object.process.cmdline))
+    }
+
+event Pipe_Created_By_Process:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and lower(event_src.title) == "sysmon"
+        and msgid == "17"
+        and match(lower(subject.process.fullpath), "?:\\windows\\system32\\sdiagnhost.exe")
+        and lower(object.name) == "<anonymous pipe>"
+        and filter::CheckWL_Specific_Only("MSDT_CVE_2022_30190", lower(event_src.host))
+    }
+    
+rule MSDT_CVE_2022_30190: Run_Msdt or Pipe_Created_By_Process
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Run_Msdt {
+        $run_msdt = true
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6    # Идентификатор сессии субъекта в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower($alert.key), "ms-msdt:.*?pcwdiagnostic", 0)
+        $alert.context = lower(subject.account.name)
+        
+        if $subject.account.name != null and $subject.account.name != $object.account.name then
+            $labels = $labels + "|subject_account_to_compromised_assets"
+        endif
+        $labels = $labels + "|object_account_to_compromised_assets"
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+    
+    on Pipe_Created_By_Process {
+        $pipe_created_by_process = true
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        $subject.process.id = subject.process.id
+        $subject.process.cmdline = subject.process.cmdline
+
+        $subject.process.parent.name = subject.process.parent.name
+        $subject.process.parent.path = subject.process.parent.path
+        $subject.process.parent.fullpath = subject.process.parent.fullpath
+        $subject.process.parent.guid = subject.process.parent.guid
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.parent.cmdline = subject.process.parent.cmdline
+        
+        $object.name = object.name
+        $object.type = object.type
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(event_src.host)
+        $alert.context = lower(join([subject.process.fullpath, object.name], "|"))
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit {
+    if $run_msdt then
+        $correlation_type = "incident"
+
+        $subject = "account"
+        $action = "start"
+        $object = "process"
+
+        $importance = "high"
+
+    elif $pipe_created_by_process then
+        $correlation_type = "event"
+
+        $subject = "process"
+        $action = "create"
+        $object = "resource"
+
+        $importance = "medium"
+    endif
+
+    $status = "success"
+
+    $detect = "CVE-2022-30190"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Trusted Developer Utilities Proxy Execution"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "Phishing"
+    $incident.aggregation.timeout = 2h
+}

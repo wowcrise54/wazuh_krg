@@ -1,0 +1,16 @@
+TEXT = 'O {WORD} {time=DATETIME}:{NUMBER} open client connection (lu={dst.hostname=HOSTNAME|STRING}{","?}
+        {"addr="dst.ip=IPV4","?} tp={object.value=UNTIL(",")} type={WORDDASH})'
+
+action = "open"
+object = "session"
+status = "ongoing"
+
+object.property = "transport control program (tp)"
+importance = "info"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.category = "Application server"
+event_src.subsys = "gateway log"
+
+id = "PT_SAP_SAP_AS_ABAP_Gateway_Log_filemonitor_Open_client_connection"

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>An untrusted user performed an operation with a critical database in VK Cloud.\nAttackers can bypass protection or gain persistence in the system by changing or deleting a critical database, or creating its backup or a new user in it. These operations allow attackers to access sensitive information stored in the database and use it to further compromise the system.</Description>
+  <EventDescriptions>
+    <EventDescription id="60852eb1-245c-7f3a-52de-ce1912906756">Untrusted user {subject.account.name} created user {object.account.name} for an instance of a critical database on host {event_src.host}</EventDescription>
+    <EventDescription id="93f21c83-044a-50ab-f1ba-c4db80ed9ffb">Untrusted user {subject.account.name} deleted an instance of a critical database on host {event_src.host}</EventDescription>
+    <EventDescription id="d5506f52-8316-92d3-2983-8c423e00e6a3">Untrusted user copied an instance of a critical database on host {event_src.host}</EventDescription>
+    <EventDescription id="e0186df9-58ee-66ed-fa26-3d6a67850881">Untrusted user {subject.account.name} changed an instance of a critical database on host {event_src.host}</EventDescription>
+    <EventDescription id="fdc140fd-6ef6-52ab-406b-bf5d338dd31c">Untrusted user {subject.account.name} copied an instance of a critical database on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

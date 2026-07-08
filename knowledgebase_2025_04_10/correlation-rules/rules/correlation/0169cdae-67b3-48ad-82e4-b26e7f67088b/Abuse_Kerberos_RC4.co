@@ -1,0 +1,137 @@
+event Logon_Without_PreAuth:
+    key:
+        event_src.host, src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4768"
+        and status == "success"
+        and reason == "0x0"
+        and logon_type == 0 # Logon without Pre-Authentication
+        and lower(datafield5) == "0xffffff80" # rc4-md4        
+    }
+
+event Standard_Auth:
+    key:
+        event_src.host, src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4768"
+        and status == "success"
+        and reason == "0x0"
+        and logon_type == 2 # Standard password authentication
+        and lower(datafield5) == "0xffffff80" # rc4-md4
+    }
+
+event Failed_Auth: # Неудачные попытки подбора байт
+    key:
+        event_src.host, src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4771"
+        and status == "failure"
+        and logon_type == 2 # Standard password authentication
+    }
+
+event Get_TGS: # Когда из TGT получаем TGS
+    key:
+        event_src.host, src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4769"
+        and status == "success"
+        and in_list(["0x17", "0x18", "0x1", "0x3"], lower(datafield2))
+        and filter::CheckWL_Specific_Only("Abuse_Kerberos_RC4", lower(join([src.host, subject.account.name, object.account.id], "|")))
+    }
+
+rule Abuse_Kerberos_RC4: (Logon_Without_PreAuth and Standard_Auth[5] and Failed_Auth+ and Get_TGS) timer 10s
+
+    init {
+        $labels = "w_auto" + "|CheckWL_Specific_Only"
+        $standard_auth_ticket_options = []
+        $failed_auth = 0
+    }
+    
+    on Logon_Without_PreAuth {
+        $subject.account.id = subject.account.id
+        
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.host = src.host
+        $src.asset = src.asset
+        
+        $step_1_full = datafield2 + " with TicketEncryptionType = " + datafield5 + " and TicketOptions = " + datafield8
+        $step_1 = "TGT request without Pre-Auth and RC4-MD4"
+    }
+    
+    on Standard_Auth {
+        if length($standard_auth_ticket_options) == 0 then $step_2_full = datafield2 + " (5 events) " endif
+        
+        if not in_list($standard_auth_ticket_options, datafield8) then 
+            $standard_auth_ticket_options = append($standard_auth_ticket_options, datafield8)
+        endif
+        
+        if $step_2 == null then $step_2 = "byte tempering" endif
+    }
+    
+    on Failed_Auth {
+        $failed_auth = $failed_auth + 1 # Исключительно для статистики
+    }
+    
+    on Get_TGS {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        
+        $logon_service = logon_service
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        
+        
+        $datafield2 = datafield2 # Тип шифрования (код)
+        $datafield5 = datafield5 # LogonGuid
+        $datafield6 = datafield6 # Тип шифрования (расшифровка для datafield2)
+        $datafield8 = datafield8 # TicketOptions
+        
+        $step_4_full = "Got TGS with TicketEncryptionType = " + $datafield6 + " and TicketOptions = " + $datafield8
+        $step_3 = $datafield6 + " TGS granted"
+    }
+    
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "access"
+    $object = "system"
+    $status = "success"
+
+    $detect = "CVE-2022-33679"
+
+    $importance = "medium"
+    
+    $alert.key = lower(join([$src.host, $subject.account.name, $object.account.id], "|"))
+    $alert.context = join([$step_1, $step_2, $step_3], " -> ")
+    
+    $step_2_full = $step_2_full + "with TicketOptions = " + join($standard_auth_ticket_options, ", ")
+    $step_3_full = "Failed attempts to auth = " + string($failed_auth)
+    $datafield9 = join([$step_1_full, $step_2_full, $step_3_full, $step_4_full], " | ")
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Steal or Forge Kerberos Tickets"
+    
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.category = "VulnerabilityExploitation"
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}    

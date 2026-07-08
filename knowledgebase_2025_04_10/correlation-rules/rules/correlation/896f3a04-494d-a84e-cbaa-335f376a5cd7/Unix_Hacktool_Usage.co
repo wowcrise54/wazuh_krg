@@ -1,0 +1,143 @@
+query Check_Hacktool($process, $commandline) from Unix_Hacktools {
+    tool == $process
+    or regex_match($commandline, column::cmdline)
+}
+
+query CheckTool_Qhandler($process, $commandline) from Unix_Hacktools {
+    tool == $process
+    or regex_match($commandline, column::cmdline)
+}
+    qhandler {
+        $tool = tool
+        $link = link
+        $description = description
+        $cmdline = cmdline
+        $event_type = event_type
+        $event_importance = event_importance
+    }
+    
+event Syscall_Execve_Run_Process:
+    key:
+        event_src.host, object.process.name, object.process.cmdline
+    filter {       
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and status == "success" 
+        and exec_query("Check_Hacktool", 
+            [
+                coalesce(lower(object.process.name), "*"),
+                coalesce(lower(object.process.cmdline), "*")
+            ]) 
+        and not in_list(
+                        ["grep", "wget", "sed", "snap", "curl", "chmod", 
+                        "whiptail", "stat", "cat", "chfn", "vi", "vim", "nano", 
+                        "chown"], 
+                        lower(object.process.name))
+        and not filter::Legitimate_Processes_Linux()
+        and filter::CheckWL_Linux_Process_Creation("Unix_Hacktool_Usage", lower(join([coalesce(subject.account.name, subject.account.id), object.process.name, object.process.cmdline], "|")))
+    }
+    
+rule Unix_Hacktool_Usage: Syscall_Execve_Run_Process
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Syscall_Execve_Run_Process {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+
+        $object.account.id = object.account.id
+        $object.account.domain = object.account.domain
+        $object.account.name = object.account.name
+        $object.account.group = object.account.group
+
+        $object.process.id = object.process.id
+        $object.process.parent.id = object.process.parent.id
+        $object.process.cwd = object.process.cwd
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+
+        $logon_service = logon_service
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), object.process.name, object.process.cmdline], "|"))
+
+        $result = exec_query("CheckTool_Qhandler",[
+            coalesce(lower(object.process.name), "*"),
+            coalesce(lower(object.process.cmdline), "*")
+        ])
+        
+        if lower($result["$tool"]) == lower(object.process.name) then
+            $reason = "binary_match"
+            $alert.context = object.process.name
+        else
+            $reason = "commandline_match"
+            $alert.regex_match = regex(lower(object.process.cmdline), $result["$cmdline"], 0)
+            $alert.context = join([$subject.account.name], " | ")
+        endif
+ 
+        $alert.context = join([$reason, $result["$description"], $alert.context], " | ")
+
+        if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+            $importance = $result["$event_importance"]
+        else
+            $importance = "medium"
+        endif
+        if in_list(["event", "incident"], lower($result["$event_type"])) then
+            $correlation_type = $result["$event_type"]
+        else
+            $correlation_type = "event"
+        endif
+
+        $datafield7 = $result["$description"] # Описание утилиты (применяется в локализации)
+
+        $alert.regex_match = replace(regex(lower(object.process.cmdline), $result["$cmdline"], 0), "", "[\n\t\r ]")
+        $external_link = $result["$link"]
+    }
+
+emit {
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

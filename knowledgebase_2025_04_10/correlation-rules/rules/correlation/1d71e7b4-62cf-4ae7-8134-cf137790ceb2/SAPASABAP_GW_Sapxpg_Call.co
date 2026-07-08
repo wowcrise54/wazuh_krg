@@ -1,0 +1,84 @@
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid
+    and (
+             group == "Production"
+             or group == "Test"
+             or group == "Development"
+        )
+}
+
+event Secinfo_Event:
+    key:
+        event_src.host, event_src.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and event_src.subsys == "gateway log"
+        and subject.name == "secinfo policy"
+        and lower(object.name) == "sapxpg"
+        and exec_query("SAP_Check_Groups", [event_src.id])
+        and filter::CheckWL_Specific_Only("SAPASABAP_GW_Sapxpg_Call", lower(join([event_src.id, src.host], "|")))
+    }
+
+rule SAPASABAP_GW_Sapxpg_Call: Secinfo_Event
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Secinfo_Event {
+        $action = action 
+
+        $subject.name = subject.name
+
+        $object.name = object.name
+        $object.type = object.type
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $alert.key = lower(join([event_src.id, src.host], "|"))
+        $alert.context = join([subject.name, object.name, event_src.id], " | ")
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $datafield1 = datafield1  # User
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "rule"
+    $object = "application"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id, $action], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

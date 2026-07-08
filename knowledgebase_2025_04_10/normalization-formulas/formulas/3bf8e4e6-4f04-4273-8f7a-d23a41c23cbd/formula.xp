@@ -1,0 +1,69 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           {subject.account.domain=user_domain},
+           {subject.account.name=user_name}
+           "
+
+COND = string($event_id) == "1270"
+       and (
+        $event_category == "Mandatory access control"
+        or $event_category == "Полномочное управление доступом"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+subject = "account"
+action = "modify"
+object = "file_object"
+status = "success"
+
+$strip_message = substr($event_message, find_substr($event_message, ".\n ") + 3, length($event_message))
+$kv_message = keyvalue($strip_message, "\n ", ": ", "")
+
+$process = coalesce($kv_message["Имя процесса"], $kv_message["Process name"])
+subject.process.fullpath = $process
+$csv_process = csv(subject.process.fullpath, "\\", "")
+subject.process.name = $csv_process[length($csv_process) - 1]
+if strip(subject.process.fullpath, "", subject.process.name) != '' then
+    subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+endif
+
+$resource = coalesce($kv_message["Имя ресурса"], $kv_message["Resource name"])
+$path_resource = substr($resource, 0, find_substr($resource, "\n "))
+object.fullpath = strip($path_resource, "", "\\")
+$csv_path = csv(object.fullpath, "\\", "")
+object.name = $csv_path[length($csv_path) - 1]
+if strip(object.fullpath, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+object.property = "confinential level"
+object.type = "file attribute"
+
+msgid = $event_id
+importance = "medium"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Полномочное управление доступом" then
+    event_src.subsys = "mandatory access control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1270_confidential_level_changed_for_resource"

@@ -1,0 +1,53 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        Vaultize - - [origin software= {datafield2=STRING} version= {datafield3=STRING} src= {src.ip=IPV4|src.ip=IPV6}]
+        [userid user= {$tmp_name=UNTIL("][")} client url=https:// {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}  {"/"?}
+        userAgent={datafield1=UNTIL("][")} path filename= {$tmp_folder=UNTIL("]")} SHARED FOLDER Created'
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "success"
+
+object.type = "shared directory"
+
+$csv = csv(replace($tmp_name,'|',' user=',0), "|","'")
+subject.id = $csv[0]
+subject.name = $csv[length($csv) - 1]
+
+$path_raw = csv(replace($tmp_folder,'|',' filename=',0), "|","'")[0]
+$path_delim_index = coalesce(find_substr($path_raw, "/"), find_substr($path_raw, "\\"))
+$path_delimeter = substr($path_raw, $path_delim_index, 1)
+$csv_path = csv($path_raw, $path_delimeter, "'")
+if length($csv_path) > 1 then
+    object.name = $csv_path[length($csv_path) - 1]
+    $object_path_raw = strip($path_raw, "", object.name)
+    $colon_pos = find_substr($object_path_raw, ":")
+    if $colon_pos != null then
+        object.path = substr($object_path_raw, $colon_pos + 1, length($object_path_raw) - $colon_pos - 1)
+    else
+        object.path = $object_path_raw
+    endif
+else
+    object.name = $path_raw
+endif
+
+# datafield1 - user agent
+# datafield2 - application name
+# datafield3 - application version
+$tmp_usr_name = substr($tmp_name, length(subject.id) + 6, length($tmp_name) - length(subject.id) - length(subject.name) - 12)
+datafield4 = replace($tmp_usr_name,',',' user=', 0)  # users ids for shared folder
+
+importance = "info"
+
+event_src.vendor = "vaultize_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vdr"
+event_src.category = "Application server"
+
+id = "PT_Vaultize_Technologies_VDR_syslog_shared_folder_created"

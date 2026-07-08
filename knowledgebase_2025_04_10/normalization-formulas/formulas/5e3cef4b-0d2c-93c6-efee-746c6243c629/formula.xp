@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{WORDDASH}|{$kv=KEYVALUE(" ", "=", "~")}'
+                
+COND = $tmp_subsys == "SmartEvent Client"
+       and $kv["msg"] == "Reports Update Web updates"
+       and $kv["outcome"] == "Started"
+ 
+subject = "application" 
+action = "update"
+object = "report"
+status = "ongoing"
+
+subject.application.name = $kv["product"]
+
+object.name = "Reports Update"
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+msgid = $kv["msg"]
+importance = "info"
+
+# имя и домен SIC шлюза безопасности, сгенерировавшего лог
+datafield8 = $kv["originsicname"]
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.ip = $kv["origin"]
+event_src.title = "smartevent_client"
+event_src.category = "Host security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_Log_Exporter_CEF_SmartEvent_Client_Update_reports"

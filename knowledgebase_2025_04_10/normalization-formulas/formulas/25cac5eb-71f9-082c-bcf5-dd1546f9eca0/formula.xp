@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME?} {event_src.hostname=HOSTNAME?} {event_src.subsys=STRING?} 
+        {$raw_time=STRING+} {$timestamp=STRING} WARN {msgid="Login error"}: 
+        {reason=UNTIL(" for")|$reason_1 = "user"} {subject.account.name=WORD}{"@"subject.account.domain=UNTIL("|||")?}
+        {$reason_2 = "is not found"|subject.account.id=UNTIL("|||")|} {$kv=KEYVALUE(";", "=", "\\"")}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subject.account.id = strip(subject.account.id,"(",")")
+
+object.process.id = $kv["@pid"]
+
+src.ip = $kv["ClientIp"]
+
+if $reason_1 != null then
+    reason = $reason_1 + ' ' + $reason_2
+endif
+reason = strip(reason, ".", ".")
+
+time = maybe_datetime($raw_time + $timestamp)
+importance = "low"
+
+category.high = "Access Management"
+category.generic = "Application"
+category.low = "Communication"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "iam"
+event_src.category = "AAA"
+
+id = "PT_Positive_Technologies_iam_filemonitor_login_error"

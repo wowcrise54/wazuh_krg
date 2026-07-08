@@ -1,0 +1,31 @@
+EVENTLOG = ''
+COND = $Channel=="DNS Server" and $Provider["Name"]=="Microsoft-Windows-DNS-Server-Service" 
+       and ($EventID["text"]=="7678" or $EventID=="7678")
+
+action = "info"
+object = "service"
+status = "success"
+
+object.name = "DNS Server"
+
+datafield1 = $Data["param1"]
+datafield2 = $Data["param2"]
+
+msgid = "7678"
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "DNS server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_7678_dns_server_is_no_longer_signed_with_dnssec"

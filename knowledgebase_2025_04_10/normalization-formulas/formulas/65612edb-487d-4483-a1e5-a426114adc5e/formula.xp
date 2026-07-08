@@ -1,0 +1,54 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME}
+        PTAF ALERT status={$state="finished"|$state="ongoing"} Data: {$kv=KEYVALUE(";","=")}'
+
+COND = coalesce($kv['correlation.id'], $kv['correlation_id']) != null
+
+subject = "rule"
+
+if find_substr(strip(coalesce($kv['alert.name'], $kv['alert_name']),"\"","\""), "[#]") != null then
+    action = "deny"
+else
+    action = "detect"
+endif
+
+object = "alert"
+status = "success"
+
+subject.type = "correlation"
+$pos = find_substr(coalesce($kv['correlation.id'], $kv['correlation_id']), ':')
+if $pos != null then
+    subject.id = substr(coalesce($kv['correlation.id'], $kv['correlation_id']), 0, $pos)
+else
+    subject.id = coalesce($kv['correlation.id'], $kv['correlation_id'])
+endif
+subject.name = replace(strip(coalesce($kv['alert.name'], $kv['alert_name']),"\"","\""), "", "\[*\] ")
+
+dst.fqdn = csv(coalesce($kv['correlation.id'], $kv['correlation_id']), ":", "")[1] # имя атакованного сайта
+if dst.fqdn == "Seek & Destroy" then dst.fqdn = null endif
+src.ip = csv(coalesce($kv['correlation.id'], $kv['correlation_id']), ":", "")[2] # адрес клиента
+
+object.state = $state
+
+reason = coalesce($kv['alert.description'], $kv['alert_description'])
+
+if $state == "ongoing" then
+    importance = "high"
+else
+    importance = "medium"
+endif
+
+event_src.title = "application_firewall"
+event_src.vendor = "positive_technologies"
+event_src.category = "Application security"
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($hostname)
+        event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+    else
+        event_src.hostname = lower($hostname)
+    endif
+endif
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_Alert"

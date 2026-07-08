@@ -1,0 +1,67 @@
+TABULAR = '{msgid=auditType_actionI18nKey},
+           author_id,
+           author_name,
+           author_type,
+           affectedObjects,
+           changedValues,
+           extraAttributes,
+           timestamp_epochSecond'
+
+COND = in_list([
+            "audit.logging.summary.group.created",
+            "audit.logging.summary.group.deleted",
+            "audit.logging.summary.group.membership.added",
+            "audit.logging.summary.group.membership.removed"
+       ], $auditType_actionI18nKey)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subject = switch $author_type
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = switch strip(msgid, "audit.logging.summary.group.", "")
+    case "created" "create"
+    case "deleted" "remove"
+    case "membership.added" "modify"
+    case "membership.removed" "modify"
+endswitch
+
+object = "user_group"
+status = "success"
+
+if $author_type == "user" then
+    subject.account.fullname = $author_name
+    subject.account.id = $author_id
+endif
+
+submessage("JSON", "parse_json", '{"affectedObjects_json": ' + $affectedObjects + '}')
+object.name = $affectedObjects_json[0]["name"]
+object.id = $affectedObjects_json[0]["id"]
+
+switch strip(msgid, "audit.logging.summary.group.membership.", "")
+    case "added"
+        object.property = "added_user"
+        object.new_value = $affectedObjects_json[1]["name"]
+    case "removed"
+        object.property = "removed_user"
+        object.value = $affectedObjects_json[1]["name"]
+endswitch
+
+src.ip = $source
+
+time = epoch_to_datetime($timestamp_epochSecond)
+importance = "info"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "atlassian"
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_odbc_Audit_Group_Management"

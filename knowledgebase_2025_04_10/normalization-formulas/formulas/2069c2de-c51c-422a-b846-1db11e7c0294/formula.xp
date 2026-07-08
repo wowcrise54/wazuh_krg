@@ -1,0 +1,75 @@
+TABULAR = ".1.3.6.1.2.1.1.3.0,
+        .1.3.6.1.6.3.1.1.4.1.0"
+
+# .1.3.6.1.4.1.9.9.383.0.2 - ciscoCidsError
+COND = $[".1.3.6.1.6.3.1.1.4.1.0"] == ".1.3.6.1.4.1.9.9.383.0.2"
+
+subject = "system"
+action = "info"
+object = "alert"
+status = "success"
+
+# check for IPS version
+$ips_major_version = 6
+if $[".1.3.6.1.4.1.9.9.383.1.1.2.0"] != null then
+    $ips_major_version = 7
+endif
+
+object.type = if $ips_major_version == 6 then $[".1.3.6.1.4.1.9.9.383.1.3.1"] else $[".1.3.6.1.4.1.9.9.383.1.3.1.0"] endif
+object.property = "class"
+$object_value = if $ips_major_version == 6 then $[".1.3.6.1.4.1.9.9.383.1.3.2"] else $[".1.3.6.1.4.1.9.9.383.1.3.2.0"] endif
+object.value = switch $object_value
+    case "1" "AuthenticationTokenExpired"
+    case "2" "ConfigCollision"
+    case "3" "InUse"
+    case "4" "InvalidDocument"
+    case "5" "LimitExceeded"
+    case "6" "NotAvailable"
+    case "7" "NotFound"
+    case "8" "NotSupported"
+    case "9" "PermissionDenied"
+    case "10" "Syslog"
+    case "11" "SystemError"
+    case "12" "Transport"
+    case "13" "UnacceptableValue"
+    case "14" "Unclassified"
+    case "15" "Warning"
+    case "16" "EngineBuildFailed"
+endswitch
+
+reason = strip($[".1.3.6.1.4.1.9.9.383.1.3.3"], "", ".")
+
+msgid = "ciscoCidsError"
+
+# time parsing
+$time_raw = if $ips_major_version == 6 then $[".1.3.6.1.4.1.9.9.383.1.1.3"] else $[".1.3.6.1.4.1.9.9.383.1.1.3.0"] endif
+$time_year = string(number16(substr($time_raw, 0, 2) + substr($time_raw, 3, 2)))
+$time_month = string(number16(substr($time_raw, 6, 2)))
+$time_month = if length($time_month) == 1 then "0" + $time_month else $time_month endif
+$time_day = string(number16(substr($time_raw, 9, 2)))
+$time_day = if length($time_day) == 1 then "0" + $time_day else $time_day endif
+$time_hour = string(number16(substr($time_raw, 12, 2)))
+$time_hour = if length($time_hour) == 1 then "0" + $time_hour else $time_hour endif
+$time_min = string(number16(substr($time_raw, 15, 2)))
+$time_min = if length($time_min) == 1 then "0" + $time_min else $time_min endif
+$time_sec = string(number16(substr($time_raw, 18, 2)))
+$time_sec = if length($time_sec) == 1 then "0" + $time_sec else $time_sec endif
+time = $time_year + "-" + $time_month + "-" + $time_day + "T" + $time_hour + ":" + $time_min + ":" + $time_sec
+
+$severity = if $ips_major_version == 6 then $[".1.3.6.1.4.1.9.9.383.1.3.1"] else $[".1.3.6.1.4.1.9.9.383.1.3.1.0"] endif
+importance = switch $severity
+    case "informational" "info"
+    case "low" "low"
+    case "warning" "low"
+    case "medium" "medium"
+    case "error" "medium"
+    case "high" "high"
+    case "fatal" "high"
+endswitch
+
+event_src.vendor = "cisco"
+event_src.title = "ips"
+event_src.hostname = if $ips_major_version == 6 then $[".1.3.6.1.4.1.9.9.383.1.1.4"] else $[".1.3.6.1.4.1.9.9.383.1.1.4.0"] endif
+event_src.category = "IDS/IPS"
+
+id = "PT_Cisco_IPS_snmp_Error"

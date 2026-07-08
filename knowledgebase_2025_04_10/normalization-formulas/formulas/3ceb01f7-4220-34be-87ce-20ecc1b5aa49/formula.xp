@@ -1,0 +1,51 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{WORDDASH}|{$kv=KEYVALUE(" ", "=", "~")}'
+                
+COND = $tmp_subsys == "System Monitor"
+       and $kv["sensor_alert_source"] != null
+       and $kv["sensor_alert_title"] == "Process High CPU rate"
+
+subject = "application"
+action = "alert"
+object = "system"
+status = "success"
+
+subject.application.name = $kv["product"]
+
+object.name = "CPU rate"
+
+reason = $kv["sensor_alert_title"]
+
+# Подробности относящиеся к предупреждению
+datafield1 = $kv["sensor_alert_message"]
+# Продолжительность события 
+datafield2 = $kv["sensor_alert_duration"]
+
+src.hostname = $kv["sensor_alert_source"]
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+$cp_severity = $kv["cp_severity"]
+if ($cp_severity != null) then
+    importance = switch lower($cp_severity)
+        case "unknown" "info"
+        case "very low" "info"
+        case "very-low" "info"
+        case "low" "low"
+        case "medium" "medium"
+        case "high" "high"
+        case "very high" "high"
+        case "very-high" "high"
+        case "critical" "high"
+    endswitch
+else
+    importance = "low"
+endif
+
+event_src.ip = $kv["origin"]
+event_src.vendor = "checkpoint"
+event_src.title = "system_monitor"
+event_src.category = "Host security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Endpoint_Security_Client_syslog_Log_Exporter_CEF_System_Monitor_CPU_usage_alert"

@@ -1,0 +1,61 @@
+!TABULAR = "{object.name = Name},
+           {datafield1 = NameRoom},
+           {$state = opis},
+           {$tm = curdate}"
+
+!COND = $opis == "вход" or $opis == "выход"
+
+action = "info"
+object = "account"
+status = "success"
+
+# datafield1 - entry point
+if $state == "вход" then
+    object.state  = "enter"
+else
+    object.state = "exit"
+endif
+
+submessage ("TEXT","date",$tm)
+
+subformula "date"
+    TEXT =  '{$day=NUMBER}.{$mon=NUMBER}.{$year=NUMBER} {$h=NUMBER}:{$m=NUMBER}:{$s=NUMBER}'
+
+$ds = string($day)
+$ms = string($mon)
+$ys = string($year)
+$hs = string($h)
+$mis = string($m)
+$ss = string($s)
+if length($ms) == 1 then
+        $mms = "0"+ $ms else
+        $mms = $ms
+endif
+if length($ds) == 1 then
+        $dds = "0"+ $ds else
+        $dds = $ds
+endif
+if length($mis) == 1 then
+        $mmis = "0"+ $mis else
+        $mmis = $mis
+endif
+if length($hs) == 1 then
+        $hhs = "0"+ $hs else
+        $hhs = $hs
+endif
+if length($ss) == 1 then
+        $sss = "0"+ $ss else
+        $sss = $ss
+endif
+
+time = $mms+"/"+$dds+"/"+$ys+" "+$hhs+":"+$mmis+":"+$sss
+
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "shs_group"
+event_src.title = "shs_office"
+event_src.category = "Physical security"
+
+id = "PT_Shs_group_Shs_office_syslog_User_login_logout"

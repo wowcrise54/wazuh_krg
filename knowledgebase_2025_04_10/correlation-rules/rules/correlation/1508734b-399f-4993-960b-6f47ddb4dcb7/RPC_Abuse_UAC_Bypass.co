@@ -1,0 +1,103 @@
+event Limited_To_Full_Token:
+    key:
+        event_src.host, subject.account.session_id, object.account.session_id, object.process.fullpath
+    filter {
+        correlation_name == "Subrule_Full_Elevation_Token_Steal"
+    }
+
+event Bypassed_Process_Started:
+    key:
+        event_src.host, subject.account.session_id, object.account.session_id, object.process.parent.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4688"
+        and lower(subject.account.privileges) == "tokenelevationtypefull"
+        and subject.account.session_id != object.account.session_id
+        and subject.account.session_id != "999"
+        and filter::CheckWL_Process_Creation("RPC_Abuse_UAC_Bypass", join([lower(subject.account.name), lower(object.process.parent.name), lower(object.process.cmdline)], "|"))
+    }
+
+rule RPC_Abuse_UAC_Bypass: Limited_To_Full_Token and Bypassed_Process_Started with different object.process.parent.id within 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Limited_To_Full_Token {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.cmdline = subject.process.cmdline
+        
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.parent.name = subject.process.parent.name
+        $subject.process.parent.path = subject.process.parent.path
+        $subject.process.parent.fullpath = subject.process.parent.fullpath
+        $subject.process.parent.cmdline = subject.process.parent.cmdline
+
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $alert.context = $subject.process.name + " | TokenElevationTypeLimited -> TokenElevationTypeFull"
+
+        if alert.context != null then
+            $alert.context = $alert.context  + " | " + alert.context
+        endif
+    }
+
+    on Bypassed_Process_Started {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $alert.key = join([lower(subject.account.name), lower(object.process.parent.name), lower(object.process.cmdline)], "|")
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Abuse Elevation Control Mechanism: Bypass User Account Control"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

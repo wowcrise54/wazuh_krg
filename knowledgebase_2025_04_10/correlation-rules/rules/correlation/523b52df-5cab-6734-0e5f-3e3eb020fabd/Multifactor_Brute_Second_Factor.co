@@ -1,0 +1,177 @@
+# Запрос второго фактора
+event Second_Factor_Request:
+    key:
+        subject.account.name,       # Логин пользователя
+        external_src.ip             # Внешний адрес
+    filter {
+        filter::NotFromCorrelator()
+        and action == "send"
+        and object == "request"
+        and status == "success"
+        and reason == "Authentication request"
+        # Если к MFA обращаются внутренние сервисы, например, для проверки доступности.
+        and external_src.ip != null
+        and lower(event_src.title) == "multifactor"
+        and filter::CheckWL_External_Connection(
+            "Multifactor_Brute_Second_Factor", 
+            lower(join([subject.account.contact, external_src.ip], "|"))
+        )
+    }
+
+# Проверка второго фактора прошла успешно
+event Verified_Successfully:
+    key:
+        object.account.name,    # Логин пользователя
+        external_src.ip         # Внешний адрес
+    filter {
+        filter::NotFromCorrelator()
+        and action == "validate"
+        and object == "request"
+        and datafield18 == "success"
+        and object.type == "2FA authentication"
+        and lower(event_src.title) == "multifactor"
+    }
+
+# Получение адреса от VPN
+event Getting_Ip_Address:
+    key:
+        object.account.name,    # Логин пользователя
+        src.ip                  # Внешний адрес
+    filter {
+        filter::NotFromCorrelator()
+        and filter::AuthVPN()
+        and action == "assign"
+        and object == "ip_address"
+        and status == "success"
+    }
+
+rule Multifactor_Brute_Second_Factor: (Second_Factor_Request[10, ] -> Verified_Successfully? -> Getting_Ip_Address?) timer 5m
+
+    init {
+        $labels = "CheckWL_External_Connection"
+        $first_second_factor_request = true
+    }
+
+    on Second_Factor_Request {
+        if $first_second_factor_request then
+
+            $subject.account.contact = subject.account.contact      # sivanov@example.com
+            $subject.account.name = subject.account.name            # Sergey Ivanov
+            $subject.account.fullname = subject.account.fullname    # sivanov
+
+            $logon_service = logon_service
+
+            # Идентификатор сессии пользователя
+            $chain_id = chain_id 
+
+            $external_src.fqdn = external_src.fqdn
+            $external_src.geo.asn = external_src.geo.asn
+            $external_src.geo.city = external_src.geo.city
+            $external_src.geo.country = external_src.geo.country
+            $external_src.geo.org = external_src.geo.org
+            $external_src.host = external_src.host
+            $external_src.hostname = external_src.hostname
+            $external_src.ip = external_src.ip
+
+            # Хост RADIUS-адаптера
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $first_second_factor_request = false
+
+            $reason = "second factor requests"
+
+            $alert.key = lower(join([subject.account.contact, external_src.ip], "|"))
+
+            # Подсчёт количество попыток запросить второй фактор
+            $count.subevents = 1
+        else
+            $count.subevents = $count.subevents + 1
+        endif
+    }
+
+    on Verified_Successfully {
+        $verified_successfully = true
+
+        $external_src.fqdn = external_src.fqdn
+        $external_src.geo.asn = external_src.geo.asn
+        $external_src.geo.city = external_src.geo.city
+        $external_src.geo.country = external_src.geo.country
+        $external_src.geo.org = external_src.geo.org
+        $external_src.host = external_src.host
+        $external_src.hostname = external_src.hostname
+        $external_src.ip = external_src.ip
+
+        $datafield4 = datafield2 # MobileApp
+        $datafield17 = datafield17 # Локация
+
+        $reason = "second factor requests verified successfully"
+    }
+
+    on Getting_Ip_Address {
+        $datafield1 = datafield1 # Логин пользователя
+        $datafield2 = datafield2 # ovpn
+        $datafield3 = datafield3 # Полученный внутренний адрес
+
+        $assigned_src_ip = assigned_src_ip
+
+        # Логин
+        $object.account.name = object.account.name
+
+        # Переписываем адрес сервера MFA, если смогли получить IP от VPN
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        # Переписываем хост MFA хостом VPN
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $reason = "second factor request accepted and internal address received"
+    }
+
+    emit {
+
+        if $verified_successfully then 
+            $correlation_type = "incident"
+            $importance = "medium"
+
+            $status = "success"
+        else
+            $correlation_type = "event"
+            $importance = "medium"
+            
+            $status = "failure"
+        endif
+
+        $subject = "account"
+        $action = "send"
+        $object = "request"
+
+        $category.generic = "Attack"
+        $category.high = "Credential Access"
+        $category.low = "Modify Authentication Process: Multi-Factor Authentication"
+        
+        $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+        $incident.severity = $importance
+        $incident.category = "Undefined"
+        $incident.aggregation.timeout = 2h
+    }

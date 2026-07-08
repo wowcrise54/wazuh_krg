@@ -1,0 +1,52 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+         CEF:{NUMBER}|Cyber-Ark|Vault|10.{NUMBER}.{NUMBER}|{msgid="378"}|PSM Secure Connect Session Start|
+         {NUMBER}|{$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+action = "start"
+object = "session"
+status = "success"
+
+subject.name = $kv["suser"]
+
+if maybe_ipv4($kv["shost"]) != null or maybe_ipv6($kv["shost"]) != null then
+    if $kv["shost"] != "0.0.0.0" and $kv["shost"] != "::" then
+        src.ip = $kv["shost"]
+    endif
+else
+    src.hostname = $kv["shost"]
+endif
+if maybe_ipv4($kv["dhost"]) != null or maybe_ipv6($kv["dhost"]) != null then
+    if $kv["dhost"] != "0.0.0.0" and $kv["dhost"] != "::" then
+        dst.ip = $kv["dhost"]
+    endif
+else
+    dst.hostname = $kv["dhost"]
+endif
+
+datafield1 = $kv["externalId"]      # ID сессии
+datafield2 = $kv["fname"]           # Расположение базы с паролем для учетной записи пользователя
+datafield3 = $kv["app"]             # протокол подключения
+$temp_duser = csv($kv["duser"], "\\", ' ')
+if length($temp_duser) == 2 then
+    datafield4 = $temp_duser[0]     # домен учетной записи под который пользователь запускает сессию
+    datafield5 = $temp_duser[1]     # логин учетной записи под который пользователь запускает сессию
+else
+    datafield5 = $kv["duser"]
+endif
+
+importance = "info"
+
+event_src.vendor = "cyberark"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "enterprise_password_vault"
+event_src.subsys = "privileged session manager"
+event_src.category = "Other"
+
+id = "PT_CyberArk_Enterprise_Password_Vault_syslog_CEF_378_PSM_secure_connect_session_start"

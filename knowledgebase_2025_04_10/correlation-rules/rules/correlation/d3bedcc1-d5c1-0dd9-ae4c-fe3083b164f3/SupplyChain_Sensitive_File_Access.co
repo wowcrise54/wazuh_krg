@@ -1,0 +1,209 @@
+query IsArtifactoryServer($asset, $host) from SupplyChain_Artifactory_Repositories_And_Addresses {
+    (
+     column::src_asset == $asset 
+     or (
+         column::src_asset == null
+         and column::src_host == $host
+     )
+    )
+}
+
+
+event Sensitive_File_Access:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "unix_like"
+        and event_src.subsys == "auditd"
+        and in_list(["modify", "move", "rename", "access"], action)
+        and in_list(["resource", "file", "link", "file_object"], object)
+        and status == "success"
+        and (
+             regex(lower(object.fullpath), "/etc/security/(?:artifactory|master|join)\.key$", 0) != null
+             or regex(lower(object.fullpath), "/etc/artifactory/security/(?:artifactory\.key|access/(?:access\.admin\.token|keys/.*))$", 0) != null
+             or regex(lower(object.fullpath), "/etc/artifactory\.config\.latest\.xml$", 0) != null
+        )
+        and exec_query("IsArtifactoryServer", [event_src.asset, event_src.host])
+        and filter::CheckWL_Linux_File_Operations("SupplyChain_Sensitive_File_Access", lower(object.fullpath))
+    }
+
+event Build_Config_Modify:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "unix_like"
+        and event_src.subsys == "auditd"
+        and in_list(["modify", "move", "rename", "access"], action)
+        and in_list(["resource", "file", "link", "file_object"], object)
+        and in_list(["w", "rw"], object.state)
+        and status == "success"
+        and subject.process.name != "java"
+        and regex(lower(object.fullpath), "/config/projects/(?:[^/]*/)*?(buildtypes|vcsroots)/.*?\.xml", 0) != null
+        and filter::CheckWL_Linux_File_Operations("SupplyChain_Sensitive_File_Access", lower(join([subject.process.meta, object.name], "|")))
+    }
+
+
+rule SupplyChain_Sensitive_File_Access: Sensitive_File_Access or Build_Config_Modify
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+    }
+
+    on Sensitive_File_Access {
+        $object = object
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+
+        $subject.process.parent.id = subject.process.parent.id
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.group = object.account.group
+        $object.account.session_id = object.account.session_id
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.state = object.state
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+        $datafield4 = "artifactory"
+
+        $numfield2 = $numfield2   # Owner User ID
+
+        $chain_id = chain_id
+        $reason = reason
+
+        $alert.key = lower(object.fullpath)
+        $alert.context = join(remove([subject.account.name, subject.account.privileges], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on Build_Config_Modify {
+        $object = object
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+
+        $subject.process.parent.id = subject.process.parent.id
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.group = object.account.group
+        $object.account.session_id = object.account.session_id
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.state = object.state
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+        $datafield4 = "teamcity"
+
+        $numfield2 = $numfield2   # Owner User ID
+
+        $chain_id = chain_id
+        $reason = reason
+
+        $alert.key = lower(join([subject.process.meta, object.name], "|"))
+        $alert.context = join(remove([subject.account.name, subject.account.privileges], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $status = "success"
+    
+    $category.generic = "Attack"
+
+    switch $datafield4
+        case "artifactory"
+            $importance = "low"
+
+            $category.high = "Collection"
+            $category.low = "Data from Local System"
+            
+            $incident.category = "UnauthorizedAccess"
+        case "teamcity"
+            $importance = "high"
+
+            $category.high = "Impact"
+            $category.low = "Data Manipulation: Stored Data Manipulation"
+            
+            $incident.category = "UnauthorizedDataChange"
+    endswitch
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

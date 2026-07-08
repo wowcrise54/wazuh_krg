@@ -1,0 +1,131 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} api_json.log: {$json=REST}'
+COND = find_substr($json, '"method":"POST"') != null
+       and (
+           find_substr($json, '"route":"/api/:version/groups/:id/invitations"') != null
+           or find_substr($json, '"route":"/api/:version/groups/:id/share"') != null
+       )
+
+subject = "account"
+action = "modify"
+object = "resource"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_path"
+    TEXT = '/api/v{NUMBER}/groups/{$group_id=NUMBER|$group_fullpath=LITERAL+}/{"invitations"|"share"}'
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+submessage("TEXT", "parse_path", $path)
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+object.type = "group"
+object.id = $group_id
+
+$group_fullpath = replace($group_fullpath, "/", "%2F")
+$group_list = csv($group_fullpath, "/", "'")
+$group_name = $group_list[length($group_list)-1]
+$group_path = strip($group_fullpath, "", "/" + $group_name)
+
+object.storage.fullpath = $group_fullpath
+object.storage.path = if $group_path != "" then $group_path else null endif
+object.storage.name = $group_name
+
+# Объект-пользователь
+$s_access_level = find_substr($json, '{"key":"access_level","value":')
+$e_access_level = find_substr(substr($json, $s_access_level, length($json)), '}')
+$access_level = substr($json, $s_access_level + 30, $e_access_level - 30)
+$access_level = if length($access_level) != 0 then $access_level else null endif
+
+# Объект-группа
+$s_group_access = find_substr($json, '{"key":"group_access","value":')
+$e_group_access = find_substr(substr($json, $s_group_access, length($json)), '}')
+$group_access = substr($json, $s_group_access + 30, $e_group_access - 30)
+$group_access = if length($group_access) != 0 then $group_access else null endif
+
+$obj_access_level = switch strip(coalesce($access_level, $group_access), '"', '"')
+    case "0"  "no_access"
+    case "5"  "minimal_access"
+    case "10" "guest"
+    case "20" "reporter"
+    case "30" "developer"
+    case "40" "maintainer"
+    case "50" "owner"
+endswitch
+
+# По ID пользователя
+$s_user_id = find_substr($json, '{"key":"user_id","value":')
+$e_user_id = find_substr(substr($json, $s_user_id, length($json)), '}')
+$user_id = substr($json, $s_user_id + 25, $e_user_id - 25)
+$user_id = if length($user_id) != 0 then $user_id else null endif
+
+# По Email пользователей
+$s_email = find_substr($json, '{"key":"email","value":')
+$e_email = find_substr(substr($json, $s_email, length($json)), '}')
+$email = substr($json, $s_email + 23, $e_email - 23)
+$email = if length($email) != 0 then $email else null endif
+
+$s_group_id = find_substr($json, '{"key":"group_id","value":')
+$e_group_id = find_substr(substr($json, $s_group_id, length($json)), '}')
+$group_id = substr($json, $s_group_id + 26, $e_group_id - 26)
+$group_id = if length($group_id) != 0 then $group_id else null endif
+
+$obj_property = "invited_"
+
+switch strip($route, "/api/:version/groups/:id/", "")
+    case "invitations" 
+        if $user_id != null then
+            $obj_property = $obj_property + "user_ids | access_level"
+            $obj_new_value = strip($user_id, '"', '"') + " | " + $obj_access_level
+        elif $email != null then
+            $obj_property = $obj_property + "emails | access_level"
+            $obj_new_value = strip($email, '"', '"') + " | " + $obj_access_level
+        endif
+        external_link = "https://docs.gitlab.com/ee/api/invitations.html#add-a-member-to-a-group-or-project"
+    case "share"
+        $obj_property = $obj_property + "group_id | access_level"
+        $obj_new_value = strip($group_id, '"', '"') + " | " + $obj_access_level
+        external_link = "https://docs.gitlab.com/ee/api/projects.html#share-project-with-group"
+endswitch
+
+object.property = $obj_property
+object.new_value = $obj_new_value
+
+src.ip = $['meta.remote_ip']
+
+datafield2 = $group_name  # Namespace Name
+
+numfield2 = $group_id  # Namespace ID
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "api"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_API_JSON_Group_Invitation"

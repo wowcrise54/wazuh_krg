@@ -1,0 +1,47 @@
+JSON = 'visit.entryPage'
+COND = $request == null and $SIEMAdditionalInfo["siteName"] != null
+
+subject = "application"
+action = "access"
+object = "resource"
+status = "success"
+
+submessage("TEXT", "parse_entryPage", $visit["entryPage"])
+
+subject.name = $visit["clientApplication"]
+subject.type = $visit["clientType"]
+
+# get the request data
+subformula "parse_entryPage"
+    TEXT = "{object.value=WORD} {object.path=REST}"
+    object.property = "method"
+endsubformula
+
+src.ip = $visit["clientIPs"][0]
+
+# protocol version
+if $visit["httpVersion"] != null and $visit["httpVersion"] != "" then
+    datafield1 = $visit["httpVersion"]
+endif
+
+# useragent
+if $visit["userAgent"] != null and $visit["userAgent"] != "" then
+    datafield2 = $visit["userAgent"]
+endif
+
+# referer
+if $visit["entryReferer"] != null and $visit["entryReferer"] != "" then
+    datafield3 = $visit["entryReferer"]
+endif
+
+time = epoch_ms_to_datetime($visit["startTime"])
+
+importance = "info"
+
+event_src.vendor = "imperva"
+event_src.title = "incapsula"
+event_src.hostname = $SIEMAdditionalInfo["siteName"]
+event_src.ip = $SIEMAdditionalInfo["siteIPs"][0]
+event_src.category = "Web security"
+
+id = "PT_Imperva_Incapsula_customeventcollector_resource_access_success_simple"

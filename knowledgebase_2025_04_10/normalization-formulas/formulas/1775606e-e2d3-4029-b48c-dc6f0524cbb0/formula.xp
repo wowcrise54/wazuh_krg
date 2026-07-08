@@ -1,0 +1,34 @@
+EVENTLOG = ''
+COND = $Channel=="DNS Server" and $Provider["Name"]=="Microsoft-Windows-DNS-Server-Service" 
+       and ($EventID["text"]=="5505" or $EventID=="5505")
+
+action = "validate"
+object = "message"
+status = "failure"
+
+object.name = "DNS Server"
+
+src.ip = $Data["param1"]
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    dst.fqdn = lower($Computer)
+    dst.hostname = lower(substr($Computer, 0, $dot_pos))
+else
+    dst.hostname = lower($Computer)
+endif
+
+direction = "ingress"
+
+msgid = "5505"
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.fqdn = dst.fqdn
+event_src.hostname = dst.hostname
+event_src.category = "DNS server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_5505_dns_server_domain_name_exceeding_maximum_length_in_packet"

@@ -1,0 +1,50 @@
+EVENTLOG = 'EventID.text="13509"'
+COND =  $Channel == "File Replication Service"
+        and $Provider["Name"] == "NtFrs"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+subject = "application"
+subject.name = "File Replication Service"
+action = "allow"
+object = "process"
+status = "success"
+
+object.type = "replication"
+object.path = lower($Data[2])
+
+$dot_pos = find_substr($Data[0], '.')
+
+if $dot_pos != null then
+	src.fqdn = lower($Data[0])
+	src.hostname = lower(substr($Data[0], 0, $dot_pos))
+else
+	src.hostname = lower($Data[0])
+endif
+
+$dot_pos = find_substr($Data[1], '.')
+
+if $dot_pos != null then
+	dst.fqdn = lower($Data[1])
+	dst.hostname = lower(substr($Data[1], 0, $dot_pos))
+else
+	dst.hostname = lower($Data[1])
+endif
+
+importance = "medium"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Server_Roles_AD_FRS_13509_replication_allowed"

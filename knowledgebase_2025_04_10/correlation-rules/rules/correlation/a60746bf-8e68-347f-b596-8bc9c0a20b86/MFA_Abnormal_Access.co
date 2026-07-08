@@ -1,0 +1,211 @@
+# Проверяем режим сбора профиля и работы правила
+query AutoProfile($rule) from Auto_Profile {
+    rule == $rule
+}
+
+# Сверка с профилем
+query CheckAuthMethod($login, $auth_method, $title) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $login
+    and dst_path == $auth_method
+}
+
+# Проверяем, есть ли такой девайс у пользователя
+query CheckAuthDevice($login, $device, $title) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $login
+    and additional_data == $device
+}
+
+# Проверяем, есть ли такая связка по гео данным
+query CheckCountry($login, $geo, $title) from Risk_User_Logon_Correlation_Profile {
+    login == $login
+    and src_host == $geo
+    and access_type == $title
+}
+
+# Проверяем, есть ли вообще в профиле такой пользователь
+query CheckUsername($login, $title) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $login
+}
+
+query CheckProfile($title, $login, $auth_method, $device, $dst_host, $geo) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $login
+    and dst_path == $auth_method
+    and additional_data == $device
+    and dst_host == $dst_host
+    and src_host == $geo
+}
+
+event Anomaly_MFA_Device:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and action == "receive"
+        and status == "success"
+        and object.account.name != null
+        and external_src.ip != null
+        and event_src.title == "multifactor"
+        and object == "request"
+        and find_substr(lower(object.type),"response") != null
+        and datafield5 != null
+        # Сверка с профилем
+        and not filter::Check_Profile(
+                event_src.title,
+                lower(object.account.name),
+                null, # Не передаем тут ip, нам важно устройство
+                lower(external_src.geo.city + "|" + external_src.geo.country), # Гео связка страна/город, вместо src_host
+                lower(event_src.host), # Сервера MFA
+                lower(datafield2), # Auth Method
+                lower(datafield5) # Device
+                )                                                      
+        
+        and filter::CheckWL_Profiling("MFA_Abnormal_Access", lower(join([external_src.ip, object.account.name, 
+        event_src.host, event_src.title], "|")))
+    }
+    
+rule MFA_Abnormal_Access: Anomaly_MFA_Device
+
+    init {
+        # Если в табличке нет правила, то считаем, что правило работает в режиме автопрофилирования
+        $auto_profile = coalesce(select_query_first("AutoProfile", ["MFA_Abnormal_Access"], "auto_profiling"), 1)
+        $insert_into_cond = false
+        $ttl_tl = 7862400
+        $labels = "CheckWL_Profiling"
+    }
+    
+    on Anomaly_MFA_Device {
+        $subject.id = object.id 
+
+        $subject.account.name = object.account.name
+        $subject.account.domain = object.account.domain
+        $subject.account.session_id = object.account.session_id
+        $subject.account.id = object.account.id
+
+        $external_src.ip = external_src.ip
+        $external_src.host = external_src.host
+        $external_src.geo.city = external_src.geo.city
+        $external_src.geo.country = external_src.geo.country
+
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.geo.org = src.geo.org
+        $src.geo.country = src.geo.country
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $assigned_src_ip = assigned_src_ip
+
+        $datafield1 = datafield1
+        $datafield2 = datafield2 # Auth method
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5 # Device
+        $datafield7 = datafield7
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        if not exec_query("CheckProfile", [$event_src.title, lower($subject.account.name), 
+        lower($datafield2), lower($datafield5), lower($event_src.host), lower($external_src.geo.city +
+        "|" + $external_src.geo.country)]) then
+            # Проверка, если ли для пользователя собранный профиль
+            if not exec_query("CheckUsername", [lower($subject.account.name), $event_src.title]) then
+                $reason = "no_user"
+                $alert.context = join([$reason, $subject.account.name], " | ")
+                $importance = "info"
+                $insert_into_cond = true
+            # Проверка, есть ли такой девайс для пользователя
+            elif not exec_query("CheckAuthDevice", [lower($subject.account.name), lower($datafield5), $event_src.title]) then
+                $reason = "no_device"
+                $alert.context = join([$reason, $datafield5], " | ")
+                $importance = "medium"
+                $correlation_type = "incident"
+                $insert_into_cond = true
+            # Проверка, есть ли такой метод аутентификации для пользователя
+            elif not exec_query("CheckAuthMethod", [lower($subject.account.name), lower($datafield2), $event_src.title]) then
+                $reason = "no_auth_method"
+                $alert.context = join([$reason, $datafield2], " | ")
+                $importance = "medium"
+                $insert_into_cond = true
+            # Проверка, есть ли такая гео позиция для пользователя
+            elif not exec_query("CheckCountry", [lower($subject.account.name), lower($external_src.geo.city + 
+            "|" + $external_src.geo.country), $event_src.title]) then
+                $reason = "no_country"
+                $alert.context = join([$reason, $external_src.geo.country, $external_src.geo.city], " | ")
+                $importance = "high"
+                $correlation_type = "incident"
+                $insert_into_cond = true
+            else
+                $importance = "info"
+                $detect = "drop"
+            endif
+        else
+            $last_changed = select_query_first("CheckProfile", [$event_src.title, lower($subject.account.name), 
+            lower($datafield2), lower($datafield5), lower($event_src.host), lower($external_src.geo.city +
+            "|" + $external_src.geo.country)], "_last_changed")
+            if bool($last_changed) then         
+                if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then          
+                    $insert_into_cond = true
+                endif
+            endif
+            $importance = "info"
+            $detect = "drop"
+        endif
+        
+        # Если правило работает в режиме сбора профиля, то emit не нужен
+        
+        if $auto_profile == 2 then
+            $importance = "info"
+            $detect = "drop"
+        endif 
+
+        $alert.key = lower(join([external_src.ip, object.account.name, event_src.host, event_src.title], "|"))
+    }
+
+    insert_into Risk_User_Logon_Correlation_Profile if ($auto_profile != 0 and $insert_into_cond == true) {
+        access_type = $event_src.title
+        login = lower($subject.account.name)
+        src_host = lower($external_src.geo.city + "|" + $external_src.geo.country)
+        dst_path = lower($datafield2) # Auth method
+        dst_host = lower($event_src.host)
+        additional_data = lower($datafield5) # Device
+    }
+   
+emit {
+    $correlation_type = coalesce($correlation_type, "event")
+
+    $subject = "account"
+    $action = "login"
+    $object = "application"
+    $status = "success"
+
+    $category.generic = "Anomaly"
+    $category.high = "Initial Access"
+    $category.low = "External Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

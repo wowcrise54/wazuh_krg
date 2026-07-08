@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} fnp[{NUMBER}]:
+        I-{msgid="105E"}-Удаление дополнительной конфигурации - {object.name=STRING}
+        ({subject.name=UNTIL(",")} {src.ip=IPV4|src.ip=IPV6})'
+
+subject = "account"
+action = "remove"
+object = "configuration"
+status = "success"
+
+object.type = "additional"
+
+importance = "info"
+
+event_src.vendor = "npo_fraktel"
+event_src.title = "sspt_2"
+event_src.category = "Firewall"
+
+id = "PT_NPO_Fraktel_SSPT_2_105E_delete_additional_config"

@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        Category: {NUMBER},{$tmp_subsys="Network Intrusion Protection Sys"},{"\\""?}Event Description: 
+        {"Ошибка в работе"object.name="систем предотвращения вторжений для сети и для браузера"?}
+        {object.name="Network Intrusion Prevention and Browser Intrusion Prevention"|object.name="Network Intrusion Prevention"|}
+        {"are malfunctioning because"reason="their content is not installed. The IPS content is going to be installed automatically"?}
+        {"вследствие того, что "reason="не установлено соответствующее содержимое. Содержимое IPS будет установлено автоматически"?}
+        {"is malfunctioning"?} {","?} {"try to reboot the system ("reason=UNTIL(")")?}
+        {".\\""|"\\"."|"."|}{",Event time"?}: {time=DATETIME},{"\\""?}Group Name: {datafield10=UNTIL("\\"")|datafield10=REST}'
+
+action = "alert"
+object = "system"
+status = "success"
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+# datafield10 - Group name
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_Intrusion_protection_system_malfunctioning"

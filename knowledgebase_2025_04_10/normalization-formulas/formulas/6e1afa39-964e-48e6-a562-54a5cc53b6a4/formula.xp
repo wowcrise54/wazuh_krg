@@ -1,0 +1,43 @@
+!JSON = "EventCode=5059"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing" and $EventType=="4"
+
+action = "info"
+object = "file"
+status = "success"
+
+subject.name = $InsertionStrings[1]
+subject.domain = lower($InsertionStrings[2])
+
+object.name = $InsertionStrings[6]
+object.value = $InsertionStrings[9]
+object.property = "return code"
+
+object.type = switch $InsertionStrings[7]
+    case "%%2499" "Machine key"
+    case "%%2500" "User key"
+endswitch
+
+object.state = switch $InsertionStrings[8]
+    case "%%2458" "Read persisted key from file"
+    case "%%2464" "Export of persistent cryptographic key"
+    case "%%2480" "Open Key"
+endswitch
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Operating system"
+event_src.title = "windows"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_5059_Key_migration_operation"

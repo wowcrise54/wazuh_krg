@@ -1,0 +1,184 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+{$tmp_subsys=WORDDASH} {"-"*} {time=DATETIME} [{$svc=WORDDASH}{WORD} {msgid="AuthorizationService.AuditLog"} opId={chain_id=UNTIL("] Action performed by principal(")}{$kv=UNTIL("):")} {$raw_message=REST}'
+
+subject = "account"
+status = "success"
+
+subformula "parse_body"
+    TEXT = 'Add{"ed"?} or update{"d"?} privilege {$kv_body=KEYVALUE(",", "=", "\'")}'
+    
+    action = "create"
+    object = "resource"
+    object.type = "privilege"
+    object.id = $kv_body["Id"]
+    object.group = $kv_body["Group"]
+endsubformula
+
+# vSphere Role
+subformula "parse_body"
+    TEXT = 'Added solution role {$kv_body=KEYVALUE(",", "=", "\'")}'
+    
+    action = "create"
+    object = "resource"
+    object.type = "solution_role"
+    object.id = $kv_body["Id"]
+    object.name = $kv_body["Name"]
+    object.property = "privileges"
+    $kv_tenant = keyvalue($kv_body["Tenant"], ",", "=", "'")
+    object.new_value = $kv_tenant["Privileges"]
+endsubformula
+
+subformula "parse_body"
+    TEXT = 'Add role {$kv_body=KEYVALUE(",", "=", "\'")}'
+    
+    action = "create"
+    object = "resource"
+    object.type = "role"
+    object.id = $kv_body["Id"]
+    object.name = $kv_body["Name"]
+    object.property = "privileges"
+    $kv_tenant = keyvalue($kv_body["Tenant"], ",", "=", "'")
+    object.new_value = $kv_tenant["Privileges"]
+endsubformula
+
+subformula "parse_body"
+    TEXT = 'Update role {$kv_body=KEYVALUE(",", "=", "\'")}'
+    
+    action = "modify"
+    object = "resource"
+    object.type = "role"
+    object.id = $kv_body["Id"]
+    object.name = $kv_body["Name"]
+    object.property = "privileges"
+    $kv_tenant = keyvalue($kv_body["Tenant"], ",", "=", "'")
+    object.new_value = $kv_tenant["Privileges"]
+endsubformula
+
+subformula "parse_body"
+    TEXT = 'Delete role {object.id=NUMBER}'
+    
+    action = "remove"
+    object = "resource"
+    object.type = "role"
+endsubformula
+
+# vSphere Permission
+subformula "parse_body"
+    TEXT = 'Add global access [ {$kv_body=KEYVALUE(",", "=", "\'")}'
+    
+    action = "modify"
+    $kv_principal = keyvalue($kv_body["Principal"], ",", "=", "'")
+    
+    if ($kv_body["isGroup"] == "true") then
+        object = "user_group"
+        object.name = $kv_principal["Name"]
+    else
+        object = "account"
+        $username = null
+        $domain = null
+        submessage("TEXT", "parse_user", $kv_principal["Name"])
+        object.account.name = $username
+        object.account.domain = $domain
+    endif
+    object.property = "account_privileges"
+    object.new_value = strip($kv_body["roles"], "[", "]")
+endsubformula
+
+subformula "parse_body"
+    TEXT = 'Added access control [ {$kv_body=UNTIL("] to document")}{$document=REST}'
+    
+    action = "modify"
+    $kv_body = keyvalue($kv_body, ",", "=", "'")
+    $kv_principal = keyvalue($kv_body["Principal"], ",", "=", "'")
+    
+    if ($kv_body["isGroup"] == "true") then
+        object = "user_group"
+        object.name = $kv_principal["Name"]
+    else
+        object = "account"
+        $username = null
+        $domain = null
+        submessage("TEXT", "parse_user", $kv_principal["Name"])
+        object.account.name = $username
+        object.account.domain = $domain
+    endif
+    object.property = "account_privileges"
+    object.new_value = strip($kv_body["roles"], "[", "]")
+    datafield4 = $document  # Document
+endsubformula
+
+subformula "parse_body"
+    TEXT = 'Remove access control for principals [ {$kv_body=UNTIL("] on document")}{$document=REST}'
+    
+    action = "modify"
+    $kv_body = keyvalue($kv_body, ",", "=", "'")
+    
+    if ($kv_body["isGroup"] == "true") then
+        object = "user_group"
+        object.name = $kv_body["Name"]
+    else
+        object = "account"
+        $username = null
+        $domain = null
+        submessage("TEXT", "parse_user", $kv_body["Name"])
+        object.account.name = $username
+        object.account.domain = $domain
+    endif
+    object.property = "account_privileges"
+    object.value = "?"
+    datafield4 = $document  # Document
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, ",", "=", "'")
+  
+submessage("TEXT", "parse_user", $kv_msg["name"])
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+$username = null
+$domain = null
+
+submessage("TEXT", "parse_body", $raw_message)
+
+importance = "medium"
+
+if (object == "account") then
+    category.generic = "Account"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+elif (object == "user_group") then
+    category.generic = "Group"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endif
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_VMware_vSphere_vspheresyslog_AuthorizationService_AuditLog"

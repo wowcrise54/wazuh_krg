@@ -1,0 +1,147 @@
+event Double_Extension_Process_Start:
+    key:
+        event_src.host, object.process.name, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            regex(lower(object.process.name),"\.(doc|docx|docm|dot|htm|html|odt|pdf|rtf|txt|xml|csv|xls|xlsx|xlsm|zip|zipx|rar|jar|tar|tar-gz|tgz|gz|gzip|7z|pps|ppsx|ppt|pptm|pptx|jpg|jpeg|gif|png|gif|bmp|raw|tiff|psd|heif|mp4|mov|wmv|avi|flv|swf|mkv|exe)[^a-z\d]*\.(exe|scr|com)$", 0) != null
+            or regex(lower(object.process.cmdline),"^[^\-]+\.(doc|docx|docm|dot|htm|html|odt|pdf|rtf|txt|xml|csv|xls|xlsx|xlsm|zip|zipx|rar|jar|tar|tar-gz|tgz|gz|gzip|7z|pps|ppsx|ppt|pptm|pptx|jpg|jpeg|gif|png|gif|bmp|raw|tiff|psd|heif|mp4|mov|wmv|avi|flv|swf|mkv)[^a-z\d\s]*\.(bat|cmd|ps1|msi|hta|js|jse|reg|vbe|vbs|wsf|wsh)\\b", 0) != null
+        )
+        and filter::CheckWL_Process_Creation("Double_File_Extension_Masquerading", lower(object.process.fullpath))
+    }
+
+event Network_Connect_From_Started_Process:
+    key:
+        event_src.host, object.process.name, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                msgid == "3"
+                and event_src.title == "sysmon"
+            )
+            or (
+                msgid == "5156"
+                and event_src.title == "windows"
+            )
+        )
+        and src.ip != dst.ip
+        and direction == "egress"
+        and protocol == "tcp"
+        and not filter::Loopback_Address(dst.ip)
+        and regex(lower(object.process.name),"\.(doc|docx|docm|dot|htm|html|odt|pdf|rtf|txt|xml|csv|xls|xlsx|xlsm|zip|zipx|rar|jar|tar|tar-gz|tgz|gz|gzip|7z|pps|ppsx|ppt|pptm|pptx|jpg|jpeg|gif|png|gif|bmp|raw|tiff|psd|heif|mp4|mov|wmv|avi|flv|swf|mkv)[^a-z\d]*\.(exe|scr|com)$", 0) != null
+}
+
+rule Double_File_Extension_Masquerading: (Double_Extension_Process_Start and Network_Connect_From_Started_Process?) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Double_Extension_Process_Start {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(object.process.fullpath)
+
+        $proc_name_regex_pattern = "\.(doc|docx|docm|dot|htm|html|odt|pdf|rtf|txt|xml|csv|xls|xlsx|xlsm|zip|zipx|rar|jar|tar|tar-gz|tgz|gz|gzip|7z|pps|ppsx|ppt|pptm|pptx|jpg|jpeg|gif|png|gif|bmp|raw|tiff|psd|heif|mp4|mov|wmv|avi|flv|swf|mkv)[^a-z\d]*\.(exe|scr|com)$"
+        $proc_cmdline_regex_pattern = "\.(doc|docx|docm|dot|htm|html|odt|pdf|rtf|txt|xml|csv|xls|xlsx|xlsm|zip|zipx|rar|jar|tar|tar-gz|tgz|gz|gzip|7z|pps|ppsx|ppt|pptm|pptx|jpg|jpeg|gif|png|gif|bmp|raw|tiff|psd|heif|mp4|mov|wmv|avi|flv|swf|mkv)[^a-z\d\s]*.(bat|cmd|ps1|msi|hta|js|jse|reg|vbe|vbs|wsf|wsh)\\b"
+        $script_name_regex_pattern = "[^\\\\]+" + $proc_cmdline_regex_pattern
+
+        if regex(lower(object.process.name), $proc_name_regex_pattern, 0) != null then
+            $alert.context = $object.process.parent.name
+            $alert.regex_match = regex(lower(object.process.name), $proc_name_regex_pattern, 0)
+        elif regex(lower(object.process.cmdline), $proc_cmdline_regex_pattern, 0) != null then
+            $alert.context = $object.process.parent.name
+            $alert.regex_match = regex(lower(object.process.cmdline), $proc_cmdline_regex_pattern, 0)
+            #script_name
+            $object.name = regex(lower(object.process.cmdline), $script_name_regex_pattern, 0)
+        endif
+    }
+
+    on Network_Connect_From_Started_Process {
+        $direction = direction
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Masquerading: Double File Extension"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id), lower($object.process.name)], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

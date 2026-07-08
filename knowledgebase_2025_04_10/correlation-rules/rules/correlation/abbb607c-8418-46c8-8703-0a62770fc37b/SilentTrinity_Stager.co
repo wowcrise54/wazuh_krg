@@ -1,0 +1,254 @@
+event Stager_Exe:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "1"
+        and (
+            regex(lower(object.process.meta), "st2stager|:naga\\b", 0) != null
+            or lower(object.process.original_name) == "naga.exe"
+        )
+        and filter::CheckWL_Process_Creation("SilentTrinity_Stager", lower(object.process.fullpath))
+    }
+
+event Stager_Dll:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "7"
+        and (
+            regex(lower(object.process.meta), "st2stager|:naga\\b", 0) != null
+            or lower(object.process.original_name) == "naga.exe"
+            or lower(object.process.original_name) == "nagadll.dll"
+        )
+        and filter::CheckWL_Specific_Only("SilentTrinity_Stager", join([lower(subject.process.name), lower(object.process.name)], "|"))
+    }
+
+event Stager_Powershell:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and object == "command"
+        and find_substr(lower(object.process.cmdline), "[reflection.assembly]::load") != null
+        and find_substr(lower(object.process.cmdline), "-guid") != null
+        and find_substr(lower(object.process.cmdline), "-psk") != null
+        and find_substr(lower(object.process.cmdline), "-url") != null
+        and filter::CheckWL_Powershell("SilentTrinity_Stager", lower(object.process.cmdline))
+    }
+
+rule SilentTrinity_Stager: Stager_Exe or Stager_Dll or Stager_Powershell
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Stager_Exe {
+        $subject = subject  # account
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.fullpath)
+        $alert.regex_match = regex(lower(object.process.meta), "\\b(st2stager|naga)\\b", 1)
+        $alert.context = object.process.original_name
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Stager_Dll {
+        $subject = subject  # process
+        $action = action  # start
+        $object = object  # module
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.guid = subject.process.guid
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.hash = object.hash
+        $object.hash.md5 = object.hash.md5
+        $object.hash.imphash = object.hash.imphash
+        $object.hash.sha256 = object.hash.sha256
+        $object.hash.sha1 = object.hash.sha1
+        $object.property = object.property
+        $object.value = object.value
+        $object.version = object.version
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([subject.process.name, object.process.name], "|"))
+        $alert.regex_match = regex(lower(object.process.meta), "\\b(st2stager|naga)\\b", 1)
+        $alert.context = object.process.original_name
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Stager_Powershell {
+        $subject = subject  # account
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+        
+        $object.fullpath = object.fullpath
+        $object.name = object.name
+        $object.path = object.path
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield1 = regex(lower(object.process.cmdline), "-url\s\'([^\']+)", 1)  # Listener address
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.context = "[reflection.assembly]::load ... -guid ... -psk ... -url"
+
+        $incident.attacking_addresses = append($incident.attacking_addresses, regex($datafield1, ":\/\/([0-9\.])", 1))  # TODO fix attacking_addresses
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "User Execution: Malicious File"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

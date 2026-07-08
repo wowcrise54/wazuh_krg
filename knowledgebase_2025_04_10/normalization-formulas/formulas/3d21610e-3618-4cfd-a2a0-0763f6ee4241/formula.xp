@@ -1,0 +1,26 @@
+!TEXT = '{"<"NUMBER">"?} {DATETIME} {$Computer=HOSTNAME} {WORD+}:
+        [{time=DATETIME}] V1 [{WORD}][{WORD}] {"<"msgid=WORDDASH">"}
+        {object.name=STRING+} on port {src.port=NUMBER} deinitialized'
+
+action = "stop"
+object = "service"
+status = "success"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_remote_administrator_server"
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_remote_administrator_server_syslog_Service_Deinitialized"

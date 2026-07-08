@@ -1,0 +1,63 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"("?}nginx{")"?}{"["NUMBER"]"?}:
+        {$json=REST}'
+        
+COND = find_substr($json, "wallarm_attack_type") != null
+
+subformula "get_json_data"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "get_json_data", $json)
+
+subject = "application"
+action = "detect"
+object = "attack"
+status = "success"
+
+object.process.meta = $http_user_agent
+object.process.fullpath = $request_uri
+
+object.state = $status
+
+if $wallarm_attack_type_list != "" then
+    object.type = $wallarm_attack_type_list
+else
+    object.type = "no type"
+endif
+
+object.id = $request_id
+
+if $upstream_status != "" then
+    datafield1 = $upstream_status
+    datafield2 = $upstream_response_time
+    datafield3 = $upstream_address
+endif
+
+datafield4 = $http_referer
+datafield5 = $http_content_type
+datafield6 = $x_forwarded_for
+
+protocol.layer7 = $server_protocol
+count.bytes = number($body_bytes_sent)
+
+time = $time_local
+importance = "high"
+
+src.ip = $remote_addr
+
+dst.hostname = $host
+
+event_src.vendor = "wallarm"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "wallarm"
+event_src.category = "Web security"
+$Computer = $hostname
+
+id = "PT_Wallarm_Wallarm_syslog_attack_detected"

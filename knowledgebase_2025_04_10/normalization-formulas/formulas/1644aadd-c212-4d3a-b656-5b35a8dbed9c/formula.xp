@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {$msg_id="CISE_Alarm"} WARN: RADIUS Authentication Request dropped : Server={src.hostname=HOSTNAME};
+        NAS IP Address={src.ip=IPV4|src.ip=IPV6};  NAS Identifier={datafield1=WORDDASH};
+        Failure Reason={reason=REST}'
+
+action = "execute"
+object = "request"
+status = "failure"
+
+object.state = "dropped"
+
+# datafield1 - NAS Identifier
+
+msgid = $msg_id
+importance = "medium"
+
+event_src.vendor = "cisco"
+
+event_src.title = switch $msg_id
+    case "CSCOacs_Alarm" "acs"
+    case "CISE_Alarm" "ise"
+endswitch
+
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_CISE_Alarm"

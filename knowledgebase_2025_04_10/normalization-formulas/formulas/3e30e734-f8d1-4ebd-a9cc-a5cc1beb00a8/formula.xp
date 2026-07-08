@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?} {$tmp_subsys=WORD}/{NUMBER}/{msgid="LOGOUT"|msgid="SSH_USER_LOGOUT"}
+        ({WORD}){"["NUMBER"]"?}:{"VS=Admin-VS-"?}{"CID="UNTIL(";")?} The {"SSH"?} user {"succeeded in logging"|"logged"} out {"of"?}
+        {logon_service=WORD?}. ({$kv=UNTIL(")")}{REST}'
+
+$kv = keyvalue($kv, ',', '=', '"')
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+subject.account.name = $kv['UserName']
+
+src.ip = coalesce($kv["Ip"], $kv["IPAddress"])
+dst.hostname = event_src.hostname
+protocol.layer7 = lower(coalesce($kv["UserType"], $kv["ServiceType"]))
+
+if find_substr(lower($kv["AuthenticationMethod"]), "local") != null then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+datafield3 = coalesce($kv["VpnName"], strip($kv["VPNInstanceName"], '', '.'))  # vpn instance
+
+reason = coalesce($kv["LogoutReason"], $kv["Reason"])
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_User_logout"

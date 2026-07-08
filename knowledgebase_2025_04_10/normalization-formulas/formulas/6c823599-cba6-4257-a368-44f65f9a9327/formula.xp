@@ -1,0 +1,35 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1102"
+       and $event_category == "Паспорт ПО"
+       and (
+        $event_type == "Information"
+        or $event_type == "Информация"
+       )
+
+action = "execute"
+object = "task"
+status = "success"
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Паспорт ПО" then
+    event_src.subsys = "program passport"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1102_software_inventory_finish"

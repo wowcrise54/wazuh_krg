@@ -1,0 +1,55 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} INFO [{UNTIL("]")} [{$req_id=UNTIL("]")} - {$kv_str=REST}'
+
+COND = find_substr($kv_str, "UPDATE_PASSWORD - User updating system admin password") != null
+       or find_substr($kv_str, "UPDATE_PASSWORD - Changing initial admin password") != null
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "ongoing"
+
+$kv = keyvalue($kv_str,",",":")
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "unknown" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+object.account.name = "admin"
+
+object.property = "change source"
+if find_substr($kv_str, "User updating system admin password") != null then
+    object.value = "UI"     # Changing the administrator password via the administrator panel, old password required
+elif find_substr($kv_str, "Changing initial admin password") != null then
+    object.value = "CLI"    # Changing the administrator password via the command line on host, old password not required
+endif
+
+dst.ip = coalesce(recv_ipv4, recv_ipv6)
+
+if $kv["AuthSource"] != "unknown" then
+    logon_service = $kv["AuthSource"]
+endif
+
+if $req_id != '' then
+    datafield1 = $req_id    # Request id
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "UPDATE_PASSWORD"
+importance = "high"
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_admin_password_changing"

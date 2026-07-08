@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{"%"|"#"}{msgid="AAA-E-SSH"}:
+        Permission denied for {object.account.name=STRING}from {src.ip=IPV4|src.ip=IPV6}'
+
+action = "deny"
+object = "session"
+status = "success"
+
+protocol = "ssh"
+
+importance = "low"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_permission_denied"

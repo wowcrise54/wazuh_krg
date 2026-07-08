@@ -1,0 +1,47 @@
+event Domain_User_Action_Subject:
+    filter {
+        filter::FromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and subject.account.provider == null
+        and (
+             subject.account.id != null
+             or subject.account.domain != null
+        )
+    }
+
+event Domain_User_Action_Object:
+    filter {
+        filter::FromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and object.account.provider == null
+        and (
+             object.account.id != null
+             or object.account.domain != null
+        )
+    }
+
+enrichment Unix_Provider_Addition
+
+    enrich Domain_User_Action_Subject:
+
+        enrich_fields {
+            if subject.account.domain != null or number(subject.account.id) > 65536  then
+                subject.account.provider = "domain"
+            else
+                subject.account.provider = "local"
+            endif
+
+            labels = labels + "|enr_unix_subj_acc_provider"
+        }
+
+    enrich Domain_User_Action_Object:
+
+        enrich_fields {
+            if object.account.domain != null or number(object.account.id) > 65536  then
+                object.account.provider = "domain"
+            else
+                object.account.provider = "local"
+            endif
+
+            labels = labels + "|enr_unix_obj_acc_provider"
+        }

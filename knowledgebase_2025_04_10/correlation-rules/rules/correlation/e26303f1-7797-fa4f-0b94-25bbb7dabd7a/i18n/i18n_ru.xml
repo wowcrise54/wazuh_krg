@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Закрепление на узле с помощью изменения файла системной службы. Атакующие могут создавать или изменять службы подсистемы systemd для многократного выполнения вредоносных полезных нагрузок</Description>
+  <EventDescriptions>
+    <EventDescription id="53686d5a-93a7-40c3-dfee-fdae9ebaa493">Обнаружено возможное закрепление с помощью изменения файла системной службы "{object.name}" на узле {event_src.host}</EventDescription>
+    <EventDescription id="61539bfb-9b71-0363-20ee-7805d947729a">Обнаружено возможное закрепление с помощью создания файла системной службы "{object.fullpath}" и запуска службы {datafield7} на узле {event_src.host}</EventDescription>
+    <EventDescription id="648bdc25-7fa4-9359-bc7a-1bd8a20dd45f">Обнаружено возможное закрепление пользователем {subject.account.name} с помощью изменения файла системной службы "{object.name}" на узле {event_src.host}</EventDescription>
+    <EventDescription id="d75385fd-6392-0b6d-13dc-d9bcb0417f10">Обнаружено возможное закрепление пользователем {subject.account.name} с помощью создания файла системной службы "{object.fullpath}" и запуска службы {datafield7} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

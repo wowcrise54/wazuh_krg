@@ -1,0 +1,58 @@
+!TABULAR = "exefile_id,
+            kl_category_desc,
+            kl_category_name"
+
+$description = replace($description, " ", "\t")
+if find_substr($description, "\r\n") != null then
+    $kv = keyvalue($description, "\r\n", ":")
+else
+    $kv = keyvalue($description, " ", ": ")
+endif
+            
+action = "info"
+object = "file"
+status = "success"
+
+$csv_path = csv($file_path, "\\", "'")
+object.storage.name = lower($csv_path[length($csv_path) - 1])
+object.storage.path = lower(strip($file_path, "", object.storage.name))
+object.storage.fullpath = object.storage.path + object.storage.name
+object.id = $exefile_id
+object.version = $file_version
+object.group = $kl_category_desc
+object.vendor = $vendor_name
+if $product_name != "" then
+    object.property = "product name"
+    object.value = lower($product_name)
+endif
+
+object.hash.sha256 = $file_sha256
+
+# file_md5 может содержать обрезанный sha256
+if find_substr($file_sha256, $file_md5) == null then
+    object.hash.md5 = $file_md5
+endif
+
+datafield1 = $group_name                # имя группы администрирования, в которую входит узел-источник
+datafield2 = $first_time_appear         # время первого обнаружения файла
+datafield3 = $first_time_exec           # время первого запуска файла
+datafield4 = $first_time_start_in_ksc   # время появления файла в Kaspersky Security Network
+if $vendor_name != "" then
+    datafield5 = $vendor_name           # производитель файла
+endif
+datafield6 = $product_version           # версия продукта
+datafield7 = $file_name                 # исходное имя файла
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_center"
+if $fqdn != "" then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_odbc_Additional_info_executables"

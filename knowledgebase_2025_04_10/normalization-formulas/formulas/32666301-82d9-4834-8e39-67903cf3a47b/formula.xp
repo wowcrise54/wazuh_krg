@@ -1,0 +1,45 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+         SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+         \"{"Event Description: "?}Получен непредвиденный входящий ответ ARP.
+         Это разновидность имитации MAC-адреса, которая может быть опасна для компьютера.
+         Данные о пакете показаны в окне справа.\",
+         Local: {dst.ip=IPV4|dst.ip=IPV6}, Local: {dst.mac=WORD},
+         Remote: {$host_2_temp=STRING} {src.ip=IPV4|src.ip=IPV6},
+         Remote: {src.mac=WORD},{$direction=WORD},{$prot=WORD}, {$kv=KEYVALUE(",", ":")}'
+
+action = "detect"
+object = "attack"
+status = "success"
+
+object.name = "mac spoofing"
+
+$d_2 = strip($host_2_temp, '', ',Remote:')
+
+if $d_2 != "" then
+    src.hostname = $d_2
+endif
+
+if $prot != "OTHERS" then
+    protocol = lower($prot)
+endif
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+
+datafield4 = $kv['User']                                                # The logon user name.
+datafield5 = substr($kv['Domain'], 0, find_substr($kv['Domain'], ","))  # The logon domain name
+
+importance = "high"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_mac_spoofing_en_ru"

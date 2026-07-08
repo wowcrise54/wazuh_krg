@@ -1,0 +1,80 @@
+event Potentially_Dangerous_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "it_bastion"
+        and event_src.title == "skdpu_nt"
+        and datafield1 == "COLOR_LIST_MATCH"
+        and msgid == "SKDPUNT.INCIDENT.00001"
+        and filter::CheckWL_Specific_Only("SKDPUNT_Potentially_Dangerous_Command", lower(join([event_src.host, subject.application.account.name, object.application.account.name, src.host, dst.host], "|")))
+    }
+
+rule SKDPUNT_Potentially_Dangerous_Command: Potentially_Dangerous_Command
+    
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Potentially_Dangerous_Command {
+
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.domain = subject.application.account.domain
+
+        $object.application.account.session_id = object.application.account.session_id
+        $object.application.account.name = object.application.account.name
+
+        $object.process.cmdline = object.process.cmdline
+
+        $object.value = object.value
+        $object.property = object.property
+
+        $src.hostname = src.hostname
+        $src.ip = src.ip 
+
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        
+        $datafield1 = datafield1     # incident category
+        $datafield5 = datafield5     # skdpu nt version
+        $datafield8 = datafield8     # gateway name
+        $datafield9 = datafield9     # incident impact
+        $datafield10 = datafield10   # sesion id on access gw
+        $datafield11 = datafield11   # session id in skdpu nt
+        $datafield12 = datafield12   # event hash
+        $datafield13 = datafield13   # triggered event data 
+
+        $logon_service = logon_service
+
+        $protocol.layer7= protocol.layer7
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(join([event_src.host, subject.application.account.name, object.application.account.name, src.host, dst.host], "|"))
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "detect"
+    $object = "alert"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.application.account.name, $object.application.account.name, $src.host, $dst.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

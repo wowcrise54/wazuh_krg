@@ -1,0 +1,53 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $kv["subject"] == "Object Manipulation"
+        and in_list(["Modify Object", "Set Object", "Rename Object", "Modify Rule"], $kv["operation"])
+
+if $kv["administrator"] != "localhost" then
+    subject = "account"
+    subject.account.name = $kv["administrator"] 
+    subject.account.session_id = $kv["session_uid"]
+    subject.process.name = $kv["session_name"]
+endif
+action = "modify"
+object = "resource"
+status = "success"
+
+if $kv["operation"] == "Set Object" then
+    object.type = $kv["objectname"]
+else
+    object.name = $kv["objectname"]
+    object.type = $kv["objecttype"]
+    object.id =  $kv["uid"]
+endif
+
+if csv($kv["fieldschanges"], " ", "")[0] != null then
+    object.property = "fields changes"
+    object.new_value = $kv["fieldschanges"]
+endif
+
+if $kv["src"] != "0.0.0.0" and $kv["src"] != "127.0.0.1" and $kv["src"] != "::" then
+    src.ip = $kv["src"]
+endif
+
+datafield4 =  $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+if $kv["operation"] == "Rename object" then
+    reason = "rename"
+endif
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+msgid = $kv["operation"]
+importance = "low"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Configuration_Modify_object"

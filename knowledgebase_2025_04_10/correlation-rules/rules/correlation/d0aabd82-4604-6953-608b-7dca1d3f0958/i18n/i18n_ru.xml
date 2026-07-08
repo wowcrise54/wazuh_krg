@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Обнаружение использования инструмента Masky, предназначенного для получения NT-хешей и TGT пользователей, работающих на атакованных узлах, для запроса сертификатов от их имени</Description>
+  <EventDescriptions>
+    <EventDescription id="6bcbde4f-2608-4952-31f1-0a40bacd1649">Процесс {object.process.name} загрузил модуль {object.process.name}, имя которого не совпадает с оригинальным {object.process.original_name} на узле {event_src.host}. Это указывает на работу инструмента Masky</EventDescription>
+    <EventDescription id="729e5991-037d-88bd-3dbf-fa5e9c5f86ab">Пользователь {subject.account.id} создал службу {object.name}, что породило процесс {object.process.name}, имя которого не совпадает с оригинальным {object.process.original_name} на узле {event_src.host}. В командной строке присутствуют признаки работы инструмента Masky</EventDescription>
+    <EventDescription id="e79b1f46-2ce1-1bb0-f282-7640b54a4cb3">От имени пользователя {subject.account.name} изменен атрибут {object.name} системной службы RasAuto для запуска {datafield1} и создания подозрительных файлов {datafield2} и {datafield3} на узле {event_src.host}. Это указывает на работу инструмента Masky</EventDescription>
+  </EventDescriptions>
+</Localization>

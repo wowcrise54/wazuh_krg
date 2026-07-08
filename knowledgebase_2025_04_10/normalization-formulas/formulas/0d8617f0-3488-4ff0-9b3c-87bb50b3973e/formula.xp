@@ -1,0 +1,59 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [] [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+[Firewall configuration {$rest=REST}'
+
+object = "rule"
+
+subformula "success"
+    TEXT = 'has changed. Operation \'{$arguments_1=WORD}\' for rule set {$arguments_2=STRING+} succeeded.]'
+    
+    status = "success"
+    msgid = "esx.audit.net.firewall.config.changed"
+endsubformula
+
+subformula "failure"
+    TEXT = 'operation \'{$arguments_1=WORD}\' failed. The changes were not applied to rule set {$arguments_2=REST}'
+    
+    status = "failure"
+    msgid = "esx.problem.net.firewall.config.failed"
+endsubformula
+
+switch substr($rest, 0, 11)
+    case "has changed"
+        submessage("TEXT", "success", $rest)
+    case "operation \'"
+        submessage("TEXT", "failure", $rest)
+endswitch
+
+$action_raw = switch $arguments_1
+    case "add" "create"
+    case "enable" "enable"
+    case "disable" "disable"
+endswitch
+action = coalesce($action_raw, "info")
+
+object.id = strip($arguments_2, "", ".]")
+
+if action == "info" then
+    object.property = "operation"
+    object.value = $arguments_1
+endif
+
+datafield1 = $def_dc_name  # Datacenter Name
+
+importance = "medium"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Firewall_Configuration"

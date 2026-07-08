@@ -1,0 +1,13 @@
+TEXT = '{time=DATETIME}:t@{NUMBER}:INFO: Bind failed {REST}'
+
+action = "info"
+object = "system"
+status = "success"
+
+importance = "low"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_filemonitor_bind_failed"

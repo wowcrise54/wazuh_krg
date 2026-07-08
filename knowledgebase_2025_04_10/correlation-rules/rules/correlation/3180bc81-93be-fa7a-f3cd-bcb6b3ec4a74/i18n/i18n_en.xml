@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A change in the LDAP attributes msPKIAccountCredentials and msPKIRoamingTimestamp is detected. This indicates an exploitation of a Windows Credential Roaming vulnerability, which allows writing to any file on behalf of the victim user.</Description>
+  <EventDescriptions>
+    <EventDescription id="0512b770-1028-ca46-7768-8eb93906b381">User {subject.account.name} changed the LDAP attribute {object.property} of user {object.account.name} on host {event_src.host}. This indicates a possible attempt to add malicious code to one of the files on behalf of {object.account.name} on his next login.</EventDescription>
+  </EventDescriptions>
+</Localization>

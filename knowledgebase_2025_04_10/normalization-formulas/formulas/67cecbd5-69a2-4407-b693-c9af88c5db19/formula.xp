@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+lame DNS referral: qname: {datafield1=STRING} ns_name:{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}
+        zone: {datafield2=STRING} ref_zone: referrals:{REST}'
+
+action = "deny"
+object = "session"
+status = "success"
+
+# datafield1 - запрашиваемый hostname
+# datafield2 - DNS hostname
+
+importance = "medium"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_lame_dns"

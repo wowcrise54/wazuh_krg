@@ -1,0 +1,49 @@
+EVENTLOG = 'EventID="6422"'
+COND = lower($Channel)=="security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "enable"
+object = "device"
+status = "success"
+
+subject.account.name = $Data["SubjectUserName"] 
+subject.account.domain = $Data["SubjectDomainName"]
+subject.account.id = $Data["SubjectUserSid"]    # SID  пользователя от имени которого производится установка девайса
+subject.account.session_id = maybe_number16($Data["SubjectLogonId"])  # Идентифкатор входа пользователя
+
+object.name = $Data["DeviceDescription"]
+object.id = strip($Data["ClassId"], "{" , "}")
+object.group = $Data["ClassName"]
+
+if find_substr($Data["DeviceId"], "VID_") != null then 
+    $device_id = csv($Data["DeviceId"], "\\", "")
+    $id = csv($device_id[1], "&", "")
+    object.vendor = lower($id[0])   # Vendor ID
+    object.type = lower($id[1])     # Device ID
+endif
+
+datafield2 = $Data["DeviceId"]
+datafield3 = $Data["HardwareIds"]
+
+if $Data["LocationInformation"] != "-" then
+    datafield4 = $Data["LocationInformation"]
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_6422_A_device_was_enabled"

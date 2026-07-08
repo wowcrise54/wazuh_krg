@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Возможное создание удаленной оболочки с помощью функций PowerShell System.IO.Pipes.NamedPipeServerStream и System.IO.Pipes.NamedPipeClientStream, предназначенных для создания сервера на узле пользователя (bind shell) и подключения к серверу на узле злоумышленника (reverse shell). Это может быть признаком использования однострочных скриптов Fuegoshell</Description>
+  <EventDescriptions>
+    <EventDescription id="72e2f6de-50c9-57ad-8a2d-dc300d1f7788">Пользователь {object.account.name} с помощью PowerShell создал прямое подключение (bind shell) с узла {src.host}:{src.port} к узлу {event_src.host}</EventDescription>
+    <EventDescription id="e910923b-72b5-2571-bfd7-1136faf25fad">Пользователь {object.account.name} с помощью PowerShell создал обратное подключение (reverse shell) к узлу {dst.host}:{dst.port} с узла {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

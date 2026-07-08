@@ -1,0 +1,35 @@
+!TABULAR = "C_3,
+            {object.value = C_5},
+            {time = EVENT_TIME},
+            {datafield1 = SESSION_ID}"
+
+!COND = find_substr($C_4, "Остановка") != null and ($EVENT_TYPE == "VW_CRIT_DIARY_LOCK_INFO")
+
+subject = "account"
+action = "stop"
+object = "task"
+status = "success"
+
+submessage ("TEXT", "session_info", $C_3)
+submessage ("TEXT", "task_name", $C_4)
+
+subformula "session_info"
+    !TEXT = "{datafield2=UNTIL(' (')} {STRING} - {subject.name=STRING} - {REST}"
+endsubformula
+
+subformula "task_name"
+    !TEXT = "Остановка {'('?}{object.name=UNTIL(')')?} {object.id=STRING}"
+endsubformula
+
+object.property = "executable"
+
+# datafield1 - id сессии
+# datafield2 - имя компьютера пользователя
+
+importance = "info"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_task_stop"

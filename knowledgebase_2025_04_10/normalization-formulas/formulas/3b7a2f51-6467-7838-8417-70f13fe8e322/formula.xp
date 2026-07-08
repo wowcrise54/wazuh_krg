@@ -1,0 +1,71 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "RESOURCE_START_COLLECTING - Starting collect resource(s) succeeded") != null
+       or find_substr($kv["Category"], "RESOURCE_STOP_COLLECTING - Stopping collect resource(s) succeeded") != null
+       or find_substr($kv["Category"], "RESOURCE_START_MAINTENANCE - Starting maintenance resource(s) succeeded") != null
+       or find_substr($kv["Category"], "RESOURCE_STOP_MAINTENANCE - Stopping maintenance resource(s) succeeded") != null
+
+subject = "account"
+action = "configure"
+object = "resource"
+status = "success"
+
+subformula "parse_category"
+    TEXT = 'RESOURCE_{$act="START_COLLECTING"|$act="STOP_COLLECTING"|$act="START_MAINTENANCE"|$act="STOP_MAINTENANCE"} - 
+            {"Starting"|"Stopping"} {"collect"|"maintenance"} resource(s) succeeded. {"Duration"|"ID(s)"}: {$dur_ids=REST}'
+
+    if $act == "START_COLLECTING" then
+        object.property = "collecting mode"
+        object.value = "start"
+    elif $act == "STOP_COLLECTING" then
+        object.property = "collecting mode"
+        object.value = "stop"
+    elif $act == "START_MAINTENANCE" then
+        object.property = "maintenance mode"
+        object.value = "start"
+    elif $act == "STOP_MAINTENANCE" then
+        object.property = "maintenance mode"
+        object.value = "stop"
+    endif
+    
+    $dur_ids = strip(strip($dur_ids, '"', '"'), '[', ']')
+    
+    if $dur_ids != '' then
+        datafield1 = $dur_ids   # Maintenance duration or resource ids
+    endif
+endsubformula
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+submessage("TEXT", "parse_category", $kv["Category"])
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+if $kv["ID(s)"] != null then
+    datafield1 = strip(strip($kv["ID(s)"], '"', '"'), '[', ']') # Resource ids
+    datafield3 = $dur_ids                                       # Maintenance duration
+endif
+datafield2 = strip(strip($kv["Name(s)"], '"', '".'), '[', '].') # Resource names
+
+time = datetime(replace($dt, ".", ","))
+msgid = "RESOURCE_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_resource_mode_manipulation"

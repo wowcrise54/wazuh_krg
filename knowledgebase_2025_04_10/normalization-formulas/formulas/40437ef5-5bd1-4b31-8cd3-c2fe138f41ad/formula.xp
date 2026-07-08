@@ -1,0 +1,36 @@
+!JSON = "EventCode=7"
+!COND = $Logfile=="Application" and $SourceName=="PT_WMI_subscriptions"
+
+subject = "process"
+action = "open"
+object = "file"
+status = "success"
+
+subject.id = strip($InsertionStrings[2], "ProcessID=", "")
+
+object.type = "module"
+$temp_object_path = strip($InsertionStrings[1], "FileName=\"", "\"")
+$tmp_list = csv($temp_object_path,'\\','"')
+object.name = $tmp_list[length($tmp_list) - 1]
+object.path = strip($temp_object_path, "", object.name)
+object.property = "size"
+object.value = strip($InsertionStrings[3], "ImageSize=", "")
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_Common_PT_WMI_subscriptions_7_Module_loaded_by_process"

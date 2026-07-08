@@ -1,0 +1,46 @@
+!TABULAR = "ids_event_id,
+            timestamp,
+            component_id,
+            component_name,
+            coord_center,
+            protocol,
+            crit,
+            description"
+!COND = ($protocol == "CRC")
+
+subject = "application"
+action = "detect"
+object = "alert"
+status = "success"
+
+subject.id = $component_id
+subject.name = $component_name
+
+object.name = "CRC error"
+object.property = "Corrupted object"
+object.value = strip($description, 'Нарушение целостности файла "', '"')
+
+time = epoch_to_datetime($timestamp)
+
+if $crit == 1 then
+    importance = "high"
+elif $crit == 2 then
+    importance = "medium"
+elif $crit == 3 then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "rnt"
+event_src.title = "forpost"
+event_src.category = "IDS/IPS"
+
+if $component_host != null then
+    event_src.hostname = $component_host
+else
+    # Fallback case:
+    event_src.hostname = $coord_center
+endif
+
+id = "PT_RNT_Forpost_odbc_Sensor_crc_error"

@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {$dt=STRING} INFO 
+        [{UNTIL("]")} [{$req_id=WORD?}] deployment.cluster.ClusterService:{NUMBER} - {$node_info=REST}'
+
+COND = find_substr($node_info, "Removing slice") != null
+       or find_substr($node_info, "Nodes removed successfully") != null
+       
+subject = "application"
+action = "remove"
+object = "node"
+
+if $node_info == "Nodes removed successfully" then
+    status = "success"
+else
+    status = "ongoing"
+endif
+
+if status != "success" then
+    $node_info = strip(strip($node_info, "Removing slice ", " from the cluster."), "Removing slice: ", "")
+    $node_slice = csv($node_info, " ", "")
+endif
+
+object.id = $node_slice[0]
+
+src.ip = coalesce(recv_ipv4, recv_ipv6)
+
+dst.ip = coalesce(ipv4($node_slice[length($node_slice)-1]), ipv6($node_slice[length($node_slice)-1]))
+
+if $req_id != null then
+    datafield1 = $req_id    # Request id
+endif
+
+time = datetime(replace($dt, ".", ","))
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_removing_node_from_cluster"

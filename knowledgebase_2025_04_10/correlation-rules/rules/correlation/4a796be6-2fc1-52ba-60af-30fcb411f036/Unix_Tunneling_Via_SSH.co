@@ -1,0 +1,219 @@
+event Syscall_Execve_Run_Ssh:
+    key:
+        event_src.host, object.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "start"
+        and object == "process"
+        and match(object.process.fullpath, "*bin/ssh")
+        and regex(object.process.cmdline, "\s+-[^-\s]*(L|D)\s+", 0) != null
+        and status == "success"
+        and filter::CheckWL_Linux_Process_Creation("Unix_Tunneling_Via_SSH",
+            lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+event Syscall_Connect:
+    key:
+        event_src.host, subject.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "open"
+        and object == "connection"
+        and not filter::Loopback_Address(dst.ip)
+        and match(subject.process.fullpath, "*bin/ssh")
+        and (
+            regex(subject.process.meta, "-[^-\s]*(L|D)\s+", 0) != null
+            or regex(subject.process.meta, "\s+-[^-\s]*R\s+", 0) != null
+        )
+        and status == "success"
+    }
+
+event Syscall_Execve_Run_Ssh_Rev:
+    key:
+        event_src.host, object.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "start"
+        and object == "process"
+        and match(object.process.fullpath, "*bin/ssh")
+        and regex(object.process.cmdline, "\s+-[^-\s]*R\s+", 0) != null
+        and status == "success"
+        and filter::CheckWL_Linux_Process_Creation("Unix_Tunneling_Via_SSH",
+            lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+
+rule Unix_Tunneling_Via_SSH: ((Syscall_Execve_Run_Ssh or Syscall_Execve_Run_Ssh_Rev) and Syscall_Connect) within 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+        $run_process = 0
+        $listen = 0
+        $context = ""
+    }
+
+    on Syscall_Execve_Run_Ssh {
+        $run_process = number(chain_id)
+        if ($run_process != 0) and ($listen != 0) then
+            if not ($listen > $run_process) then
+                close
+            endif
+        endif
+
+        $reason = "direct"
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        if subject != null then
+            $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+        else
+            $prefix = "[sys] "
+        endif
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.group = object.account.group
+        $object.account.domain = object.account.domain
+
+        $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "
+
+        $object.process.id = object.process.id
+        $object.process.parent.id = object.process.parent.id
+        $object.process.cwd = object.process.cwd
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        
+        $context = $context + "[" + string(object.process.id) + "] " + object.process.cmdline
+
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+        
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.host = event_src.host
+        $event_src.hostname = event_src.hostname
+        $event_src.asset = event_src.asset
+        $event_src.ip = event_src.ip
+        $event_src.id = event_src.id
+        $event_src.subsys = event_src.subsys
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.rule = event_src.rule
+    }
+    
+    on Syscall_Connect {
+        $listen = number(chain_id)
+        if ($run_process != 0) and ($listen != 0) then
+            if not ($listen > $run_process) then
+                close
+            endif
+        endif
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+    }
+
+    on Syscall_Execve_Run_Ssh_Rev {    
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        if subject != null then
+            $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+        else
+            $prefix = "[sys] "
+        endif
+
+        $reason = "reverse"
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.group = object.account.group
+        $object.account.domain = object.account.domain
+        
+        $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "
+
+        $object.process.id = object.process.id
+        $object.process.parent.id = object.process.parent.id
+        $object.process.cwd = object.process.cwd
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        
+        $context = $context + "[" + string(object.process.id) + "] " + object.process.cmdline
+
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+        
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.host = event_src.host
+        $event_src.hostname = event_src.hostname
+        $event_src.asset = event_src.asset
+        $event_src.ip = event_src.ip
+        $event_src.id = event_src.id
+        $event_src.subsys = event_src.subsys
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.rule = event_src.rule
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $alert.context = $prefix + $context
+    $alert.key = lower(join([$object.process.fullpath, coalesce($object.process.cmdline, $object.process.meta)], "|"))
+    
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Protocol Tunneling"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

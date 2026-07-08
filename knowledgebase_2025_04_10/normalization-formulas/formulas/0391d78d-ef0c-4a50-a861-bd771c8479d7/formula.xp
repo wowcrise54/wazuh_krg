@@ -1,0 +1,68 @@
+TEXT = "{$timedata=STRING+}{$timestamp=STRING}[INF] {chain_id=STRING?} Second factor for user 
+        '{$user=UNTIL('\\'')} verified successfully {'.'$kv=KEYVALUE(', ', ': ', '\\'')?}"
+
+subject = "application"
+action = "validate"
+object = "request"
+status = "success"
+
+object.type = "2FA authentication"
+
+if find_substr($user, '@') != null then
+    $temp_csv = csv(lower($user), "@", "`")
+    object.account.name = $temp_csv[0]
+    object.account.domain = $temp_csv[1]
+elif find_substr($user, '\\') != null then
+    $temp_csv2 = csv(lower($user), "\\", "`")
+    object.account.name = $temp_csv2[1]
+    object.account.domain = $temp_csv2[0]
+else 
+    object.account.name = lower($user)
+endif
+
+object.account.id = "synthetic:" + $user
+
+if $kv["account"] != "null" then
+    object.account.contact = $kv["account"]
+endif
+
+if find_substr($kv["calling-station-id"], "{") != null then
+    $temp_csv = csv($kv["calling-station-id"], " ", "")
+    if coalesce(maybe_ipv4($temp_csv[0]), maybe_ipv6($temp_csv[0])) != null then
+        external_src.ip = coalesce(maybe_ipv4($temp_csv[0]), maybe_ipv6($temp_csv[0]))
+    elif find_substr($temp_csv[0], '@') != null then
+        external_src.fqdn = lower($temp_csv[0])
+        external_src.hostname = lower(substr($temp_csv[0], 0, find_substr($temp_csv[0], '@')))
+    else
+        external_src.hostname = $temp_csv[0]
+    endif
+    datafield16 = $temp_csv[1]   # authenticatorId
+else
+    if coalesce(maybe_ipv4($kv["calling-station-id"]), maybe_ipv6($kv["calling-station-id"])) != null then
+        external_src.ip = coalesce(maybe_ipv4($kv["calling-station-id"]), maybe_ipv6($kv["calling-station-id"]))
+    else 
+        external_src.hostname = $kv["calling-station-id"]
+    endif
+endif
+
+if $kv["country"] != null and $kv["region"] != null and $kv["city"] != null then
+    external_src.geo.country = $kv["country"]
+    if external_src.geo.country == "null" then external_src.geo.country = null endif
+    external_src.geo.city = $kv["city"]
+    if external_src.geo.city == "null" then external_src.geo.city = null endif
+    datafield17 = $kv["region"]     # Region
+endif
+
+datafield2 = $kv["Authenticator"]   # Type of token used
+if datafield16 == "{}" or datafield16 == "" then datafield16 = null endif
+
+datafield18 = "success"             # Validation result
+
+time = datetime($timedata + $timestamp)
+importance = "info"
+
+event_src.vendor = "multifactor"
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_filemonitor_2FA_verification_success"

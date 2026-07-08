@@ -1,0 +1,43 @@
+!TABULAR = '_11,
+            {object.name = _6},
+            {datafield3 = _7},
+            {$process_raw = _10},
+            {datafield4 = _14}'
+
+!COND = $_11 == 82 and $_1 == 8
+
+subject = "account"
+action = "print"
+object = "file"
+status = "success"
+
+$csv = csv($_8, "\\", "'")
+subject.domain = $csv[0]
+subject.name = $csv[1]
+
+$csv_path = csv($process_raw, "\\", "'")
+datafield2 = $csv_path[length($csv_path) - 1]     # Имя приложения, через которое осуществляется печать
+datafield1 = strip($process_raw, "", datafield2)  # Путь к приложению, через которое осуществляется печать
+# datafield3 - Имя принтера, через который осуществляется печать
+# datafield4 - Дополнительная информация о печати
+
+time = win_ticks_to_datetime($_3)
+msgid = $_11
+importance = "info"
+
+event_src.vendor = "smart_line"
+event_src.title = "devicelock"
+if maybe_ipv4($_2) != null or maybe_ipv6($_2) != null then
+    event_src.ip = $_2
+else
+    $dot_pos = find_substr($_2, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($_2)
+        event_src.hostname = lower(substr($_2, 0, $dot_pos))
+    else
+        event_src.hostname = lower($_2)
+    endif
+endif
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_odbc_Document_printing"

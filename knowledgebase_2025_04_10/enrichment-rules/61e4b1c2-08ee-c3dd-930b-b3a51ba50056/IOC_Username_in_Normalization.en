@@ -1,0 +1,46 @@
+query Get_user_info($subj_name, $obj_name) from IOCs_Value {
+    (
+     value == $subj_name
+     or value == $obj_name
+    ) 
+    and category == "username"
+}
+    qhandler {
+        $value = value
+    } 
+    
+event enrich_by_user_info:
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            subject.account.name != null
+            or object.account.name != null
+        )
+        and find_substr(alert.ioc_provider,"ioc:username") == null
+    }
+    
+enrichment IOC_Username_in_Normalization
+ 
+enrich enrich_by_user_info:
+    enrich_fields {
+        $ioc_info = exec_query("Get_user_info", [subject.account.name, object.account.name])
+        
+        if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+            
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:username"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:username"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }

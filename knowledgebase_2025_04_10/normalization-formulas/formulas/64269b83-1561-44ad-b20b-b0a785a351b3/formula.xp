@@ -1,0 +1,171 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_ADD_STORAGE_DOMAIN",  # 956
+           "USER_ADD_STORAGE_DOMAIN_FAILED",  # 957
+           "USER_UPDATE_STORAGE_DOMAIN",  # 958
+           "USER_UPDATE_STORAGE_DOMAIN_FAILED",  # 959
+           "USER_REMOVE_STORAGE_DOMAIN",  # 960
+           "USER_REMOVE_STORAGE_DOMAIN_FAILED",  # 961
+           "USER_ACTIVATED_STORAGE_DOMAIN",  # 966
+           "USER_ACTIVATE_STORAGE_DOMAIN_FAILED",  # 967
+           "USER_ACTIVATED_STORAGE_DOMAIN_ASYNC",  # 9,505
+           "USER_ACTIVATE_STORAGE_DOMAIN_FAILED_ASYNC",  # 9,506
+           "USER_DEACTIVATED_STORAGE_DOMAIN",  # 968
+           "USER_DEACTIVATE_STORAGE_DOMAIN_FAILED",  # 969
+           "SYSTEM_DEACTIVATED_STORAGE_DOMAIN",  # 970
+           "SYSTEM_DEACTIVATE_STORAGE_DOMAIN_FAILED",  # 971
+           "USER_EXTENDED_STORAGE_DOMAIN",  # 972
+           "USER_EXTENDED_STORAGE_DOMAIN_FAILED",  # 973
+           "USER_FORCE_REMOVE_STORAGE_DOMAIN",  # 981
+           "USER_FORCE_REMOVE_STORAGE_DOMAIN_FAILED"  # 982
+       ], $event_class)
+
+if substr($event_class, 0, 6) == "SYSTEM" then
+    subject = "system"
+else
+    subject = "account"
+endif
+
+if substr($event_class, 0, 8) == "USER_ADD" then
+    action = "create"
+elif (substr($event_class, 0, 11) == "USER_UPDATE") or (substr($event_class, 0, 13) == "USER_EXTENDED") then
+    action = "modify"
+elif (substr($event_class, 0, 11) == "USER_REMOVE") or (substr($event_class, 0, 17) == "USER_FORCE_REMOVE") then
+    action = "remove"
+elif substr($event_class, 0, 13) == "USER_ACTIVATE" then
+    action = "enable"
+else
+    action = "disable"
+endif
+
+object = "resource"
+
+if find_substr($event_class, "FAILED") != null then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subformula "parse_body"
+    # USER_ADD_STORAGE_DOMAIN
+    # USER_UPDATE_STORAGE_DOMAIN
+    # USER_REMOVE_STORAGE_DOMAIN
+    # USER_FORCE_REMOVE_STORAGE_DOMAIN
+    TEXT = "Storage Domain {$storage_domain_name=STRING+} was {'added'|'updated'|'removed'|'forcibly removed'} by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_STORAGE_DOMAIN_FAILED
+    # USER_UPDATE_STORAGE_DOMAIN_FAILED
+    # USER_REMOVE_STORAGE_DOMAIN_FAILED
+    # USER_FORCE_REMOVE_STORAGE_DOMAIN_FAILED
+    TEXT = "Failed to {'add'|'update'|'remove'|'forcibly remove'} Storage Domain {$storage_domain_name=STRING+} (User: {$user=REST}"
+    
+    $storage_domain_name = strip($storage_domain_name, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_ACTIVATED_STORAGE_DOMAIN
+    TEXT = "Storage Domain {$storage_domain_name=STRING+} (Data Center {$storage_pool_name=UNTIL(') was activated by ')} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ACTIVATE_STORAGE_DOMAIN_FAILED
+    TEXT = "Failed to activate Storage Domain {$storage_domain_name=STRING+} (Data Center {$storage_pool_name=UNTIL(') by ')} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ACTIVATED_STORAGE_DOMAIN_ASYNC
+    TEXT = "Storage Domain {$storage_domain_name=STRING+} (Data Center {$storage_pool_name=UNTIL(') was autorecovered.')}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ACTIVATE_STORAGE_DOMAIN_FAILED_ASYNC
+    TEXT = "Failed to autorecover Storage Domain {$storage_domain_name=STRING+} (Data Center {$storage_pool_name=UNTIL(').')}"
+endsubformula
+
+subformula "parse_body"
+    # USER_DEACTIVATED_STORAGE_DOMAIN
+    TEXT = "Storage Domain {$storage_domain_name=STRING+} (Data Center {$storage_pool_name=STRING+} was deactivated and has moved to 'Preparing for maintenance' until it will no longer be accessed by any Host of the Data Center."
+    
+    $storage_pool_name = strip($storage_pool_name, "", ")")
+endsubformula
+
+subformula "parse_body"
+    # USER_DEACTIVATE_STORAGE_DOMAIN_FAILED
+    # SYSTEM_DEACTIVATE_STORAGE_DOMAIN_FAILED
+    TEXT = "Failed to deactivate Storage Domain {$storage_domain_name=STRING+} (Data Center {$storage_domain_name=REST}"
+    
+    $storage_domain_name = strip($storage_domain_name, "", ").")
+endsubformula
+
+subformula "parse_body"
+    # SYSTEM_DEACTIVATED_STORAGE_DOMAIN
+    TEXT = "Storage Domain {$storage_domain_name=STRING+} (Data Center {$storage_pool_name=STRING+} was deactivated by system because it's not visible by any of the hosts."
+    
+    $storage_pool_name = strip($storage_pool_name, "", ")")
+endsubformula
+
+subformula "parse_body"
+    # USER_EXTENDED_STORAGE_DOMAIN
+    TEXT = "Storage {$storage_domain_name=STRING+} has been {object.state='extended'} by {$user=STRING+} Please wait for refresh."
+endsubformula
+
+subformula "parse_body"
+    # USER_EXTENDED_STORAGE_DOMAIN_FAILED
+    TEXT = "Failed to extend Storage Domain {$storage_domain_name=STRING+} (User: {$user=REST}"
+    
+    $storage_domain_name = strip($storage_domain_name, "", ".")
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+if in_list([
+    "USER_ADD_STORAGE_DOMAIN_FAILED", "USER_UPDATE_STORAGE_DOMAIN_FAILED",
+    "USER_REMOVE_STORAGE_DOMAIN_FAILED", "USER_EXTENDED_STORAGE_DOMAIN_FAILED",
+    "USER_FORCE_REMOVE_STORAGE_DOMAIN_FAILED"
+    ], $event_class) then
+    $user = strip($user, "", ")")
+elif $event_class == "USER_EXTENDED_STORAGE_DOMAIN" then
+    $user = strip($user, "", ".")
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = "storage_domain"
+object.name = $storage_domain_name
+
+logon_service = $authz_provider
+
+datafield1 = $storage_pool_name  # Data Center Name
+datafield2 = $storage_domain_name  # Storage Domain Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_Storage_Domain_Management"

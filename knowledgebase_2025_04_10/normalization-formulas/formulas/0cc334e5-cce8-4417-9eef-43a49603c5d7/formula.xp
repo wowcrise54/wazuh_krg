@@ -1,0 +1,37 @@
+TABULAR =  "recordid,
+            {subject.name = module_name},
+            severity,
+            event_id,
+            {time = time},
+            {datafield1 = site_code},
+            hostname,
+            {datafield2 = component},
+            params
+            "
+
+COND = $event_id == 1215
+
+subject = "application"
+object = "report"
+
+action = "receive"
+status = "success"
+
+msgid = string($event_id)
+
+submessage ("TEXT", "add_info", $params)
+subformula "add_info"
+    TEXT = '{$csv=CSV}'
+
+    src.hostname = lower($csv[2])  # Имя комьютера, с которого пришел отчет
+    datafield3 = $csv[3]           # Назване компонента
+endsubformula
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "medium"
+
+id = "PT_Microsoft_SCCM_odbc_1215_status_manager_received_status_report"

@@ -1,0 +1,85 @@
+# {"class":"vim.event.RoleRemovedEvent","key":15406,"chainId":15406,"createdTime":"2022-02-17 07:51:11.003000+00:00","userName":"VSPHERE.LOCAL\\Administrator","fullFormattedMessage":"Role SomeRoleVC_Edited removed","role":{"class":"vim.event.RoleEventArgument","roleId":1750195841,"name":"SomeRoleVC_Edited"}}
+
+JSON = ''
+COND = in_list([
+           "RoleAddedEvent",
+           "RoleRemovedEvent",
+           "RoleUpdatedEvent"
+       ], strip($class, "vim.event.", ""))
+       or ($eventTypeId == "com.vmware.sso.RoleManagement")
+
+
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+action = switch strip($class, "vim.event.", "")
+    case "RoleAddedEvent" "create" 
+    case "RoleRemovedEvent" "remove"
+    case "RoleUpdatedEvent" "modify"
+    case "EventEx" "info"
+endswitch
+
+object = "resource"
+status = "success"
+
+subformula "sso_event"
+    TEXT = '[Role Management event by {UNTIL(" at ")}{$sso_time=DATETIME} : {$reason=REST}'
+    
+    reason = strip($reason, "", "]")
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.type = "role"
+object.id = $role["roleId"]
+
+if $class == "vim.event.RoleUpdatedEvent" then
+    object.name = $prevRoleName
+    
+    $added_privileges = join($privilegesAdded, " | ")
+    $removed_privileges = join($privilegesRemoved, " | ")
+    $privilege_list = join($privilegeList, " | ")
+    
+    object.property = "name|privileges"
+    object.value = $prevRoleName + " | " + replace($privilege_list, "", $added_privileges) + $removed_privileges
+    object.new_value = $role["name"] + " | " + $privilege_list
+elif $class == "vim.event.RoleAddedEvent" then
+    object.name = $role["name"]
+    object.property = "privileges"
+    object.new_value = join($privilegeList, " | ")
+else
+    object.name = $role["name"]
+endif
+
+chain_id = $chainId
+
+time = $createdTime
+msgid = coalesce($eventTypeId, strip($class, "vim.event.", ""))
+importance = "medium"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_Role_Management"

@@ -1,0 +1,113 @@
+query User_SID_Mismatch($id, $name) from Known_Windows_Accounts {
+    id == $id
+    and name != $name
+}
+
+query Get_User_SID($id, $name) from Known_Windows_Accounts {
+    id == $id
+    and name != $name
+}
+    qhandler {
+        $name = name
+        $domain_full = domain_full
+        $domain_netbios = domain_netbios
+    }
+
+event SID_Mismatch:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4624"
+        and lower(logon_service) == "kerberos"
+        and (   (
+                match(subject.account.name, "*$")
+                and (exec_query("User_SID_Mismatch", [lower(subject.account.id), lower(subject.account.name)]) or match(subject.account.id, "*-500"))
+            )
+            or  (
+                match(subject.account.id, "*-500")
+                and exec_query("User_SID_Mismatch", [lower(subject.account.id), lower(subject.account.name)])
+            )
+        )
+        and filter::CheckWL_Windows_Login("Kerberos_Silver_Ticket", join([lower(subject.account.name), lower(subject.account.id)], "|"))
+    }
+
+rule Kerberos_Silver_Ticket: SID_Mismatch
+
+    init {
+        $labels = "w_auto|CheckWL_Windows_Login"
+    }
+
+    on SID_Mismatch {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $result = exec_query("Get_User_SID", [lower(subject.account.id), lower(subject.account.name)])
+        $object.account.name = $result["$name"]
+        $object.account.domain = coalesce($result["$domain_full"], $result["$domain_netbios"])
+        $object.account.id = subject.account.id
+
+        $logon_type = logon_type
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+        
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        
+        if match($object.account.id, "*-500") then
+            $reason = "RID 500" 
+        else
+            $reason = "Known user SID"
+        endif
+
+        $alert.key = join([lower(subject.account.name),lower(subject.account.id)], "|")
+        $alert.context = $reason + ": " + $object.account.name + "@" + $object.account.domain
+        
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Silver Ticket"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 1h
+}

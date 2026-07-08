@@ -1,0 +1,99 @@
+event Auth_To_Attacker_Host:
+    key:
+        src.hostname, dst.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon" 
+        and msgid == "3"
+        and not filter::Loopback_Address(dst.ip)
+        and src.ip != dst.ip
+        and src.hostname != null
+        and in_list([80, 445, 25, 1433], dst.port)
+        and object == "connection"
+        and direction == "egress"
+        and filter::CheckWL_Specific_Only("NTLM_Relay_Auth", join([lower(src.hostname), dst.ip, string(dst.port)],"|"))
+    }
+    
+event Auth_From_Attacker_Host:
+    key:
+        src.hostname, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4624"
+        and not filter::Loopback_Address(src.ip)
+        and src.hostname != null
+        and logon_type == 3
+        and lower(logon_service) == "ntlmssp"
+        and lower(logon_auth_method) == "remote"
+    }
+    
+rule NTLM_Relay_Auth: Auth_To_Attacker_Host and Auth_From_Attacker_Host within 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Auth_To_Attacker_Host {
+        $subject.account.id = object.account.id
+        $subject.account.name = object.account.name
+        $subject.account.domain = object.account.domain
+        
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+   
+        $src.host = dst.host
+        $src.fqdn = dst.fqdn
+        $src.hostname = dst.hostname
+        $src.ip = dst.ip
+        $src.port = dst.port
+        $src.asset = dst.asset  
+    
+        $event_src.host = event_src.host
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        
+        $alert.key = join([lower(src.hostname), dst.ip, string(dst.port)],"|")
+        $alert.context = lower($event_src.host) + " (" + $subject.account.name + ") → " + $src.ip + " → " + $alert.context
+    }
+    
+    on Auth_From_Attacker_Host {        
+        $object.account.name = subject.account.name
+        $object.account.domain = subject.account.domain
+        $object.account.id = subject.account.id
+        $object.account.session_id = subject.account.session_id
+        
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+        
+        $alert.context = $alert.context + $dst.host + " (" + subject.account.name + ")"
+    }
+    
+emit {
+    $correlation_type = "incident"
+    $importance = "high"
+    
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Adversary-in-the-Middle: LLMNR/NBT-NS Poisoning and SMB Relay"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance 
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}
+    

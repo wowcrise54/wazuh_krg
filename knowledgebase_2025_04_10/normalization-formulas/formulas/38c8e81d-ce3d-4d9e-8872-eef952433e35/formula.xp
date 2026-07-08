@@ -1,0 +1,58 @@
+!TEXT = 'CEF:0|Netwrix|{$tmp_subsys="File Servers"}|1.0|Read (Failed Attempt)|Read (Failed Attempt){"File or folder"|"Folder"}
+        |0|shost={src.ip=IPV4|$hostname=HOSTNAME}{$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+action = "access"
+object = "resource"
+status = "failure"
+
+if $kv["cat"] == "Folder" then
+    object.type = "directory"
+endif
+
+$csv1 = csv($kv["suser"], "\\", "*")
+
+subject.domain = $csv1[0]
+subject.name = $csv1[length($csv1) - 1]
+
+$path_raw = replace($kv["filePath"], "\\", "\\\\\\\\")
+$csv_path = csv($path_raw, "\\", "'")
+object.name = $csv_path[length($csv_path) - 1]
+object.path = strip($path_raw, "", object.name)
+
+submessage("TEXT", "SPLIT_1", $kv["msg"])
+
+subformula "SPLIT_1"
+    # извлечение datafield1 и datafield3
+    TEXT = '{"Process:" $process_raw=UNTIL(",")?} {"Session ID: "} {datafield1=REST}'
+endsubformula
+
+# datafield1 - идентификатор сессии
+$process_raw = replace($process_raw, "\\", "\\\\\\\\")
+$csv_path = csv($process_raw, "\\", "'")
+datafield3 = $csv_path[length($csv_path) - 1]     # имя исполняемого файла
+datafield2 = strip($process_raw, "", datafield3)  # путь к исполняемому файлу
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        src.fqdn = $hostname
+        event_src.fqdn = src.fqdn
+        src.hostname = substr($hostname, 0, $dot_pos)
+        event_src.hostname = src.hostname
+    elif $hostname != "unknown" then
+        src.hostname = $hostname
+        event_src.hostname = src.hostname
+    endif
+endif
+
+time = $kv["start"]
+importance = "low"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Other"
+event_src.ip = src.ip
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_File_folder_access_failure"

@@ -1,0 +1,150 @@
+event Create_File_In_Tmp:
+    key:
+        event_src.host, subject.account.session_id, subject.process.id, subject.process.cwd
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Linux()
+        and in_list(["file", "file_object"], object)
+        and object.type == "regular_file"
+        and object.state == "rw"
+        and in_list(["gs", "ghostscript"], subject.process.name)
+        and object.path == "/tmp/"
+        and regex(lower(subject.process.meta), "^(gs|ghostscript)\s+.*?\.e?ps", 0) != null
+    }
+
+event Start_Sh_From_GS:
+    key:
+        event_src.host, subject.account.session_id, object.process.parent.id, object.process.cwd
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux_Shell()
+    }
+
+event Start_GS:
+    key:
+        event_src.host, subject.account.session_id, object.process.id, object.process.cwd
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and in_list(["gs", "ghostscript"], object.process.name)
+        and regex(lower(object.process.cmdline), "^(gs|ghostscript)\s+.*?\.e?ps", 0) != null
+        and filter::CheckWL_Linux_Process_Creation("CVE_2024_29510_Ghostscript", lower(join([coalesce(subject.account.name, subject.account.id), object.process.cmdline], "|")))
+    }
+
+rule CVE_2024_29510_Ghostscript: (Create_File_In_Tmp? and Start_Sh_From_GS and Start_GS) timer 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Start_GS {
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+        $subject.type = subject.type
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+        
+        $object.process.parent.name = object.process.name
+        $object.process.parent.id = object.process.id
+        $object.process.parent.path = object.process.path
+        $object.process.parent.fullpath = object.process.fullpath
+        $object.process.parent.cmdline = object.process.cmdline
+
+        $logon_service = logon_service
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "^(gs|ghostscript)\s+.*?\.e?ps", 0)
+    }
+
+    on Create_File_In_Tmp {
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.meta = subject.process.meta
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.chain = subject.process.chain
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.state = object.state
+        $object.id = object.id
+
+        $detect = "CVE-2024-29510"
+    }
+
+    on Start_Sh_From_GS {
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $datafield1 = datafield1
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+
+        $datafield18 = datafield18 # chain with PID for subject
+        $datafield19 = datafield19 # chain with PID for object
+        
+        $numfield2 = numfield2
+    }
+
+emit {
+    if $detect != null then
+        $correlation_type = "incident"
+
+        $importance = "medium"
+
+        $incident.category = "VulnerabilityExploitation"
+    else
+        $correlation_type = "event"
+
+        $importance = "low"
+
+        $incident.category = "SoftwareSuspiciousActivity"
+    endif
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $alert.context = join([$object.process.parent.name, "executed", "'" + $object.process.cmdline + "'"], " ")
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Exploitation for Client Execution"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

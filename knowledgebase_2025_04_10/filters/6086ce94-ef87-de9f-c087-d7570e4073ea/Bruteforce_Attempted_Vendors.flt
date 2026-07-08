@@ -1,0 +1,9 @@
+filter Bruteforce_Attempted_Vendors() {
+    filter::NotFromCorrelator()
+    and filter::Bruteforce_Supported_Vendors()
+    and action == "login"
+    and status == "failure"
+    and src.host != null
+    and category.high == "Access Management"
+    and category.low == "Communication"
+}

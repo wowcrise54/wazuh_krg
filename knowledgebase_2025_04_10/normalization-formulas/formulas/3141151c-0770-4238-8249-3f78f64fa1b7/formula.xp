@@ -1,0 +1,89 @@
+# {"class":"vim.event.EventEx","key":"498","chainId":"498","createdTime":"2022-02-10 14:43:14.573999+00:00","userName":"VSPHERE.LOCAL\\machine-b8e76ece-a298-4e77-ae41-3d8b5ceebdec","fullFormattedMessage":"event.com.vmware.applmgmt.ssh.access.event.fullFormat (com.vmware.applmgmt.ssh.access.event)","eventTypeId":"com.vmware.applmgmt.ssh.access.event","severity":"info","message":"","arguments":{"userName":"root","status":"Accepted","userIp":"10.125.3.2","portId":"56739","serverIp":"10.125.4.5","_sourcehost_":"vcsa7.rf.plat.form"},"objectId":"","objectName":""}
+
+JSON = ''
+COND = in_list([
+           "esx.audit.ssh.session.opened",
+           "esx.audit.ssh.session.closed",
+           "esx.audit.ssh.session.failed",
+           "com.vmware.applmgmt.ssh.access.event"
+       ], $eventTypeId)
+
+subject = "account"
+
+action = switch $eventTypeId
+    case "esx.audit.ssh.session.closed" "logout"
+    case "esx.audit.ssh.session.opened" "login"
+    case "esx.audit.ssh.session.failed" "login"
+    case "com.vmware.applmgmt.ssh.access.event" "login"
+endswitch
+
+object = "system"
+
+status = switch strip($eventTypeId, "esx.audit.ssh.session.", "")
+    case "closed" "success"
+    case "opened" "success"
+    case "failed" "failure"
+endswitch
+if ($eventTypeId == "com.vmware.applmgmt.ssh.access.event") and ($arguments["status"] == "Accepted") then
+    status = "success"
+endif
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", coalesce($arguments["1"], $arguments["userName"]))
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+if ($eventTypeId == "com.vmware.applmgmt.ssh.access.event") then
+    src.ip = $arguments["userIp"]
+    src.port = $arguments["portId"]
+    dst.ip = $arguments["serverIp"]
+    dst.hostname = $arguments["_sourcehost_"]
+else
+    src.ip = $arguments["2"]
+    if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+        dst.ip = $host["name"]
+    else
+        dst.hostname = $host["name"]
+    endif
+endif
+
+logon_auth_method = "remote"
+logon_service = "ssh"
+
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = coalesce(if $objectName == "" then null else $objectName endif, $arguments["_sourcehost_"])  # vCenter/ESXi Host Name
+datafield6 = $host["name"]  # Host Name
+datafield10 = if $objectId == "" then null else $objectId endif  # Internal Entity ID
+
+chain_id = $chainId
+
+time = $createdTime
+msgid = $eventTypeId
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_SSH_Session"

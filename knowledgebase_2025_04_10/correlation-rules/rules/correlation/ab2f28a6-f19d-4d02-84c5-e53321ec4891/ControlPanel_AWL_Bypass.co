@@ -1,0 +1,206 @@
+event StartProcess:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("control.exe", "\.(cpl|dll)\\b")
+        and filter::CheckWL_Process_Creation("ControlPanel_AWL_Bypass", lower(object.process.cmdline))
+
+}
+
+event StartRundll32:
+    key:
+        event_src.host, object.process.parent.id, object.process.parent.name
+    filter {
+        correlation_name == "Rundll32_AWL_Bypass"
+        and lower(object.process.name) == "rundll32.exe"
+        and regex(lower(object.process.cmdline), "shell32\.dll.*?control_rundll.*?\.(dll|cpl)\\b", 0) != null
+}
+
+event Registry_Event:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                msgid == "4657"
+                and event_src.title == "windows"
+            )
+            or (
+                in_list(["12", "13"], msgid)
+                and event_src.title == "sysmon"
+            )
+        )
+        and match(lower(object.path), "*\\control panel\\cpls*")
+        and regex(lower(object.new_value), "\.(cpl|dll|exe)\\b", 0) != null
+        and filter::CheckWL_Registry_Actions("ControlPanel_AWL_Bypass", lower(join([subject.process.fullpath, object.name, object.new_value], "|")))
+    }
+
+rule ControlPanel_AWL_Bypass: (StartProcess and StartRundll32?) timer 15s or Registry_Event
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on StartProcess {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+            $reason = join([$reason, "Service execution"], "|")
+        elif $object.process.parent.name == "scheduler.exe" then
+            $reason = join([$reason, "Task execution"], "|")
+        else
+            $reason = join([$reason, "User execution"], "|")
+        endif
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "\.(cpl|dll)\\b", 0)
+        $alert.context = $alert.context
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on StartRundll32 {
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.imphash = object.process.hash.imphash
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+        $subject.process.version = object.process.version
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.guid = object.process.guid
+        $subject.process.meta = object.process.meta
+        $subject.process.original_name = object.process.original_name
+        $subject.process.cwd = object.process.cwd
+
+        $reason = join([$reason, "Success"], "|")
+
+        $alert.regex_match = "rundll32_regex_match: " + regex(lower(object.process.cmdline), "shell32\.dll.*?control_rundll.*?\.(dll|cpl)\\b", 0)
+        $alert.context = $alert.context
+    }
+
+    on Registry_Event {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.new_value = object.new_value
+
+        $reason = "Registry"
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(join([subject.process.fullpath, object.name, object.new_value], "|"))
+        $alert.regex_match = regex(lower(object.new_value), "\.(cpl|dll|exe)\\b", 0)
+        $alert.context = object.path
+        $labels = $labels + "|CheckWL_Registry_Actions"
+    }
+
+emit {
+    if match(lower($reason), "*success*") then
+        $importance = "medium"
+    elif $reason == "Registry" then
+        $importance = "medium"
+    else
+        $importance = "low"
+    endif
+
+    $correlation_type = "event"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "System Binary Proxy Execution: Control Panel"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

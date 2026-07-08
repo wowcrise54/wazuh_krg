@@ -1,0 +1,91 @@
+query CheckIfUserIsCritical($user, $event_src_title) from Applications_Significant_Users {
+    user == $user
+    and event_src_title == $event_src_title
+}
+
+event Modify_Critical_User:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "zabbix"
+        and in_list(["ACTION_UPDATE", "ACTION_DELETE"], msgid)
+        and object == "account"
+        and in_list(["modify", "remove"], action)
+        and status == "success"
+        and exec_query("CheckIfUserIsCritical", [lower(object.account.name), event_src.title])
+        and filter::CheckWL_Specific_Only("Zabbix_Critical_User_Manipulate", lower(object.account.name))
+    }
+
+rule Zabbix_Critical_User_Manipulate: Modify_Critical_User
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Modify_Critical_User {
+        $action = action
+
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.name = object.account.name    
+        $object.account.id = object.account.id
+        $object.account.fullname = object.account.fullname
+
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $datafield1 = datafield1 # additional info about action
+
+        $reason = select_query_first("CheckIfUserIsCritical", [lower(object.account.name), event_src.title], "reason")
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.asset = src.asset
+
+        $alert.key = lower(object.account.name)
+        $alert.context = join(remove([subject.account.name, object.account.name], null), " | ")
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.id = event_src.id
+    }
+
+emit { 
+    $correlation_type = "event"
+
+    $subject = "account"
+    $object = "account"
+    $status = "success"
+
+    $category.generic = "Attack"
+    if $action == "modify" then
+        $category.high = "Persistence"
+        $category.low = "Account Manipulation"
+
+        $importance = "medium"
+
+        $incident.category = "PermissionViolation"
+    else
+        $category.high = "Impact"
+        $category.low = "Account Access Removal"
+
+        $importance = "high"
+
+        $incident.category = "UnauthorizedDataDeletion"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.account.name], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,15 @@
+TEXT = 'R {WORD} {time=DATETIME}:{NUMBER} reject client: TP={object.name=STRING} {reason=REST}'
+
+action = "execute"
+object = "application"
+status = "failure"
+
+object.type = "transport control program (tp)"
+importance = "medium"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.category = "Application server"
+event_src.subsys = "gateway log"
+
+id = "PT_SAP_SAP_AS_ABAP_Gateway_Log_filemonitor_Reject_client"

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying for a MikroTik network device. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="2c8b64da-0486-703a-4629-3c346dfd4770">Successful password spraying from host {src.host} on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="4c7f93b8-287e-3cd6-7f48-84edda318ed0">Successful password spraying from host {src.host} on host {event_src.host}. Attackers obtained the passwords of the following users: {datafield2}. Number of failed login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="d41aca8e-df2f-bc41-4fd2-267adfd663a1">Password spraying attempts from host {src.host} on host {event_src.host}. Number of login attempts: {datafield1}.</EventDescription>
+  </EventDescriptions>
+</Localization>

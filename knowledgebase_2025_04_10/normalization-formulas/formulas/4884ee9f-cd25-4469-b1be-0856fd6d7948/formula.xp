@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{event_src.hostname=HOSTNAME|STRING}  :DAI: {$proto="ARP"} packet with invalid IP/MAC binding dropped on untrusted port {datafield8 = REST}'
+
+action = "deny"
+object = "packet"
+status = "success"  
+
+protocol = lower($proto)
+
+# datafield8 - порт
+
+importance = "info"
+reason = "ip-mac pair was not found in dhcp binding database"
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.title = "ers_5500"
+event_src.vendor = "avaya"
+event_src.category = "Network device"
+
+id = "PT_Avaya_ERS_5500_syslog_interface_arp_inspection_check_failed"

@@ -1,0 +1,59 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.fqdn=HOSTNAME} {$product_name=UNTIL("|")}
+        {STRING} - {msgid="000007e6"}
+        [event@{NUMBER} {$raw_kv=UNTIL("]")} {$data=REST}' 
+
+action = "open"
+object = "session"
+status = "success"
+
+$description = replace($data, " ", "\\\\r")
+$kv = keyvalue($description, " \\n", ":")
+$kv_extra = keyvalue($raw_kv, " ", "=", "\"")
+
+$bracket = find_substr($kv["Пользователь"], "(")
+$domain_user = substr($kv["Пользователь"], 0, $bracket - 1)
+$domain_user = csv($domain_user, "\\", "'")
+if length($domain_user) == 2 then
+    subject.account.name = lower($domain_user[1])
+    subject.account.domain = lower($domain_user[0])
+else
+    subject.account.name = lower($domain_user)
+endif
+
+subject.process.name = lower($kv["Название"])
+subject.process.path = lower($kv["Путь к приложению"])
+if subject.process.path != null then
+    subject.process.fullpath = lower($kv["Путь к приложению"] + "\\" + $kv["Название"])
+endif
+
+object.type = "KSN server"
+
+datafield1 = $kv_extra["gn"]    # имя группы администрирования, в которую входит узел-источник
+datafield5 = $kv_extra["tdn"] # обозначение типа действия или категории события
+
+reason = $kv["Тип события"]
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $kv['hip'] != "127.0.0.1" then
+    event_src.ip = $kv_extra['hip']
+endif
+event_src.hostname = lower($kv_extra["hdn"])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_plain_ksn_servers_available"

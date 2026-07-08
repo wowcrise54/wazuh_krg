@@ -1,0 +1,63 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        haproxy{'['?}{NUMBER}{']'?}{':'?} {$ci=IPV4|$ci=IPV6}:{$cp=NUMBER} [{$t=DATETIME}.{NUMBER}] {$ft=STRING}
+        {$bs=STRING} {NUMBER}/{NUMBER}/{NUMBER} {$B=NUMBER} {$ts=STRING} {NUMBER}/{NUMBER}/{NUMBER}/{NUMBER}/{NUMBER}
+        {NUMBER}/{NUMBER}"
+
+# Формат по умолчанию: "%ci:%cp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts %ac/%fc/%bc/%sc/%rc %sq/%bq"
+
+action = if $ts == "--" then "allow" else "deny" endif 
+object = "session"
+status = "success"
+
+object.type = "tcp"
+
+src.ip = $ci
+src.port = $cp
+
+reason = switch $ts
+    case "--" "Normal termination"
+    case "CC" "The client aborted before the connection could be established to the server"
+    case "CD" "The client unexpectedly aborted during data transfer"
+    case "cD" "The client did not send nor acknowledge any data for as long as the 'timeout client' delay"
+    case "CH" "The client aborted while waiting for the server to start responding"
+    case "cH" "The 'timeout client' stroke while waiting for client data during a POST request"
+    case "CQ" "The client aborted while its session was queued, waiting for a server with enough empty slots to accept it"
+    case "CR" "The client aborted before sending a full HTTP request"
+    case "cR" "The 'timeout http-request' stroke before the client sent a full HTTP request"
+    case "CT" "The client aborted while its session was tarpitted"
+    case "LR" "The request was intercepted and locally handled by haproxy"
+    case "SC" "The server or an equipment between it and haproxy explicitly refused the TCP connection"
+    case "sC" "The 'timeout connect' stroke before a connection to the server could complete"
+    case "SD" "The connection to the server died with an error during the data transfer"
+    case "sD" "The server did not send nor acknowledge any data for as long as the 'timeout server' setting during the data phase"
+    case "SH" "The server aborted before sending its full HTTP response headers, or it crashed while processing the request"
+    case "sH" "The 'timeout server' stroke before the server could return its response headers"
+    case "sQ" "The session spent too much time in queue and has been expired"
+    case "PC" "The proxy refused to establish a connection to the server because the process' socket limit has been reached while attempting to connect"
+    case "PD" "The proxy blocked an incorrectly formatted chunked encoded message in a request or a response, after the server has emitted its headers"
+    case "PH" "The proxy blocked the server's response, because it was invalid, incomplete, dangerous (cache control), or matched a security filter"
+    case "PR" "The proxy blocked the client's HTTP request, either because of an invalid HTTP syntax or because a deny filter matched"
+    case "PT" "The proxy blocked the client's request and has tarpitted its connection before returning it a 500 server error"
+    case "RC" "A local resource has been exhausted (memory, sockets, source ports) preventing the connection to the server from establishing"
+endswitch
+
+datafield1 = $ft  # Frontend Name
+$bs_list = csv($bs, "/", "")
+datafield2 = $bs_list[0]  # Backend Name
+datafield3 = $bs_list[1]  # Server Name
+
+time = $t
+importance = "info"
+
+event_src.vendor = "haproxy_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "haproxy"
+event_src.category = "Proxy server"
+
+id = "PT_HAProxy_Technologies_HAProxy_syslog_TCP_Option_Access"

@@ -1,0 +1,132 @@
+event File_Key_Modify:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (event_src.title == "sysmon" and msgid == "13") 
+            or (event_src.title == "windows" and msgid == "4657")
+        )
+        and regex(lower(object.path), "\\\\registry\\\\machine\\\\system\\\\(controlset001|currentcontrolset)\\\\services\\\\eventlog\\\\", 0) != null
+        and lower(object.name) == "file"
+        and object.new_value != null
+        and filter::CheckWL_Registry_Actions("EventLog_File_Substitute", lower(join([object.fullpath, object.new_value], "|")))
+    }
+    
+event Wevtutil_Command:
+    key:
+        event_src.host
+    filter { 
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("wevtutil.exe", "\s(sl)\s+.*?\/\\blogfilename:")
+    }
+
+rule EventLog_File_Substitute: (Wevtutil_Command? and File_Key_Modify) timer 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+    }
+
+    on File_Key_Modify {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.hash.md5 = subject.process.hash.md5
+        $subject.process.hash.imphash = subject.process.hash.imphash
+        $subject.process.hash.sha1 = subject.process.hash.sha1
+        $subject.process.hash.sha256 = subject.process.hash.sha256
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.query = object.query
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $datafield1 = regex(lower(object.fullpath), "eventlog\\\\(.*?)\\\\file", 1)
+        
+        $alert.key = lower(join([object.fullpath, object.new_value], "|"))
+        $alert.context = $datafield1 + "|" + subject.process.name + $alert.context
+    }
+
+    on Wevtutil_Command {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.account.name = subject.account.name
+        $object.account.domain = subject.account.domain
+        $object.account.session_id = subject.account.session_id
+        $object.account.id = subject.account.id
+        $object.account.privileges = subject.account.privileges
+
+        $alert.regex_match = regex(lower(object.process.cmdline), "\s(sl)\s+.*?\/\\blogfilename:", 0)
+        $alert.context = $alert.context
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "modify"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable Windows Event Logging"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

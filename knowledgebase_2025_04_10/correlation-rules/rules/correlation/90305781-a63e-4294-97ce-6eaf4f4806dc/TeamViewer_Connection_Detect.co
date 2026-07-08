@@ -1,0 +1,118 @@
+query Check_Server_Ip_Teamviewer_Servers_Addresses($server_ip) from Teamviewer_Servers_Addresses {
+    server_ip == $server_ip
+}
+
+event TeamViewer_Detect:
+    key:
+        src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                in_list(["connection", "session"], object)
+                and in_list(["allow", "open", "detect"], action)
+            )
+            or (
+                object == "flow"
+                and in_list(["open", "detect"], action)
+            )
+            or (
+                object == "conntrack"
+                and action == "create"
+            )
+        )
+        and status == "success"
+        and src.host != null
+        and (
+            (
+                dst.port == 5938
+            )
+            or (
+                in_list([80, 443], dst.port)
+                and exec_query("Check_Server_Ip_Teamviewer_Servers_Addresses", [dst.ip])
+            )
+        )
+        and filter::CheckWL_Networking("TeamViewer_Connection_Detect", join([src.ip, dst.ip], "|"))
+    }
+
+rule TeamViewer_Connection_Detect: TeamViewer_Detect+ timer 5m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on TeamViewer_Detect {
+        if $first_event then
+            $subject = subject
+
+            if $subject == "rule" then
+                $subject.id = subject.id
+                $subject.name = subject.name
+            endif
+
+            if coalesce(subject.account.id, subject.account.name) != null then
+                $object.account.id = subject.account.id
+                $object.account.name = subject.account.name
+                $object.account.domain = subject.account.domain
+            elif coalesce(object.account.id, object.account.name) != null then
+                $object.account.id = object.account.id
+                $object.account.name = object.account.name
+                $object.account.domain = object.account.domain
+                $object.account.fullname = object.account.fullname
+            endif
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+        
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.port = dst.port
+            $dst.asset = dst.asset
+
+            $protocol = protocol
+            $direction = direction
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = join([src.ip, dst.ip], "|")
+
+            $first_event = false
+            $labels = $labels + "|CheckWL_Networking"
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "detect"
+    $object = "connection"
+    $status = "success"
+
+    $object.name = "TeamViewer"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Remote Access Software"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareInstallationPolicyViolation"
+    $incident.aggregation.timeout = 3h
+}

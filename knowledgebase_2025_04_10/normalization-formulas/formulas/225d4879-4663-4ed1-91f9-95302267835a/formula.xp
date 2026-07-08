@@ -1,0 +1,48 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "BackupSettings" and $type == "Update"
+ 
+if $authorType == "User" then
+    subject = "account"
+
+    subject.account.id = $author
+    subject.account.name = $authorPresentation
+
+elif $authorType == "Service" then
+    subject = "service"
+
+    subject.id = $author
+    subject.name = $authorPresentation
+endif
+
+action = "modify"
+object = "application"
+status = "success"
+
+object.id = $targetId
+object.type = "backup settings"
+object.property = $change["fieldName"]
+object.new_value = $change["newValue"]
+
+if $change["type"] == "PrimitiveChangeJSON" and $change["fieldName"] == "backupFolder" then
+    object.path = $change["oldValue"]
+
+elif $change["type"] == "PrimitiveChangeJSON" then
+    object.value = $change["oldValue"]
+endif
+
+chain_id = $id
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "info"
+
+category.generic = "Application"
+category.high = "Generic Application Management"
+category.low = "Manipulation"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_Change_Backup_Settings"

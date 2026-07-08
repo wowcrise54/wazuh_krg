@@ -1,0 +1,98 @@
+!TABULAR = "severity,
+            {msgid=event_type},
+            {time=event_time},
+            description,
+            hostname,
+            {datafield1=group_name}"
+
+!COND = $event_type == "GNRL_EV_ATTACK_DETECTED"
+
+$description = replace($description, " ", "\t")
+if find_substr($description, "\r\n") != null then
+    $kv = keyvalue($description, "\r\n", ":")
+else
+    $kv = keyvalue($description, " ", ": ")
+endif
+
+subject = "application"
+action = "detect"
+object = "attack"
+status = "success"
+
+if $kv["Результат\\Описание"] == "Запрещено" then
+    object.state = "denied"
+endif
+
+object.name = $kv["Результат\\Название"]
+
+if $kv["Результат\\Название"] == null then
+    if $par1 != upper($par1) then
+        object.name = $par1
+    else
+        # no data in event, sorry
+    endif
+else
+    object.name = $kv["Результат\\Название"]
+endif
+
+submessage("TEXT", "details", $kv["Объект"])
+subformula "details"
+    TEXT = '{protocol=WORD?} от {src.ip=IPV4|src.ip=IPV6|"нескольких разных источников"|"неожиданного источника"}
+            {"на локальный порт"|"на"|} {dst.ip=IPV4|dst.ip=IPV6|}{":"?}{dst.port=NUMBER?}'
+endsubformula
+
+if dst.ip == null then
+   dst.ip = $ip_address
+endif
+
+$dot_pos = find_substr($fqdn, '.')
+
+if $dot_pos != null then
+    dst.fqdn = $fqdn
+    dst.hostname = substr($fqdn, 0, $dot_pos)
+else
+    dst.hostname = $fqdn
+endif
+
+# datafield1 - имя группы администрирования, в которую входит узел-источник
+datafield3 = substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' ('))     # имя активного пользователя
+if src.ip == null then
+    datafield4 = $kv["Объект"]  # отметка о том, что атака происходила от нескольких разных источников
+endif
+
+importance = switch $severity
+    case 1 "info"
+    case 2 "low"
+    case 3 "medium"
+    case 4 "high"
+endswitch
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Network Attack"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $ip_address != "127.0.0.1" then
+    event_src.ip = $ip_address
+endif
+if ipv4($fqdn) == null and find_substr($fqdn, ".") != null then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_odbc_GNRL_EV_ATTACK_DETECTED"

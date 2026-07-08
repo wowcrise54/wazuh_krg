@@ -1,0 +1,82 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} {WORD} hostd[{WORD}] [Originator@{NUMBER} {$kv=UNTIL("]")} Event {NUMBER} :
+{$act="Upgrading virtual machine"|$act="Virtual machine compatibility upgraded"|$act="Cannot upgrade virtual machine compatibility."}{$rest=REST}'
+
+subject = "account"
+action = "update"
+object = "virtual_machine"
+
+status = switch $act
+    case "Upgrading virtual machine" "ongoing"
+    case "Virtual machine compatibility upgraded" "success"
+    case "Cannot upgrade virtual machine compatibility." "failure"
+endswitch
+
+subformula "upgrading_vm"
+    TEXT = 'compatibility of {$vm_name=STRING+} in {$datacenter_name=STRING+} to {$version=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+if ($act == "Virtual machine compatibility upgraded") then
+    $version = strip($rest, "to ", "")
+elif ($act == "Upgrading virtual machine") then
+    submessage("TEXT", "upgrading_vm", $rest)
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+
+if not in_list(["", null], $version) then
+    object.property = "compatibility_version"
+    object.new_value = $version
+endif
+
+datafield1 = $datacenter_name  # Datacenter Name
+datafield5 = $vm_name  # Virtual Machine Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+msgid = switch $act
+    case "Upgrading virtual machine" "VmUpgradingEvent"
+    case "Virtual machine compatibility upgraded" "VmUpgradeCompleteEvent"
+    case "Cannot upgrade virtual machine compatibility." "VmUpgradeFailedEvent"
+endswitch
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_Upgrade_VM"

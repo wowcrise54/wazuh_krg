@@ -1,0 +1,40 @@
+EVENTLOG = 'EventID.text="1000"'
+COND = (($Channel=="Kaspersky Security for Exchange Servers" and $Provider["Name"]=="KSE") or ($Channel=="Application" and $Provider["Name"] == "KSCM8"))
+
+action = "info"
+object = "update"
+status = "success"
+
+submessage("TEXT", "SPLIT", $Data[0])
+
+object.property = "component name"
+object.type = "signature database"
+
+subformula "SPLIT"  # EN
+    # Извлечение object.value, object.version и datafield1 из $Data[0]
+    TEXT='{UNTIL("\r\n")} {object.value=STRING+} databases {"have become"|"became"}
+    outdated more than {datafield1=STRING+} ago. Databases released on: {object.version=REST}'
+endsubformula
+
+subformula "SPLIT"  # RU
+    # Извлечение object.value, object.version и datafield1 из $Data[0]
+    TEXT='{UNTIL("\r\n")}Базы {object.value=STRING+} устарели более чем
+    на {datafield1=UNTIL(".")} Дата выпуска баз: {object.version=REST}'
+endsubformula
+
+# Datafield1 - время, которое прошло с момента последнего обновления
+
+reason="bases are out of date"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "low"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_microsoft_exchange_servers"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Kaspersky_Security_for_Exchange_eventlog_1000_bases_are_out_of_date"

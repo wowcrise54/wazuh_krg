@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Изменение LDAP-атрибутов msPKIAccountCredentials и msPKIRoamingTimestamp, которое свидетельствует об экплуатации уязвимости системы Windows Credential Roaming, позволяющей сделать запись в любой файл от имени пользователя-жертвы</Description>
+  <EventDescriptions>
+    <EventDescription id="0512b770-1028-ca46-7768-8eb93906b381">Пользователь {subject.account.name} изменил LDAP-атрибут {object.property} пользователя {object.account.name} на узле {event_src.host}. Это указывает на возможную попытку записи вредоносного кода в один из файлов от имени {object.account.name} при его следующем входе в систему</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,20 @@
+filter LoginSuccessful_Windows() {
+    filter::NotFromCorrelator()
+    and (
+            (
+                category.generic == "Access"
+                and category.high == "Authentication"
+            )
+            or (
+                category.high == "Access Management"
+                and category.low == "Communication"
+            )
+        )
+    and src.host != null
+    and src.host != "-"
+    and (subject.account.name != null or subject.account.id != null)
+    and event_src.title == "windows"
+    and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+    and not in_list(["127.0.0.1", "::1", "-"], src.ip)
+    and in_list(["528", "540", "4624"], msgid)
+}

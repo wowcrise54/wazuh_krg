@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$title="ASA"|$title="PIX"|$title="FWSM"|$title="FTD"}{"-session"?}-{WORD}-{msgid="500004"}:
+        {reason=WORD+}={$proto=WORD}, from {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}/{src.port=NUMBER}
+        to {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}/{dst.port=NUMBER}'
+
+action = "deny"
+object = "packet"
+status = "success"
+
+protocol = lower($proto)
+
+importance = "info"
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "cisco"
+event_src.title = lower($title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_500004_Invalid_transport_field_for_protocol"

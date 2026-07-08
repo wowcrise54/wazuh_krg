@@ -1,0 +1,91 @@
+event Start_Messenger_Chain:
+    key:
+        event_src.host
+    filter { 
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and object.process.chain != null
+        and regex(lower(object.process.chain), "^\S+\s←\s\S+\s←\s(lync|skype|telegram|whatsapp|teams)\.exe", 0) != null
+        #Исключаем цепочки процессов, заканчивающиеся офисными программами и браузерами
+        and regex(lower(object.process.chain), "^((werfault|browser|chrome|acrord32|firefox|msedge|opera|launcher|splwow64|yandex|winword|excel|powerpnt|onenote|onenotem|outlook|mspub|msaccess|onedrive|visio)\.exe ← )+", 0) == null
+        and filter::CheckWL_Process_Creation("Suspicious_Messenger_Process_Chain", lower(object.process.chain))   
+}
+
+rule Suspicious_Messenger_Process_Chain: Start_Messenger_Chain
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Start_Messenger_Chain {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $alert.key = lower(object.process.chain)
+        $alert.regex_match = regex(lower(object.process.chain), "^\S+\s←\s\S+\s←\s((lync|skype|telegram|whatsapp|teams)\.exe)", 1)
+        $alert.context = join([object.process.fullpath, object.process.cmdline], " | ")
+    }   
+
+emit {  
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Phishing: Spearphishing Attachment"
+
+    $importance = "high"
+        
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "Phishing"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{WORD}|{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $kv["subject"] == "Revision Control"
+       and $kv["operation"] == "Publish"
+
+subject = "account"
+action = "apply"
+object = "configuration"
+status = "success"
+
+subject.account.name = $kv["administrator"]
+subject.process.name = $kv["session_name"]
+subject.account.session_id = $kv["session_uid"]
+
+src.ip = $kv["src"]
+
+datafield4 =  $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+msgid = $kv["operation"]
+reason = $kv["fieldschanges"]
+importance = "low"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Configuration_Publish_changes"

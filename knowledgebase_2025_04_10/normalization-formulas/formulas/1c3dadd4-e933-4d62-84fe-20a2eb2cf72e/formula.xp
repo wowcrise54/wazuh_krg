@@ -1,0 +1,59 @@
+TEXT = "{'<'NUMBER'>'?}{$time_syslog=DATETIME} {$syslog_or_file=UNTIL('user')} {$subject_raw=UNTIL(' could')} not authenticate."
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subformula "parse_syslog_or_file"
+    # File
+    TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {$service_name=STRING*} {$time_file=DATETIME} {"us="NUMBER?} {$prefix=STRING*}'
+
+    $possible_day_of_week = substr($service_name, -3, 3)
+
+    if in_list(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], $possible_day_of_week) then
+        $service_name = strip($service_name, "", $possible_day_of_week)
+    endif
+
+    $service_name = if $service_name == "" then null else $service_name endif
+endsubformula
+
+subformula "parse_syslog_or_file"
+    # Syslog
+    TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {$service_name=WORDDASH}{"["?}{NUMBER?}{"]"?}{":"?} {$prefix=STRING*}'
+endsubformula
+
+submessage("TEXT", "parse_syslog_or_file", $syslog_or_file)
+
+$subject_raw = strip($subject_raw, "'", "'")
+
+if find_substr($subject_raw, "@") != null then
+    $subject_raw = csv($subject_raw, "@", "`")
+    subject.account.name = $subject_raw[0]
+    subject.account.domain = $subject_raw[1]
+else
+    subject.account.name = $subject_raw
+endif
+
+datafield2 = $service_name  # OpenVPN Daemon Name
+
+time = coalesce($time_file, $time_syslog)
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "openvpn"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "openvpn"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_OpenVPN_OpenVPN_syslog_user_authentication_failed"

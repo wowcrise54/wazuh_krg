@@ -1,0 +1,42 @@
+JSON = ''
+
+COND = $event_id == "siem_tabular_list_row_created"
+
+if $event_data["additionalFields"]["subjectTypeId"] == "User" then
+    subject = "account"
+    
+    subject.account.name = $event_data["additionalFields"]["subjectDisplayName"]
+    subject.account.id = $event_data["additionalFields"]["subjectId"]
+    
+elif $event_data["additionalFields"]["subjectTypeId"] == "System" then
+    subject = "system"
+else
+    subject = "rule"
+endif
+
+action = "create"
+object = "db_object"
+status = "success"
+
+subject.name = $event_data["additionalFields"]["subjectDisplayName"]
+subject.id = $event_data["additionalFields"]["subjectId"]
+subject.type = $event_data["additionalFields"]["subjectTypeId"]
+
+object.name = $event_data["objectId"]["tabularListName"]
+object.type = $event_data["objectTypeId"]
+object.property = "affected entry"
+object.new_value = "{" + strip($event_data["additionalFields"]["keyFieldValues"], "{", "}") + ", " + strip($event_data["additionalFields"]["newFieldValues"], "{", "}") + "}"
+
+datafield1 = $event_data["applicationId"]               # MPX instance ID
+datafield2 = $event_data["additionalFields"]["siemId"]  # conveyor ID
+
+time = $event_time
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "siem"
+event_src.category = "SIEM"
+
+id = "PT_Positive_Technologies_siem_tabular_list_row_created"
+

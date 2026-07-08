@@ -1,0 +1,44 @@
+JSON = "EventCode=4660"
+
+COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "remove"
+object = "file_object"
+status = "success"
+
+subject.account.id = $InsertionStrings[0]
+subject.account.name = lower($InsertionStrings[1])
+subject.account.domain = lower($InsertionStrings[2])
+subject.account.session_id = maybe_number16($InsertionStrings[3])
+
+subject.process.fullpath = lower($InsertionStrings[7])
+$temp = csv(subject.process.fullpath, '\\', '')
+subject.process.id = maybe_number16($InsertionStrings[6])
+subject.process.name = $temp[length($temp) - 1]
+subject.process.path = strip(subject.process.fullpath, '', subject.process.name)
+
+datafield1 = $InsertionStrings[5]  # Идентификатор файлового дескриптора
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_Common_Security_Auditing_4660_An_object_was_deleted"

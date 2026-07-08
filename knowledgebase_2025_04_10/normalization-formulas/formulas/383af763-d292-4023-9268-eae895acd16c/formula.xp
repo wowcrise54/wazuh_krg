@@ -1,0 +1,46 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} zorp/scb_rdp
+        {'['NUMBER']'?}: scb.audit({NUMBER}): ({object.value=UNTIL(')')}: {$action_choose=WORD} connection; {$kv=REST}"
+
+$result_list = keyvalue($kv, ",", "=", "'")
+
+if $action_choose == "Closing" then
+    action = "close"
+elif $action_choose == "Starting" then
+    action = "open"
+else
+    drop
+endif
+
+object = "session"
+status = "success"
+
+object.name = $result_list["connection"]
+object.property = "session ID"
+
+src.ip = $result_list["src_ip"]
+src.port = $result_list["src_port"]
+
+dst.ip = $result_list["server_ip"]
+dst.port = $result_list["server_port"]
+
+protocol = $result_list["protocol"]
+
+datafield1 = $result_list["verdict"]           # результат применения правил (при их наличии)
+datafield2 = $result_list["connection_id"]     # идентификатор подключения
+datafield3 = $result_list["gateway_username"]  # имя шлюза
+datafield4 = $result_list["remote_username"]   # имя пользователя
+
+importance = "info"
+
+event_src.vendor = "one_identity"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "safeguard_for_privileged_sessions"
+event_src.category = "Other"
+
+id = "PT_One_Identity_Safeguard_for_Privileged_Sessions_syslog_Connection_state"

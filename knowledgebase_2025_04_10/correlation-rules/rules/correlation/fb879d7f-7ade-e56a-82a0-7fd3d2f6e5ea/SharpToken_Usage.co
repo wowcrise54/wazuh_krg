@@ -1,0 +1,196 @@
+event SharpToken_In_Commandline:
+    key:
+        event_src.host, subject.account.id, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            match(lower(object.process.name),"*sharptoken*")
+            or match(lower(object.process.original_name), "*sharptoken*")
+            or match(lower(object.process.meta), "*sharptoken*")
+            or regex(lower(object.process.cmdline), "\s+((list_(all_)?token(\s+\d+)?)|((add_user|enableuser|delete_user)\s+.*?)|(execute\s+\"[^\\]+\\[^\"]+\"\s+.*?(\s+interactive)?)|enablerdp|(tscon\s+\d+(\s+\d+)?))(\s+bypass)?", 0) != null
+        )
+        and filter::CheckWL_Process_Creation("SharpToken_Usage", lower(join([subject.account.name, object.process.cmdline], "|")))
+    }
+
+# Всегда возникает при использовании ключа bypass (повышение до SYSTEM)
+event RPCSS_PrivEsc:
+    key:
+        event_src.host, subject.account.id, subject.process.id
+    filter {
+        correlation_name == "Named_Pipe_Impersonation_PrivEsc"
+        and match(lower(alert.context), "*named pipe impersonation (rpcss variant)*")
+    }
+
+# Если у пользователя есть необходимые права для выполнения привилегированной операции
+event Token_Manipulation:
+    key:
+        event_src.host, subject.account.id, object.process.parent.id
+    filter {
+        correlation_name == "Token_Manipulation"
+    }
+
+rule SharpToken_Usage: (SharpToken_In_Commandline and (RPCSS_PrivEsc or Token_Manipulation)?) timer 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+        $found_patterns = null
+    }
+
+    on SharpToken_In_Commandline {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = coalesce($object.account.session_id, object.account.session_id)
+        $object.account.name = coalesce($object.account.name, object.account.name)
+        $object.account.domain = coalesce($object.account.domain, object.account.domain)
+        $object.account.fullname = coalesce($object.account.fullname, object.account.fullname)
+        $object.account.id = coalesce($object.account.id, object.account.id)
+        $object.account.privileges = coalesce($object.account.privileges, object.account.privileges)
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $datafield18 = datafield18 # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19 # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([subject.account.name, object.process.cmdline], "|"))
+
+        $pattern_in_cmdline = strip(regex(
+            lower(object.process.cmdline), 
+            "\s+((list_(all_)?token(\s+\d+)?)|((add_user|enableuser|delete_user)\s+.*?)|(execute\s+\"[^\\]+\\[^\"]+\"\s+.*?(\s+interactive)?)|enablerdp|(tscon\s+\d+(\s+\d+)?))(\s+bypass)?", 
+            0), " ", " ")
+        if match(lower(object.process.name),"*sharptoken*") or match(lower(object.process.original_name), "*sharptoken*") then 
+            $pattern_in_proc_name = coalesce(
+                regex(lower(object.process.name), "\\bsharptoken\\b", 0),
+                regex(lower(object.process.original_name), "\\bsharptoken\\b", 0)
+            )
+        endif    
+        if match(lower(object.process.meta), "*sharptoken*") then
+            $pattern_in_meta = regex(lower(object.process.meta), "\\bsharptoken\\b", 0)
+        endif
+
+        if $pattern_in_proc_name != null then
+            $found_patterns = append($found_patterns, "pattern in process name: " + $pattern_in_proc_name)
+        endif
+        if $pattern_in_meta != null then
+            $found_patterns = append($found_patterns, "pattern in process meta: " + $pattern_in_meta)
+        endif
+        if $pattern_in_cmdline != null then
+            $found_patterns = append($found_patterns, "pattern in process cmdline: " + $pattern_in_cmdline)
+        endif
+        
+        $alert.regex_match = join($found_patterns, " | ")
+    }
+
+    on RPCSS_PrivEsc {
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $alert.context = alert.context # Ex: Named Pipe Impersonation (RPCSS variant): \ipc$\<pipe_name>
+    }
+
+    on Token_Manipulation {
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $alert.context = alert.context # Ex.: <username> → system
+    }
+
+emit {
+    # alert.context выше заполняется только в блоках on RPCSS_PrivEsc и Token_Manipulation, поэтому ориентируемся по нему
+    if $alert.context != null then
+        $correlation_type = "incident" # Повышение привилегий успешно прошло
+    else
+        $correlation_type = "event"
+    endif    
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    if $alert.context != null then
+        $alert.context = $alert.regex_match + " | " + $alert.context
+    else
+        $alert.context = $alert.regex_match
+    endif    
+
+    $category.generic = "Attack"
+    if match($alert.regex_match, "*list_token*") or match($alert.regex_match, "*list_all_token*") then
+        $category.high = "Privilege Escalation"
+        $category.low = "Access Token Manipulation: Token Impersonation/Theft"
+        $importance = "high"
+    elif match($alert.regex_match, "*add_user*") then
+        $category.high = "Persistence"
+        $category.low = "Create Account: Local Account"
+        $importance = "medium"
+    elif match($alert.regex_match, "*enableuser*") or match($alert.regex_match, "*delete_user*") then
+        $category.high = "Privilege Escalation"
+        $category.low = "Account Manipulation"
+        $importance = "medium"
+    elif match($alert.regex_match, "*execute*") then
+        $category.high = "Execution"
+        $category.low = "Command and Scripting Interpreter"
+        $importance = "medium"
+    elif match($alert.regex_match, "*enablerdp*") then
+        $category.high = "Lateral Movement"
+        $category.low = "Remote Services: Remote Desktop Protocol"
+        $importance = "medium"
+    elif match($alert.regex_match, "*tscon*") then
+        $category.high = "Lateral Movement"
+        $category.low = "Remote Service Session Hijacking: RDP Hijacking"
+        $importance = "high"
+    else
+        $category.high = "Privilege Escalation"
+        $category.low = "Access Token Manipulation: Token Impersonation/Theft"
+        $importance = "high"
+    endif    
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

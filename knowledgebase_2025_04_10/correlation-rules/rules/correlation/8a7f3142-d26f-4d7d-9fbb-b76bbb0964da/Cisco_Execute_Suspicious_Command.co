@@ -1,0 +1,58 @@
+event Cisco_Command_Executed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "PARSER-5-CFGLOG_LOGGEDCMD"
+        and event_src.vendor == "cisco"
+        and event_src.title == "ios"
+        and regex(lower(object.process.cmdline), "gdb|tclsh|service internal|config-register|boot|platform shell", 0) != null
+        and filter::CheckWL_Specific_Only("Cisco_Execute_Suspicious_Command", lower(join([subject.account.name, object.process.cmdline], "|")))
+    }
+
+rule Cisco_Execute_Suspicious_Command: Cisco_Command_Executed
+    
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Cisco_Command_Executed {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        
+        $object.process.cmdline = object.process.cmdline
+
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+    
+        $alert.key = lower(join([subject.account.name, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "gdb|tclsh|service internal|config-register|boot|platform shell", 0)
+        $alert.context = $alert.regex_match
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Network Device CLI"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 3h
+}

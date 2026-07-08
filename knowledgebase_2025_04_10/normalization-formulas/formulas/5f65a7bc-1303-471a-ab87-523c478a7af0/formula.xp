@@ -1,0 +1,42 @@
+JSON = "EventCode=19"
+
+COND = $Logfile=="System" and $SourceName=="Microsoft-Windows-WindowsUpdateClient"
+
+action = "install"
+object = "update"
+status = "success"
+
+subformula 'KB_name'
+    TEXT = '{UNTIL("KB")$value=NUMBER?} {REST}'
+endsubformula
+
+object.id = strip($InsertionStrings[1], "{", "}")
+object.name = $InsertionStrings[0]
+object.version = $InsertionStrings[2]
+
+submessage("TEXT", "KB_name", $InsertionStrings[0])
+
+if $value != null then
+    object.property = "kb name"
+    object.value = join(["KB", $value], "")
+endif
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_19_Windows_successfully_installed_the_following_update"

@@ -1,0 +1,78 @@
+JSON = "EventCode=5140"
+COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "access"
+object = "file_object"
+if $EventType == "4" then
+    status = "success"
+elif $EventType == "5" then
+    status = "failure"
+endif
+
+subject.account.name = if $InsertionStrings[1] != "-" then lower($InsertionStrings[1]) else null endif
+subject.account.domain = if $InsertionStrings[2] != "-" then lower($InsertionStrings[2]) else null endif
+subject.account.id = if $InsertionStrings[0] != "S-1-0-0" then$InsertionStrings[0] else null endif
+if subject.account.id == null and subject.account.name != null then
+    subject.account.id = "synthetic:" + subject.account.name
+    if subject.account.domain != null then
+        subject.account.id = subject.account.id + "@" + subject.account.domain
+    endif
+endif
+subject.account.session_id = maybe_number16($InsertionStrings[3])
+subject.account.privileges = $InsertionStrings[10]
+
+object.type = $InsertionStrings[4]
+
+object.storage.id = $InsertionStrings[7]
+
+object.storage.fullpath = lower(strip($InsertionStrings[8], "\\??\\", "\\"))
+$name_and_path_local = csv(object.storage.fullpath, "\\", "'")
+if $name_and_path_local[0] == object.storage.fullpath then
+    object.storage.path = object.storage.fullpath 
+else
+    object.storage.name = $name_and_path_local[length($name_and_path_local) - 1]    
+    object.storage.path = strip(object.storage.fullpath, "", object.storage.name)     
+endif
+
+object.fullpath = lower(strip($InsertionStrings[7], "\\\\*", "\\"))
+$name_and_path_public = csv(object.fullpath, "\\", "'")
+if $name_and_path_public[0] == object.fullpath then
+    object.path = object.fullpath 
+else
+    object.name = $name_and_path_public[length($name_and_path_public) - 1]    
+    object.path = strip(object.fullpath, "", object.name)     
+endif
+
+if (maybe_ipv4($InsertionStrings[5]) != null) || (maybe_ipv6($InsertionStrings[5]) != null) then
+    src.ip = $InsertionStrings[5]
+endif
+if $InsertionStrings[6] != "-" then
+    src.port = $InsertionStrings[6]
+endif
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    dst.fqdn = lower($ComputerName)
+    dst.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    dst.hostname = lower($ComputerName)
+endif
+
+datafield3 = $InsertionStrings[9]  # Маска доступа
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+importance = "medium"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+event_src.category = "Operating system"
+event_src.hostname = dst.hostname
+event_src.fqdn = dst.fqdn
+
+id = "PT_Microsoft_Windows_wmi_5140_A_network_share_object_was_accessed"

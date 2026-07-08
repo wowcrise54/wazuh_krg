@@ -1,0 +1,45 @@
+EVENTLOG = ""
+COND = $Provider["Name"] == "Rutoken KeyBox"
+       and $EventID == "12"
+
+subject = "account"
+action = "modify"
+object = "device"
+status = "success"
+
+$csv = csv($Data["initiator"], "\\", "'")
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+object.type = "token"
+object.name = $Data["cardType"]
+object.id = $Data["cardSerialNumber"]
+
+if $Data["userName"] != null then
+   object.property = "user name"
+   object.value = $Data["userName"]
+endif
+
+reason = "PIN-код устройства успешно сброшен"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "aktiv"
+event_src.title = "rutoken_keybox"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "AAA"
+
+id = "PT_Aktiv_Rutoken_KeyBox_eventlog_12_modify_token"

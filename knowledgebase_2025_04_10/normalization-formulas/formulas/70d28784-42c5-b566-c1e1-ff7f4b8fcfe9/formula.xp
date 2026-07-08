@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?}{time=DATETIME}
+        {object.type=WORDDASH}: Info: Appliance: {dst.fqdn=UNTIL(",")}
+        Interaction Mode: GUI, User: {subject.account.name=UNTIL(",")} 
+        Source IP: {src.ip=IPV4|src.ip=IPV6|}, Event:{reason=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+if find_substr(reason, "successfully") != null then
+    status = "success"
+else
+    status = "failure"
+endif
+
+logon_auth_method = "remote"
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_login_gui"

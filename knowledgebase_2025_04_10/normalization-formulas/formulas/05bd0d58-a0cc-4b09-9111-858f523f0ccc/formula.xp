@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="DEV_Create"} {subject.name=WORDDASH} {$status="OK"|"FAIL"|"FAILURE"} mkdev
+        {object.name=REST}'
+
+subject = "account"
+action = "create"
+object = "device"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_dev_create"
+importance = "info"

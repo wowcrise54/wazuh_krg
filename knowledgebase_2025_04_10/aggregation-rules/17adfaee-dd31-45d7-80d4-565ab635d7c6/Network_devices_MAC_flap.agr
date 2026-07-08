@@ -1,0 +1,8 @@
+event MAC_flap:
+    key:
+        event_src.host, src.mac, datafield1, !datafield2, !datafield3, id,
+        action, object, status, importance, event_src.category, event_src.vendor, event_src.title
+
+    reason = "Host is flapping between ports"
+
+aggregate Network_devices_MAC_flap: MAC_flap[3,300] within 30m

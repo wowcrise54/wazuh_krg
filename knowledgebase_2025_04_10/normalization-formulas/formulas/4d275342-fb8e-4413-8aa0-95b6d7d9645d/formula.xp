@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$event_src_host=HOSTNAME}
+        {event_src.subsys="ideco-web-backend"} {subject.process.id=NUMBER} - - {msgid="Authentication failed"}
+        for login \'{subject.account.name=UNTIL("\'")} from address {src.ip=IPV4|src.ip=IPV6}'
+
+COND = event_src.subsys == "ideco-web-backend"
+        
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+dst.ip = event_src.ip
+
+$dot_pos = find_substr($event_src_host, '.')
+
+if $dot_pos != null then
+    dst.hostname = lower(substr($event_src_host, 0, $dot_pos))
+    dst.fqdn = lower($event_src_host)
+else
+    dst.hostname = lower($event_src_host)
+endif
+
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "ideco"
+event_src.title = "utm"
+event_src.fqdn = dst.fqdn
+event_src.hostname = dst.hostname
+event_src.category = "Network security"
+
+id = "PT_Ideco_IdecoUTM_syslog_ideco_web_backend_authentication_failed"

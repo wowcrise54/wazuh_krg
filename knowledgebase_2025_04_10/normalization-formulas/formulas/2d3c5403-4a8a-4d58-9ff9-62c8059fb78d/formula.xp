@@ -1,0 +1,288 @@
+TABULAR = '{time=DetectedUTC},
+           Analyzer,
+           AnalyzerName,
+           ThreatEventID,
+           ThreatSeverity'
+
+# 2008, 2025, 2027 -> F1
+COND = in_list(["1026", "1028", "1033", "1055", "1057", "2004", "2009", "2014", "2019", "2002", "2007", "2012", "21026",
+                "21028", "21033", "21055", "21057", "1502", "2022", "1274", "1275", "1276", "1277", "1282", "1283", "1284",
+                "1285", "1286", "1287", "1288", "1289", "1290", "1291", "1292", "1294", "1295", "1296", "1298", "1299", "1300",
+                "1302", "1304", "1305", "1307", "1308", "1310", "1311", "1312", "1314", "1317", "1318"], string($ThreatEventID)) and
+                $AnalyzerName == "VirusScan Enterprise"
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+subject.id = $ServerID
+subject.type = $Analyzer
+subject.name = $AnalyzerName
+subject.version = $AnalyzerEngineVersion
+
+object.type = $ThreatType
+if $ThreatName != "none" and length($ThreatName) != 0 then
+    object.name = $ThreatName
+endif
+object.group = $ThreatCategory
+if $SourceProcessName != null then
+    object.property = "SourceProcessName"
+    object.value = $SourceProcessName
+endif
+if $TargetFileName != "null" and length($TargetFileName) != 0 then
+    object.path =  $TargetFileName
+endif
+
+src.hostname = $AnalyzerHostName
+dst.ip = $TargetIP
+dst.hostname = $TargetHostName
+
+# datafield1 - RU localization
+datafield2 = $TargetUserName
+datafield3 = $ThreatSeverity
+datafield4 = $AnalyzerDATVersion
+datafield5 = $AnalyzerDetectionMethod
+
+msgid = string($ThreatEventID)
+switch msgid
+    case "1026"
+        reason = "Unable to clean infected file"
+        datafield1 = "Невозможно очистить заражённый файл"
+        object.state = "not cured"
+    case "1028"
+        reason = "Unable to delete infected file"
+        datafield1 = "Невозможно удалить заражённый файл"
+        object.state = "not cured"
+    case "1033"
+        reason = "Unable to move infected file to quarantine"
+        datafield1 = "Невозможно отправить заражённый файл в карантин"
+        object.state = "not cured"
+    case "1055"
+        reason = "Unable to delete infected file"
+        datafield1 = "Невозможно удалить заражённый файл"
+        object.state = "not cured"
+    case "1057"
+        reason = "Unable to move infected file to quarantine"
+        datafield1 = "Невозможно отправить заражённый файл в карантин"
+        object.state = "not cured"
+    case "2002"
+        reason = "Unable to clean infected file"
+        datafield1 = "Невозможно очистить заражённый файл"
+        object.state = "not cured"
+    case "2004"
+        reason = "Unable to delete infected file"
+        datafield1 = "Невозможно удалить заражённый файл"
+        object.state = "not cured"
+    case "2007"
+        reason = "Access denied to the infected file"
+        datafield1 = "Запрещён доступ к заражённому файлу"
+        object.state = "not cured"
+    case "2009"
+        reason = "Unable to move infected file to quarantine"
+        datafield1 = "Невозможно отправить заражённый файл в карантин"
+        object.state = "not cured"
+    case "2012"
+        reason = "Centralized alerting - Unable to clean infected file"
+        datafield1 = "Централизованное оповещение: Невозможно очистить заражённый файл"
+        object.state = "not cured"
+    case "2014"
+        reason = "Centralized alerting - Unable to delete infected file"
+        datafield1 = "Централизованное оповещение: Невозможно удалить заражённый файл"
+        object.state = "not cured"
+    case "2019"
+        reason = "Centralized alerting - Unable to move infected file to quarantine"
+        datafield1 = "Централизованное оповещение: Невозможно отправить заражённый файл в карантин"
+        object.state = "not cured"
+    case "21026"
+        reason = "Unable to clean unwanted program"
+        datafield1 = "Невозможно очистить нежелательную программу"
+        object.state = "not cured"
+    case "21028"
+        reason = "Unable to delete unwanted program"
+        datafield1 = "Невозможно удалить нежелательную программу"
+        object.state = "not cured"
+    case "21033"
+        reason = "Unable to move unwanted program to quarantine"
+        datafield1 = "Невозможно отправить нежелательную программу в карантин"
+        object.state = "not cured"
+    case "21055"
+        reason = "Unable to delete unwanted program"
+        datafield1 = "Невозможно удалить нежелательную программу"
+        object.state = "not cured"
+    case "21057"
+        reason = "Unable to move unwanted program to quarantine"
+        datafield1 = "Невозможно отправить нежелательную программу в карантин"
+        object.state = "not cured"
+    case "1502"
+        reason = "Unable to clean infected mail"
+        datafield1 = "Невозможно очистить заражённое электронное письмо"
+        object.state = "not cured"
+    case "2022"
+        reason = "Boot record infection clean error"
+        datafield1 = "Ошибка при очистке заражения записи загрузки"
+        object.state = "not cured"
+    case "1274"
+        reason = "File infected. No cleaner available, quarantine failed"
+        datafield1 = "Файл заражён. Очистка невозможна, сбой отправки в карантин"
+        object.state = "not cured"
+    case "1275"
+        reason = "Impossible to clean the unwanted program found by heuristics, quarantine failed"
+        datafield1 = "Очистка нежелательной программы, обнаруженной эвристическим анализом, невозможна. Сбой отправки в карантин"
+        object.state = "not cured"
+    case "1276"
+        reason = "File infected. Undetermined clean error, quarantine failed"
+        datafield1 = "Файл заражён. Неопределённая ошибка при очистке, сбой отправки в карантин"
+        object.state = "not cured"
+    case "1277"
+        reason = "Encrypted file infected. Clean error, quarantine failed"
+        datafield1 = "Зашифрованный файл заражён. Ошибка при очистке, сбой отправки в карантин"
+        object.state = "not cured"
+    case "1282"
+        reason = "File infected. No cleaner available, delete failed"
+        datafield1 = "Файл заражён. Очистка невозможна, сбой удаления"
+        object.state = "not cured"
+    case "1283"
+        reason = "Unwanted program found by heuristics clean error, delete failed"
+        datafield1 = "При очистке нежелательной программы, обнаруженной эвристическим анализом, произошла ошибка. Сбой удаления"
+        object.state = "not cured"
+    case "1284"
+        reason = "File infected. Undetermined clean error, delete failed"
+        datafield1 = "Файл заражён. Неопределённая ошибка при очистке, сбой удаления"
+        object.state = "not cured"
+    case "1285"
+        reason = "Encrypted file infected. Clean error, delete failed"
+        datafield1 = "Зашифрованный файл заражён. Ошибка при очистке, сбой удаления"
+        object.state = "not cured"
+    case "1286"
+        reason = "File infected. No cleaner available, scanning continued (ODS)"
+        datafield1 = "Файл заражён. Очистка невозможна, продолжено сканирование (проверка по требованию)"
+        object.state = "not cured"
+    case "1287"
+        reason = "Heuristically found infected file clean error. Scanning continued (ODS)"
+        datafield1 = "Ошибка при очистке заражённого файла, обнаруженного эвристическим анализом. Продолжено сканирование (проверка по требованию)"
+        object.state = "not cured"
+    case "1288"
+        reason = "File infected. Undetermined clean error, scanning continued (ODS)"
+        datafield1 = "Файл заражён. Неопределённая ошибка при очистке, продолжено сканирование (проверка по требованию)"
+        object.state = "not cured"
+    case "1289"
+        reason = "Encrypted file infected. Clean error, scanning continued (ODS)"
+        datafield1 = "Зашифрованный файл заражён. Ошибка при очистке, продолжено сканирование (проверка по требованию)"
+        object.state = "not cured"
+    case "1290"
+        reason = "File infected. No cleaner available, OAS denied access, scanning continued"
+        datafield1 = "Файл заражён. Очистка невозможна - доступ к нему запрещён, продолжено сканирование"
+        object.state = "not cured"
+    case "1291"
+        reason = "Heuristics found infected file. No cleaner available, OAS denied access, scanning continued"
+        datafield1 = "По эвристикам обнаружен заражённый файл. Очистка невозможна - доступ к нему запрещён, продолжено сканирование"
+        object.state = "not cured"
+    case "1292"
+        reason = "File infected. Undetermined clean error, OAS denied access, scanning continued"
+        datafield1 = "Файл заражён. Неопределённая ошибка при очистке - доступ к нему запрещён, продолжено сканирование"
+        object.state = "not cured"
+    case "1294"
+        reason = "File infected. Quarantine failed, delete failed"
+        datafield1 = "Файл заражён. Сбой отправки в карантин, сбой удаления"
+        object.state = "not cured"
+    case "1295"
+        reason = "File infected. Move failed, scanning continued (ODS)"
+        datafield1 = "Файл заражён. Сбой перемещения, продолжено сканирование (проверка по требованию)"
+        object.state = "not cured"
+    case "1296"
+        reason = "File infected. Move failed, access to the file is denied, scanning continued (OAS)"
+        datafield1 = "Файл заражён. Сбой перемещения - доступ к нему запрещён, продолжено сканирование (проверка при доступе)"
+        object.state = "not cured"
+    case "1298"
+        reason = "File infected. Delete failed, quarantine failed"
+        datafield1 = "Файл заражён. Сбой удаления, сбой отправки в карантин"
+        object.state = "not cured"
+    case "1299"
+        reason = "File infected. Delete failed, scanning continued (ODS)"
+        datafield1 = "Файл заражён. Сбой удаления, продолжено сканирование (проверка по требованию)"
+        object.state = "not cured"
+    case "1300"
+        reason = "File infected. Delete failed, access to the file is denied, scanning continued (OAS)"
+        datafield1 = "Файл заражён. Сбой удаления - доступ к нему запрещён, продолжено сканирование (проверка при доступе)"
+        object.state = "not cured"
+    case "1302"
+        reason = "Multiple extension heuristic detection: Move failed, clean error"
+        datafield1 = "Эвристическое обнаружение нескольких расширений: Сбой перемещения, ошибка очистки"
+        object.state = "not cured"
+    case "1304"
+        reason = "Multiple extension heuristic detection: Clean error, delete failed"
+        datafield1 = "Эвристическое обнаружение нескольких расширений: Ошибка очистки, сбой удаления"
+        object.state = "not cured"
+    case "1305"
+        reason = "Multiple extension heuristic detection: Clean error, access to the file is denied, scanning continued"
+        datafield1 = "Эвристическое обнаружение нескольких расширений: Ошибка очистки - доступ к файлу запрещён, продолжено сканирование"
+        object.state = "not cured"
+    case "1307"
+        reason = "Multiple extension heuristic detection: Move failed, delete failed"
+        datafield1 = "Эвристическое обнаружение нескольких расширений: Сбой перемещения, сбой удаления"
+        object.state = "not cured"
+    case "1308"
+        reason = "Multiple extension heuristic detection: Move failed, access to the file is denied, scanning continued"
+        datafield1 = "Эвристическое обнаружение нескольких расширений: Сбой перемещения - доступ к файлу запрещён, сканирование продолжено"
+        object.state = "not cured"
+    case "1310"
+        reason = "Multiple extension heuristic detection: Delete failed, quarantine failed"
+        datafield1 = "Эвристическое обнаружение нескольких расширений: Сбой удаления, сбой помещения в карантин"
+        object.state = "not cured"
+    case "1311"
+        reason = "Multiple extension heuristic detection: Delete failed, access to the file is denied, scanning continued"
+        datafield1 = "Эвристическое обнаружение нескольких расширений: Сбой удаления - доступ к файлу запрещён, сканирование продолжено"
+        object.state = "not cured"
+
+    case "1312"
+        reason = "Move failed, delete failed, file will be deleted on reboot"
+        datafield1 = "Сбой перемещения, сбой удаления, файл будет удалён после перезагрузки"
+        object.state = "not cured"
+    case "1314"
+        reason = "Encrypted file: Clean error, file will be deleted on reboot"
+        datafield1 = "Зашифрованный файл: Ошибка очистки, файл будет удалён после перезагрузки"
+        object.state = "not cured"
+    case "1317"
+        reason = "No cleaner available: Clean error, file will be deleted on reboot"
+        datafield1 = "Отсутствуют средства удаления элементов: Ошибка очистки, файл будет удалён после перезагрузки"
+        object.state = "not cured"
+    case "1318"
+        reason = "Undetermined: Clean error, file will be deleted on reboot"
+        datafield1 = "Не определено: Ошибка очистки, файл будет удалён после перезагрузки"
+        object.state = "not cured"
+endswitch
+
+if object.state == null and action != "detect" and $ThreatActionTaken != "none" then
+    object.state = $ThreatActionTaken
+endif
+
+importance = "high"
+
+if action == "detect" then
+    if object.state == null then
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Detection"
+    elif (object.state == "cured" or object.state == "not cured") then
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Curing"
+    elif object.state == "removed" then
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Mitigation"
+    endif
+endif
+
+event_src.vendor = "mcafee"
+event_src.title = "vse"
+event_src.category = "Anti-virus"
+
+if maybe_ipv4($SourceIP) != null then
+    event_src.ip = maybe_ipv4($SourceIP)
+elif maybe_ipv6($SourceIP) != null then
+    event_src.ip = maybe_ipv6($SourceIP)
+endif
+
+id = "PT_McAfee_VSE_odbc_F2_High_Infection_Failure"

@@ -1,0 +1,143 @@
+query Check_Hackdriver($object_name, $legitimacy_value) from Windows_Hackdrivers {
+    driver_name == $object_name
+    and legitimacy == $legitimacy_value
+}
+
+query Check_Hackdriver_Qhandler($object_name) from Windows_Hackdrivers {
+    driver_name == $object_name
+}
+
+qhandler {
+    $driver_name = driver_name
+    $driver_description = driver_description
+    $legitimacy = legitimacy
+    $event_type = event_type
+    $event_importance = event_importance
+}
+
+query Check_File_Created($event_src_host, $object_fullpath) from Windows_File_Created {
+    host == $event_src_host
+    and filename == $object_fullpath
+}
+
+event Driver_Loaded:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "6"
+        and event_src.title == "sysmon"
+        and object.name != null
+        and event_src.host != null
+        and object.fullpath != null
+        and (
+            exec_query("Check_Hackdriver", [coalesce(lower(object.name), "*"), 0])
+            or (
+                exec_query("Check_Hackdriver", [coalesce(lower(object.name), "*"), 1])
+                and exec_query("Check_File_Created", [coalesce(lower(event_src.host), "*"), coalesce(lower(object.fullpath), "*")])
+            )
+        )
+        and filter::CheckWL_Specific_Only("Suspicious_BYOVKD_Driver_Loaded", lower(join([event_src.host, object.name], "|")))
+    }
+
+rule Suspicious_BYOVKD_Driver_Loaded: Driver_Loaded
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Driver_Loaded {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.hash.md5 = subject.process.hash.md5
+        $subject.process.hash.imphash = subject.process.hash.imphash
+        $subject.process.hash.sha1 = subject.process.hash.sha1
+        $subject.process.hash.sha256 = subject.process.hash.sha256
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.chain = subject.process.chain 
+
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.path = object.path
+        $object.hash = object.hash
+        $object.hash.md5 = object.hash.md5
+        $object.hash.imphash = object.hash.imphash
+        $object.hash.sha256 = object.hash.sha256
+        $object.hash.sha1 = object.hash.sha1
+        $object.fullpath = object.fullpath
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $result = exec_query("Check_Hackdriver_Qhandler",[coalesce(lower(object.name), "*")])
+
+        if $result["$legitimacy"] == 1 then
+            $reason = "legitimate_vulnerable_driver_in_object_name_match|created_and_loaded"
+        else
+            $reason = "illegitimate_driver_in_object_name_match"
+        endif
+        
+        $alert.key = lower(join([event_src.host, object.name], "|"))
+        $alert.context = $object.name + " | " + $result["$driver_description"]
+
+        if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+            $importance = $result["$event_importance"]
+        else
+            $importance = "medium"
+        endif
+        if in_list(["event", "incident"], lower($result["$event_type"])) then
+            $correlation_type = $result["$event_type"]
+        else
+            $correlation_type = "event"
+        endif
+    }
+
+emit {
+    $subject = "system"
+    $action = "open"
+    $object = "module"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Compromise Client Software Binary"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Exploitation of vulnerability CVE-2024-26229 in the csc.sys offline files driver allows a low-privileged attacker to escalate their privileges to NT AUTHORITY/SYSTEM in the current command-line session. This can lead to the compromise of local and domain user accounts, as well as accounts of users who have previously accessed the host. By using the compromised data, the attacker can move laterally within the target infrastructure.</Description>
+  <EventDescriptions>
+    <EventDescription id="39752e10-52f9-3707-1fc7-8ae6759f9aa0">User {subject.account.name} escalated their privileges through the exploitation of vulnerability CVE-2024-26229 using executable file {object.process.parent.name} on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

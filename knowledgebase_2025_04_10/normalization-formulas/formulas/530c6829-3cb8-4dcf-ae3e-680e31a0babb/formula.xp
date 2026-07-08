@@ -1,0 +1,67 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["device_id"] != null
+       and $kv["devname"] != null
+       and in_list(["0038000007", "0038000004", "0021000002"], $kv["log_id"])
+
+subject = "rule"
+
+action = switch $kv["status"]
+    case "pass" "allow"
+    case "deny" "deny"
+    case "block" "deny"
+    case "reject" "deny"
+    case "start" "allow"
+    case "accept" "allow"
+endswitch
+
+object = "connection"
+status = "success"
+
+subject.id = $kv["policyid"]
+
+if $kv["user"] != "N/A" then object.account.name = $kv["user"] endif
+if $kv["group"] != "N/A" then object.account.group = $kv["group"] endif
+
+object.state = $kv["status"]
+
+src.ip = $kv["src"]
+src.port = $kv["src_port"]
+if $kv["src_country"] != "Reserved" then src.geo.country = $kv["src_country"] endif
+dst.ip = $kv["dst"]
+dst.port = $kv["dst_port"]
+if $kv["dst_country"] != "Reserved" then dst.geo.country = $kv["dst_country"] endif
+if $kv["tran_sip"] != "0.0.0.0" then assigned_src_ip = $kv["tran_sip"] endif
+if $kv["tran_sport"] != "0" then assigned_src_port = $kv["tran_sport"] endif
+protocol = $kv["proto"]
+count.bytes_in = $kv["rcvd"]
+count.bytes_out = $kv["sent"]
+count.packets_in = $kv["rcvd_pkt"]
+count.packets_out = $kv["sent_pkt"]
+
+duration = $kv["duration"]
+
+reason = strip($kv["msg"], "", ".")
+
+datafield1 = $kv["vd"]                                                                       # Virtual domain name
+if $kv["src_int"] != null then datafield2 = $kv["src_int"] endif                             # Ingress interface
+if find_substr($kv["service"], $kv["dst_port"]) != 0 then datafield3 = $kv["service"] endif  # Service name
+if $kv["dst_int"] != null then datafield4 = $kv["dst_int"] endif                             # Egress interface
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")                                        # Event type
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["log_id"]
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["device_id"]
+event_src.category = "Firewall"
+event_src.rule = $kv["policyid"]
+
+id = "PT_Fortinet_Fortigate_syslog_2_4_7_Traffic"

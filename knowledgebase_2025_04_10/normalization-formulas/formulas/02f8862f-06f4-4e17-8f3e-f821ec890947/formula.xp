@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+       %{$event_src_title="ASA"|$event_src_title="PIX"|$event_src_title="FWSM"|$event_src_title="FTD"}{"-session"?}-{NUMBER}-{msgid="302023"}:
+       Teardown IP protocol {protocol=WORD} connection {object.id=NUMBER} for {UNTIL(":")}{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}
+       to {UNTIL(":")}{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME} duration {duration=DURATION} bytes {NUMBER}'
+
+action = "remove"
+object = "conntrack"
+status = "success"
+
+importance = "info"
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src_title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_302023_Teardown_IP_protocol"

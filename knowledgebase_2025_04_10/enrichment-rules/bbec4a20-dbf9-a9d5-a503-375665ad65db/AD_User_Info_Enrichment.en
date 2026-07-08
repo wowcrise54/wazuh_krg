@@ -1,0 +1,85 @@
+query CheckUserName($name) from AssetGrid_AD_User {
+    name == $name
+}
+
+query GetUserInfo_q($name) from AssetGrid_AD_User {
+    name == $name
+}
+    qhandler {
+        $position = position
+        $department = department
+        $manager = manager
+        $objectsid = objectsid
+        $description = description
+        $company = company
+        $phones = phones
+        $radiusframedipaddress = radiusframedipaddress
+        $whencreated = whencreated
+        $passwordlastchanged = passwordlastchanged
+        $passwdnotreqd = passwdnotreqd
+        $dontexpirepasswd = dontexpirepasswd
+        $trustedfordelegation = trustedfordelegation
+        $notdelegated = notdelegated
+        $passwordexpired = passwordexpired
+    }
+
+event Name_events:
+    filter {
+        correlation_name != null
+        and not in_list(["subrule", "draft"], correlation_type)
+        and find_substr(labels, "ad_user_info") == null
+        and (
+            exec_query("CheckUserName", [lower(subject.account.name)])
+            or exec_query("CheckUserName", [lower(object.account.name)])
+            )
+    }
+
+enrichment AD_User_Info_Enrichment
+    enrich Name_events:
+        enrich_fields {
+            if exec_query("CheckUserName", [lower(subject.account.name)]) == true then
+                $user_info = exec_query("GetUserInfo_q", [lower(subject.account.name)])
+                $all_info = join(["Руководитель: " + coalesce($user_info["$manager"], "-"),
+                                  "VPN-адрес: " + coalesce($user_info["$radiusframedipaddress"], "-"),
+                                  "Description: " + coalesce($user_info["$description"], "-"),
+                                  "Телефон: " + coalesce($user_info["$phones"], "-"),
+                                  "WhenCreated: " + coalesce(string($user_info["$whencreated"]), "-"),
+                                  "PasswordLastSet: " + coalesce(string($user_info["$passwordlastchanged"]), "-"),
+                                  "PasswordExpired: " + coalesce($user_info["$passwordexpired"], "-"),
+                                  "PasswordNotRequired: " + coalesce($user_info["$passwdnotreqd"], "-"),
+                                  "PasswordNeverExpires: " + coalesce($user_info["$dontexpirepasswd"], "-"),
+                                  "TrustedForDelegation: " + coalesce($user_info["$trustedfordelegation"], "-"),
+                                  "AccountNotDelegated: " + coalesce($user_info["$notdelegated"], "-")], "\r\n")
+                
+                subject.account.department = $user_info["$department"]
+                subject.account.title = $user_info["$position"]
+
+                if subject.account.contact == null then
+                    subject.account.contact = $all_info
+                endif
+            endif
+
+            if exec_query("CheckUserName", [lower(object.account.name)]) == true then
+                $user_info = exec_query("GetUserInfo_q", [lower(object.account.name)])
+                $all_info = join(["Руководитель: " + coalesce($user_info["$manager"], "-"),
+                                  "VPN-адрес: " + coalesce($user_info["$radiusframedipaddress"], "-"),
+                                  "Description: " + coalesce($user_info["$description"], "-"),
+                                  "Телефон: " + coalesce($user_info["$phones"], "-"),
+                                  "WhenCreated: " + coalesce(string($user_info["$whencreated"]), "-"),
+                                  "PasswordLastSet: " + coalesce(string($user_info["$passwordlastchanged"]), "-"),
+                                  "PasswordExpired: " + coalesce($user_info["$passwordexpired"], "-"),
+                                  "PasswordNotRequired: " + coalesce($user_info["$passwdnotreqd"], "-"),
+                                  "PasswordNeverExpires: " + coalesce($user_info["$dontexpirepasswd"], "-"),
+                                  "TrustedForDelegation: " + coalesce($user_info["$trustedfordelegation"], "-"),
+                                  "AccountNotDelegated: " + coalesce($user_info["$notdelegated"], "-")], "\r\n")  
+                
+                object.account.department = $user_info["$department"]
+                object.account.title = $user_info["$position"]
+
+                if object.account.contact == null then
+                    object.account.contact = $all_info
+                endif
+            endif
+
+            labels =  labels + "|ad_user_info"
+        }

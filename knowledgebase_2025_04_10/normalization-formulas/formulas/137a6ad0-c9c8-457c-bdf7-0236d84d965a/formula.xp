@@ -1,0 +1,36 @@
+TABULAR = 'Additional_Info,
+           Administrator,
+           Machine,
+           {msgid=Operation},
+           Subject,
+           action,
+           client_ip,
+           orig,
+           product,
+           time'
+
+COND = $Operation == "File Stored"
+       and $Subject == "File Operation"
+       and $action == "accept"
+       and $product == "cpmidu_update_tool"
+
+action = "modify"
+object = "file_object"
+status = "success"
+
+object.name = $Additional_Info
+
+time = $time
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $orig
+event_src.hostname = $Machine
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Common_File_stored"

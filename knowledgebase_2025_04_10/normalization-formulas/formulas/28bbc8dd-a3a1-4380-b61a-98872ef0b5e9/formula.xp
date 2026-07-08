@@ -1,0 +1,43 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}bkp|{NUMBER}|cat= System:
+        BackupService {$kv=KEYVALUE(" ", "=", "\\"")}'
+        
+COND = $kv["act"] == "bkp_created"
+       or $kv["act"] == "bkp_task_added"
+       or $kv["act"] == "bkp_task_deleted"
+       or $kv["act"] == "bkp_restored"
+
+if $kv["suser"] != "$system" then
+   subject = "account"
+   subject.account.name = $kv["suser"]
+endif
+
+if $kv["act"] == "bkp_created" then
+    action = "backup"
+    object = "configuration"
+elif $kv["act"] == "bkp_task_deleted" then
+    action = "remove"
+    object = "task"
+elif $kv["act"] == "bkp_task_added" then
+    action = "create"
+    object = "task"
+elif $kv["act"] == "bkp_restored" then
+    action = "restore"
+    object = "configuration"        
+endif   
+ 
+if  $kv["outcome"] == "success" then
+    status = "success"
+elif  $kv["outcome"] == "failed" then
+    status = "failure"
+endif
+   
+time = recv_time
+msgid = $kv["act"]
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_cef_backup_system"

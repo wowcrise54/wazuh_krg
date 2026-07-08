@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER} {time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} ERAServer {NUMBER} - - {reason="Как минимум одна из клиентских задач на сервере управления ESET имеет недопустимую конфигурацию и выполнена не будет. Для получения дополнительных сведений войдите в центр управления безопасностью ESET."}'
+
+action = "start"
+object = "task"
+status = "failure"
+
+importance = "info"
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_security_management_center"
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_security_management_center_syslog_task_start_failure"

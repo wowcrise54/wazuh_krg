@@ -1,0 +1,59 @@
+query CheckLDAPConnectionNumber($conn_number, $dst_host) from FreeIPA_LDAP_Connections {
+    conn_number == $conn_number
+    and dst_host == $dst_host
+}
+
+query GetLDAPConnectionNumber($conn_number, $dst_host) from FreeIPA_LDAP_Connections {
+    conn_number == $conn_number
+    and dst_host == $dst_host
+}
+    qhandler {
+        $src_ip = src_ip
+        $src_host = src_host
+        $dst_ip = dst_ip
+        $dst_host = dst_host
+    }
+
+event IPA_LDAP_Query:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "freeipa"
+        and msgid == "SRCH"
+        and src.ip == null
+        and dst.ip == null
+        and exec_query("CheckLDAPConnectionNumber", [string(numfield1), lower(coalesce(dst.host, event_src.host))])
+    }
+
+enrichment FreeIPA_LDAP_Events_Enrichment
+    enrich IPA_LDAP_Query:
+        enrich_fields {
+            $connection_info = exec_query("GetLDAPConnectionNumber", [string(numfield1), lower(coalesce(dst.host, event_src.host))])
+            
+            if $connection_info != null then
+                # Проставляем src.ip
+                if $connection_info["$src_ip"] != null then
+                    src.ip = $connection_info["$src_ip"]
+                    labels = labels + "|src_ip_enriched" # Метка для валидации проставления src.ip
+
+                    # Проставлем src.host
+                    if src.host == null and $connection_info["$src_host"] != null then
+                        src.host = $connection_info["$src_host"]
+                        labels = labels + "|src_host_enriched" # Метка для валидации проставления src.host
+                    endif              
+                endif
+                
+                # Проставляем dst.ip
+                if $connection_info["$dst_ip"] != null then
+                    dst.ip = $connection_info["$dst_ip"]
+                    labels = labels + "|dst_ip_enriched" # Метка для валидации проставления dst.ip
+
+                    # Проставлем dst.host
+                    if dst.host == null and $connection_info["$dst_host"] != null then
+                        dst.host = $connection_info["$dst_host"]
+                        labels = labels + "|dst_host_enriched" # Метка для валидации проставления dst.host
+                    endif              
+                endif
+            endif
+        }
+
+

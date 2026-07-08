@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {NUMBER+},{DATETIME},
+        {event_src.id=WORD?},CONFIG,{$csv=CSV}'
+
+
+subject = "account"
+action = "execute"
+object = "command"
+
+status = switch $csv[8]
+    case "Succeeded"    "success"
+    case "Submitted"    "success"
+    case "Failed"       "failure"
+    case "Unauthorized" "failure"
+endswitch
+
+subject.name = $csv[6]         # username
+
+object.name = $csv[5]          # set, delete
+if length($csv[9]) != 0 then
+    object.property = "scope"
+    object.value = $csv[9]     # configure path
+endif
+
+src.ip = $csv[3]
+
+datafield1 = $csv[7]           # CLI, WEB
+
+time = $csv[2]
+importance = "info"
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_Events_Config"

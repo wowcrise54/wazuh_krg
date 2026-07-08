@@ -1,0 +1,92 @@
+JSON = 'source="cinder"'
+
+COND = in_list(["create-volume", "update-volume", "delete-volume"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "create-volume" "create"
+    case "update-volume" "modify"
+    case "delete-volume" "remove"
+endswitch
+
+object = "file_object"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["volume"]
+
+$csv_uri = csv(strip($uri, "/infra/volume", ""), "/", "")
+if $properties["id"] != null then
+    object.id = $properties["id"]
+else
+    object.id = $csv_uri[length($csv_uri) - 1]
+endif
+
+if $request_body["volume"]["name"] != "" then
+    object.name = $request_body["volume"]["name"]
+endif
+
+object.state = $properties["status"]
+object.type = "volume"
+
+if $properties["volume_type"] != null then
+    object.property = "volume type"
+    object.value = $properties["volume_type"]
+endif
+
+datafield1 = $method                                                 # Method
+datafield2 = $uri                                                    # URL
+datafield3 = $request_body["volume"]["imageRef"]                     # The UUID of the image from which volume is created
+datafield4 = $response_body["volume"]["attachments"][0]["server_id"]  # The the UUID of the attached server
+datafield6 = $csv_uri[2]                                             # The ID of the project
+datafield8 = $properties["source_volid"]                             # The UUID of the source volume
+
+if $properties["snapshot_id"] != null then
+    datafield7 = $properties["snapshot_id"]                         # The UUID of the volume snapshot
+elif $properties["backup_id"] != null then
+    datafield7 = $properties["backup_id"]                           # The UUID of the volume backup
+endif
+
+if $properties["description"] != "" then
+    datafield9 = $properties["description"]  # A human-readable description for the resource
+endif
+
+if $success == "no" then
+    $message_path = coalesce($response_body["itemNotFound"], $response_body["badRequest"])
+    reason = coalesce($message_path["message"], $response_body)
+endif
+
+time = $timestamp
+msgid = $action
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Cinder_Volume_operations"

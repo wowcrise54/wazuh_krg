@@ -1,0 +1,51 @@
+EVENTLOG = 'EventID="5058"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "info"
+object = "file"
+
+if $Keywords == "0x8020000000000000" then
+status = "success"
+elif $Keywords == "0x8010000000000000" then
+status = "failure"
+endif
+
+subject.account.name = lower($Data["SubjectUserName"])
+subject.account.domain = lower($Data["SubjectDomainName"])
+
+object.type = switch $Data["KeyType"]
+    case "%%2499" "Machine key"
+    case "%%2500" "User key"
+endswitch
+object.path = $Data["KeyFilePath"]
+object.state = switch $Data["Operation"]
+    case "%%2458" "Read persisted key from file"
+    case "%%2464" "Export of persistent cryptographic key"
+    case "%%2480" "Open Key"
+endswitch
+
+object.property = "return code"
+object.value = $Data["ReturnCode"]
+object.name = $Data["KeyName"]
+
+datafield1 = maybe_number16($Data["SubjectLogonId"])    # ID сессии
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_5058_Key_file_operation"

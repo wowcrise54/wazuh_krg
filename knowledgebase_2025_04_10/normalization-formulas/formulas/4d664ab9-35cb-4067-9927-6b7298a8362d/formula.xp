@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$Computer=HOSTNAME} info kernel: vmxnet3
+        {NUMBER}:{NUMBER}:{NUMBER}.{NUMBER}: {$int=STRING} NIC Link is {$act="Up"|$act="Down"}
+        {$speed1=WORD?} {$speed2=WORD?}'
+
+action = lower($act)
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+interface = strip($int, "", ":")
+
+if $speed1 != null then
+    datafield1 = $speed1 + " " + $speed2  # interface speed
+endif
+
+importance = "info"
+
+event_src.vendor = "f5_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "big_ip_virtual_edition"
+event_src.category = "Network device"
+
+id = "PT_F5_Networks_BIG_IP_Virtual_Edition_syslog_interface_status"

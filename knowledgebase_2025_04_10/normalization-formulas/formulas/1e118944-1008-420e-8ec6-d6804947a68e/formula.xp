@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?}{time=DATETIME}:{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {"#"|"%"}{msgid="WEBSERVER-5-LOGIN_PASSED"|msgid="WEBSERVER-5-LOGIN_FAILED"}: Chassis{NUMBER}R{NUMBER"/"NUMBER}{UNTIL("Login")}
+        {$status="Successful"|$status="Un-Successful"} from host{src.ip=IPV4|src.ip=IPV6} {"by user"?}
+        {"\'"subject.account.name=WORD"\'"?}{"using crypto cipher"?}{"\'"$crypto=UNTIL("\'")?}'
+
+subject = "account"
+action = "login"
+object = "system"
+
+status = switch $status
+    case "Successful" "success"
+    case "Un-Successful" "failure"
+endswitch
+
+logon_auth_method = "remote"
+logon_service = "web"
+
+datafield1 = $crypto  # Crypto cipher
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_syslog_WEBSERVER_5_LOGIN_PASSED_or_FAILED"

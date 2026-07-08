@@ -1,0 +1,70 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME} {$Computer=HOSTNAME} [{$time_date=DATETIME},{$time_rest=NUMBER}] DEBUG Completed request:
+        {$kv=UNTIL('(')} {datafield1=UNTIL(')')}"
+
+action = "execute"
+object = "request"
+status = "success"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $kv)
+$temp_user = csv($principal, ':', '')
+object.account.name = $temp_user[1]
+
+object.name = $requestHeader["requestApiKeyName"]
+
+# datafield1 module created event
+datafield2 = $connection                                            # socket data
+datafield3 = $listener                                              # listener security protocol
+datafield4 = $requestHeader["correlationId"]                        # correlation id
+datafield5 = $requestHeader["clientId"]                             # client id
+datafield6 = $securityProtocol                                      # security protocol
+
+if $request["topics"][0]["name"] != null then
+    datafield7 = $request["topics"][0]["topicId"]                   # request topic id
+    datafield8 = $request["topics"][0]["name"]                      # request topic name
+else
+    datafield7 = $request["groupId"]                                # consumer group id
+    datafield8 = $request["memberId"]                               # consumer id  
+    numfield5 = $request["generationId"]                            # generation id
+endif
+
+datafield9 = $request["allowAutoTopicCreation"]                     # allow auto topic creation
+datafield10 = $request["includeTopicAuthorizedOperations"]          # include topic authorized operations 
+datafield11 = $response["clusterId"]                                # cluster id
+datafield12 = $response["controllerId"]                             # controller id
+datafield13 = $response["topics"][0]["errorCode"]                   # topics error code
+datafield14 = $response["topics"][0]["name"]                        # topic name
+datafield15 = $response["topics"][0]["topicId"]                     # topic id
+datafield16 = $response["topics"][0]["partitions"][0]["errorCode"]  # partitions error code
+datafield17 = $temp_user[0]                                         # principal type
+datafield18 = $clientInformation["softwareName"]                    # software name
+datafield19 = $clientInformation["softwareVersion"]                 # software version
+
+if $response["brokers"][0]["host"] != null then
+    datafield20 = string($response["brokers"][0]["host"]) + ":" + string($response["brokers"][0]["port"])  # broker information
+endif
+
+numfield1 = $response["brokers"][0]["nodeId"]                          # node id
+numfield2 = $response["topics"][0]["partitions"][0]["partitionIndex"]  # partition index
+numfield3 = $requestHeader["requestApiKey"]                            # request API Key
+numfield4 = $requestHeader["requestApiVersion"]                        # request API version
+
+time = epoch_ms_to_datetime(datetime_to_epoch_ms($time_date) + $time_rest)
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache_kafka"
+event_src.category = "Other"
+
+id = "PT_Opensource_ASF_Apache_Kafka_syslog_completed_request"

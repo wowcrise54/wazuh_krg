@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A user crashed a service. An attacker can crash the Windows Event Log service on behalf of any user on any remote computer running Windows 10 or Windows Server 2022 in the same domain. The crash occurs in wevtsvc!VerifyUnicodeString when an attacker sends a malformed UNICODE_STRING object to the ElfrRegisterEventSourceW method exposed by the RPC-based EventLog Remoting Protocol.</Description>
+  <EventDescriptions>
+    <EventDescription id="08099773-dc57-180e-debb-30b3bb07c4a0">User {subject.account.name} from host {src.host} crashed service "{object.name}" on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,37 @@
+TEXT = "<{NUMBER}>{DATETIME} {STRING} {$date=NUMBER} {$Computer=STRING} {NUMBER} {NUMBER} SecretNet [{NUMBER?}] [{NUMBER}]
+        {datafield1=WORD+}: successfully {$action_taken=WORD} group '{object.name=STRING}"
+
+if $action_taken == "modified" then
+    action = "modify"
+elif $action_taken == "deleted" then
+    action = "remove"
+elif $action_taken == "added" then
+    action = "create"
+endif        
+
+object = "user_group"
+status = "success"
+
+object.group = strip(object.group, "", "'")
+
+#datafield1 name of plugin
+
+time = epoch_to_datetime($date)
+importance = "info"
+
+category.high = "Users And Rights Management"
+category.generic = "Group"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "secretnet_lsp"
+event_src.category = "Host security"
+
+id = "PT_Securitycode_SecretNet_LSP_syslog_group_modified"

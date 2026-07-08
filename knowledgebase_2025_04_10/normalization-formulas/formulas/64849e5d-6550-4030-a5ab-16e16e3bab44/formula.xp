@@ -1,0 +1,98 @@
+# {"class":"vim.event.NoAccessUserEvent","key":"570296132","chainId":"570296132","createdTime":"2022-01-26 12:17:29.407000+00:00","userName":"DOMAIN\\ausatov","fullFormattedMessage":"Cannot login user DOMAIN\\ausatov@127.0.0.1: no permission","ipAddress":"127.0.0.1"}
+
+JSON = ''
+COND = in_list([
+           "BadUsernameSessionEvent",
+           "NoAccessUserEvent",
+           "UserLoginSessionEvent",
+           "UserLogoutSessionEvent"
+       ], strip($class, "vim.event.", ""))
+
+subject = "account"
+
+action = switch strip($class, "vim.event.", "")
+    case "BadUsernameSessionEvent" "login"
+    case "NoAccessUserEvent" "login"
+    case "UserLoginSessionEvent" "login"
+    case "UserLogoutSessionEvent" "logout"
+endswitch
+
+object = "application"
+
+status = switch strip($class, "vim.event.", "")
+    case "BadUsernameSessionEvent" "failure"
+    case "NoAccessUserEvent" "failure"
+    case "UserLoginSessionEvent" "success"
+    case "UserLogoutSessionEvent" "success"
+endswitch
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+subject.account.session_id = $sessionId
+subject.process.meta = $userAgent
+
+start_time = $loginTime
+
+if in_list(["127.0.0.1", "[::1]", $host["name"], recv_ipv4], $ipAddress) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+    
+    src.ip = $ipAddress
+
+    if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+        dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+    else
+        dst.hostname = $host["name"]
+    endif
+    if $host["name"] == null then
+        dst.ip = recv_ipv4
+    endif
+endif
+
+reason = switch strip($class, "vim.event.", "")
+    case "BadUsernameSessionEvent" "Invalid user name"
+    case "NoAccessUserEvent" "No access for user"
+endswitch
+
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = coalesce($host["name"], recv_ipv4)  # Entity Name
+datafield6 = $host["name"]  # Host Name
+datafield10 = strip($host["host"], "vim.HostSystem:", "")  # Internal Entity ID
+
+chain_id = $chainId
+
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_User_Login_Logout"

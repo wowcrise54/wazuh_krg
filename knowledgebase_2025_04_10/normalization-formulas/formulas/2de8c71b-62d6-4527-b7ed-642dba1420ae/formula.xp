@@ -1,0 +1,18 @@
+TEXT = "<{NUMBER}>{time=DATETIME} {STRING} Info: {subject.name='sophos'} antivirus - MID {object.id=NUMBER} -
+        Result ' {$object_problem='CLEAN'} ' {REST}"
+
+subject = "application"
+action = "scan"
+object = "message"
+status = "success"
+
+object.type = "email"
+object.state = lower($object_problem)
+
+importance = "info"
+
+event_src.title = "sophos_antivirus"
+event_src.vendor = "sophos"
+event_src.category = "Anti-virus"
+
+id = "PT_Sophos_Sophos_Antivirus_syslog_clean"

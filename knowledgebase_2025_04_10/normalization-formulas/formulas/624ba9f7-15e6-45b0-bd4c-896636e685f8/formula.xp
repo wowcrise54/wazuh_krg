@@ -1,0 +1,62 @@
+ TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           user_domain,
+           user_name
+           "
+
+COND = string($event_id) == "1200"
+       and $event_category == "Вход/выход"
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subformula "message"
+    TEXT = 'Вход пользователя в систему. Имя пользователя: {$username=STRING} Тип сессии: {$session_type=STRING+} Уровень конфиденциальности:
+            {subject.account.privileges=STRING+} Режим аутентификации:{REST}'
+
+    if find_substr($username, "\\") != null then
+        $domain_name = csv($username, "\\", "`")
+        subject.account.name = $domain_name[1]
+        subject.account.domain = $domain_name[0]
+    else
+        subject.account.name = $username
+    endif
+endsubformula
+
+if find_substr($session_type, "Локальная") != null then
+    logon_auth_method = 'local'
+endif
+
+msgid = $event_id
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Вход/выход" then
+    event_src.subsys = "logon/logoff"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1200_user_logon"

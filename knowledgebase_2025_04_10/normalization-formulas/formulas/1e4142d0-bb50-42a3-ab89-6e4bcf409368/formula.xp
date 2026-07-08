@@ -1,0 +1,37 @@
+!TEXT='{"<"NUMBER">"} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$raw_hostname=HOSTNAME} {STRING}
+       {NUMBER?} ACCOUNT ({$sname=STRING} login ({$prot=WORD}) from
+       [{src.ip=IPV4|src.ip=IPV6}]:{src.port=NUMBER}{"("WORD")"?}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subject.account.name = substr($sname, 0, find_substr($sname, '@'))
+subject.account.domain = strip(substr($sname, find_substr($sname, '@') + 1, length($sname)), '', ')')
+
+dst.hostname = event_src.hostname
+dst.ip = event_src.ip
+
+protocol.layer7 = upper($prot)
+
+logon_auth_method = 'remote'
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "communigate_systems"
+event_src.title = "communigate"
+$dot_pos = find_substr($raw_hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = $raw_hostname
+    event_src.hostname = substr($raw_hostname, 0, $dot_pos)
+else
+    event_src.hostname = $raw_hostname
+endif
+event_src.category = "Mail server"
+
+id = "PT_CommuniGate_Systems_CommuniGate_syslog_account_login"

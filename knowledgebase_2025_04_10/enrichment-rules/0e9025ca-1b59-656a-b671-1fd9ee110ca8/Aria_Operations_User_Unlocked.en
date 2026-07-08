@@ -1,0 +1,22 @@
+query CheckIfAccountIsLocked($username) from Aria_Operations_Locked_Accounts {
+    column::username == $username
+}
+
+event Unlocked_User:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "aria_operations"
+        and event_src.vendor == "vmware"
+        and action == "modify"
+        and object == "account"
+        and status == "ongoing"
+        and object.account.name != null
+        and object.value == "CLI"
+        and exec_query("CheckIfAccountIsLocked", [object.account.name])
+    }
+
+enrichment Aria_Operations_User_Unlocked
+    enrich Unlocked_User:
+        remove_from Aria_Operations_Locked_Accounts {
+            column::username == object.account.name
+        }

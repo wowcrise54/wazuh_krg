@@ -1,0 +1,66 @@
+JSON = 'Event.Event="_$Session$_.Authentication"'
+
+COND = in_list(["Designer", "1CV8C", "1CV8", "COMConnection", "WebClient", "BackgroundJob"], $Event['ApplicationName'])
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+$temp = csv(lower(coalesce($Event['Data']['OSUser'], $Event['Data']['CurrentOSUser'])), '\\', '')
+subject.account.domain = $temp[0]
+
+if $temp[2] != null then
+    subject.account.name = $temp[2]
+else
+    subject.account.name = $temp[1]
+endif
+
+subject.application.account.session_id = $Event['Session']
+
+if $Event['User'] != "00000000-0000-0000-0000-000000000000" then
+    subject.application.account.id = lower($Event['User'])
+endif
+
+if $Event['UserName'] != "" then
+    subject.application.account.name = lower($Event['UserName'])
+endif
+
+object.name = $Event['ApplicationName']
+
+if lower($Event['Computer']) != "" then
+    src.hostname = lower($Event['Computer'])
+endif
+
+time = $Event['Date']
+msgid = $Event['Event']
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.id = $Event['v8ibase']
+
+if $Event['ServerName'] == null or $Event['ServerName'] == "" or lower($Event['ServerName']) == lower($Event['Computer']) then
+    logon_auth_method = "local"
+    
+    event_src.hostname = lower($Event['Computer'])  # to have at last any info
+else
+    logon_auth_method = "remote"
+    
+    $dot_pos = find_substr($Event['ServerName'], '.')
+    
+    if $dot_pos != null then
+        event_src.fqdn = lower($Event['ServerName'])
+        event_src.hostname = lower(substr($Event['ServerName'], 0, $dot_pos))
+    else
+        event_src.hostname = lower($Event['ServerName'])
+    endif
+endif
+
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_filemonitor_registration_log_session_authentication_success"

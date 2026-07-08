@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {UNTIL(" - - ")}
+        The following event has occurred: Event type: {STRING} (8); Computer: {STRING}
+        ({$evsrcip=UNTIL(";")} Date_Time: {UNTIL(";")} Source: {UNTIL(";")} 
+        Action: {$action=UNTIL(";")}
+        Name: {UNTIL(";")} Info: {STRING} {$ver=UNTIL(";")} Reason: {UNTIL(";")} User name: {UNTIL(";")}
+        User SID: {STRING} Process name: {UNTIL(";")} Process Id: {UNTIL(";")} Event id: {msgid="81"}'
+
+action = "terminate"
+object = "service"
+status = "success"
+
+object.process.version = strip($ver,'', '')
+object.type = "Agent"
+
+$intf_list = strip($evsrcip, '', ')')  # снятие скобок
+$csv = csv($intf_list, ", ", "\'")      # разделение на список интерфейсов
+interface = $intf_list                 # все интерфейсы источника
+
+reason = strip($action,'', '.')
+
+importance = "medium"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.vendor = "smart_line"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "devicelock"
+event_src.ip = maybe_ipv4($csv[0])
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_syslog_Unexpected_completion_of_agent"

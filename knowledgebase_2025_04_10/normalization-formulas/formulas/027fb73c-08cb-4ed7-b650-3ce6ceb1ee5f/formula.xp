@@ -1,0 +1,40 @@
+!TEXT = '{time=DATETIME} - {$result="OK"|$result="FAILED"},{msgid="USER_LOGIN"},{subject.account.name=WORDDASH+},
+         {$ending=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+if $result == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+submessage("TEXT","Reason",$ending)
+
+subformula "Reason"
+    !TEXT = 'User logged in from {src.ip=IPV4|src.ip=IPV6}'
+    importance = "info"
+endsubformula
+
+subformula "Reason"
+    !TEXT = 'Wrong password. Tried from IP:{src.ip=IPV4|src.ip=IPV6}'
+    importance = "low"
+    reason="Wrong password"     # Workaround for the old subformula bug
+endsubformula
+
+subformula "Reason"
+    !TEXT = 'User not found. Tried from IP:{src.ip=IPV4|src.ip=IPV6}'
+    importance = "low"
+    reason="User not found"     # Workaround for the old subformula bug
+endsubformula
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "zoom_international"
+event_src.title = "call_recording"
+event_src.category = "Telecom"
+
+id = "PT_ZOOM_International_Call_Recording_filemonitor_User_login"

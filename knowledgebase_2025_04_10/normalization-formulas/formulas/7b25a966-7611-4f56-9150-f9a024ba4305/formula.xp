@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{$time_syslog=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {WORD $time_file=DATETIME "us="NUMBER?} ocserv{"["NUMBER"]"?}:
+        sec-mod: initiating session for user \'{$subject_name_raw=UNTIL("\'")} ({"session:" object.name=UNTIL(")")}'
+
+if $subject_name_raw != null then
+    subject = "account"
+endif
+action = "initiate"
+object = "session"
+status = "ongoing"
+
+$csv1 = csv($subject_name_raw, "\\", "'")
+$csv2 = csv($subject_name_raw, "@", "'")
+if $csv1[1] != null then
+    subject.name = $csv1[1]
+    subject.domain = $csv1[0]
+elif $csv2[1] != null then
+    subject.name = $csv2[0]
+    subject.domain = $csv2[1]
+else
+    subject.name = $subject_name_raw
+endif
+
+time = coalesce($time_file, $time_syslog)
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "openconnect"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Opensource_OpenConnect_syslog_initiating_session"

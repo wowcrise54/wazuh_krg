@@ -1,0 +1,72 @@
+JSON = 'source="cinder"'
+
+COND = $action == "action-volume"
+       and $request_body["os-volume_upload_image"] != null 
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = "create"
+object = "file_object"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["os-volume_upload_image"]
+
+object.id = $properties["image_id"]
+
+if $properties["image_name"] != "" then
+    object.name = $properties["image_name"]
+endif
+
+object.state = $properties["status"]
+object.type = "image"
+
+datafield1 = $method            # Method
+datafield2 = $uri               # URL
+datafield3 = $properties["id"]  # The ID of the volume
+
+$csv_uri = csv(strip($uri, "/infra/volume", ""), "/", "")
+datafield6 = $csv_uri[4]        # The ID of the project
+
+if $properties["display_description"] != "" then
+    datafield9 = $properties["display_description"]  # A human-readable description for the resource
+endif
+
+if $success == "no" then
+    $message_path = coalesce($response_body["itemNotFound"], $response_body["badRequest"])
+    reason = coalesce($message_path["message"], $response_body)
+endif
+
+time = $timestamp
+msgid = $action
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Cinder_Volume_upload_image"

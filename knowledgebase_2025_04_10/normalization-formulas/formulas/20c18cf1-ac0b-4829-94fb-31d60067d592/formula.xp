@@ -1,0 +1,38 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {NUMBER+},{DATETIME},
+        {event_src.id=WORD?},SYSTEM,userid,{NUMBER},{time=DATETIME},{UNTIL(',')}{msgid='connect-ldap-sever-failure'},{UNTIL(',')}{NUMBER},{NUMBER},{WORD},{WORD},
+        {'\"'?}ldap cfg Group Mapping {datafield1=STRING+} failed to connect to server {dst.ip=IPV4|dst.ip=IPV6}:{dst.port=NUMBER}{','|':'} {$rest = REST}"
+
+submessage ("TEXT", "parse_rest", $rest)
+
+subformula "parse_rest"
+  !TEXT = "source: {src.ip = IPV4|src.ip = IPV6}: {reason = 'Invalid credentials'} {REST}"
+endsubformula
+
+subformula "parse_rest"
+  !TEXT = "Error: Failed to connect to {REST}"
+endsubformula
+
+subformula "parse_rest"
+  !TEXT = "source: {src.ip = IPV4|src.ip = IPV6}: Failed to connect to server {REST}"
+endsubformula
+
+action = "open"
+object = "session"
+status = "failure"
+
+# datafield1 - LDAP group name
+
+importance = "info"
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_System_Ldap_cfg_failed_to_connect_to_server"

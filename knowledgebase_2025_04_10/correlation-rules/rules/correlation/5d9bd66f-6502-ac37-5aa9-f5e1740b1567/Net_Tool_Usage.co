@@ -1,0 +1,194 @@
+event Process_Start:
+    key:
+        event_src.host, datafield12
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and in_list(["net.exe", "net1.exe"], lower(object.process.name))
+        and regex(lower(object.process.cmdline), "net(1)?(\.exe)?.*?\\buse\\b.*?", 0) != null
+        and filter::CheckWL_Process_Creation("Net_Tool_Usage", lower(join([object.account.name, object.process.cmdline], "|")))
+    }
+
+event Subrule_Net_Share_Access:
+    key:
+        src.host, object.name
+    filter {
+        correlation_name == "Subrule_Net_Share_Access"
+    }
+
+rule Net_Tool_Usage: (Process_Start and Subrule_Net_Share_Access?) timer 5s
+
+    init {
+        $labels = "w_auto|CheckWL_Windows_Shares"
+    }
+
+    on Process_Start {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6
+
+        $datafield11 = datafield11 # Причина    
+        $datafield12 = datafield12 # Имя ресурса из UNC-пути
+        $datafield13 = datafield13 # Домен пользователя        
+        $datafield14 = datafield14 # Имя пользователя       
+        $datafield15 = datafield15 # UNC-путь       
+        $datafield16 = datafield16 # Password
+
+        $datafield18 = datafield18 # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19 # Цепочка процесса-объекта с идентификаторами
+
+        $dst.ip = dst.ip
+        $dst.host = dst.host
+        $dst.port = dst.port
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([object.account.name, object.process.cmdline], "|"))
+
+        $lower_cmdline = lower(object.process.cmdline)
+        # Проверяем причину сработки обогащения на net use
+        $reason = regex($datafield11, "delete|connect|discovery|savecred", 0)
+        # Connect - подключение к объекту сетевого каталога
+        # net use f: \\host\object password /user:username@domain
+        # net use f: \\host\object password /user:domain\username
+        if $reason == "connect" then
+            $alert.context = lower(join([$datafield15, $datafield14 ,$datafield16], "|"))
+            $alert.regex_match = regex($lower_cmdline, "\\buse\\b\s+([d-z]:|\*)?.*?(\\\\\\\\(.+?)(\\\\(.+?))+?)\s+(\*|\S+)?\s*(\/u.*?):(.*?\\b([a-z0-9\._-]{1,15}\\b\\\\\\b)?(\S+)|.*?\\b(\S+)\\b@([a-z0-9\._-]{1,15}))(\s+(\*|\S+))?", 0)
+        # delete - удаление подключений к объектам сетевого каталога
+        # net use * /delete
+        # net use f: /delete
+        # net use \\host\object /delete
+        elif $reason == "delete" then
+            # one - удалилось одно подключений
+            if $datafield15 != null and $datafield14 == "one" then
+                $reason = "delete_one"
+            # all - удалились все подключения
+            elif $datafield13 == "*" and $datafield14 == "all"then
+                $reason = "delete_all"
+            endif
+            $alert.context = lower(join([$datafield11, $datafield14, "connections"], " "))
+            $alert.regex_match = regex($lower_cmdline, "\\buse\\b.*?/delete", 0)
+        # savecred - сохранение учётных данных пользователя для подключения
+        # net use /savecred \\host\object /user:username@domain
+        elif $reason == "savecred" then
+            # учётных данные пользователя сохраняют для конкретного подключения
+            if $datafield15 != null then
+                $alert.context = lower(join(["User", subject.account.name, "save credentials for connection", $datafield15], " "))
+                $reason = $reason + "_connect"
+            else
+                $alert.context = lower(join(["User", subject.account.name, "save credentials for connection"], " "))
+            endif
+            # учётных данные пользователя сохраняют для конкретного пользователя, проверка, что всё корректно прокидывается
+            if $datafield14 != null then
+                $alert.context = lower(join([$alert.context, "for user:", $datafield14]," "))
+                $reason = $reason + "_user"
+            endif
+            $alert.regex_match = regex($lower_cmdline, "\\buse\\b.*?\/sa.*?\\b", 0)
+            $correlation_type = "incident"
+        # Для случаев, которые не попадают под случаи с корректным парсингом всех данных
+        elif $reason == "discovery" then
+            $alert.regex_match = regex($lower_cmdline, "\\buse\\b\s+([d-z]\:|\*)?.*?(((\\\\\\\\(.+?)(\\\\(.+?))+?)\\b)|\\b\S+\\b|(\\\\\\\\(.+)))", 0)
+            $alert.context = lower(join([$datafield15, $datafield4],"|"))
+        endif
+        # сохранение подключений после перезагрузки
+        if match($datafield11, "*remember") then
+            $alert.context = lower(join([$alert.context, "persistent:" + regex($lower_cmdline, "(\/p.*?)\:(y.*?\\b|n.*?\\b)", 2)],"|"))
+            $correlation_type = "incident"
+        endif
+    }
+
+    on Subrule_Net_Share_Access {
+        $object.account.session_id = subject.account.session_id
+        $object.account.name = subject.account.name
+        $object.account.domain = subject.account.domain
+        $object.account.fullname = subject.account.fullname
+        $object.account.id = subject.account.id
+        $object.account.privileges = subject.account.privileges
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+
+        $protocol = protocol
+        $direction = direction
+
+        $importance = "medium"
+        $category.high = "Lateral Movement"
+        $category.low = "Remote Services: SMB/Windows Admin Shares"
+        $incident.category = "UnauthorizedAccess"
+    }
+
+emit {
+    $correlation_type = coalesce($correlation_type, "event")
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = coalesce($importance, "low")
+
+    $category.generic = "Attack"
+    $category.high = coalesce($category.high, "Discovery")
+    $category.low = coalesce($category.low, "System Network Connections Discovery")
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = coalesce($incident.category, "NetworkScan")
+    $incident.aggregation.timeout = 2h
+}

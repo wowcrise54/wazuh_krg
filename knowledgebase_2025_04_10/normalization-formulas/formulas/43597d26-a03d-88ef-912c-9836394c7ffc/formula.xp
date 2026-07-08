@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+{UNTIL("[")?}{NUMBER"]:"?}{$temp_time=UNTIL(",")?}{NUMBER?} 
+{"[salt.transport.zeromq"?}{":"?}{msgid = "328"?}{"]"?}{"["?}{WORD?}{"]["?}{object.process.id=NUMBER?}] 
+ReqServer clients {protocol=UNTIL("://")}{$ip_port=REST}'
+
+action = "start"
+object = "application"
+status = "success"
+
+$ip_port = csv($ip_port, ":", "")
+datafield5 = $ip_port[0]  # ReqServer IP
+datafield6 = $ip_port[1]  # ReqServer port
+
+if $temp_time != null then
+    time = datetime($temp_time)
+endif
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "saltstack"
+event_src.category = "Other"
+
+id = "PT_Opensource_SaltStack_syslog_328_reqserver_clients"

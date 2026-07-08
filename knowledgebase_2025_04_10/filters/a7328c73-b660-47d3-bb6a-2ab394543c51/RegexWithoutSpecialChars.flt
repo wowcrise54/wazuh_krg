@@ -1,0 +1,5 @@
+filter RegexWithoutSpecialChars(string $field_value, string $field_regex, number $regex_group_number) {
+    $field_value != null
+    and $regex_group_number != null
+    and regex(replace(lower($field_value), "", "[\'\"\`]"), $field_regex, $regex_group_number) != null
+}

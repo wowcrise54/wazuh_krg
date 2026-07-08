@@ -1,0 +1,139 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} production_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"controller":"Projects::MergeRequestsController"') != null
+    and (
+        (
+            find_substr($json, '"method":"DELETE"') != null
+            and find_substr($json, '"action":"destroy"') != null
+        )
+        or (
+            find_substr($json, '"method":"PATCH"') != null
+            and find_substr($json, '"action":"update"') != null
+        )
+        or (
+            find_substr($json, '"method":"PUT"') != null
+            and find_substr($json, '"action":"update"') != null
+        )
+        or (
+            find_substr($json, '"method":"POST"') != null
+            and find_substr($json, '"action":"merge"') != null
+        )
+        or (
+            find_substr($json, '"method":"POST"') != null
+            and find_substr($json, '"action":"rebase"') != null
+        )
+    )
+)
+
+subject = "account"
+object = "resource"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_commit_message"
+    TEXT = 'Merge branch \'{$src_branch=UNTIL("\'")} into \'{$dst_branch=UNTIL("\'")}{REST}'
+    
+    object.property = "branch"
+    object.value = $src_branch
+    object.new_value = $dst_branch
+endsubformula
+
+subformula "parse_commit_message"
+    TEXT = '{REST}'
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+action = switch $action
+    case "update" "modify"
+    case "destroy" "remove"
+    case "merge" "apply"
+    case "rebase" "modify"
+endswitch
+
+$s_commit_message = find_substr($json, '{"key":"commit_message","value":"')
+$e_commit_message = find_substr(substr($json, $s_commit_message, length($json)), '"}')
+$commit_message = substr($json, $s_commit_message + 33, $e_commit_message - 33)
+$commit_message = if length($commit_message) != 0 then $commit_message else null endif
+
+if ($action == "update") then
+    $start_update = find_substr($json, '{"key":"merge_request","value":{')
+    $end_update_1 = find_substr(substr($json, $start_update, length($json)), '}},')
+    $end_update_2 = find_substr(substr($json, $start_update, length($json)), '}}],')
+    $end_update = coalesce($end_update_1, $end_update_2)
+    object.property = "configuration"
+    object.new_value = replace(substr($json, $start_update + 32, $end_update - 32), "'", '"')
+elif ($action == "merge") then
+    submessage("TEXT", "parse_commit_message", $commit_message)
+endif
+
+$status_new = substr(string($status), 0, 1)
+
+if in_list(["2", "3"], $status_new) then
+    status = switch action == "apply"
+        case true "ongoing"
+        case false "success" 
+    endswitch
+
+elif in_list(["4", "5"], $status_new) then
+    status = "failure"
+endif
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+object.type = "merge_request"
+
+$s_squash_commit_message = find_substr($json, '{"key":"squash_commit_message","value":"')
+$e_squash_commit_message = find_substr(substr($json, $s_squash_commit_message, length($json)), '"}')
+$squash_commit_message = substr($json, $s_squash_commit_message + 40, $e_squash_commit_message - 40)
+object.name = if length($squash_commit_message) != 0 then $squash_commit_message else null endif
+
+src.ip = $remote_ip
+
+$s_project_id = find_substr($json, '{"key":"project_id","value":"')
+$e_project_id = find_substr(substr($json, $s_project_id, length($json)), '"}')
+$project_id = substr($json, $s_project_id + 29, $e_project_id - 29)
+datafield1 = if length($project_id) != 0 then $project_id else null endif  # Project Slug
+
+$s_namespace_id = find_substr($json, '{"key":"namespace_id","value":"')
+$e_namespace_id = find_substr(substr($json, $s_namespace_id, length($json)), '"}')
+$namespace_id = substr($json, $s_namespace_id + 31, $e_namespace_id - 31)
+datafield2 = if length($namespace_id) != 0 then $namespace_id else null endif  # Namespace Fullpath
+
+datafield3 = $src_branch  # Branch Name (исходная ветка)
+datafield4 = $commit_message  # Commit Title
+
+# Specific Rule Field
+$s_sha = find_substr($json, '{"key":"sha","value":"')
+$e_sha = find_substr(substr($json, $s_sha, length($json)), '"}')
+$sha = substr($json, $s_sha + 22, $e_sha - 22)
+datafield8 = if length($sha) != 0 then $sha else null endif  # Last Commit ID
+
+$s_id = find_substr($json, '{"key":"id","value":"')
+$e_id = find_substr(substr($json, $s_id, length($json)), '"}')
+$id = substr($json, $s_id + 21, $e_id - 21)
+numfield3 = if length($id) != 0 then $id else null endif  # MR Internal ID (!x)
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "production"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Production_MR_Management"

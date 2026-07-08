@@ -1,0 +1,147 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} UNSPECIFIED 
+        (__progname=\"(squid{"-"?}{WORDDASH?})\"{"["?}{NUMBER?}{"]"?} uid={NUMBER} euid={NUMBER}): {$time=STRING} {NUMBER} {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} {src.port=NUMBER?}
+        {$raw_proto="TCP"|$raw_proto="UDP"}_{object.state=WORD}/{datafield2=NUMBER} {NUMBER} {$method=WORD}
+        {datafield1=STRING} {$subject_name=STRING} {WORD}/{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME|"-"} {STRING}  {$sub=REST}'
+
+COND = (
+        find_substr(object.state, "MISS") != null or
+        find_substr(object.state, "HIT") != null or
+        find_substr(object.state, "DENIED") != null or 
+        find_substr(object.state, "REFRESH") != null
+        )
+
+action = "access"
+object = "resource"
+
+if $method != "CONNECT" then
+    $level_7_proto_end = find_substr(datafield1, "://")
+    object.property = "Application layer protocol"
+    object.value = upper(substr(datafield1, 0, $level_7_proto_end))
+else
+    $level_7_port_start = find_substr(datafield1, ":")
+    dst.port = substr(datafield1, $level_7_port_start + 1, length(datafield1))
+endif
+
+if $subject_name != "-" then
+    subject = "account"
+    subject.name = $subject_name
+endif
+
+protocol = lower($raw_proto)
+
+$success_list = ["100","101","102","200","201","202","203","204",
+                 "205","206","207","226","300","302","304"]
+if find_substr(object.state, "MISS") != null then
+    msgid = "MISS"
+    if in_list($success_list, datafield2) then
+            status = "success"
+    else
+            status = "failure"
+    endif
+elif find_substr(object.state, "HIT") != null then
+    msgid = "HIT"
+    object.type = "cached object"
+        if in_list($success_list, datafield2) then
+            status = "success"
+    else
+            status = "failure"
+    endif
+else
+    msgid = "DENIED"
+    status = "failure"
+endif
+
+if length($sub) != 0 then  
+    submessage('TEXT','message',$sub)
+endif
+
+reason = switch datafield2
+    case "100" "Continue"
+    case "101" "Switching"
+    case "102" "Processing"
+    case "200" "OK"
+    case "201" "Created"
+    case "202" "Accepted"
+    case "203" "Non-Authoritative Information"
+    case "204" "No Content"
+    case "205" "Reset Content"
+    case "206" "Partial Content"
+    case "207" "Multi-Status"
+    case "226" "IM Used"
+    case "300" "Multiple Choices"
+    case "301" "Moved Permanently"
+    case "302" "Found or Moved Temporarily"
+    case "303" "See Other"
+    case "304" "Not Modified"
+    case "305" "Use Proxy"
+    case "307" "Temporary Redirect"
+    case "308" "Permanent Redirect"
+    case "400" "Bad Request"
+    case "401" "Unauthorized"
+    case "402" "Payment Required"
+    case "403" "Forbidden"
+    case "404" "Not Found"
+    case "405" "Method Not Allowed"
+    case "406" "Not Acceptable"
+    case "407" "Proxy Authentication Required"
+    case "408" "Request Timeout"
+    case "409" "Conflict"
+    case "410" "Gone"
+    case "411" "Length Required"
+    case "412" "Precondition Failed"
+    case "413" "Payload Too Large or Request Entity Too Large"
+    case "414" "URI Too Long or Request-URI Too Large"
+    case "415" "Unsupported Media Type"
+    case "416" "Range Not Satisfiable or Requested Range Not Satisfiable"
+    case "417" "Expectation Failed"
+    case "421" "Misdirected Request"
+    case "422" "Unprocessable Entity"
+    case "423" "Locked"
+    case "424" "Failed Dependency"
+    case "426" "Upgrade Required"
+    case "428" "Precondition Required"
+    case "429" "Too Many Requests"
+    case "431" "Request Header Fields Too Large"
+    case "451" "Unavailable For Legal Reasons or Redirect - Internet Information Services - Unofficial code"
+    case "500" "Internal Server Error"
+    case "501" "Not Implemented"
+    case "502" "Bad Gateway"
+    case "503" "Service Unavailable"
+    case "504" "Gateway Timeout"
+    case "505" "HTTP Version Not Supported"
+    case "506" "Variant Also Negotiates"
+    case "507" "Insufficient Storage"
+    case "508" "Loop Detected"
+    case "510" "Not Extended"
+    case "511" "Network Authentication Required"
+    case "599" "Network Connect Timeout Error"
+endswitch
+
+subformula "message"
+    TEXT = '{$df3=STRING} {$df4=REST}'
+    datafield3 = strip($df3,'\"','\"')
+    datafield4 = strip($df4,'\"','\"')
+endsubformula
+
+if find_substr($time,"T") != null then
+    time = $time 
+else
+    $unix_time_1 = substr($time, 0, find_substr($time, '.'))
+    $unix_time_2 = substr($time, find_substr($time, '.') + 1, length($time))  
+    time = epoch_ms_to_datetime(number($unix_time_1 + $unix_time_2))
+endif
+
+importance = "info"
+
+event_src.title = "squid"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Proxy server"
+
+id = "PT_Opensource_Squid_filemonitor_Query_detected"

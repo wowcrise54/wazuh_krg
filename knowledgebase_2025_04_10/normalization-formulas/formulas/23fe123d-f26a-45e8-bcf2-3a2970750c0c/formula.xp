@@ -1,0 +1,19 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4} {event_src.hostname=HOSTNAME}
+        - {'Log'|'Alert'} [Fields@{STRING} UUid={STRING} StormAgentName=\"{object.name=UNTIL('\"')}
+        StormAgentAction=\"Agent is up\" {REST}"
+
+action = "start"
+object = "service"
+status = "success"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_Common_Agent_is_up"

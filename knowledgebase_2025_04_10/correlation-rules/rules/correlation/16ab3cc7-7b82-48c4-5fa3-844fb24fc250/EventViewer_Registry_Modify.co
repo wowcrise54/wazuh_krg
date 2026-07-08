@@ -1,0 +1,81 @@
+event Registry_Modify:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                msgid == "4657"
+                and event_src.title == "windows"
+            ) or (
+                msgid == "13"
+                and event_src.title == "sysmon"
+            )
+        )
+        and regex(lower(object.new_value), "\.(scr|exe|cmd|ps1|bat)", 0) != null
+        and regex(lower(object.fullpath), "\\\\currentversion\\\\event\sviewer\\\\microsoftredirection(url|program(commandlineparameters)?)", 0) != null
+        and filter::CheckWL_Registry_Actions("EventViewer_Registry_Modify", lower(join([subject.process.fullpath, object.fullpath, object.new_value], "|")))
+    }
+
+rule EventViewer_Registry_Modify: Registry_Modify
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+    }
+
+    on Registry_Modify {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.new_value = object.new_value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.process.fullpath, object.fullpath, object.new_value], "|"))
+        $alert.context = lower(join([subject.process.name, "modified", object.name, "value to", object.new_value], " "))
+    }
+
+emit {
+    $correlation_type = "event"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "modify"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Event Triggered Execution"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

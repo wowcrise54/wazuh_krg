@@ -1,0 +1,93 @@
+event SSH_Login:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "login"
+        and logon_auth_method == "remote"
+        and status == "success"
+        and regex(object.process.name, "^(sshd?|lsh-server|dropbear)", 0) != null
+        and (
+            number(subject.account.id) > 0
+            and number(subject.account.id) < 1000
+        )
+        and not filter::Loopback_Address(src.ip)
+        and filter::CheckWL_Linux_Login("Unix_SSH_Login_By_Daemons",
+            lower(join([coalesce(subject.account.name, subject.account.id), string(src.ip)], "|")))
+    }
+
+rule Unix_SSH_Login_By_Daemons: SSH_Login
+
+    init {
+        $labels = "CheckWL_Linux_Login"
+    }
+
+    on SSH_Login {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.state = subject.state
+
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), string(src.ip)], "|"))
+    }
+
+emit {    
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: SSH"
+
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

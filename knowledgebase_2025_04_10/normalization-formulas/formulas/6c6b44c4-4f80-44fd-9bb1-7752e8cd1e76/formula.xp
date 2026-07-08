@@ -1,0 +1,37 @@
+EVENTLOG = 'EventID.text="1013"'
+COND = (($Channel=="Kaspersky Security for Exchange Servers" and $Provider["Name"]=="KSE") 
+        or ($Channel=="Application" and $Provider["Name"] == "KSCM8"))
+
+action = "start"
+object = "task"
+status = "success"
+
+submessage("TEXT", "SPLIT", $Data[0])
+
+subformula "SPLIT"
+    # Извлечение datafield1, subject.domain, subject.name из $Data[0]
+    TEXT='{datafield1=UNTIL("\r\n")} {"Background scan task is running. Run type: "|
+    "Задача фоновой проверки запущена. Тип запуска: "}
+    {object.value=UNTIL(". Scan type: ")|UNTIL(". Тип проверки: ")} {object.type=WORD}.'
+
+    object.property = "Start type"
+endsubformula
+
+# Datafield1 - исполняемый файл
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+category.generic = "Task"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_microsoft_exchange_servers"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Kaspersky_Security_for_Exchange_eventlog_1013_start_background_scan"

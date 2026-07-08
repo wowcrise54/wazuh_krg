@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?} PPE-{NUMBER}: {"default"?}
+        {$tmp_subsys="AAA"} Message {NUMBER+} : "{reason="Authentication failed in dialogue mode"}
+        for user {$subj_user_info=UNTIL("\\"")}'
+
+action = "info"
+object = "account"
+status = "success"
+
+if find_substr($subj_user_info, "\\") != null then
+    object.account.name = csv($subj_user_info, "\\", "")[1]
+    object.account.domain = csv($subj_user_info, "\\", "")[0]
+else
+    object.account.name = $subj_user_info
+endif
+
+time = $sys_time
+msgid = "AAA Message authentication failed"
+importance = "low"
+
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "netscaler"
+event_src.category = "Terminal services"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Citrix_NetScaler_syslog_aaa_message_authentication_failed"

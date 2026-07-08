@@ -1,0 +1,38 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "Health Service Modules" and $number == 10357
+
+submessage("XML","Event_data",$eventdata)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    reason = $DataItem / eventdata / Data [5]
+endsubformula
+
+msgid = $number
+
+object = "service"
+action = "alert"
+status = "success"
+subject = "host"
+
+importance = "medium"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_10357_unable_to_execute_notification_query"

@@ -1,0 +1,47 @@
+TABULAR = "{chain_id=audit_id}, action_int, resource_type_int, unix_time"
+COND = ($action_int == 0)
+       and not in_list([0, 11, 44, 45], $resource_type_int)
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "success"
+
+subformula "getID"
+    TEXT = '{STRING?} [{object.id=NUMBER}] {REST}'
+endsubformula
+
+subject.account.name = $user_alias
+subject.account.id = $user_id
+subject.account.privileges = switch $user_role_type
+    case 1 "User"
+    case 2 "Admin"
+    case 3 "Super admin"
+endswitch
+
+object.type = $resource_type_int
+if $resource_id != 0 then  # regular operation
+    object.id = $resource_id
+    object.name = if $resource_name != "" then $resource_name else null endif
+else  # mass operation
+    reason = "mass operation"
+endif
+
+src.ip = $ip
+
+if not in_list(["", "0"], $details) then
+    if find_substr($details, "[]") == null and object.id == null then
+        submessage("TEXT", "getID", $details)
+    endif
+    datafield1 = replace($details, "'", '"')  # additional info about action
+endif
+
+time = epoch_to_datetime($unix_time)
+msgid = "ACTION_ADD"
+importance = "info"
+
+event_src.vendor = "zabbix"
+event_src.title = "zabbix"
+event_src.category = "Network monitoring system"
+
+id = "PT_Zabbix_Zabbix_odbc_Add_resource"

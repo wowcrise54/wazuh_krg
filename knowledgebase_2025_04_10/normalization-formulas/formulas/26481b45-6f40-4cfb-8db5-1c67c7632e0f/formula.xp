@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"}{NUMBER}{time=DATETIME}:{NUMBER}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {subject.name="KasperskyHTTPService"}{NUMBER} SERVICE_MESSAGE - {reason="BOM Service Close connection"}:
+        {"["src.ip=IPV4":"src.port=NUMBER"]"}'
+
+subject = "service"
+action = "close"
+object = "connection"
+status = "success"
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "scan_engine"
+event_src.category = "Network monitoring system"
+
+id = "PT_Kaspersky_Scan_Engine_syslog_Close_connection"

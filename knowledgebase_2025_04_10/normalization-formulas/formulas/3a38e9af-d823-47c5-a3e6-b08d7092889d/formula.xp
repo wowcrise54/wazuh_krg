@@ -1,0 +1,71 @@
+JSON = 'msg.comp_id="tnslsnr"'
+
+COND = $msg["time"] != null
+       and find_substr($msg["txt"], "* establish *") != null
+
+$csv_msg_txt = csv($msg["txt"], " * ", "'")
+
+subject = "account"
+action = "connect"
+object = "database"
+if $csv_msg_txt[5] == "0" then
+    status = "success"
+else
+    status = "failure"
+    reason = "TNS-" + $csv_msg_txt[5]
+endif
+
+$kv_msg_txt_1 = keyvalue(strip($csv_msg_txt[1], "(", "))"), "(", "=", "'")
+if $kv_msg_txt_1["USER"] != ")" then
+    subject.account.id = strip($kv_msg_txt_1["USER"], "", ")")
+    subject.account.name = subject.account.id
+endif
+if $kv_msg_txt_1["SID"] != null then
+    object.name = strip($kv_msg_txt_1["SID"], "", ")")
+else
+    object.name = strip($kv_msg_txt_1["SERVICE_NAME"], "", ")")
+endif
+
+object.query = $msg["txt"]
+
+$temp_hostname = strip($kv_msg_txt_1["HOST"], "", ")")
+if $temp_hostname == "__jdbc__" then
+    datafield2 = $temp_hostname
+else
+    src.hostname = $temp_hostname
+endif
+
+$kv_msg_txt_2 = keyvalue(strip($csv_msg_txt[2], "(", "))"), "(", "=", "'")
+src.ip = strip($kv_msg_txt_2["HOST"], "", ")")
+src.port = $kv_msg_txt_2["PORT"]
+
+dst.ip = $msg["host_addr"]
+
+protocol = upper(strip($kv_msg_txt_2["PROTOCOL"], "", ")"))
+
+$program = strip($kv_msg_txt_1["PROGRAM"], "", ")")
+if $program != "" then
+    datafield1 = strip($kv_msg_txt_1["PROGRAM"], "", ")")  # используемая программа
+endif
+
+time = $msg["time"]
+
+importance = "high"
+
+event_src.vendor = "oracle"
+event_src.title = "oracle_database"
+event_src.subsys = "tnslsnr"
+event_src.ip = dst.ip
+$first_dot = find_substr($msg["host_id"], '.')
+if $first_dot != null then
+    event_src.fqdn = lower($msg["host_id"])
+    event_src.hostname = lower(substr($msg["host_id"], 0, $first_dot))
+    dst.fqdn = event_src.fqdn
+    dst.hostname = event_src.hostname
+else
+    event_src.hostname = lower($msg["host_id"])
+    dst.hostname = event_src.hostname
+endif
+event_src.category = "Database server"
+
+id = "PT_Oracle_Oracle_Database_filemonitor_LSNR_establish"

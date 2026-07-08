@@ -1,0 +1,40 @@
+EVENTLOG = 'Channel = "Netwrix Auditor"'
+
+COND = $EventID["text"] == "6120" or $EventID["text"] == "6121"
+
+if $EventID["text"] == "6120" then
+    action = "check"
+    status = "failure"
+    reason = strip($Data[6],"",".")
+elif $EventID["text"] == "6121" then
+    action = "modify"
+    status = "ongoing"
+    object.property = "modify details"
+    object.value = "Maximum event log size will be set to " + $Data[8] + " KB. Current size: " + $Data[6] + " KB"
+endif
+
+object = "configuration"
+
+datafield1 = $Data[0]  # monitoring plan name
+datafield2 = $Data[1]  # monitored item in monitoring plan
+datafield3 = $Data[5]  # monitored object
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($Provider["Name"])
+event_src.category = "Other"
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_Eventlog_settings_check_modify"

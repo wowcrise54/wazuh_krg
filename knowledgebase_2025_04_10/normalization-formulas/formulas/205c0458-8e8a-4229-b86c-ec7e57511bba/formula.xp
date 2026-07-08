@@ -1,0 +1,24 @@
+TEXT = 'CEF:0|Kaspersky|{subject.name="Scan Engine HTTP Service"}|2.{$ver=UNTIL("|")}1|Service event|5|
+        msg={reason="Service Accept new connection"}:{"["src.ip=IPV4":"src.port=NUMBER"]"}dvcpid={object.process.id=NUMBER}
+        dvc={dst.ip=IPV4}dvchost={dst.hostname=HOSTNAME}start={time=DATETIME}:{NUMBER} flexString1={object.value=STRING}
+        {$kv=KEYVALUE(" ", "=")}'
+
+subject = "service"
+action = "open"
+object = "connection"
+status = "success"
+
+subject.version = "2." + $ver
+
+object.property = $kv["flexString1Label"]
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "scan_engine"
+event_src.category = "Network monitoring system"
+
+id = "PT_Kaspersky_Scan_Engine_syslog_CEF_accept_new_connection"

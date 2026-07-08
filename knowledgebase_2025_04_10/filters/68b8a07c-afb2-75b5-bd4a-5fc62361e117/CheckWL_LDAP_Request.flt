@@ -1,0 +1,156 @@
+# Windows 1644
+
+filter CheckWL_LDAP_Request(string $rule_name, string $specific_value)
+{
+    (
+        # check if specific value is manually elevated and whitelisted
+        not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower($specific_value)
+        )
+    )
+    and
+    (
+        (
+            # check if specific value is manually elevated
+            filter::CheckWL_BlackListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+        )
+        or (
+            # check manual whitelists for the specific value
+            not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+            
+            # check manual whitelist for the exceptions inserted from UI
+            and not filter::CheckWL_WhiteListValue_4(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower(object.query),
+                lower(src.host),
+                lower(dst.host),
+                lower(src.host + "|" + object.query)
+            )
+            and not filter::CheckWL_WhiteListValue_3(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower(subject.account.name),
+                lower(object.value),
+                lower(src.host + "|" + dst.host + "|" + subject.account.name)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower(subject.account.name + "|" + object.query + "|" + src.host)
+            )
+            and not filter::CheckWL_WhiteListValue_4(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower(object.query),
+                lower(src.host),
+                lower(dst.host),
+                lower(src.host + "|" + object.query)
+            )
+            and not filter::CheckWL_WhiteListValue_2(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower(object.value),
+                lower(src.host + "|" + dst.host + "|" + subject.account.name)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower(subject.account.name + "|" + object.query + "|" + src.host)
+            )
+
+            # check Common_IP_Subnet_Whitelist for specific subnets
+            and not filter::Check_Network_Whitelist(
+                $rule_name,
+                lower(subject.account.id),
+                src.ip,
+                dst.ip
+            )
+            and not filter::Check_Network_Whitelist(
+                $rule_name,
+                lower(subject.account.name),
+                src.ip,
+                dst.ip
+            )
+
+            # check auto whitelist for the specific value
+            and not filter::CheckWL_Auto(
+                $rule_name,
+                lower($specific_value)
+            )
+        )
+    )
+}

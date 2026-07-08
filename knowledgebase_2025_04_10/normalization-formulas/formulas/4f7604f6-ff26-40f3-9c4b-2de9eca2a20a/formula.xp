@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        snmpd{"["NUMBER"]"?}: {"%AUTH-5-SNMPD_AUTH_FAILURE"|"SNMPD_AUTH_FAILURE"}: nsa_log_community:
+        {reason="unauthorized SNMP community"} from {src.ip=IPV4|src.hostname=HOSTNAME|}
+        to {dst.ip=IPV4|dst.hostname=HOSTNAME|} ({subject.name = WORDDASH})'
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+subject = "account"
+action = "access"
+object = "system"
+status = "failure"
+
+protocol = "SNMP"
+
+importance = "medium"
+
+event_src.category = "Network device"
+event_src.vendor = "juniper"
+event_src.title = "junos"
+
+id = "PT_Juniper_Junos_syslog_snmp_unauthorized_community"

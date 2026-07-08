@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Updating the PostgreSQL database configuration can impact the security parameters of the data stored</Description>
+  <EventDescriptions>
+    <EventDescription id="0abbece6-90a3-996a-2525-1d8601000993">User {subject.application.account.name} updated the PostgreSQL database configuration using an SQL command on host {event_src.host}</EventDescription>
+    <EventDescription id="5fb06d26-0119-b186-daf8-ce4a7f74b3ea">User {subject.account.name} changed configuration file {object.name} of the PostgreSQL database on host {event_src.host}</EventDescription>
+    <EventDescription id="97332174-f5a6-f054-5d66-8cb035ae4c40">User {subject.account.name} changed configuration file {object.name} of the PostgreSQL database, and database user {subject.application.account.name} applied these changes on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

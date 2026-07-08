@@ -1,0 +1,213 @@
+query Check_host_not_enabled_for_chains($host, $subj, $obj) from Disable_Process_Chain { 
+    (host == $host or host == '*')
+    and (
+        value == '*'
+        or (property == 'msgid-8_subj' and value == $subj)
+        or (property == 'msgid-8_obj' and value == $obj)
+    )
+}
+
+query Check_all_process_chains($host, $proc_id, $proc_name) from Process_Chains{
+    host == $host
+    and proc_id == $proc_id
+    and proc_name == $proc_name
+}
+    qhandler {
+        $subject_account = subject_account
+        $subject_session_id = subject_session_id
+        $object_account = object_account
+        $object_session_id = object_session_id
+        $proc_meta = proc_meta 
+        $proc_hash = proc_hash
+        $parent_proc_id = parent_proc_id
+        $parent_proc_name = parent_proc_name
+        $step = step
+        $last_event_uuid = last_event_uuid
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $first_cmdline = first_cmdline
+        $second_cmdline = second_cmdline
+    }
+
+query Check_all_process_chains_by_account($host, $proc_id, $proc_name, $object_account) from Process_Chains{
+    host == $host
+    and proc_id == $proc_id
+    and proc_name == $proc_name
+    and object_account == $object_account
+}
+    qhandler {
+        $subject_account = subject_account
+        $subject_session_id = subject_session_id
+        $object_account = object_account
+        $object_session_id = object_session_id
+        $proc_meta = proc_meta 
+        $proc_hash = proc_hash
+        $parent_proc_id = parent_proc_id
+        $parent_proc_name = parent_proc_name
+        $step = step
+        $last_event_uuid = last_event_uuid
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $first_cmdline = first_cmdline
+        $second_cmdline = second_cmdline
+    }
+    
+event Access_process:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "8"
+        and event_src.title == "sysmon"
+        and not  exec_query("Check_host_not_enabled_for_chains", [lower(event_src.host), lower(subject.process.name), lower(object.process.name)])
+    }
+    
+enrichment Process_chain_throw_access_process
+    enrich Access_process:
+        enrich_fields {
+            $host = lower(event_src.host)
+            $proc_id = number(object.process.id)
+            $proc_name = lower(object.process.name)
+            $proc_name_for_chain_info = if find_substr(object.process.name, " ") != null then '"' + object.process.name + '"' else object.process.name endif
+            $chain_loop = false
+            
+            if subject.account.name != null and subject.account.domain != null then
+                $result_check_all = exec_query("Check_all_process_chains_by_account", [lower(event_src.host), number(subject.process.id), lower(subject.process.name), lower(subject.account.domain) + "\\" + lower(subject.account.name)])
+            else
+                $result_check_all = exec_query("Check_all_process_chains", [lower(event_src.host), number(subject.process.id), lower(subject.process.name)])
+            endif
+
+            if $result_check_all["$step"] != null then 
+                $subject_account = $result_check_all["$subject_account"]
+                $subject_session_id = number($result_check_all["$object_session_id"])
+                $subj_chain_proc_names = $result_check_all["$chain_proc_names"]
+                $subj_chain_proc_info = $result_check_all["$chain_proc_info"]
+                $subj_step = $result_check_all["$step"]
+                subject.account.session_id = $result_check_all["$object_session_id"]
+                if subject.account.name == null and subject.account.domain == null then
+                    $separator_pos = find_substr($subject_account, "\\")
+                    if $separator_pos != null then
+                        subject.account.domain = substr($result_check_all["$subject_account"], 0, $separator_pos)
+                        subject.account.name = substr($result_check_all["$subject_account"], $separator_pos + 1, length($result_check_all["$subject_account"]))
+                    else
+                        subject.account.name = $result_check_all["$subject_account"]
+                    endif
+                endif
+                
+                $second_cmdline = $result_check_all["$first_cmdline"]
+                if subject.process.cmdline == null then subject.process.cmdline = $second_cmdline endif
+                if subject.process.parent.cmdline == null then subject.process.parent.cmdline = $result_check_all["$second_cmdline"] endif
+                if subject.process.parent.name == null then subject.process.parent.name = $result_check_all["$parent_proc_name"] endif
+                if subject.process.parent.id == null then subject.process.parent.id = $result_check_all["$parent_proc_id"] endif
+                if subject.process.meta  == null then subject.process.meta = $result_check_all["$proc_meta"] endif
+                if subject.process.hash  == null then 
+                    subject.process.hash = $result_check_all["$proc_hash"] 
+                    subject.process.hash.imphash = regex($result_check_all["$proc_hash"], "IMPHASH:([A-Z0-9]+)\\b", 1)
+                    subject.process.hash.md5 = regex($result_check_all["$proc_hash"], "MD5:([A-Z0-9]+)\\b", 1)
+                    subject.process.hash.sha1 = regex($result_check_all["$proc_hash"], "SHA1:([A-Z0-9]+)\\b", 1)
+                    subject.process.hash.sha256 = regex($result_check_all["$proc_hash"], "SHA256:([A-Z0-9]+)\\b", 1)
+                endif
+            else
+                if subject.account.domain != null then 
+                    $subject_account = lower(subject.account.domain) + "\\" + lower(subject.account.name)
+                else 
+                    $subject_account = lower(subject.account.name)
+                endif
+                $subject_session_id = null
+                $subj_chain_proc_names = subject.process.name                
+                $subj_chain_proc_info = if find_substr(subject.process.name, " ") != null then '"' + subject.process.name + '" (' + subject.process.id + ") []" else subject.process.name + ' (' + subject.process.id + ") []" endif
+                $subj_step = 1
+                $second_cmdline = null
+            endif
+                        
+            if object.account.name != null and object.account.domain != null then
+                $old_chain_info = exec_query("Check_all_process_chains_by_account", [lower(event_src.host), number(object.process.id), lower(object.process.name), lower(object.account.domain) + "\\" + lower(object.account.name)])
+            else
+                $old_chain_info = exec_query("Check_all_process_chains", [lower(event_src.host), number(object.process.id), lower(object.process.name)])
+            endif
+
+            if $old_chain_info["$step"] != null then
+                $proc_meta = $old_chain_info["$proc_meta"]
+                $proc_hash = $old_chain_info["$proc_hash"]
+                $parent_proc_id = $old_chain_info["$parent_proc_id"]
+                $parent_proc_name = $old_chain_info["$parent_proc_name"]
+                object.account.session_id = $old_chain_info["$object_session_id"]
+                $object_session_id = $old_chain_info["$object_session_id"]
+                
+                if object.account.name == null and object.account.domain == null then
+                    $separator_pos = find_substr($old_chain_info["$object_account"], "\\")
+                    $object_account = $old_chain_info["$object_account"]
+                    if $separator_pos != null then
+                        object.account.domain = substr($old_chain_info["$object_account"], 0, $separator_pos)
+                        object.account.name = substr($old_chain_info["$object_account"], $separator_pos + 1, length($old_chain_info["$object_account"]))
+                    else
+                        object.account.name = $old_chain_info["$object_account"]
+                    endif
+                else
+                    if object.account.domain != null then 
+                        $object_account = lower(object.account.domain) + "\\" + lower(object.account.name)
+                    else 
+                        $object_account = lower(object.account.name)
+                    endif
+                endif
+                $step = $old_chain_info["$step"] + 1 + $subj_step
+                $first_cmdline = $old_chain_info["$first_cmdline"]
+                if object.process.cmdline == null then object.process.cmdline = $first_cmdline endif
+                if object.process.parent.cmdline == null then object.process.parent.cmdline = $old_chain_info["$second_cmdline"] endif
+                if object.process.parent.name == null then object.process.parent.name = $old_chain_info["$parent_proc_name"] endif
+                if object.process.parent.id == null then object.process.parent.id = $old_chain_info["$parent_proc_id"] endif
+                if object.process.meta  == null then object.process.meta = $old_chain_info["$proc_meta"] endif
+                if object.process.hash  == null then 
+                    object.process.hash = $old_chain_info["$proc_hash"] 
+                    object.process.hash.imphash = regex($old_chain_info["$proc_hash"], "IMPHASH:([A-Z0-9]+)\\b", 1)
+                    object.process.hash.md5 = regex($old_chain_info["$proc_hash"], "MD5:([A-Z0-9]+)\\b", 1)
+                    object.process.hash.sha1 = regex($old_chain_info["$proc_hash"], "SHA1:([A-Z0-9]+)\\b", 1)
+                    object.process.hash.sha256 = regex($old_chain_info["$proc_hash"], "SHA256:([A-Z0-9]+)\\b", 1)
+                endif
+           else
+                $proc_meta = null
+                $proc_hash = null
+                $parent_proc_id = null
+                $parent_proc_name = null
+                $object_session_id = null
+                $first_cmdline = null
+                $step = 1 + $subj_step
+                if object.account.domain != null then 
+                    $object_account = lower(object.account.domain) + "\\" + lower(object.account.name)
+                else 
+                    $object_account = lower(object.account.name)
+                endif
+            endif
+            $chain_proc_names = "{" + object.process.name + "} ← " + $subj_chain_proc_names
+            if length($chain_proc_names) > 1000 then
+                $chain_proc_names = "{" + object.process.name + "} ← " + subject.process.name + " ← ... "
+            endif 
+
+            $chain_proc_info = "{" + $proc_name_for_chain_info + " (" + object.process.id + ") [" + object.account.session_id + "]} ← " + $subj_chain_proc_info
+            if length($chain_proc_info) > 1300 then
+                $chain_proc_info = "{" + $proc_name_for_chain_info + " (" + object.process.id + ") [" + object.account.session_id + "]} ← " + subject.process.name + ' (' + subject.process.id + ') [' + subject.account.session_id + '] ← ... '
+            endif
+            object.process.chain = $chain_proc_names
+            datafield19 = $chain_proc_info
+        }
+            
+insert_into Process_Chains if $chain_loop != true and $host != null and $proc_id != null and $proc_name != null and uuid != null and $step != null and $chain_proc_names != null and $chain_proc_info != null {
+    host = $host
+    proc_id = $proc_id
+    proc_name = $proc_name
+    time_like_number = datetime_to_epoch(time)
+    subject_account = $subject_account
+    subject_session_id = $subject_session_id
+    object_account = $object_account
+    object_session_id = $object_session_id
+    proc_meta = $proc_meta
+    proc_hash = $proc_hash
+    parent_proc_id = $parent_proc_id
+    parent_proc_name = $parent_proc_name
+    step = $step
+    chain_proc_names = $chain_proc_names
+    chain_proc_info = $chain_proc_info
+    first_cmdline = $first_cmdline
+    second_cmdline = $second_cmdline
+    last_event_uuid = uuid
+}

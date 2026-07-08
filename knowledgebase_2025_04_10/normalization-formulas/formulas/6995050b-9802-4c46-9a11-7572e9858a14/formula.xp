@@ -1,0 +1,29 @@
+!TEXT = '{"<"NUMBER">"} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}
+         {":"?} {$tmp_subsys=WORDDASH}:RT_SCREEN_{$prot=WORD}: {$obj=STRING+} source:{src.ip=IPV4|src.ip=IPV6}{":"?}
+         {src.port=NUMBER?}, destination{":"?}{dst.ip=IPV4|dst.ip=IPV6}{":"?}{dst.port=NUMBER?}, {"protocol-id:"?}
+         {$pr=NUMBER?}{","?} zone name:{datafield1=WORDDASH}, interface name:{$interface1=STRING} action:{STRING}'
+
+status = "success"
+action = "detect"
+object  = "attack"
+
+object.name = strip($obj, " ", "!")
+
+interface = strip($interface1, " ", ",")
+
+protocol = $pr
+
+importance = "high"
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "IDS/IPS Alert"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "IDS/IPS"
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+id = "PT_Juniper_Junos_syslog_attack_detected"

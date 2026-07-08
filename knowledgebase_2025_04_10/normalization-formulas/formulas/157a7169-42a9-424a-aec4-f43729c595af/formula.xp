@@ -1,0 +1,21 @@
+TEXT = '{time=DATETIME} [{WORD}] info: {$add="Добавление"|"Удаление"} {STRING} соединения \'{object.name=UNTIL("\'")}: {"{"} 
+        {$raw_kv=STRING}'
+
+subject = "account"
+action = if $add != null then "create" else "remove" endif
+object = "session"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.type = "L2TP/PPTP соединение"
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_add_delete_connection"

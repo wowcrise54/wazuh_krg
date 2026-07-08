@@ -1,0 +1,121 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = (
+    in_list([
+        "PermissionAddedEvent",
+        "PermissionRemovedEvent",
+        "PermissionUpdatedEvent"
+    ], $event_class)
+    or substr($raw_message, 0, 19) == "[Global Permission "
+)
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+action = "modify"
+object = "account"
+status = "success"
+
+subformula "perm_create"
+    TEXT = '[Permission created for {$principal=STRING+} on {$entity_name=UNTIL(", role is ")} {$role_name=UNTIL(", propagation is ")}{$propagate=REST}'
+    
+    object.property = "role|propagation"
+    object.new_value = $role_name + " | " + strip($propagate, "", "]")
+endsubformula
+
+subformula "perm_remove"
+    TEXT = '[Permission rule removed for {$principal=STRING+} on {$entity_name=REST}'
+endsubformula
+
+subformula "perm_change"
+    TEXT = '[Permission changed for {$principal=STRING+} on {$entity_name=STRING+} \\nRole changed from \'{$prev_role_name=UNTIL("\' to role ")} \'{$role_name=UNTIL("\'. Propagate changed from \'")} {$prev_propagate=UNTIL("\' to \'")}{$propagate=REST}'
+    
+    $principal = strip($principal, "'", "'")
+    object.property = "role|propagation"
+    object.value = $prev_role_name + " | " + $prev_propagate
+    object.new_value = $role_name + " | " + strip($propagate, "", "'.]")
+endsubformula
+
+subformula "cis_event"
+    TEXT = '[Global Permission created for user {$arguments_user=STRING+} with role {$arguments_role=UNTIL(" and propagation ")}{$arguments_propagate=REST}'
+    
+    $propagation_map = if strip($arguments_propagate, "", ".]") == "True" then "Enabled" else "Disabled" endif
+    object.property = "role|propagation"
+    object.new_value = $arguments_role + " | " + $propagation_map
+    $event_class = "com.vmware.cis.CreateGlobalPermission"
+endsubformula
+
+subformula "cis_event"
+    TEXT = '[Global Permission removed for user {$arguments_user=REST}'
+    
+    $arguments_user = strip($arguments_user, "", ".]")
+    $event_class = "com.vmware.cis.RemoveGlobalPermission"
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+$username = null
+$domain = null
+
+switch $event_class
+    case "PermissionAddedEvent"
+        submessage("TEXT", "perm_create", $raw_message)
+    case "PermissionRemovedEvent"
+        submessage("TEXT", "perm_remove", $raw_message)
+    case "PermissionUpdatedEvent"
+        submessage("TEXT", "perm_change", $raw_message)
+    case "EventEx"
+        submessage("TEXT", "cis_event", $raw_message)
+endswitch
+
+submessage("TEXT", "parse_user", coalesce($principal, $arguments_user))
+
+object.account.name = $username
+object.account.domain = $domain
+
+datafield1 = $def_dc_name  # Datacenter Name
+datafield4 = strip(strip($entity_name, "'", "'."), "", "]")  # Entity Name
+
+msgid = $event_class
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Permissions_Management"

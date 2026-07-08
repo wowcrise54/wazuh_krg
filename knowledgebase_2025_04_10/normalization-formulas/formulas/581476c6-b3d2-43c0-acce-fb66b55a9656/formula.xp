@@ -1,0 +1,35 @@
+TEXT = "{'<'NUMBER'>'?}{time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        ownCloud[{NUMBER}]: {STRING} File renamed: \"{object.fullpath=UNTIL('\"')}
+        to \"{object.new_value=UNTIL('\"')}"
+
+action = "rename"
+object = "file_object"
+status = "success"
+
+$csv_path = csv(object.fullpath, '/', '')
+object.name = $csv_path[length($csv_path) - 1]
+if strip(object.fullpath, '', object.name) != '' then
+    object.path = strip(object.fullpath, '', object.name)
+endif
+
+object.property = "path"
+
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nextcloud"
+event_src.category = "File service"
+
+id = "PT_Opensource_Nextcloud_syslog_Resource_renamed"

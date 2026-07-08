@@ -1,0 +1,19 @@
+event Reverse_Fuegoshell_Command_Execute:
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and match(lower(object.process.cmdline), "*system.io.pipes.namedpipeclientstream*")
+        and match(lower(object.process.cmdline), "*system.io.streamreader*")
+        and match(lower(object.process.cmdline), "*system.io.streamwriter*")
+        and regex(lower(object.process.cmdline),"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)", 0) != null
+    }
+
+enrichment Enrich_Fuegoshell_Oneliners_IP
+    
+    enrich Reverse_Fuegoshell_Command_Execute:
+        enrich_fields {
+            dst.ip = regex(lower(object.process.cmdline),"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)", 0)
+        }

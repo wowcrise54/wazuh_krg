@@ -1,0 +1,50 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "33539"
+       and $event_category == "Вход/выход"
+       and $event_type == "Аудит успехов"
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+subformula "message"
+    TEXT = 'Выход из системы. \n{object.property="Подсистема"}: {object.value=STRING+} 
+    \nИмя пользователя: {$raw_subject=STRING+} \nУзел клиента: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} 
+    \nУзел сервера: {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME} \nСессия: {NUMBER}'
+    
+    $name_domain = csv($raw_subject, '@', '')
+
+    subject.account.name = $name_domain[0]
+    subject.account.domain = $name_domain[1]
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+
+
+msgid = $event_id
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Вход/выход" then
+    event_src.subsys = "logon/logoff"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_33539_user_logout"

@@ -1,0 +1,61 @@
+EVENTLOG = 'EventID="4793"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "start"
+object = "module"
+status = "success"
+
+subject.account.domain = lower($Data["SubjectDomainName"])
+subject.account.name = lower($Data["SubjectUserName"])
+subject.account.id = $Data["SubjectUserSid"]
+subject.account.session_id = maybe_number16($Data["SubjectLogonId"])
+
+if $Data["TargetUserName"] != "-" then
+    $obj_acc_splitted = csv($Data["TargetUserName"], "@", "'")
+    object.account.name = lower($obj_acc_splitted[0])
+    object.account.domain = lower($obj_acc_splitted[1])
+endif
+
+if maybe_ipv4($Data["Workstation"]) != null then
+    src.ip = maybe_ipv4($Data["Workstation"])
+elif maybe_ipv6($Data["Workstation"]) != null then
+    src.ip = maybe_ipv6($Data["Workstation"])
+else
+    $hostname = $Data["Workstation"]
+endif
+
+$dot_pos = find_substr($hostname, '.')
+
+if $dot_pos != null then
+    src.fqdn = lower($hostname)
+    src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    src.hostname = lower($hostname)
+endif
+
+reason = $Data["Status"]
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+category.generic = "Executable Module"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_4793_Password_policy_checking_API_called"

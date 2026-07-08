@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["description"] == "HTTPS Inspection Trusted CAs"
+       and $kv["product"] == "HTTPS Inspection" 
+       and $kv["status"] == "Failed"
+
+subject = "application"
+action = "update"
+object = "configuration"
+status = "failure"
+
+subject.name = $kv["product"]
+
+object.name = "Trusted CAs"
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+reason = $kv["failure_impact"] + ". " + strip($kv["reason"], "", ".")
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_HTTPS_Inspection_Inspection_trusted_cas_failed"

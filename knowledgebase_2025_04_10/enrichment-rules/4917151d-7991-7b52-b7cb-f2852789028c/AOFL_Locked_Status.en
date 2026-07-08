@@ -1,0 +1,133 @@
+query GetAccountByUsername($username) from AOFL_Locked_Accounts {
+    column::username == $username
+}
+
+query CheckAccount($username, $lock) from AOFL_Locked_Accounts {
+    column::username == $username
+    and column::locked == $lock
+}
+
+query GetAccount($id, $username, $lock) from AOFL_Locked_Accounts {
+    column::locked == $lock
+    and (
+        column::account_id == $id
+        or column::username == $username
+    )
+}
+
+    qhandler {
+        $acc_id = column::account_id
+        $username = column::username
+        $locked = column::locked
+    }
+
+event Account_Login:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "aria_operations_for_logs"
+        and event_src.vendor == "vmware"
+        and subject == "account"
+        and action == "login"
+        and status == "success"
+        and subject.account.id != null
+        and subject.account.name != null
+        and not exec_query("GetAccountByUsername", [subject.account.name])
+        }
+
+event Account_Lock:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "aria_operations_for_logs"
+        and event_src.vendor == "vmware"
+        and action == "lock"
+        and object == "account"
+        and status == "success"
+        and object.account.name != null
+        and exec_query("CheckAccount", [object.account.name, 0])
+    }
+
+event Unlock_By_Reset_Pswd:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "aria_operations_for_logs"
+        and event_src.vendor == "vmware"
+        and subject == "account"
+        and action == "modify"
+        and object == "account"
+        and status == "success"
+        and object.account.name != null
+        and find_substr(object.value, "password") != null
+        and exec_query("CheckAccount", [object.account.name, 1])
+    }
+
+event Unlock_By_DB_Update:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "apache_cassandra"
+        and event_src.vendor == "opensource"
+        and subject == "account"
+        and action == "modify"
+        and object == "db_object"
+        and status == "success"
+        and object.fullpath == "logdb.user"
+        and datafield1 == "DML"
+        and datafield4 == "AOFL"
+        and object.property == "table" 
+        and regex(lower(object.query), "update\\s*user\\s*set\\s*status=1\\s*where\\s*id\\s*=", 0) != null
+    }
+    
+enrichment AOFL_Locked_Status
+    enrich Account_Login:
+        insert_into AOFL_Locked_Accounts {
+            column::account_id = subject.account.id
+            column::username = subject.account.name
+            column::locked = 0
+        }
+        
+    enrich Account_Lock:
+        enrich_fields {
+            $account_id = exec_query("GetAccount", [object.account.id, object.account.name, 0])["$acc_id"]
+            object.account.id = $account_id
+            
+            reason = "locked"
+        }
+        
+        insert_into AOFL_Locked_Accounts {
+            column::account_id = $account_id
+            column::username = object.account.name
+            column::locked = 1
+        }
+        
+    enrich Unlock_By_Reset_Pswd:
+        enrich_fields {
+            $account_id = exec_query("GetAccount", [object.account.id, object.account.name, 1])["$acc_id"]
+            object.account.id = $account_id
+        }
+        
+        insert_into AOFL_Locked_Accounts {
+            column::account_id = $account_id
+            column::username = object.account.name
+            column::locked = 0
+        }
+        
+    enrich Unlock_By_DB_Update:
+        enrich_fields {
+            $first_query_part = regex(lower(object.query), "update\\s*user\\s*set\\s*status=1\\s*where\\s*id\\s*=", 0)
+            $sub_query = substr(lower(object.query), length($first_query_part), length(object.query) - length($first_query_part))
+            $account_id = replace($sub_query,"", "[ ;]")
+            
+            $account = exec_query("GetAccount", [$account_id, object.account.name, 1])
+            
+            if $account != null then
+                object.account.id = $account["$acc_id"]
+                object.account.name = $account["$username"]
+            else
+                drop
+            endif
+        }
+        
+        insert_into AOFL_Locked_Accounts {
+            column::account_id = object.account.id
+            column::username = object.account.name
+            column::locked = 0
+        }

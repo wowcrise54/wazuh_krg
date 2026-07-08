@@ -1,0 +1,166 @@
+event Exploit_Created_IMarshal_Interface:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        correlation_name == "Subrule_S4UTomato_IMarshal_Creation"
+        and filter::CheckWL_Process_Creation("S4UTomato_PrivEsc", alert.key)
+    }
+    
+event Registry_Modified:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "13"
+        and status == "success"
+        and subject.process.name == "services.exe"
+        and match(lower(object.fullpath), "\\registry\\machine\\system\\currentcontrolset\\services\\*\\imagepath")
+    }
+
+event Elevated_Process_Started:
+    key:
+        event_src.host, object.process.parent.id, object.process.parent.name
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::ProcessStart_Windows_any()
+        and (  
+            (
+                object.account.id != null
+                and filter::SystemAccount_Windows(object.account.id)
+            ) 
+            or (
+                object.account.id == null
+                and filter::SystemAccount_Windows(subject.account.id)
+            )
+        )
+        and object.process.name != null    
+    }
+
+rule S4UTomato_PrivEsc: (Exploit_Created_IMarshal_Interface and Registry_Modified and Elevated_Process_Started) within 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Exploit_Created_IMarshal_Interface {
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.imphash = object.process.hash.imphash
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+        $subject.process.version = object.process.version
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.guid = object.process.guid
+        $subject.process.meta = object.process.meta
+        $subject.process.original_name = object.process.original_name
+        $subject.process.cwd = object.process.cwd
+        $subject.process.chain = object.process.chain 
+
+        $subject.process.parent.id = object.process.parent.id
+        $subject.process.parent.name = object.process.parent.name
+        $subject.process.parent.path = object.process.parent.path
+        $subject.process.parent.fullpath = object.process.parent.fullpath
+        $subject.process.parent.guid = object.process.parent.guid
+        $subject.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        if regex(lower(object.process.cmdline), "\srbcd\s", 0) != null then 
+            $alert.regex_match = regex(lower(object.process.cmdline), "\srbcd\s", 0)
+            $reason = "Resource-based Constrained Delegation"
+        elif regex(lower(object.process.cmdline), "\sshadowcred\s", 0) != null then
+            $alert.regex_match = regex(lower(object.process.cmdline), "\sshadowcred\s", 0)
+            $reason = "Shadow Credentials"
+        elif regex(lower(object.process.cmdline), "\s(tgtdeleg|krbscm)\s", 0) != null then
+            $alert.regex_match = regex(lower(object.process.cmdline), "\s(tgtdeleg|krbscm)\s", 0)
+            $reason = "TGT Delegation"
+        endif
+
+        $alert.key = alert.key
+    }
+    
+    on Registry_Modified {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.value = object.value
+    }
+
+    on Elevated_Process_Started {
+        $object.account.name = object.account.name
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield18 = datafield18  # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # Цепочка процесса-объекта с идентификаторами
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    $alert.context = $reason + ": " +  $subject.account.name + " -> " + $object.account.name
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

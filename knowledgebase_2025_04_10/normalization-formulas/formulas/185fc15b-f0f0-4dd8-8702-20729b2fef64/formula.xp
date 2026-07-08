@@ -1,0 +1,35 @@
+TABULAR = 'action, 
+           description, 
+           failure_impact, 
+           orig, 
+           product, 
+           reason, 
+           status, 
+           time'
+
+COND = $product == "HTTPS Inspection" 
+       and $description == "HTTPS Inspection Trusted CAs" 
+       and $status == "Failed"
+
+subject = "application"
+action = "update"
+object = "configuration"
+status = "failure"
+
+subject.name = $product
+subject.version = $version
+
+object.name = "Trusted CAs"
+
+reason = $failure_impact + ". " + strip($reason, "", ".")
+
+time = $time
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($product)
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_HTTPS_Inspection_Inspection_trusted_cas_failed"

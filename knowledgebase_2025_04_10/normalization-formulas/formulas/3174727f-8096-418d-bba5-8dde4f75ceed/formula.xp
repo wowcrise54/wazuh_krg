@@ -1,0 +1,31 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4} {event_src.hostname=HOSTNAME}
+        - {'Log'|'Alert'} [Fields@{STRING} Action=\"{$action='monitor'}\" UUid={STRING} {$kv=REST}"
+
+$kv = keyvalue($kv, " ", "=", "\"")
+
+action = "detect"
+object = "packet"
+status = "success"
+
+src.ip = $kv["src"]
+src.port = $kv["s_port"]
+
+dst.ip = $kv["dst"]
+dst.port = $kv["service"]
+
+protocol = $kv["proto"]
+
+reason = $kv["message_info"]
+
+importance = "medium"
+
+category.generic = "Packet"
+category.high = "Information Security"
+category.low = "State"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_VPN_and_Firewall_FW_detect_connection"

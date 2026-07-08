@@ -1,0 +1,20 @@
+filter LoginFailed_Windows_DC() {
+    filter::UserAccount_Windows(subject.account.name, subject.account.id)
+    and event_src.title == "windows"
+    and not in_list(["127.0.0.1", "::1", "-"], src.ip)
+    and src.host != null
+    and src.host != "-"
+    and category.high == "Access Management"
+    and category.low == "Communication"
+    and action == "login"
+    and (
+        (  # Kerberos
+            in_list(["0x6", "0x12", "0x18", "0xc"], lower(reason))  # 0x6 только в 4768, 0x18 только в 4771
+            and in_list(["4768", "4771"], msgid)
+        )
+        or (  # NTLM
+            in_list(["0xc0000064", "0xc000006a"], lower(reason))
+            and msgid == "4776"
+        )
+    )
+}

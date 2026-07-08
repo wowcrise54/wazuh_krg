@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        %%10SHELL/{NUMBER}/{msgid="SHELL_CMD"}(l): {"-DevIP="?}{event_src.ip=IPV4|event_src.ip=IPV6|}
+        -Task=vt0-IPAddr={src.ip=IPV4|src.ip=IPV6}-User={subject.account.name=WORDDASH}; Command is {object.process.cmdline=REST?}'
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+object.account.name = subject.account.name
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "comware_software"
+event_src.subsys = "shell"
+event_src.category = "Network device"
+
+id = "PT_Hewlett_Packard_Enterprise_Comware_Software_syslog_shell_cmd"

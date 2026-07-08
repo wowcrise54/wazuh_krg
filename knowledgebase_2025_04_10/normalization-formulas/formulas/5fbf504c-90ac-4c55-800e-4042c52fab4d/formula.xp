@@ -1,0 +1,57 @@
+TEXT = '{"<"NUMBER">"?}{$time_syslog=DATETIME} {$syslog_or_file=UNTIL("MULTI")}: new connection by client  {$new_cn=STRING} will cause previous active sessions by this client to be dropped {REST}'
+
+action = "terminate"
+object = "session"
+status = "success"
+
+subformula "parse_syslog_or_file"
+    # File
+    TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {$service_name=STRING*} {$time_file=DATETIME} {"us="NUMBER?}'
+
+    $possible_day_of_week = substr($service_name, -3, 3)
+
+    if in_list(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], $possible_day_of_week) then
+        $service_name = strip($service_name, "", $possible_day_of_week)
+    endif
+
+    $service_name = if $service_name == "" then null else $service_name endif
+endsubformula
+
+subformula "parse_syslog_or_file"
+    # Syslog
+    TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {$service_name=WORDDASH}{"["?}{NUMBER?}{"]"?}{":"?}'
+endsubformula
+
+submessage("TEXT", "parse_syslog_or_file", $syslog_or_file)
+
+$new_cn = lower(strip($new_cn, "'","'"))
+
+if find_substr($new_cn, "@") != null then
+    $new_cn_list = csv($new_cn, "@", "`")
+    subject.account.name = $new_cn_list[0]
+    subject.account.domain = $new_cn_list[1]
+else
+    subject.account.name = $new_cn
+endif
+
+datafield1 = $new_cn  # Multi Instance TLS Common Name
+datafield2 = $service_name  # OpenVPN Daemon Name
+
+reason = "Session duplicated"
+
+time = coalesce($time_file, $time_syslog)
+importance = "info"
+
+event_src.vendor = "openvpn"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "openvpn"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_OpenVPN_OpenVPN_syslog_session_duplicated"

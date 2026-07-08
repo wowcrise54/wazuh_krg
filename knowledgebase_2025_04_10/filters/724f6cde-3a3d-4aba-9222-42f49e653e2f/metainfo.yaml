@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        en: "Event fields are present in a list of exclusions (Linux OS login)"
+        ru: "Поля события входа в систему на ОС Linux есть в списке исключений"
+    Description:
+        en: "Correlated event field values match values from a list of exclusions. The macro is only applicable to events of the \"Linux OS login\" type."
+        ru: "Значения полей корреляционного события совпадают со значениями из списка исключений. Макрос применим только к событиям типа \"Вход в ОС Linux\""
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "correlated event field value"
+            ru: "значение поля корреляционного события"
+    rule_name:
+        Type: string
+        Name:
+            ru: "название правила корреляции"
+            en: "correlation rule name"
+ObjectId: PT-RF-88
+Origin: PT

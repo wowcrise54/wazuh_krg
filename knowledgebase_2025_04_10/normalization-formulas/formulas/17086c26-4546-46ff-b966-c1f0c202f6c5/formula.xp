@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        mailfilter: CEF:0|Solar Security|Dozor|6.{NUMBER}.{NUMBER}-{NUMBER}|{msgid="110"}|
+        action|{WORD}|{$kv=KEYVALUE(" ","=")}'
+
+COND = $kv["SolarSecurityDozorAct"] == "archive" and $kv["SolarSecurityDozorType"] == "email"
+
+action = "backup"
+object = "message"
+status = "success"
+
+object.type = "email"
+object.state = "archive by mailfilter"
+
+$id_start = find_substr ($kv["SolarSecurityDozorSrc"], "<")
+if $id_start != null then
+    datafield1 = lower(                                                                   # отправитель сообщения
+        substr(
+            $kv["SolarSecurityDozorSrc"],
+            $id_start + 1,
+            length($kv["SolarSecurityDozorSrc"]) - $id_start - 2
+        ))
+else
+    datafield1 = lower($kv["SolarSecurityDozorSrc"])
+endif
+
+datafield2 = lower(replace($kv["SolarSecurityDozorDst"], ", ", ","))                      # получатель сообщения
+datafield4 = lower($kv["SolarSecurityDozorStorageProfile"])                               # профайл архивации
+
+importance = "low"
+
+event_src.id = $kv["SolarSecurityDozorVid"]
+event_src.vendor = "rostelecom_solar"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solar_dozor"
+event_src.category = "DLP"
+
+id = "PT_Rostelecom_Solar_Solar_Dozor_syslog_CEF_archive_message_email"

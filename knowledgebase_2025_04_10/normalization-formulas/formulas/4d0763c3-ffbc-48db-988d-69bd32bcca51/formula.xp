@@ -1,0 +1,91 @@
+TABULAR = '{chain_id=TransactionId},
+           {datafield2=SequenceId},
+           {time=OccurredAt},
+           {$selector=ObjectSelector},
+           {$login=Login},
+           {$workstation=Workstation},
+           {$account=NTAccount},
+           SequenceNumber,
+           {$temp_action=Action},
+           {msgid=ObjectType},
+           {$server=Server},
+           ServerIsPrimary'
+
+COND = $ObjectType == "DeviceInstance"
+       and (
+                $Action != "Update"
+                or (
+                        $Action == "Update"
+                        and $FieldName != null
+                        and $OldValue != null
+                        and $NewValue != null
+                    )
+            )
+
+subject = "account"
+
+if $temp_action == "Include" then
+    action = "create"
+elif $temp_action == "Update" then
+    action = "modify"
+
+    object.property = switch $FieldName
+        case "Действует по" "end time"
+        case "Active till" "end time"
+        case "Действует с" "start time"
+        case "Active from" "start time"
+    endswitch
+
+    object.value = $OldValue
+
+    object.new_value = $NewValue
+elif $temp_action == "Exclude" then
+    action = "remove"
+endif
+
+object = "resource"
+status = "success"
+
+subject.account.name = lower($login)
+
+$csv_account = csv(lower($account), "\\", "")
+subject.name = $csv_account[1]    # Имя системного пользователя
+subject.domain = $csv_account[0]  # Домен системного пользователя
+
+$csv_selector = csv($selector, "/", "") 
+$device = substr($selector, length($csv_selector[0]) + length($csv_selector[1]) + 2, length($selector))
+$csv_device = csv($device, "(", "")
+$len_csv = length($csv_device)
+if $len_csv != 1 then
+    $id = $csv_device[$len_csv - 1]
+    object.id = strip($id, "", ")")
+    object.name = strip($device, "", " (" + $id)
+else
+    object.id = $device
+endif
+
+object.type = "white list object"
+
+src.hostname = lower($workstation)
+dst.hostname = lower($server)
+
+# datafield2 - Номер действия в рамках текущей транзакции
+
+$col_selector = find_substr($csv_selector[1], ":") + 2 
+$name_selector = substr($csv_selector[1], $col_selector, length($csv_selector[1]) - $col_selector)
+datafield7 = $name_selector  # Белый список
+
+if lower($workstation) == lower($server) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+importance = "medium"
+
+event_src.vendor = "infowatch"
+event_src.title = "device_monitor"
+event_src.hostname = lower($server)
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Device_Monitor_odbc_device_instance"

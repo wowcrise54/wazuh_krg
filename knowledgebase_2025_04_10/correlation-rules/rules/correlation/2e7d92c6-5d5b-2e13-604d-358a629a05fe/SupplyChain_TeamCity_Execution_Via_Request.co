@@ -1,0 +1,188 @@
+# включение опции rest.debug.processes.enable в конфиге
+event Config_Changed:
+    key:
+        event_src.host, event_src.title
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teamcity"
+        and msgid == "server_file_change"
+        and lower(object.fullpath) == "/opt/teamcity/.buildserver/config/internal.properties"
+        and status == "success"
+    }
+
+# запрос на включение опции rest.debug.processes.enable в конфиге
+event RestDebugProcesses_Feature_Enable_Request:
+    key:
+        event_src.host, event_src.title
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teamcity"
+        and object == "request"
+        and lower(object.query) == "/admin/datadir.html?action=edit&filename=config%2finternal.properties&content=rest.debug.processes.enable%3dtrue"
+        and object.type == "POST"
+        and status == "success"
+    }
+
+# запрос на обновление конфигурации
+event Config_Update_Request:
+    key:
+        event_src.host, event_src.title
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teamcity"
+        and object == "request"
+        and lower(object.query) == "/admin/admin.html?item=diagnostics&tab=datadir&file=config%2finternal.properties"
+        and object.type == "POST"
+        and status == "success"
+    }
+
+# выполнение команд
+event Command_Executed:
+    key:
+        event_src.host, event_src.title
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teamcity"
+        and msgid == "external_process_command_line"
+        and object.process.cmdline != null
+        and status == "success"
+        and filter::CheckWL_Linux_Process_Creation("SupplyChain_TeamCity_Execution_Via_Request", join([subject.account.id, object.process.cmdline], "|"))
+    }
+
+# запрос на выполнение команд
+event Command_Execute_Request:
+    key:
+        event_src.host, event_src.title
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teamcity"
+        and object == "request"
+        and match(lower(object.query), "/app/rest/debug/processes?exepath=*")
+        and object.type == "POST"
+        and status == "success"
+        and filter::CheckWL_Linux_Process_Creation("SupplyChain_TeamCity_Execution_Via_Request", join([src.host, object.type, object.query], "|"))
+    }
+
+rule SupplyChain_TeamCity_Execution_Via_Request: (Config_Changed or RestDebugProcesses_Feature_Enable_Request) 
+                                     and Config_Update_Request
+                                     and (Command_Executed+ or Command_Execute_Request+) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+        $first_event = true
+    }
+
+    on Config_Changed {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+
+        $config = $object.name
+    }
+
+    on RestDebugProcesses_Feature_Enable_Request {
+        $object.process.meta = object.process.meta
+
+        # конфиг и изменяемая опция
+        $datafield6 = "internal.properties"
+        $datafield7 = "/opt/teamcity/.BuildServer/config/internal.properties"
+        $datafield8 = "rest.debug.processes.enable"
+        $datafield9 = "true"
+        $object.type = object.type
+        $object.query = object.query
+
+        $config = $datafield6
+    }
+
+    on Config_Update_Request {
+        $subject.account.privileges = object.account.privileges
+
+        $datafield3 = object.type
+        $datafield4 = object.query
+        $datafield5 = object.process.meta
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+    on Command_Executed {
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.process.cmdline = object.process.cmdline
+
+            $datafield20 = datafield20
+
+            $alert.key = join([subject.account.id, object.process.cmdline], "|")
+            $alert.regex_match = $object.process.cmdline
+
+            $first_event = false
+        else
+            $alert.regex_match = join([$alert.regex_match, object.process.cmdline], "|")
+        endif
+    }
+
+    on Command_Execute_Request {
+        # параметры запуска команды с преобразованием URL-кодировки
+        $params = regex(object.query, "&params=(.*)&?", 1)
+        $params = replace(replace(replace(replace(replace(replace(replace(replace(replace($params, "/", "%2F"), " ", "%20"), "'", "%22"), "|", "%7C"), "$", "%24"), ">", "%3E"), "'", "%27"), "-", "%2D"), ";", "%3B")
+        if $first_event then
+            $subject.account.id = object.account.id
+
+            $object.process.meta = object.process.meta
+            $object.process.name = regex(object.query, "exePath=(.*)&params", 1)
+            $object.process.cmdline = $object.process.name + " " + $params
+
+            $datafield1 = object.type
+            $datafield2 = object.query
+
+            $alert.key = join([src.host, object.type, object.query], "|")
+            $alert.regex_match = $object.process.cmdline
+
+            $first_event = false
+        else
+            $cmdline = regex(object.query, "exePath=(.*)&params", 1) + " " + $params
+            $alert.regex_match = join([$alert.regex_match, $cmdline], "|")
+        endif
+    }    
+
+emit {
+    $correlation_type = "incident"
+    
+    $alert.context = $subject.account.name + " changed: " + $config + "||executed: " + $alert.regex_match
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Unix Shell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME}%{msgid="AAA-I-SSH"}:{$status="Accepted"|$status="Failed"}
+        {"password"|"publickey"|"keyboard-interactive/pam"}for {subject.account.name=STRING} from
+        {src.ip=IPV4|src.ip=IPV6} port {src.port=NUMBER} {$proto=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = switch $status
+    case "Accepted" "success"
+    case "Failed" "failure"
+endswitch
+
+protocol.layer7 = upper($proto)
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_SSH_login"
+
+# -- DEPRECATED --
+# lines from here will be deleted in future releases
+
+subject.name = subject.account.name
+protocol = protocol.layer7

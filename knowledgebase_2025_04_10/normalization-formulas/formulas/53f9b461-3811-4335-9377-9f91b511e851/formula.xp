@@ -1,0 +1,42 @@
+EVENTLOG = 'EventID="5378"'
+COND = lower($Channel)=="security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "rule"
+action = "grant"
+object = "account"
+status = "failure"
+
+object.name = lower($Data["SubjectUserName"])
+object.domain = lower($Data["SubjectDomainName"])
+datafield1 = maybe_number16($Data["SubjectLogonId"])  # Идентификатор объекта который необходимо делегировать
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+datafield2 = $Data["TargetServer"]  # Имя участника-службы (SPN), для которой запрошено делегирование
+
+switch  $Data ["CredType"]  # Вариант учетных данных
+    case "%%8096"
+    datafield3 = "Default credentials"
+    case "%%8097"
+    datafield3 = "Credentials manager"
+    case "%%8098"
+    datafield3 = "Fresh credentials"
+endswitch
+
+importance = "low"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "AAA"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_5378_The_requested_credentials_delegation_was_disallowed_by_policy"

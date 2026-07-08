@@ -1,0 +1,39 @@
+!JSON = "EventCode=4779"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing" and $EventType=="4"
+
+subject = "account"
+action = "stop"
+object = "session"
+status = "success"
+
+subject.account.name = lower($InsertionStrings[0])
+subject.account.domain = lower($InsertionStrings[1])
+subject.account.session_id = maybe_number16($InsertionStrings[2])
+
+object.name = $InsertionStrings[3]
+
+src.hostname = lower($InsertionStrings[4])
+if (maybe_ipv4($InsertionStrings[5]) != null) || (maybe_ipv6($InsertionStrings[5]) != null) then
+    src.ip = $InsertionStrings[5]
+endif
+
+datafield1 = maybe_number16($InsertionStrings[2])   # ID сессии
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_4779_A_session_was_disconnected_from_a_Window_Station"

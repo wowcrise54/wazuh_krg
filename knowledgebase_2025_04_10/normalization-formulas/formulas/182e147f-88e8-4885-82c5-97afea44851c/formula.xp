@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME}: Application=smtp,
+        Event=\'{msgid="File format detection"}\', status={$status=STRING+} From={$sender=STRING} to={$receiver=STRING+}
+        source={$source=STRING} msgid={object.id=WORDDASH},
+        contentrule=\'{subject.name = WORD}\', rule=\'{$ob.state=STRING+} filename={$filename=STRING+} scan-identity-name={REST}'
+
+subject = "rule"
+action = "scan"
+object = "message"
+status = "success"
+
+object.state = strip(strip(strip($ob.state, '', '\','), '', ' '), '', '.')
+
+src.ip = strip(substr($source, find_substr($source, '('), length($source)), '(', '),')
+if find_substr($source, '(') != 0 then
+    src.hostname =substr($source, 0, find_substr($source, '('))
+endif
+
+if length($receiver) != 3 and length($receiver) != 1 then
+    datafield1 = strip($receiver, '', ',')      # получатель сообщения
+endif
+if length($sender) != 3 and length($sender) != 1 then
+    datafield2 = strip($sender, '<', '>,')      # отправитель сообщения
+endif
+
+datafield3 = strip($filename, '', ',')          # имя файла
+
+reason = strip($status, "\'", "\',")
+
+importance = "low"
+
+event_src.category = "Web security"
+event_src.title = "email_gateway"
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_McAfee_Email_Gateway_syslog_File_format_detection"

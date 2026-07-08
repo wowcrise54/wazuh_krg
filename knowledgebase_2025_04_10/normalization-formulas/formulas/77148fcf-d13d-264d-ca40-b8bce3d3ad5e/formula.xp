@@ -1,0 +1,50 @@
+JSON = ''
+
+COND = $event["xp_malware_detected"] != null
+
+subject = "process"
+action = "detect"
+object = "malware"
+status = "success"
+
+subject.account.id = $process["audit_token"]["ruid"]
+subject.account.session_id = $process["session_id"]
+
+subject.process.id = $process["audit_token"]["pid"]
+subject.process.parent.id = $process["ppid"] 
+subject.process.fullpath = $process["executable"]["path"]
+$temp_name = csv(subject.process.fullpath, "/", "'")
+subject.process.name = $temp_name[length($temp_name) - 1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+
+object.storage.fullpath = $event["xp_malware_detected"]["detected_path"]
+$temp_name = csv(object.storage.fullpath, "/", "'")
+object.storage.name = $temp_name[length($temp_name) - 1]
+object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+
+object.version = $event["xp_malware_detected"]["signature_version"]
+object.property = "incident identifier"
+object.value = $event["xp_malware_detected"]["incident_identifier"]
+object.type = $event["xp_malware_detected"]["malware_identifier"]
+subject.process.hash = "UNKNOWN:" + $process["cdhash"]
+
+datafield1 = $process["audit_token"]["euid"]  # effective user ID
+datafield2 = $process["audit_token"]["rgid"]  # real group ID
+datafield3 = $process["audit_token"]["auid"]  # audit user ID
+datafield4 = $process["audit_token"]["egid"]  # effective group ID
+datafield5 = $process["is_platform_binary"]          # является ли исполняемый файл предустановленным Apple в ОС
+datafield6 = $process["is_es_client"]                # имеет ли данный процесс разрешение на работу с EndpointSecurity API
+datafield7 = $process["signing_id"]                  # идентификатор подписи кода исполняемого файла
+datafield8 = $process["codesigning_flags"]           # флаги подписи кода исполняемого файла
+datafield9 = $process["tty"]                         # tty ассоциированный с процессом
+datafield11 = $process["team_id"]                    # идентификатор разработчика исполняемого файла
+
+msgid = $event_type
+time = $time
+importance = "high"
+
+event_src.category = "Host security"
+event_src.vendor = "positive_technologies"
+event_src.title = "edr"
+
+id = "PT_Positive_Technologies_XDR_es_logger_malware_detected"

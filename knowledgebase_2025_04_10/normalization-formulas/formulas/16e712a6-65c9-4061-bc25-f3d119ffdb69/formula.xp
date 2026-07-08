@@ -1,0 +1,20 @@
+!TEXT = '{$maybe_time=STRING*} interface,{$topics=STRING+} {interface=WORDDASH} link {action="down"|action="up"} {REST}'
+
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+# $maybe_time - reserved for the future
+# $topics - reserved for the case of in_list() searches
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "mikrotik"
+event_src.title = "routeros"
+event_src.category = "Network device"
+
+id = "PT_MikroTik_RouterOS_syslog_interface_state"

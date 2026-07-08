@@ -1,0 +1,62 @@
+event Erase_Config:
+    key:
+        event_src.host
+    filter {   
+        filter::NotFromCorrelator()
+        and event_src.title == "csp_vpn_gate"
+        and msgid == "00727001" 
+        and object.process.cmdline == "clear running-config"
+        and filter::CheckWL_Specific_Only("S_Terra_Gate_Erase_Config", lower(join([subject.account.name, object.process.cmdline, src.host], "|")))
+
+    }
+rule S_Terra_Gate_Erase_Config: Erase_Config
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Erase_Config {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+        
+        $object.process.cmdline = object.process.cmdline
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline, src.host], "|"))
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "clean"
+    $object = "configuration"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Indicator Removal: Clear Network Connection History and Configurations"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $object.process.cmdline, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 3h
+}

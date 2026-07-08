@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {$event_src_ip=IPV4|$event_src_ip=IPV6|$event_src_host=HOSTNAME|} youtrack.log:
+    {$mday_raw=WORD}/{$month_raw=WORD}/{$year_raw=NUMBER} {$hours_raw=UNTIL(",")}{NUMBER}
+    INFO [{LITERAL*}] [{LITERAL*}] [{LITERAL*}]
+    {object.name="YouTrack"} init complete'
+
+action = "start"
+object = "application"
+status = "success"
+
+time = $month_raw + "/" + $mday_raw + "/" + string(2000 + $year_raw) + " " + $hours_raw
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Application"
+category.low = "Control"
+
+$dot_pos = find_substr($event_src_host, '.')
+
+if $dot_pos != null then
+    $event_src_fqdn = lower($event_src_host)
+    $event_src_hostname = lower(substr($event_src_host, 0, $dot_pos))
+else
+    $event_src_hostname = lower($event_src_host)
+endif
+event_src.ip = $event_src_ip
+event_src.hostname = $event_src_hostname
+event_src.fqdn = $event_src_fqdn
+
+event_src.vendor = "jetbrains"
+event_src.title = "youtrack"
+event_src.category = "Other"
+
+id = "PT_JetBrains_Youtrack_syslog_youtrack_init_complete"

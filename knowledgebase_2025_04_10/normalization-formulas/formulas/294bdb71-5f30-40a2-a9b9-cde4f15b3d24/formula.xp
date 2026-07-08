@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} %{msgid="AUTH-6-SYSTEM_MSG"}: (pam_unix) session {$a=WORD} for user
+        {subject.name=WORD} by {WORD?}(uid={NUMBER}) - sshd[{NUMBER}]'
+
+subject = "account"
+
+if $a == "opened" then
+    action = "start"
+else
+    action = "stop"
+endif
+
+object = "session"
+status = "success"
+
+object.type = "terminal"
+
+importance = "info"
+
+event_src.title = "nexus"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_AUTH_6_SYSTEM_MSG"

@@ -1,0 +1,123 @@
+event Pipe_Created:
+    key:
+        event_src.host, object.fullpath
+    filter {
+        correlation_name == "Subrule_Pwned_Pipe"
+        and match(lower(object.name), "*\\pipe\\*") 
+    }
+    
+event Pipe_Connected:
+    key:
+        event_src.host, object.storage.fullpath
+    filter {
+        correlation_name == "Subrule_Action_After_Pipe_Connected"
+        and filter::CheckWL_Specific_Only("MultiPotato_PrivEsc", lower(join([subject.account.name, src.host, object.storage.fullpath], "|")))
+    }   
+
+rule MultiPotato_PrivEsc: (Pipe_Created -> Pipe_Connected) with different subject.account.name within 60s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Pipe_Created {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+  }
+
+    on Pipe_Connected {
+        $object.account.name = subject.account.name
+        $object.account.domain = subject.account.domain
+        $object.account.session_id = subject.account.session_id
+        $object.account.id = subject.account.id
+        $object.account.privileges = subject.account.privileges
+
+        # Несуществующая УЗ, используемая атакующим для кражи токена
+        $object.name = object.account.name
+        $object.domain = object.account.domain
+        $object.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+    
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+    
+        $alert.key = lower(join([subject.account.name, src.host, object.storage.fullpath], "|"))
+        $alert.context = alert.context
+        $reason = reason
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "high"
+    
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

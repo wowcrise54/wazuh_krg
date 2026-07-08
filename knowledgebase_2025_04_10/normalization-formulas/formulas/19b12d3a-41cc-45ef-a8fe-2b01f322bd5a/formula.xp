@@ -1,0 +1,67 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?}{WORD"hostd["WORD"] [Originator@"NUMBER $kv=UNTIL("]")"Event"NUMBER":"?}
+The dvPort {$port_key=NUMBER} {$act="was unblocked"|$act="was blocked"|$act="was disconnected"|$act="was connected"|$act="link was down"|$act="link was up"} in the vSphere Distributed Switch {$rest=REST}'
+
+action = switch $act
+    case "was unblocked" "enable"
+    case "was blocked" "disable"
+    case "was disconnected" "disconnect"
+    case "was connected" "connect"
+    case "link was down" "down"
+    case "link was up" "up"
+endswitch
+
+object = "resource"
+status = "success"
+
+subformula "parse_rest_block"
+    TEXT = '{$dvs_name=STRING*} in {$datacenter_name=STRING+} It was in {WORD} state before.'
+endsubformula
+
+subformula "parse_rest"
+    TEXT = '{$dvs_name=STRING*} in {$datacenter_name=REST}'
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+
+if in_list(["enable", "disable"], action) and (substr($rest, -13, 13) == "state before.") then
+    submessage("TEXT", "parse_rest_block", $rest)
+else
+    submessage("TEXT", "parse_rest", $rest)
+endif
+
+object.type = "vswitch_ports"
+object.id = $port_key
+
+datafield1 = strip($datacenter_name, "", ".")  # Datacenter Name
+datafield8 = $dvs_name  # vCenter Distributed Switch Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+msgid = switch $act
+    case "was unblocked" "DvsPortUnblockedEvent"
+    case "was blocked" "DvsPortBlockedEvent"
+    case "was disconnected" "DvsPortDisconnectedEvent"
+    case "was connected" "DvsPortConnectedEvent"
+    case "link was down" "DvsPortLinkDownEvent"
+    case "link was up" "DvsPortLinkUpEvent"
+endswitch
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_DvsPort_State"

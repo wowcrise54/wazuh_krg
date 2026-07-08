@@ -1,0 +1,36 @@
+TABULAR = "{msgid=event_id}"
+COND = $event_id == 502
+
+subject = "account"
+action = "remove"
+object = "account"
+status = if $status == 0 then "success" else "failure" endif
+
+subformula "get_some"
+    TEXT = "Удаление пользователя: {object.account.name=STRING}"
+endsubformula
+
+if $comment != "" then
+    submessage("TEXT","get_some",$comment)
+endif
+
+subject.account.name = $user
+
+object.state = $status
+
+datafield1 = $guid  # guid
+datafield2 = $obj_name  # the object in which the action takes place
+
+time = epoch_ms_to_datetime($unix_time + ($timezone * 60000))
+if $comment != "" then reason = $comment endif  # comment
+importance = "info"
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "confident"
+event_src.title = "ucc_dallas_lock"
+event_src.category = "Other"
+
+id = "PT_Confident_UCC_Dallas_Lock_odbc_user_account_deleting"

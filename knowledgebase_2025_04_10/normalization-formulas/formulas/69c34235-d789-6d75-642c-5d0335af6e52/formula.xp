@@ -1,0 +1,30 @@
+TEXT = "<{NUMBER}>{DATETIME} {STRING} {$date=NUMBER} {$Computer=STRING} {NUMBER} {NUMBER} SecretNet[{NUMBER?}] [{NUMBER}]
+        backup: {'successfully'|'succesfully'} {$action_taken='exported'|$action_taken='imported'} backup with id {object.id=STRING}"
+        
+if $action_taken == 'exported' then
+    action = "read"
+    importance = "low"
+elif $action_taken == 'imported' then
+    action = "modify"
+    importance = "medium"
+endif
+
+object = "resource"
+status = "success"
+
+object.type = "backup"
+
+time = epoch_to_datetime($date)
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "secretnet_lsp"
+event_src.category = "Host security"
+
+id = "PT_Securitycode_SecretNet_LSP_syslog_backup_exported"

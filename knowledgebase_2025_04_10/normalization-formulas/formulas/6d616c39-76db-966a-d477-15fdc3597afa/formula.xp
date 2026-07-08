@@ -1,0 +1,39 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{WORDDASH|STRING} vault[{NUMBER}]: {$json=REST}' 
+COND = find_substr($json, "\"mount_type\":\"kv\"") != null 
+       and find_substr($json, "\"operation\":\"read\"") != null
+
+submessage("JSON","json_in_syslog_secret_read", $json)
+
+subformula 'json_in_syslog_secret_read'
+    JSON = ''
+    
+    if $error != null then
+        status = "failure"
+        reason = $error
+    else
+        status = "success"
+    endif
+    
+    subject.account.name = $auth["display_name"]
+    subject.account.privileges = join($auth["policies"], ", ")
+    
+    $temp = csv($request["path"], "/", " ")
+    object.name = $temp[length($temp) - 1]
+    object.fullpath = $request["path"]
+    object.path = strip(object.fullpath, "", object.name)
+    
+    src.ip = $request["remote_address"]
+    src.port = $request["remote_port"]
+endsubformula
+
+subject = "account"
+action = "read"
+object = "resource"
+
+importance = "low"
+
+event_src.vendor = "hashicorp"
+event_src.title = "vault"
+event_src.category = "Application security"
+
+id = "PT_Hashicorp_Vault_syslog_Secret_read"

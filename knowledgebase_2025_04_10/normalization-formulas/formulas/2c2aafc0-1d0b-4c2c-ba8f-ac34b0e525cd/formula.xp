@@ -1,0 +1,39 @@
+TABULAR = ' Administrator,
+            Machine,
+            ObjectName,
+            ObjectTable,
+            ObjectType,
+            {msgid=Operation},
+            Operation_Number,
+            Subject,
+            action,
+            client_ip,
+            orig,
+            product,
+            time'
+
+COND = $Operation == "Push SIC Certificate"
+
+subject = "account"
+action = "apply"
+object = "certificate"
+status = "success"
+
+subject.name = $Administrator
+
+object.property = "shared application"
+object.value = strip($ObjectName, "cpshared_application_", "")
+
+src.ip = $client_ip
+src.hostname = $Machine
+
+time = $time
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($product)
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Smart_dashboard_Push_sic_certificate"

@@ -1,0 +1,57 @@
+TABULAR = '_1,
+           _2,
+           _3,
+           _5,
+           {datafield3=_6},
+           _8,
+           {$process_raw=_10},
+           _11,
+           _14'
+
+COND = $_11 == 173 and $_1 == 8
+
+subject = "application"
+action = "receive"
+object = "message"
+status = "success"
+
+subformula "parse_7"
+    # Извлечение src.ip, src.port, src.hostname и protocol из _7
+    TEXT = "{STRING} {STRING} {src.ip=IPV4|src.ip=IPV6}:{src.port=NUMBER}({src.hostname=HOSTNAME}:{protocol.layer7=WORD})"
+endsubformula
+
+$csv_8 = csv($_8, "\\", "'")
+subject.account.name = $csv_8[1]
+subject.account.domain = $csv_8[0]
+
+submessage ("TEXT", "parse_7", $_7)
+
+subject.process.fullpath = $process_raw
+
+$csv_path = csv($process_raw, "\\", "'")
+subject.process.name = $csv_path[length($csv_path) - 1]
+subject.process.path = strip($process_raw, "", subject.process.name)
+# datafield3 - url
+
+time = win_ticks_to_datetime($_3)
+msgid = $_11
+importance = "info"
+
+event_src.vendor = "smart_line"
+event_src.title = "devicelock"
+
+if maybe_ipv4($_2) != null or maybe_ipv6($_2) != null then
+    event_src.ip = $_2
+else
+    $dot_pos = find_substr($_2, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($_2)
+        event_src.hostname = lower(substr($_2, 0, $dot_pos))
+    else
+        event_src.hostname = lower($_2)
+    endif
+endif
+
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_odbc_Incoming_data"

@@ -1,0 +1,28 @@
+JSON = 'category = 4'
+
+COND = $data["Type"] == "INVALID_CGW_AUTH"
+
+action = "start"
+object = "session"
+status = "failure"
+
+count.packets = $count
+
+datafield1 = $cg_name   # узел безопасности
+datafield2 = $cg_cssid  # id узла безопасности
+if $data["SourceLow"] == $data["SourceHigh"] then
+    src.ip = $data["SourceLow"]
+else 
+    datafield4 = $data["SourceLow"] + " - " + $data["SourceHigh"]  # source ip-range
+endif
+
+time = $time
+msgid = $data["Type"]
+importance = "high"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+
+id = "PT_Security_Code_Kontinent_odbc_invalid_cgw_auth"

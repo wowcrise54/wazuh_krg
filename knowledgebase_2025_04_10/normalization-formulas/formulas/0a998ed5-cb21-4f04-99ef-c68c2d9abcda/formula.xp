@@ -1,0 +1,116 @@
+JSON = ''
+
+COND = in_list(["yandex.cloud.audit.gitlab.CreateInstance",
+                "yandex.cloud.audit.gitlab.UpdateInstance",
+                "yandex.cloud.audit.gitlab.DeleteInstance",
+                "yandex.cloud.audit.gitlab.StartInstance",
+                "yandex.cloud.audit.gitlab.StopInstance"], $event_type)
+
+subject = "account"
+
+$operation = strip($event_type, "yandex.cloud.audit.gitlab.", "")
+
+if $operation == "UpdateInstance" and $request_parameters["name"] != null then
+    action = "rename"
+
+    object.new_value = $request_parameters["name"]
+else
+    action = switch $operation
+        case "CreateInstance" "create"
+        case "UpdateInstance" "modify"
+        case "DeleteInstance" "remove"
+        case "StartInstance" "start"
+        case "StopInstance" "stop"
+    endswitch
+
+    object.name = $details["instance_name"]
+endif
+
+object = "virtual_machine"
+
+status = switch $event_status
+    case "DONE" "success"
+    case "STARTED" "ongoing"
+    case "ERROR" "failure"
+    case "CANCELLED" "failure"
+endswitch
+
+subject.account.id = $authentication["subject_id"]
+
+$at_sign = find_substr($authentication["subject_name"], "@")
+if $at_sign != null then
+    $account = substr($authentication["subject_name"], 0, $at_sign)
+    subject.account.name = $account
+    subject.account.domain = strip($authentication["subject_name"], $account + "@", "")
+else
+    subject.account.name = $authentication["subject_name"]
+endif
+
+subject.account.group = $authentication["federation_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+object.account.name = $details["admin_login"]
+object.account.domain = $details["domain"]
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+$cloud = $resource_metadata["path"][1]["resource_name"] 
+$folder = $resource_metadata["path"][2]["resource_name"]
+object.storage.fullpath = join([$organization, $cloud, $folder], "|")
+
+object.id = $details["instance_id"]
+object.path = $details["zone_id"]
+object.state = $details["status"]
+object.type = "gitlab instance"
+
+$remote_address = coalesce(ipv4($request_metadata["remote_address"]), ipv6($request_metadata["remote_address"]))
+if $remote_address != null then
+    src.ip = $remote_address
+else
+    logon_service = $request_metadata["remote_address"]
+endif
+
+datafield1 = $organization                   # Наименование организации
+datafield2 = $cloud                          # Наименование облака
+datafield3 = $folder                         # Наименование каталога
+datafield4 = $details["resource_preset_id"]  # Идентификатор предустановленного ресурса
+datafield5 = $details["disk_size"]           # Размер диска
+datafield6 = $details["subnet_id"]           # Идентификатор подсети
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = $operation
+
+importance = switch $operation
+    case "CreateInstance" "info"
+    case "UpdateInstance" "low"
+    case "StartInstance" "info"
+    case "StopInstance" "low"
+    case "DeleteInstance" "medium"
+endswitch
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = $event_source
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_Gitlab_Instance_Manage"

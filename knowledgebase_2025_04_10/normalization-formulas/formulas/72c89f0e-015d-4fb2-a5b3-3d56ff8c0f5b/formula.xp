@@ -1,0 +1,17 @@
+!TEXT = '{time=DATETIME} - OK,{msgid="WEB_CONFIG_MODULE_PART_SELECTED"},{subject.name=WORDDASH+},
+        Selected module part: {object.value=STRING}'
+
+subject = "account"
+action = "configure"
+object = "system"
+status = "ongoing"
+
+object.property = "Module part"
+
+importance = "info"
+
+event_src.vendor = "zoom_international"
+event_src.title = "call_recording"
+event_src.category = "Telecom"
+
+id = "PT_ZOOM_International_Call_Recording_filemonitor_Web_config_module_part_selected"

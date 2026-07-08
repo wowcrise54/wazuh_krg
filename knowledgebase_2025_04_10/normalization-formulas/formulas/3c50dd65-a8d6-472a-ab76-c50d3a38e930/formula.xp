@@ -1,0 +1,131 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+router-request: {$json=REST}'
+COND = (
+    find_substr($json, '"request_Uber-Trace-Id":') != null
+    and find_substr($json, '"request_User-Agent":') != null
+)
+
+subject = "account"
+action = "execute"
+object = "request"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_addr"
+    TEXT = '{$host_ip=IPV4|$host_ip=IPV6|$host_name=HOSTNAME}:{$host_port=NUMBER}'
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+$raw_status = string($DownstreamStatus)
+
+# http коды успешного доступа
+$access_success = ["100", "101", "200", "201", "202", "203", "204", "206", "302", "304"]
+
+# http коды неуспешного доступа
+$access_failure = ["301", "305", "307", "308", "400", "401", "403", "404",
+                   "405", "406", "407", "413", "415", "418", "423", "429",
+                   "431", "495", "496", "497", "500", "501", "502", "503",
+                   "504", "505", "507", "508"]
+
+# http коды высокой важности
+$importance_low = ["400", "401", "403", "407", "405", "413", "415", "418",
+                   "429", "495", "500", "501", "502", "503", "504", "507", "508"]
+
+if in_list($access_success, $raw_status) then
+    status = "success"
+elif in_list($access_failure, $raw_status) then
+    status = "failure"
+else
+    drop
+endif
+
+subject.process.meta = $["request_User-Agent"]
+
+object.type = $RequestMethod
+object.path = $RequestPath
+object.state = $raw_status
+
+duration = $Duration
+
+submessage("TEXT", "parse_addr", $ClientAddr)
+src.ip = $host_ip
+src.hostname = $host_name
+src.port = $host_port
+
+$host_ip = null
+$host_name = null
+$host_port = null
+
+submessage("TEXT", "parse_addr", $BackendAddr)
+dst.ip = $host_ip
+dst.hostname = $host_name
+dst.port = $host_port
+
+start_time = $StartUTC
+
+chain_id = $["request_Uber-Trace-Id"]
+
+time = $time
+
+reason = switch object.state
+    case "101" "Switching Protocols"
+    case "100" "Continue"
+    case "200" "OK"
+    case "201" "Created"
+    case "202" "Accepted"
+    case "203" "Non-Authoritative Information"
+    case "204" "No Content"
+    case "206" "Partial Content"
+    case "301" "Moved Permanently"
+    case "302" "Found"
+    case "304" "Not Modified"
+    case "305" "Use Proxy"
+    case "307" "Temporary Redirect"
+    case "308" "Permanent Redirect"
+    case "400" "Bad Request"
+    case "401" "Unauthorized"
+    case "403" "Forbidden"
+    case "404" "Not Found"
+    case "405" "Method Not Allowed"
+    case "406" "Not Acceptable"
+    case "407" "Proxy Authentication Required"
+    case "413" "Payload Too Large"
+    case "415" "Unsupported Media Type"
+    case "418" "I'm a teapot"
+    case "423" "Locked"
+    case "429" "Too Many Requests"
+    case "431" "Request Header Fields Too Large"
+    case "495" "SSL Certificate Error (nginx specific)"
+    case "496" "SSL Certificate Required (nginx specific)"
+    case "497" "HTTP Request Sent to HTTPS Port (nginx specific)"
+    case "500" "Internal Server Error"
+    case "501" "Not Implemented"
+    case "502" "Bad Gateway"
+    case "503" "Service Unavailable"
+    case "504" "Gateway Timeout"
+    case "505" "HTTP Version Not Supported"
+    case "507" "Insufficient Storage"
+    case "508" "Loop Detected"
+endswitch
+
+if in_list($importance_low, $raw_status) then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "jfrog"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "artifactory"
+event_src.category = "Other"
+
+id = "PT_JFrog_Artifactory_syslog_RT_Request"

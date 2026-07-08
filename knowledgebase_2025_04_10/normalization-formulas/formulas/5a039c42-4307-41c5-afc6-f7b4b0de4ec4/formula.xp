@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {$fallback_time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING+?}
+        CEF:{NUMBER}|InfoTeCS|IDS|2.4{"."NUMBER?}-{NUMBER}|{NUMBER}:{NUMBER}:{NUMBER}|{msgid="USER_START"}|
+        {NUMBER}|{$values=KEYVALUE(" ", "=", "\\\"")}'
+
+subject = "account"
+action = "start"
+object = "session"
+status = "success"
+
+subject.name = $values["suser"]
+subject.privileges = $values["spriv"]
+
+if maybe_datetime($values["rt"]) != null then
+    time = $values["rt"]
+else
+    time = $fallback_time
+endif
+importance = "info"
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+event_src.id = $values["deviceExternalId"]
+
+id = "PT_Infotecs_VipNet_IDS_2_4_syslog_cef_session_started"

@@ -1,0 +1,76 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        apt-detects{'['NUMBER']'?}: \"{subject.name='Kaspersky Anti Targeted Attack Platform'}\",\"2.{$ver=UNTIL('\",')} \"{msgid='file_web'}\",
+        {$csv=CSV(',','\"')}"
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+object.name = $csv[18]
+if $csv[23] != "" and $csv[23] != "\"" then
+    object.path = $csv[23]
+endif
+if $csv[15] != "" and $csv[15] != "\"" then
+    object.hash = $csv[15]
+endif
+
+$src_ip_port = csv($csv[5], ":", "'")
+if length($src_ip_port) != 2 then
+    # IPv4 without port or IPv6
+    src.ip = $csv[5]
+else
+    src.ip = $src_ip_port[0]
+    src.port = $src_ip_port[1]
+endif
+
+$dst_ip_port = csv($csv[4], ":", "'")
+if length($dst_ip_port) != 2 then
+    # IPv4 without port or IPv6
+    dst.ip = $csv[4]
+else
+    dst.ip = $dst_ip_port[0]
+    dst.port = $dst_ip_port[1]
+endif
+
+protocol = $csv[20]
+
+if $csv[6] != "" and $csv[6] != "\"" then
+    datafield2 = $csv[6]        # Имя хоста, на котором обнаружено событие
+endif
+if $csv[7] != "" and $csv[7] != "\"" then
+    datafield3 = $csv[7]        # Имя учетной записи пользователя хоста, на котором обнаружено событие
+endif
+if $csv[8] != "" and $csv[8] != "\"" then
+    datafield5 = $csv[8]        # Имя файла, в котором обнаружено событие
+endif
+if $csv[14] != "" and $csv[14] != "\"" then
+    datafield6 = $csv[14]       # Размер обнаруженного файла в байтах
+endif
+
+datafield8 = $csv[22]           # User Agent клиентского компьютера (только для протокола HTTP(S))
+if $csv[13] != "" and $csv[13] != "\"" then
+    datafield9 = $csv[13]       # URL обнаруженного объекта (только для протокола HTTP(S))
+endif
+if $csv[24] != "" and $csv[24] != "\"" then
+    datafield10 = $csv[24]      # Заголовок HTTP Referrer (только для протокола HTTP(S))
+endif
+
+time = $csv[0]
+
+if in_list(["Low", "Medium", "High"], $csv[1]) then
+    importance =  lower($csv[1])
+endif
+
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v2_file_web"

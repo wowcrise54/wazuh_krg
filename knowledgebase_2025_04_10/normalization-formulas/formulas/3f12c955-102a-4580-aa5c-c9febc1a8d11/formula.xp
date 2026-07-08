@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}
+        {UNTIL("Site:")} {"Site"?} {datafield1=UNTIL(",Server")} {"Name"?}: {datafield2=UNTIL(",")} {"\\""?}Event Description:
+        The administrator\'s user name or password is incorrect. Type a valid user name or password.{"\\""?}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+# datafield1 - Site Name
+# datafield2 - Server name
+
+importance = "high"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip2, $ip1)
+event_src.hostname = coalesce($host2, $host1)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_Incorrect_password_or_username"

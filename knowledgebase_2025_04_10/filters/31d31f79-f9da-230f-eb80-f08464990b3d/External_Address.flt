@@ -1,0 +1,21 @@
+filter External_Address(string $IP) {
+    not filter::Loopback_Address($IP)
+    and (
+        (
+            maybe_ipv4($IP) != null
+            and not in_subnet($IP, "10.0.0.0/8")
+            and not in_subnet($IP, "172.16.0.0/12")
+            and not in_subnet($IP, "192.168.0.0/16")
+            and not in_subnet($IP, "100.64.0.0/10")
+            and not in_subnet($IP, "169.254.0.0/16")
+            and not in_subnet($IP, "224.0.0.0/4")
+        )
+        or 
+        (
+            maybe_ipv6($IP) != null
+            and not in_subnet($IP, "fc00::/7")
+            and not in_subnet($IP, "fe80::/10")
+        )
+    )
+}
+

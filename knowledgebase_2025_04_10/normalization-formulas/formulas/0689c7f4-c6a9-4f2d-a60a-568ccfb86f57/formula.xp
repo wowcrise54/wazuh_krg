@@ -1,0 +1,16 @@
+id = "PT_Accord_SUCU_filemonitor_Turn_screensaver_on_by_hotkey"
+
+!TEXT = "{time = DATETIME},{subject.name=WORDDASH},{HOSTNAME},Execute command,{msgid='SSOnKey'},{$csv=CSV}"
+
+subject = "account"
+action = "lock"
+object = "session"
+status = "success"
+
+reason = "hotkey"
+
+importance = "low"
+
+event_src.vendor = "accord"
+event_src.title = "sucu"
+event_src.category = "Host security"

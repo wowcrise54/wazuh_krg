@@ -1,0 +1,76 @@
+event Create_User_Root:
+    key:
+        event_src.host
+    filter {
+        msgid == "createUser"
+        and event_src.title == "mongodb"
+        and match(lower(object.account.privileges), "*:root*")
+        and filter::CheckWL_Database_Actions("MongoDB_Create_Root_User", lower(object.account.id))
+    }
+     
+rule MongoDB_Create_Root_User: Create_User_Root
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+     }
+    
+    on Create_User_Root {
+        $status = status
+    
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.privileges = subject.account.privileges
+      
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.privileges = object.account.privileges
+        $object.type = object.type
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+             
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+            
+        $datafield1 = datafield1     # БД пользователя субъекта
+        $datafield2 = datafield2     # БД пользователя объекта
+        $datafield3 = reason
+        
+        $alert.key = lower(object.account.id)
+        $alert.context = join([object.account.id, object.account.privileges], " | ")
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+        
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "create"
+    $object = "account"
+    
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Create Account: Local Account"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

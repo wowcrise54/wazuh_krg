@@ -1,0 +1,78 @@
+# {"class":"vim.event.EventEx","key":12410,"chainId":12410,"createdTime":"2022-02-12 11:04:41.793999+00:00","userName":"administrator","fullFormattedMessage":"Failed login administrator from 10.125.3.2 at 02/12/2022 11:02:22 GMT in SSO","eventTypeId":"com.vmware.sso.LoginFailure","severity":"info","message":"","arguments":{"userName":"administrator","description":"User administrator@10.125.3.2 failed to log in with response code 401","userIp":"10.125.3.2","timestamp":"02/12/2022 11:02:22 GMT","_sourcehost_":"vcsa7.rf.plat.form"},"objectId":"","objectName":""}
+
+JSON = ''
+COND = in_list([
+           "LoginSuccess",
+           "LoginFailure",
+           "Logout"
+       ], strip($eventTypeId, "com.vmware.sso.", ""))
+
+subject = "account"
+
+action = switch strip($eventTypeId, "com.vmware.sso.", "")
+    case "LoginSuccess" "login"
+    case "LoginFailure" "login"
+    case "Logout" "logout"
+endswitch
+    
+object = "application"
+
+status = switch strip($eventTypeId, "com.vmware.sso.", "")
+    case "LoginSuccess" "success"
+    case "LoginFailure" "failure"
+    case "Logout" "success"
+endswitch
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.name = "vCenter Single Sign-On"
+
+if in_list(["127.0.0.1", "[::1]", recv_ipv4], $arguments["userIp"]) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+    
+    src.ip = $arguments["userIp"]
+    dst.ip = coalesce(maybe_ipv4($arguments["_sourcehost_"]), maybe_ipv6($arguments["_sourcehost_"]))
+    if dst.ip == null then
+        dst.hostname = $arguments["_sourcehost_"]
+    endif
+endif
+
+datafield4 = $arguments["_sourcehost_"]  # vCenter Host Name
+
+chain_id = $chainId
+
+time = $arguments["timestamp"]
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_SSO_Login_Logout"

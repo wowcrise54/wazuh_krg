@@ -1,0 +1,48 @@
+EVENTLOG = 'EventID.text="4"'
+
+COND = (
+         $Channel == "ViPNet Administrator KCA"
+         and $Provider["Name"] == "Key and Certification Authority"
+         and $Keywords == '0x80000000000000'
+       )
+
+action = "start"
+object = "process"
+status = "success"
+
+object.process.fullpath = $Data[1] # full path to module
+object.process.id = $Data[3]
+
+$csv_path = csv(object.process.fullpath, "\\", "`")
+object.process.name = $csv_path[length($csv_path) - 1]
+if strip(object.process.fullpath, "", object.process.name) != '' then
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+endif
+
+datafield5 = $Data[0] # module name
+datafield1 = $Data[2] # full path to application
+datafield2 = $Data[4] # Thead ID
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_kca"
+event_src.subsys = lower($Channel)
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_KCA_eventlog_4_event_auditing_process_started"

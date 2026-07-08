@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {"("?}{"apache"|"apache2"|"httpd"|}{")"?}{"["NUMBER"]"?}{":"?}
+        [{WORD?} {time=DATETIME} {WORD?}]
+        [{WORD}{":"WORD?}]
+        {"[pid "NUMBER"]"?}
+        {datafield2=UNTIL(":")?}
+        Command line:
+        {object.process.cmdline=REST}'
+
+action = "start"
+object = "application"
+status = "success"
+
+object.process.cmdline = strip(object.process.cmdline,"'","'")
+
+# datafield2 - error ID
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache"
+event_src.category = "Web server"
+
+id = "PT_Opensource_ASF_Apache_HTTP_Server_syslog_server_started_with_command_line"

@@ -1,0 +1,8 @@
+event Frag_table_overflow:
+    key:
+        event_src.host, interface, action, object, object.name, object.state, status, importance,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Cisco_IOS_syslog_IP_VFR_FRAG_TABLE_OVERFLOW"
+
+aggregate Cisco_IOS_Frag_table_overflow: Frag_table_overflow[3,300] within 10m

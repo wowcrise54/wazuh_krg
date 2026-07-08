@@ -1,0 +1,56 @@
+JSON = 'ENTITY_TYPE'
+COND = ($ENTITY_TYPE == "Perimeter"
+        and in_list(["create", "update", "delete", "create_elements", "update_element", "delete_element"], $OPERATION))
+
+subject = "account"
+switch $OPERATION 
+    case "create"
+        action = "create"
+        object.type = "Perimeter"
+    case "update"
+        action = "modify"
+        object.type = "Perimeter"
+    case "delete"
+        action = "remove"
+        object.type = "Perimeter"
+    case "create_elements"
+        action = "create"
+        object.type = "Element in Perimeter"
+    case "update_element"
+        action = "modify"
+        object.type = "Element in Perimeter"
+    case "delete_element"
+        action = "remove"
+        object.type = "Element in Perimeter"
+endswitch
+object = "resource"
+status = "success"
+
+subject.account.id = $USER_ID
+subject.account.name = $user_or_token['USERNAME']
+subject.account.fullname = $user_or_token['DISPLAY_NAME']   
+subject.account.contact = $user_or_token['EMAIL']
+
+switch object.type
+    case "Perimeter"
+       object.name = $ENTITY_DISPLAY_NAME 
+       object.id = $ENTITY_ID
+    case "Element in Perimeter"
+       object.group = $ENTITY_DISPLAY_NAME
+       object.name = coalesce($PROPERTY_CHANGES['contact']['ENTITY_DISPLAY_NAME'], 
+                              $PROPERTY_CHANGES['entry']['ENTITY_DISPLAY_NAME'])
+       object.id = coalesce($PROPERTY_CHANGES['contact']['ENTITY_ID'], 
+                            $PROPERTY_CHANGES['entry']['ENTITY_ID'], 
+                            $PROPERTY_CHANGES['elements'][0]['ENTRY_ID'])
+endswitch
+
+time = $CHANGE_DATE
+msgid = $ENTITY_TYPE
+importance = "medium"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_9_customeventcollector_Perimeter_actions"

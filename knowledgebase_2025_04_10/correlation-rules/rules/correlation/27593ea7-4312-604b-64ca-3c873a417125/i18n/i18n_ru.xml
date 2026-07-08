@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Подозрительный вход на критически важный сервер. Данные аутентификации отличаются от собранного профиля</Description>
+  <EventDescriptions>
+    <EventDescription id="1b952f5b-497b-df27-50a9-9cce621bf211">Пользователь {subject.account.name} с узла {src.host} вошел на критически важный сервер и получил доступ к новому общему сетевому ресурсу "{object.storage.path}" на узле {event_src.host}. Сетевой ресурс отсутствует в собранном профиле</EventDescription>
+    <EventDescription id="462aacec-a10e-dd33-9d17-2bd1da9d7b81">Пользователь {subject.account.name} с узла {src.host}, использовав новый тип входа {logon_type} ({datafield6}), вошел на критически важный сервер на узле {event_src.host}. Тип входа отсутствует в собранном профиле</EventDescription>
+    <EventDescription id="5b3a3453-054f-216f-2617-02539640289e">Пользователь {subject.account.name} с узла {src.host} вошел на критически важный сервер и получил доступ к новому объекту общего сетевого ресурса "{object.storage.name}" на узле {event_src.host}. Объект отсутствует в собранном профиле</EventDescription>
+    <EventDescription id="9be79db2-03c9-dd5a-ee5b-798a47fbc7bc">Пользователь {subject.account.name} с нового узла {src.host} вошел на критически важный сервер на узле {event_src.host}. Адрес отсутствует в собранном профиле</EventDescription>
+    <EventDescription id="b068bafe-5ec8-5b95-efec-1c0963fd65f7">Новый пользователь {subject.account.name} с узла {src.host} вошел на критически важный сервер на узле {event_src.host}. Пользователь отсутствует в собранном профиле</EventDescription>
+  </EventDescriptions>
+</Localization>

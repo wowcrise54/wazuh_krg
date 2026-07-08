@@ -1,0 +1,80 @@
+event Service_Create_Via_Registry:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "12"
+        and event_src.title == "sysmon"
+        and lower(object.path) == "\\registry\\machine\\system\\currentcontrolset\\services\\"
+        and not match(lower(subject.process.fullpath), "?:\\windows\\system32\\services.exe")
+        and object.name != null
+        and filter::CheckWL_Registry_Actions("Hidden_Service_Create", lower(subject.process.name + "|" + object.fullpath)) 
+    }
+    
+event Service_Create_Windows_Logs:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "windows"
+        and in_list(["7045", "601", "4697"], msgid)
+    }
+
+rule Hidden_Service_Create: (Service_Create_Via_Registry and not Service_Create_Windows_Logs) timer 15s
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+    }
+
+    on Service_Create_Via_Registry {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(subject.process.name + "|" + object.fullpath)
+        $alert.context = object.name
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "process"
+    $action = "create"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Create or Modify System Process: Windows Service"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "SecurityBackdoorDetection"
+    $incident.aggregation.timeout = 2h
+}

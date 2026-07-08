@@ -1,0 +1,32 @@
+TEXT = "{'<'NUMBER'>'?}{time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        ownCloud[{NUMBER}]: {STRING} The password of the publicly shared
+        {$type='file'|$type='folder'} \"{object.path=UNTIL('\"')}
+        with ID \"{object.id=NUMBER}\" has been changed"
+
+action = "modify"
+object = "resource"
+status = "success"
+
+if $type == "folder" then
+    object.type = "directory"
+else
+    object.type = "file"
+endif
+
+reason = "password changed"
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nextcloud"
+event_src.category = "File service"
+
+id = "PT_Opensource_Nextcloud_syslog_Shared_resource_password_changed"

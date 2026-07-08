@@ -1,0 +1,102 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0004000017"
+
+subject = "rule"
+
+action = switch $kv["action"]
+    case "accept" "allow"
+    case "deny" "deny"
+endswitch
+
+object = "connection"
+status = "success"
+
+subject.id = $kv["policyid"]
+subject.type = $kv["policytype"]
+
+object.account.name = $kv["user"]
+
+object.id = $kv["sessionid"]
+
+if $kv["srcname"] != $kv["srcip"] then
+    $dot_pos = find_substr($kv["srcname"], '.')
+    if $dot_pos != null then
+        src.fqdn = $kv["srcname"]
+        src.hostname = substr($kv["srcname"], 0, $dot_pos)
+    else
+        src.hostname = $kv["srcname"]
+    endif
+endif
+
+if $kv["dstname"] != $kv["dstip"] then
+    $dot_pos = find_substr($kv["dstname"], '.')
+    if $dot_pos != null then
+        dst.fqdn = $kv["dstname"]
+        dst.hostname = substr($kv["dstname"], 0, $dot_pos)
+    else
+        dst.hostname = $kv["dstname"]
+    endif
+endif
+
+src.mac = $kv["srcmac"]
+src.ip = $kv["srcip"]
+src.port = $kv["srcport"]
+if $kv["srccountry"] != "Reserved" then src.geo.country = $kv["srccountry"] endif
+dst.mac = $kv["dstmac"]
+dst.ip = $kv["dstip"]
+dst.port = $kv["dstport"]
+if $kv["dstcountry"] != "Reserved" then dst.geo.country = $kv["dstcountry"] endif
+if $kv["transip"] != "0.0.0.0" then assigned_src_ip = $kv["transip"] endif
+if $kv["transport"] != "0" then assigned_src_port = $kv["transport"] endif
+if $kv["tranip"] != "0.0.0.0" then assigned_dst_ip = $kv["tranip"] endif
+if $kv["tranport"] != "0" then assigned_dst_port = $kv["tranport"] endif
+protocol = $kv["proto"]
+count.bytes_out = $kv["sentbyte"]
+count.bytes_in = $kv["rcvdbyte"]
+count.packets_out = $kv["sentpkt"]
+count.packets_in = $kv["rcvdpkt"]
+
+duration = $kv["duration"]
+
+datafield1 = $kv["vd"]                                                # Virtual domain name
+if $kv["srcintf"] != null then datafield2 = $kv["srcintf"] endif      # Ingress interface
+datafield3 = $kv["app"]                                               # Application name
+if $kv["dstintf"] != null then datafield4 = $kv["dstintf"] endif      # Egress interface
+if $kv["trandisp"] != "noop" then datafield7 = $kv["trandisp"] endif  # NAT translation type
+
+if $kv["appcat"] != null then $app_lst = append($app_lst, "appcat:" + $kv["appcat"]) endif     # Application category
+if $kv["appid"] != null then $app_lst = append($app_lst, "appid:" + $kv["appid"]) endif        # Application ID
+if $kv["apprisk"] != null then $app_lst = append($app_lst, "apprisk:" + $kv["apprisk"]) endif  # Application Risk Level
+datafield8 = join($app_lst, "|")
+
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")  # Event type
+
+if $kv["mastersrcmac"] != null then $mastersrcmac = "src master mac:" + $kv["mastersrcmac"] endif  # The master MAC address for a host that has multiple network interfaces
+if $kv["masterdstmac"] != null then $masterdstmac = "dst master mac:" + $kv["masterdstmac"] endif  # Destination master MAC address
+if ($mastersrcmac != null or $masterdstmac != null) then datafield10 = join(remove([$mastersrcmac, $masterdstmac], null), "|") endif
+datafield11 = $kv["action"]                                                                        # Action
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+
+if $kv["crlevel"] == "critical" then
+    importance = "medium"
+else
+    importance = "low"
+endif
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["devid"]
+event_src.category = "Firewall"
+event_src.rule = $kv["policyid"]
+
+id = "PT_Fortinet_Fortigate_syslog_17_log_id_traffic_sniffer"

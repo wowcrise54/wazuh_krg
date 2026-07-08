@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} ATD2ESM[{NUMBER}]:
+        {"{"}"CPU Alert\": {STRING} {$usage=STRING} {STRING} {$threshold=STRING}'
+
+action = "alert"
+object = "resource"
+status = "success"
+
+object.type = "cpu"
+object.property = "cpu utilization"
+object.value = strip($usage, "Usage\":", ",")
+
+datafield1 = strip($threshold, "Threshold\":", "}}") # CPU Threshold
+
+reason = "The CPU threshold is exceeded"
+
+importance = "high"
+
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "atd"
+event_src.category = "Network security"
+
+id = "PT_McAfee_ATD_syslog_cpu_alert"

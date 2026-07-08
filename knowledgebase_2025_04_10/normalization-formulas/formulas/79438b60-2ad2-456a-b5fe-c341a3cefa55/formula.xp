@@ -1,0 +1,27 @@
+TEXT = '{time=DATETIME} {STRING} ({WORD}) {WORD+} {msgid="8310"} {WORD}
+       Logging of event type {object.type=WORDDASH+} was {$action_tmp=WORD}
+       by user {$fqdn=STRING+} on server {dst.hostname=UNTIL(".")} {datafield1=REST}'
+
+subject = "account"
+
+action = switch $action_tmp
+    case "disabled" "disable"
+    case "enabled" "enable"
+endswitch
+
+object = "logging"
+status = "success"
+
+$sep = csv($fqdn, "\\", "")
+subject.account.domain = lower($sep[0])
+subject.account.name = lower($sep[1])
+
+# datafield1 server ID
+
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Logging_preferences_changed"

@@ -1,0 +1,29 @@
+JSON = ""
+
+COND = $entity_type == "CrawlerScanner"
+        and $operation == "update"
+
+subject = "account"
+action = "modify"
+object = "log"
+status = "success"
+
+subject.account.id = $user_id
+subject.account.name = $user_login
+subject.account.fullname = $user_fullname
+subject.account.contact = $user_email
+
+object.id = $entity_id
+object.name = $entity_display_name
+object.type = $entity_type
+
+time = $change_date
+
+importance = "low"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_Crawler_scanner"

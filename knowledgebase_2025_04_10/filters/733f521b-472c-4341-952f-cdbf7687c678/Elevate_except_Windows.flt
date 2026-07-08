@@ -1,0 +1,12 @@
+filter Elevate_except_Windows() {
+    filter::NotFromCorrelator()
+    and category.high == "Users And Rights Management"
+    and category.low == "Manipulation"
+    and in_list(["elevate", "escalate"], action)
+    and event_src.title != "windows"
+    and event_src.title != "sap_as_abap"
+    and (
+        subject.account.name != null
+        or subject.account.id != null
+    )
+}

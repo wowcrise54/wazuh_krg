@@ -1,0 +1,28 @@
+TABULAR = 'orig,
+           sys_msgs,
+           {time=time}'
+
+COND = $action == "ctl"
+       and find_substr($sys_msgs, "log entries were not sent to log server") != null
+
+action = "send"
+object = "log"
+status = "failure"
+
+submessage('TEXT', 'sub1', $sys_msgs)
+
+subformula 'sub1'
+    # Извлечение dst.ip и reason из $sys_msgs
+    TEXT = '{NUMBER} log entries were not sent to log server {dst.ip=IPV4|dst.ip=IPV6} {$reason=REST}'
+
+    reason = strip($reason, "", ".")
+endsubformula
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Common_Log_entries_were_not_sent_to_log_server"

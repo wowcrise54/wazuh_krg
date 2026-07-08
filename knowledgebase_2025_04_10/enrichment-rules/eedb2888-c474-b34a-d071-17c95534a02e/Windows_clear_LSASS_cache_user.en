@@ -1,0 +1,100 @@
+query GetLSASSCachedAccounts($host) from LSASS_Cached_Accounts {
+    column::host == $host
+}
+
+query GetDomainFullName($id) from Known_Windows_Domains {
+    column::id == $id
+}
+    qhandler {
+        $fullname = fullname
+        $netbios = netbios
+        $_last_changed = _last_changed
+    }
+
+query GetAccountStorage($user_id) from Known_Windows_Accounts {
+    column::id == $user_id
+    and column::storage != "unknown"
+}
+
+event User_Logoff:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4634"
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and (
+            in_list([2, 4, 5, 7, 9, 10, 11, 12], logon_type)
+            or (
+                logon_type == 8
+                and (
+                    (
+                        in_list(["w3wp.exe", "microsoft.exchange.pop3.exe", "microsoft.exchange.imap4.exe"], lower(subject.process.name))
+                        and lower(logon_service) == "advapi"
+                        and lower(datafield9) == "negotiate"
+                    ) 
+                    or lower(logon_service) == "wsman"
+                )
+            )
+        )
+    }
+
+enrichment Windows_clear_LSASS_cache_user
+    
+    enrich User_Logoff:
+        enrich_fields {
+            $cached_accounts_on_host = select_query_first("GetLSASSCachedAccounts", [lower(event_src.host)], "accounts")
+            
+            if $cached_accounts_on_host != null then
+                # Определение типа аккаунта: domain или local
+                if event_src.hostname == subject.account.domain then
+                    $account_storage = "local"
+                elif find_substr(subject.account.id, "S-1-5-21-") != 0 then
+                    $account_storage = "local" # Далее данный кейс уточняется
+                elif subject.account.domain == "microsoftaccount" then
+                    $account_storage = "local"
+                elif in_list([11, 12], logon_type) then  # Данная проверка должна быть после 'microsoftaccount' т.к. она тоже может иметь logon_type = '11'
+                    $account_storage = "domain"
+                else
+                    $account_storage = select_query_first("GetAccountStorage", [lower(subject.account.id)], "storage")
+                endif
+                if $account_storage == null then
+                    $account_storage = "unknown"
+                endif
+                # Завершение определения типа аккаунта
+
+                # Попытка заменить NETBIOS-домен на полное имя домена
+                if in_list(["domain", "unknown"], $account_storage) then
+                    $domain_id = lower(regex(subject.account.id, "S-1-5-21-(.*?)-\d+$", 1))
+                    # Внимание! Только учетные записи с 'storage == domain' находятся в ТС Known_Windows_Domains
+                    $domain_info = exec_query("GetDomainFullName", [$domain_id])
+                    if $domain_info["$_last_changed"] != null then
+                        subject.account.domain = coalesce($domain_info["$fullname"], $domain_info["$netbios"])
+                        $account_storage = "domain"  # Тут можно быть уверенным, что учетная запись является доменной
+                    endif
+                endif    
+                
+                # Расстановка меток для типов аккаунтов
+                if $account_storage == "domain" then 
+                    $acc_in_domain = "|acc_in_domain:true"
+                elif $account_storage == "local" then 
+                    $acc_in_domain = "|acc_in_domain:false"
+                endif
+
+                $logged_off_user = "acc_name:" + subject.account.name + "|acc_domain:" + subject.account.domain + $acc_in_domain + "||" 
+                $cached_accounts_on_host_updated = replace($cached_accounts_on_host, "", $logged_off_user)
+
+                if $cached_accounts_on_host_updated != null and $cached_accounts_on_host_updated != $cached_accounts_on_host then
+                    $allowed_update = true
+                endif    
+            endif
+        }
+
+    # Если запись о пользователе найдена, то перезаписываем строку ТС уже без данных о нем
+    insert_into LSASS_Cached_Accounts if $allowed_update {
+        column::host = lower(event_src.host)
+        column::accounts = $cached_accounts_on_host_updated
+    }
+    
+    remove_from LSASS_Cached_Accounts {
+            column::accounts == ""
+        }

@@ -1,0 +1,44 @@
+filter ConnectionDetected() {
+    filter::NotFromCorrelator()
+    and (
+        (
+            category.generic == "Connection"
+            and category.high == "Network Interaction Management"
+            and category.low == "State"
+        )
+        or
+        (
+            category.generic == "Flow"
+            and category.high == "Network Interaction Management"
+            and category.low == "State"
+        )
+        or
+        (
+            category.generic == "Packet"
+            and category.high == "Network Interaction Management"
+            and category.low == "State"
+        )
+        or
+        (
+            category.generic == "Connection"
+            and category.high == "Network Interaction Management"
+            and category.low == "Control"
+        )
+        or
+        (
+            category.generic == "Flow"
+            and category.high == "Network Interaction Management"
+            and category.low == "Control"
+        )
+        or
+        (
+            category.generic == "Packet"
+            and category.high == "Network Interaction Management"
+            and category.low == "Control"
+        )
+    )
+    # 3 actions from Checkpoint, 1 from NetFlow, 2 from Cisco ASA, 1 from Squid
+    and in_list(["allow", "deny", "reject", "detect", "open", "start", "access"], action)
+    # 1 object from Checkpoint, 1 from Checkpoint/ASA, 1 from ASA, 1 from NetFlow, 1 from Squid
+    and in_list(["connection", "translation", "flow", "resource", "session", "packet"], object)
+}

@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        [{time=DATETIME}] ["http{"s"?}-{WORD}-{WORD}-{NUMBER}-exec-{NUMBER}"/{dst.ip=IPV4|dst.ip=IPV6} INFO] 
+        [com.vmware.loginsight.web.actions.BaseActionBean.audit] [{$kv_str=UNTIL("]")}'
+
+COND = find_substr($kv_str, "Enabled Active Directory") != null
+       or find_substr($kv_str, "Disabled Active Directory") != null
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$kv = keyvalue($kv_str,",",":")
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.domain = lower($kv["Domain"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "Default (built-in)" "local"
+    case "Active Directory" "domain"
+endswitch
+
+object.type = "active directory"
+object.property = "action type"
+if find_substr($kv_str, "Enabled") != null then
+    object.value = "enable"
+else
+    object.value = "disable"
+endif
+
+logon_service = replace($kv["AuthSource"], "", " (built-in)")
+
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_ad_modify"

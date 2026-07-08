@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}
+        {datafield1="vi"|datafield1="cat"|datafield1="bash"}[{NUMBER}]: open {$status=WORD} in
+        session {NUMBER} by {WORDDASH} as {subject.name=WORDDASH}:{subject.privileges=WORD} from
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} @ pts/{NUMBER} obj
+        {object.fullpath=REST}'
+
+subject = "account"
+action = "modify"
+object = "file_object"
+if $status == "ok" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.type = "Daemon configuration file"
+
+$file_name_path = csv(object.fullpath, "/", "")
+object.name = $file_name_path[length($file_name_path) - 1]
+if length($file_name_path) > 1 then    
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+# datafield1 - name of process
+
+importance = "info"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "hp_ux"
+event_src.category = "Operating system"
+
+id = "PT_Hewlett_Packard_Enterprise_HP_UX_syslog_daemon_conf_modify"

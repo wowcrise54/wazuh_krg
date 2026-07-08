@@ -1,0 +1,41 @@
+JSON = ""
+
+COND = $ENTITY_TYPE == "ServiceLog" 
+        and in_list(["start", "stop", "restart"], $OPERATION)
+
+subject = "account"
+if $OPERATION == "start" then
+    action = "start"
+    importance = "info"
+elif $OPERATION == "stop" then
+    action = "stop"
+    importance = "medium"
+else
+    action = "restart"
+    importance = "medium"
+endif
+object = "service"
+status = "success"
+
+subject.account.name = $user_or_token['USERNAME']
+subject.account.id = $USER_ID
+subject.account.fullname = $user_or_token['DISPLAY_NAME']
+subject.account.contact = $user_or_token['EMAIL']
+
+$service = csv($ENTITY_DISPLAY_NAME, ":", "'")
+object.name = $service[1]
+object.property = "host"
+object.value = $service[0]
+
+time = $CHANGE_DATE + $user_or_token['TIMEZONE']
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_Service_start_stop_restart"

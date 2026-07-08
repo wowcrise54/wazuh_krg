@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {msgid="CisACS_02_FailedAuth"} {WORD} {NUMBER} 0 {$kv=KEYVALUE}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+subject.account.name = $kv['User-Name']
+subject.account.group = $kv['Group-Name']
+
+if maybe_ipv4(strip($kv["Caller-ID"], "", "/")) != null
+        or maybe_ipv6(strip($kv["Caller-ID"], "", "/")) != null then
+    src.ip = strip($kv["Caller-ID"], "", "/")
+elif maybe_macaddr(strip($kv["Caller-ID"], "", "/")) != null then
+    src.mac = strip($kv["Caller-ID"], "", "/")
+endif
+
+nas_ip = $kv['NAS-IP-Address']
+
+datafield1 = $kv['Access Device']           # Access Device
+datafield2 = $kv['Network Device Group']    # Название группы, к которой относится NAS
+
+reason = $kv['Authen-Failure-Code']
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "acs"
+event_src.vendor = "cisco"
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_CisACS_02_FailedAuth"

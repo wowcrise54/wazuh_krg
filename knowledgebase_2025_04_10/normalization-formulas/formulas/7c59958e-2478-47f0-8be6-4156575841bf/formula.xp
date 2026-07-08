@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{time=DATETIME}{":"?} {WORD":"?}
+        %{msgid="SYS-5-LOGGING_STOP"}: Logging is disable - {reason="CLI initiated"}'
+
+action = "info"
+object = "service"
+status = "success"
+
+object.name = "logging"
+object.state = "stopped"
+
+importance = "medium"
+
+category.generic = "Service"
+category.high = "Network Interaction Management"
+category.low = "State"
+
+if ($origin_id_ip == "127.0.0.1" or $origin_id_ip == "0.0.0.0") then
+    $origin_id_ip = null
+endif
+
+if number($hostname) == null then
+    event_src.hostname = coalesce($hostname, $origin_id_hostname)
+    event_src.ip = coalesce($ip, $origin_id_ip)
+endif
+event_src.title = "ios"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_syslog_SYS_5_LOGGING_STOP"

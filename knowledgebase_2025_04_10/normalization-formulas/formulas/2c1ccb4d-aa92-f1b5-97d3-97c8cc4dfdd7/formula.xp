@@ -1,0 +1,45 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        [{time=DATETIME}] ["DaemonCommands-thread-{NUMBER}"/{dst.ip=IPV4|dst.ip=IPV6} INFO] 
+        [com.vmware.loginsight.daemon.ClusterManager] [{$kv_str=UNTIL(")]")}'
+
+COND = find_substr($kv_str, "Received a membership request") != null
+       or find_substr($kv_str, "rejects a pending request") != null
+
+if find_substr($kv_str, "Received") != null then
+    subject = "application"
+    action = "receive"
+elif find_substr($kv_str, "rejects") != null then
+    subject = "account"
+    action = "deny"
+endif
+
+object = "request"
+status = "success"
+
+subformula "parse_node"
+    TEXT = '{$user_info=STRING+} StrataNodeInfo({$kv=KEYVALUE(",",":")}'
+    
+    if action == "receive" then
+        src.ip = coalesce(ipv4($kv["host"]),ipv6($kv["host"]))
+        src.port = number($kv["port"])
+    else
+        subject.account.name = lower(strip($user_info, "The ", " rejects a pending request:"))
+        datafield1 = $kv["host"]    # Node IP
+        datafield2 = $kv["port"]    # Node port
+    endif
+    
+    datafield4 = $kv["token"]       # Node token
+    datafield5 = $kv["status"]      # Node status
+    datafield6 = $kv["version"]     # Node software version
+    datafield7 = $kv["fips"]        # Fips mode
+endsubformula 
+
+submessage('TEXT', 'parse_node', $kv_str)
+
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_new_node_request"

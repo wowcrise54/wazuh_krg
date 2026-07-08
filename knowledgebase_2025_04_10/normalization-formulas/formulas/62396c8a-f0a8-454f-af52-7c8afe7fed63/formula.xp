@@ -1,0 +1,45 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "Microsoft-Windows-WindowsUpdateClient" and $number == 20
+
+submessage("XML","Event_data",$eventdata)
+submessage("TEXT","Update_info",$update_info)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    $update_info = $DataItem / eventdata / Data [1]  # информация о пакете
+    reason = $DataItem / eventdata / Data [0]        # идентификатор ошибки
+endsubformula
+
+subformula "Update_info"
+    TEXT = '{object.name=WORDDASH+} {$version=STRING}'
+    object.version = strip($version,'(',')')
+endsubformula
+
+msgid = $number
+
+object = "update"
+action = "install"
+status = "failure"
+subject = "host"
+
+importance = "high"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_20_failed_to_install_updates"

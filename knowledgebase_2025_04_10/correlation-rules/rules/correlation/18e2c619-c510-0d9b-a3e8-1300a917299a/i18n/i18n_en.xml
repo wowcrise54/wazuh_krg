@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A connection to samr and wkssvc named pipes on behalf of the same user from the same host was detected, which may indicate usage of the SharpHound (BloodHound) Session information collection method</Description>
+  <EventDescriptions>
+    <EventDescription id="0938d9ce-6bfe-4d66-b888-7f87d8b63afb">User {subject.account.name} from host {src.host} used utility {object.process.name} to connect to srvsvc named pipe of host {event_src.host}</EventDescription>
+    <EventDescription id="d561bd91-cffc-47dc-9653-6cd8669f319d">User {subject.account.name} from host {src.host} used utility {object.process.name} to connect consecutively to srvsvc and wkssvc named pipes of host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

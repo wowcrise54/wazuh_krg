@@ -1,0 +1,141 @@
+query CheckProcess($process_parent_name, $process_child_name) from External_Link_Processes {
+    (
+        process_name == $process_parent_name
+        and parent_or_child == "parent"
+    )
+    or (
+        process_name == $process_child_name
+        and parent_or_child == "child"
+    )
+}
+
+query GetDomainPhishing($domain) from External_Link_Phishing {
+    domain == $domain
+}
+
+event Link_Click:
+    key:
+        event_src.host, object.process.cmdline
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::ProcessStart_Windows_any()
+        and exec_query("CheckProcess", [lower(object.process.parent.name), lower(object.process.name)])
+        and regex(lower(object.process.cmdline),"https?:\/\/(10\.|192\.168|172\.16)([0-9.]+)(:\d+)?\/", 1) == null
+        and regex(lower(object.process.cmdline),"((https?:\/\/?|www[.])[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/)))", 1) != null
+        and filter::CheckWL_Process_Creation("External_Link_Clicked", lower(join([object.process.parent.name, regex(regex(lower(object.process.cmdline), "(https?:\/\/?|www[.])[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/))", 0), "https?:\/\/([a-яё0-9-_.]+(\.([a-я]+))?)(:\d+)?\/?", 1)], "|")))
+    }
+
+rule External_Link_Clicked: Link_Click+ timer 120s
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+    
+    on Link_Click {
+        $subject = subject
+        $action = action
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield18 = datafield18  # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # Цепочка процесса-объекта с идентификаторами
+
+        # full external link
+        $alert.regex_match = regex(lower(object.process.cmdline), "(https?:\/\/?|www[.])[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/))", 0)
+
+        # full domain
+        $datafield2 = regex(lower($alert.regex_match), "https?:\/\/([a-яё0-9-_.]+(\.([a-я]+))?)(:\d+)?\/?", 1)
+                        
+        # 1-st & 2-nd lvl domain
+        if maybe_ipv4($datafield2) == null then 
+            $datafield1 = regex(lower($alert.regex_match), "https?:\/\/.*?([a-яё0-9-_]+(\.([a-я]+))?)(:\d+)?\/", 1)
+        else
+            $datafield1 = $datafield2    
+        endif
+
+        $alert.key = lower(join([object.process.parent.name, regex(regex(lower($object.process.cmdline), "(https?:\/\/?|www[.])[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/))", 0), "https?:\/\/([a-яё0-9-_.]+(\.([a-я]+))?)(:\d+)?\/?", 1)], "|"))
+        $alert.context = join([subject.account.name + " | " + object.process.parent.name, object.process.name, $alert.regex_match], " → ")
+
+        $event_src.fqdn = event_src.fqdn
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $object = "process"
+
+    $importance = "info"
+
+    #$datafield5 = regex(regex(lower($object.process.cmdline), "(https?:\/\/?|www[.])[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/))", 0), "https?:\/\/.*?([a-яё0-9-_]+(\.([a-я]+))?)(:\d+)?\/", 1)
+    #$datafield6 = regex(regex(lower($object.process.cmdline), "(https?:\/\/?|www[.])[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/))", 0), "https?:\/\/([a-яё0-9-_.]+(\.([a-я]+))?)(:\d+)?\/?", 1)
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Phishing: Spearphishing Link"
+    
+    if exec_query("GetDomainPhishing", [$datafield1]) then
+        $object.type = "phishing domain"
+        $alert.context = $alert.context + " | обнаружен фишинговый домен"
+        $importance = "high"
+        $correlation_type = "incident"
+    endif
+
+    if regex(lower($datafield2), "(\.рф|\.дети|\.москва|\.онлайн|\.орг|\.рус|\.сайт)", 0) == null then 
+        if regex(lower($datafield2), "[а-я]", 0) != null  then
+            $object.type = "punycode attacks"
+            $alert.context = $alert.context + " | обнаружены русские буквы в имени домена"
+            $importance = "medium"
+            $correlation_type = "incident"
+        endif
+    endif
+
+    if regex(lower($datafield2), "oastify", 0) != null then
+        $object.type = "burp collaborator"
+        $alert.context = $alert.context + " | burp collaborator"
+        $importance = "high"
+        $correlation_type = "incident"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $alert.regex_match], "|")
+    if $importance == "info" then
+        $incident.severity = "low"
+    else
+        $incident.severity = $importance
+    endif
+    $incident.category = "Phishing"
+    $incident.aggregation.timeout = 2h
+}

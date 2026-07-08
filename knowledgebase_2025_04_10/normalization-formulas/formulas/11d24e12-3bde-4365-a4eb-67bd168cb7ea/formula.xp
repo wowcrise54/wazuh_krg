@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {UNTIL("Info: ")}
+        MID {object.id=NUMBER} Subject \'{object.value=UNTIL("\'")}'
+
+action = "info"
+object = "message"
+status = "success"
+
+object.property = "subject"
+
+# datafield1 - incoming connection ID
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_message_subject"

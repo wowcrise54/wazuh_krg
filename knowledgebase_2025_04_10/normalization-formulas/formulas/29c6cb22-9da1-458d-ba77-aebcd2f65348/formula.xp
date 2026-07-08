@@ -1,0 +1,42 @@
+TABULAR = 'Administrator,
+           {object.type=ObjectType},
+           {msgid=Operation},
+           orig,
+           {time=time}'
+
+COND = $product != "Endpoint Security Console"
+       and $Subject == "Object Manipulation"
+       and in_list(["Create Object", "Create Layer", "Create Rule"], $Operation)
+
+if $Administrator != "localhost" then
+    subject = "account"
+    subject.name = $Administrator
+endif
+action = "create"
+object = "resource"
+status = "success"
+
+object.name = $ObjectName
+
+if $FieldsChanges != null then
+    object.property = "fields changes"
+    object.value = $FieldsChanges
+endif
+
+if $client_ip != "0.0.0.0" and $client_ip != "127.0.0.1" and $client_ip != "::" then
+    src.ip = $client_ip
+endif
+
+datafield1 = $Session_UID  # идентификатор сессии
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($product)
+if $orig != $client_ip then
+    event_src.ip = $orig
+endif
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Configuration_Create_object"

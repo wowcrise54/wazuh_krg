@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?} CEF:0|Imperva Inc.|SecureSphere|{NUMBER}{"."}{NUMBER?}{"."}{NUMBER}|Audit archive ended successfully|
+        Audit archive created for policy: {object.value=UNTIL(", time")} frame: {UNTIL("|")}{$severity=WORDDASH}|
+        suser={STRING} rt={time=DATETIME} cat={REST}'
+
+action = "create"
+object = "resource"
+status = "success"
+
+object.type = "audit archive"
+object.property = "policy name"
+
+importance = lower($severity)
+
+event_src.vendor = "imperva"
+event_src.title = "securesphere"
+event_src.category = "Application security"
+
+id = "PT_Imperva_SecureSphere_syslog_Audit_archive_created"

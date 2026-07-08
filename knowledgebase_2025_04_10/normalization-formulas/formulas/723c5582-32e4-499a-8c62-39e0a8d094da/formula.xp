@@ -1,0 +1,42 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="smtp-proxy"}[{NUMBER}]:
+         msg_id="{msgid="1BFF-0015"|msgid="1BFF-0016"|msgid="1BFF-0017"}"
+         Deny {WORDDASH} {WORDDASH} {$pt1=WORD} {src.ip=IPV4|src.ip=IPV6} {dst.ip=IPV4|dst.ip=IPV6}
+         {src.port=NUMBER} {dst.port=NUMBER} {$msg=STRING*} ({datafield1=WORDDASH+})'
+
+$kv = keyvalue($msg, " ", "=", '"')
+
+action = "detect"
+object = "message"
+status = "success"
+
+switch msgid
+    case "1BFF-0015"
+        object.property = "line size"
+        object.value = $kv["line_length"]
+    case "1BFF-0016"
+    object.property = "message size"
+        object.value = $kv["size"]
+    case "1BFF-0017"
+        object.property = "header size"
+        object.value = $kv["headers_size"]
+endswitch
+
+protocol = upper($pt1)
+
+# datafield1 - Proxy policy name
+
+importance = "low"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_SMTP_size_or_length_too_long"

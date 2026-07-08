@@ -1,0 +1,224 @@
+event Disable_Service:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and 
+        (
+            (
+                filter::ProcessStart_Linux_Service_Disable("auditd")
+                and (
+                    (
+                        msgid == "SERVICE_STOP"
+                        and filter::CheckWL_Linux_Specific_Only("Unix_Disable_Auditd", 
+                            join([coalesce(subject.account.name, subject.account.id), object.name], "|")) # object.name содержит имя отключаемого сервиса
+                    ) or (
+                        msgid != "SERVICE_STOP"
+                        and filter::CheckWL_Linux_Process_Creation("Unix_Disable_Auditd",
+                            join([coalesce(subject.account.name, subject.account.id), coalesce(object.process.cmdline, subject.process.fullpath)], "|"))
+                    )
+                )
+            ) or (
+            # Временное выключение auditd до перезагрузки
+            # [sudo] auditctl -e0
+                filter::OperatingSystem_UNIXLike()
+                and object.process.cmdline != null
+                and
+                regex(object.process.cmdline, "auditctl\s+-e0", 0) != null
+                and filter::CheckWL_Linux_Process_Creation("Unix_Disable_Auditd",
+                    join([coalesce(subject.account.name, subject.account.id), coalesce(object.process.cmdline, subject.process.fullpath)], "|"))
+            ) 
+        )
+    }
+
+event Config_Modification:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and event_src.subsys == "auditd"
+        and status == "success"
+        # Модификация конфигурационного файла (/etc/audit/auditd.conf ) службы или правил журналирования (/etc/audit/rules.d)
+        and filter::FileModify_Linux("(auditd.conf$)|(^/etc/audit/rules.d/)") 
+        and filter::CheckWL_Linux_File_Operations(
+            "Unix_Disable_Auditd",
+            lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|")))
+    }
+
+event Restart_Service:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux_Service_Restart("auditd")
+    }
+
+rule Unix_Disable_Auditd: Disable_Service or (Config_Modification and Restart_Service) within 3m
+
+    on Disable_Service {
+        $action = "stop"
+        $object = "service"
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+        
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+        
+        $numfield2 = numfield2
+              
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+               
+        if msgid == "SERVICE_STOP" then
+            # process, that stops the service
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+
+            $object.name = object.name # service name
+            
+            $alert.key = join([coalesce(subject.account.name, subject.account.id), object.name], "|")
+
+            $labels = "CheckWL_Linux_Specific_Only"
+        else
+            $alert.key = join([coalesce(subject.account.name, subject.account.id), coalesce(object.process.cmdline, subject.process.fullpath)], "|")
+
+            $labels = "CheckWL_Linux_Process_Creation"
+        endif
+
+        $alert.regex_match = coalesce(
+            # Отключение auditd после перезагрузки, либо полная остановка службы
+            regex(object.process.cmdline, "systemctl\s+(disable|stop)\s+auditd", 0),
+            regex(object.process.cmdline, "/etc/init.d/auditd\s+(disable|stop)", 0),
+            # [sudo] service auditd stop
+            regex(object.process.cmdline, "service\s+auditd\s+stop", 0),
+            # Временное выключение auditd до перезагрузки
+            # [sudo] auditctl -e0
+            regex(object.process.cmdline, "auditctl\s+-e0", 0),
+            # [sudo] pkill -f "auditd"
+            regex(object.process.cmdline, "pkill\s+-f\s+auditd", 0),
+            # [sudo] killall auditd
+            regex(object.process.cmdline, "killall\s+auditd", 0)
+        )
+    }
+
+    on Config_Modification {
+        $action = "access" 
+        $object = "file_object"  
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.meta = subject.process.meta
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.type = subject.type
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.id = object.id
+        $object.type = object.type
+        $object.state = object.state
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+
+        $numfield2 = numfield2  # Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|"))
+        $alert.regex_match = regex(subject.process.meta, "(auditd.conf$)|(^/etc/audit/rules.d/)", 0)
+
+        $labels = "CheckWL_Linux_File_Operations"
+    }
+
+    on Restart_Service {
+        $alert.context = "restart service command: " + coalesce(object.process.cmdline, object.process.meta)
+    }
+
+emit {  
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Linux Audit System"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

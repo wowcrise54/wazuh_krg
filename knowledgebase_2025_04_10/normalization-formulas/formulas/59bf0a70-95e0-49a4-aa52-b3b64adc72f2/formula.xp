@@ -1,0 +1,57 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME} {subject.name="KWTS"}: 
+        type="{datafield1=UNTIL("\\"")}: method="{datafield2=UNTIL("\\"")}: action="{$raw_action=UNTIL("\\"")}: 
+        processing_time="{duration=NUMBER}": scan_result="{object.state=UNTIL("\\"")}: 
+        workspace="{datafield3=UNTIL("\\"")}: http_user_name="{$raw_name=UNTIL("\\"")}: 
+        http_user_agent="{subject.process.meta=UNTIL("\\"")}: http_user_ip="{src.ip=IPV4}": 
+        url="{object.path=UNTIL("\\"")}: {$detail_info=STRING*}'
+
+subject = "rule"
+
+action = switch $raw_action
+    case "Allow" "allow"
+    case "Deny" "deny"
+    case "Redirect" "modify"
+endswitch
+
+object = "session"
+status = "success"
+
+if find_substr($raw_name, "@") != null then
+    $name_domain = csv($raw_name, "@", "`")
+    subject.account.name = $name_domain[0]
+    subject.account.domain = $name_domain[1]
+else
+    subject.account.name = $raw_name
+endif
+
+object.query = join([datafield2, object.path], " ")
+
+$temp_kv = keyvalue($detail_info,", ","=", "\"")
+# datafield1 - type of http message
+# datafield2 - request method
+# datafield3 - workspace name 
+datafield4 = $temp_kv["part_mimetype"]  # MIME-type of a multipart object component
+datafield5 = $temp_kv["kata_upload"]    # the result of checking the object for the need to send it to the KATA
+datafield6 = $temp_kv["av-status"]      # antivirus module scan result
+datafield7 = $temp_kv["ap-status"]      # antiphishing module scan result
+datafield8 = $temp_kv["mlf-status"]     # link malware scan result
+datafield9 = $temp_kv["macros"]         # macros in the object of a scan
+datafield10 = $temp_kv["kata-alert"]    # kata scan result
+
+numfield1 = $temp_kv["filesize"]        # file size
+
+importance = "info"
+
+event_src.rule = $temp_kv["rules"]
+event_src.title = "kaspersky_web_traffic_security"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Web security"
+
+id = "PT_Kaspersky_KWTS_syslog_action_allow_deny_redirect"

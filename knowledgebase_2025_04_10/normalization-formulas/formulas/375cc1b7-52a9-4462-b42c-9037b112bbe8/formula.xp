@@ -1,0 +1,41 @@
+!JSON = "EventCode=4781"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing" and $EventType=="4"
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.account.name = lower($InsertionStrings[5])
+subject.account.domain = lower($InsertionStrings[6])
+subject.account.id = $InsertionStrings[4]
+subject.account.session_id = maybe_number16($InsertionStrings[7])
+
+object.account.domain = lower($InsertionStrings[2])
+object.account.name = lower($InsertionStrings[0])
+object.account.id = $InsertionStrings[3]
+
+object.property = "name"
+object.new_value = $InsertionStrings[1]
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+importance = "info"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_4781_Name_of_account_changed"

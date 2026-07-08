@@ -1,0 +1,102 @@
+JSON = 'source="PTAF4"'
+
+COND = $eventid != null
+       and $items['AttackEvent'] != null
+
+$event = keyvalue($items['AttackEvent'][0], ' ', '=', '"')
+$http = keyvalue($items['AttackHTTP'][0], ' ', '=', '"')
+$client = keyvalue($items['AttackClient'][0], ' ', '=', '"')
+$geo = keyvalue($items['AttackGEO'][0], ' ', '=', '"')
+$node = keyvalue($items['PTAFNode'][0], ' ', '=', '"')
+$e_match = keyvalue($items['AttackEventMatched'][0], ' ', '=', '"')
+$desc = keyvalue($items['AttackEventDescription'][0], ' ', '=', '"')
+$ptaf_node = keyvalue($items['PTAFNode'][0], ' ', '=', '"')
+
+subject = "rule"
+action = if find_substr($event["actions"], "Block") != null then "deny" else "detect" endif
+object = "attack"
+status = "success"
+
+if $client['username'] != null and $client['username'] != "Guest"  then
+    if action == "login" then 
+        subject = "account"
+    endif
+    $subject_name_and_dom = csv($client['username'], "@", "'")
+    $account_name = $subject_name_and_dom[0]
+    if length($subject_name_and_dom) > 1 then
+        $account_domain = lower($subject_name_and_dom[1])
+    endif
+    subject.account.domain = $account_domain
+    subject.account.name = $account_name
+    subject.account.id = "synthetic:" + $client['username']
+endif
+
+
+subject.name = $event['rule']
+subject.type = strip($event['tags'], "[\\\"", "\\\"\\]")
+subject.group = replace(strip($event['classifications'], "[", "\\]"), '', "\\\\\"")
+subject.state = replace(strip($event['actions'], "[", "\\]"), '', "\\\\\"")
+
+object.process.name = $client["browser"]
+object.process.version = $client["browser_version"]
+if object.process.name != null or object.process.version != null then
+    object.process.meta = object.process.name + "/" + object.process.version
+endif
+object.vendor = $client["os"]
+
+object.id = $http["transaction_id"]
+object.path = $http["path"]
+object.type = $http["method"]
+object.name = $e_match["name"]
+object.property = $e_match["key"]
+object.value = $e_match["value"]
+
+src.ip = $client['ip']
+src.geo.city = $geo['city']
+src.geo.country = $geo['country']
+
+if not in_list([null, "", "''", "'", '\\"\\"', '\\"', "null", "None"], $http['host']) then
+    $maybe_port = csv($http['host'], ":", "'")
+    if length($maybe_port) == 2 then
+        $dst = $maybe_port[0]
+        dst.port = $maybe_port[1]
+    else
+        $dst = $http['host']
+    endif
+    if maybe_ipv4($dst) != null or maybe_ipv6($dst) != null then
+        dst.ip = $dst
+    else
+        dst.fqdn = $dst
+        dst.hostname = substr(dst.fqdn, 0, find_substr(dst.fqdn, "."))
+    endif
+else
+    labels = "no REQUEST_HOST"
+endif
+
+reason = $desc['description']
+
+datafield1 = $event["application"]
+
+time = $time
+importance = switch lower($event["severity"])
+    case "info" "info"
+    case "low" "low"
+    case "medium" "medium"
+    case "high" "high"
+endswitch
+
+external_link = $event["attack_url"]
+
+if maybe_ipv4($node["host"]) != null or maybe_ipv6($node["host"]) != null then
+    event_src.ip = $node["host"]
+else
+    event_src.fqdn = lower($node["host"])
+    event_src.hostname = lower(substr(dst.fqdn, 0, find_substr(dst.fqdn, ".")))
+endif
+
+event_src.hostname = lower($hostname)
+event_src.title = "application_firewall"
+event_src.vendor = "positive_technologies"
+event_src.category = "Application security"
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_structured_Attack_detected"

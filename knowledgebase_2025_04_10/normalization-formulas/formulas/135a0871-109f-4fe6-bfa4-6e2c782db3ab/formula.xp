@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        CEF:0|New Security Technologies|SafeInspect|2.4.{NUMBER}|{$msgid_raw_1="4050"}|{$msgid_raw_2="Admin_login"}|{NUMBER}|
+        {$kv=KEYVALUE(" ","=")}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subject.account.name = $kv["SshAuditorAdminname"]
+
+src.ip = $kv["shost"]
+dst.hostname = $Computer
+
+logon_auth_method = "remote"
+
+reason = $kv["msg"]
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "safeinspect"
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_4_syslog_4050_admin_login"

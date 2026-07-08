@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0101040101"
+
+subject = "account"
+action = "open"
+object = "session"
+status = "success"
+
+subject.account.name = $kv["user"]
+subject.account.group = $kv["group"]
+
+object.id = $kv["tunnelid"]
+
+src.ip = $kv["remip"]
+assigned_src_ip = $kv["tunnelip"]
+protocol = $kv["tunneltype"]
+
+datafield1 = $kv["vd"]                                 # Virtual domain name
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")  # Event type
+datafield11 = $kv["action"]                            # Action
+
+reason = $kv["msg"]
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "info"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.subsys = "vpn-gateway"
+event_src.hostname = $kv["devname"]
+event_src.id = $kv["devid"]
+event_src.category = "VPN"
+
+id = "PT_Fortinet_Fortigate_syslog_40101_l2tp_vpn_tunnel_up"

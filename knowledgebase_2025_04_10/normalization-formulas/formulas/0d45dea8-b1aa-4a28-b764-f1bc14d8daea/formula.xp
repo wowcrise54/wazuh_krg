@@ -1,0 +1,42 @@
+!TABULAR = "audit_log_id_kf,
+            {time=change_date},
+            {subject.account.name=user_login},
+            {subject.account.fullname=user_fullname}"
+
+!COND = ($entity_type == "ServiceLog" and in_list(["start", "stop", "restart"], $operation))
+
+subject = "account"
+if $operation == "start" then
+    action = "start"
+    importance = "medium"
+elif $operation == "stop" then
+    action = "stop"
+    importance = "medium"
+else
+    action = "restart"
+    importance = "low"
+endif
+object = "service"
+status = "success"
+
+subject.account.contact = $user_email
+
+$service = csv($entity_display_name, ":", "'")
+object.name = $service[1]
+
+if maybe_ipv4($service[0]) != null or maybe_ipv6($service[0]) != null then 
+    dst.ip = $service[0]
+else
+    dst.hostname = $service[0]
+endif
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_6_odbc_Audit_Service_start_stop_restart"

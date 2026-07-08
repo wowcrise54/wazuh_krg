@@ -1,0 +1,78 @@
+TABULAR = ''
+
+COND = in_list(["E-mail", "Mail on Client", "Mail in Browser"], $MONITOR_CODE)
+       and $DATE_OF_CAPTURE != null
+       and $VERDICT != null
+
+subject = "account"
+action = "send"
+object = "message"
+
+if $VERDICT == "Allowed" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+$senders_keys_simplified = keyvalue($SENDERSCONTACTS, ",", ":")
+$name_domain = csv($senders_keys_simplified["auth"], "@", "'")
+subject.name = lower($name_domain[0])
+subject.domain = lower($name_domain[1])
+subject.id = $senders_keys_simplified["email"]
+
+object.type = "email"
+object.value = replace($RECIPIENTSCONTACTS, "", "email:")
+if object.value != null then
+    object.property = "recipient id"
+endif
+
+$workstations_keys_simplified = keyvalue($SENDERMACHINECONTACTS, ",", ":")
+src.ip = $workstations_keys_simplified["ip"]
+src.hostname = $workstations_keys_simplified["dnshostname"]
+protocol = lower($PROTOCOL)
+
+datafield1 = $USER_DECISION                             # Решение оператора DLP по событию
+datafield2 = coalesce($PERIMETERSIN, $PERIMETERSOUT)    # Перечень периметров через запятую
+datafield3 = $TAGS                                      # Перечень тегов через запятую
+datafield4 = $PROTECTED_DOCUMENTS                       # Перечень защищаемых документов через запятую
+datafield6 = $POLICIES                                  # Перечень нарушенных политик через запятую
+
+$recipients_count = length(csv($RECIPIENTSCONTACTS, ",", "'"))
+if $recipients_count != 1 then
+    datafield8 = string($recipients_count)              # Количество адресатов
+endif
+
+# Convert time to ISO 6801 (there is a problem in the database timestamp - timezone is not applied to timestamp as it should be)
+$utc = substr($DATE_OF_CAPTURE, 0, 19) + "Z"
+$ut = "1970-01-01T" + (substr($DATE_OF_CAPTURE, 20, 24)) + ":00Z"
+if find_substr($DATE_OF_CAPTURE, "+") != null then
+    $lt = datetime_to_epoch(datetime($utc)) + datetime_to_epoch(datetime($ut))
+    time = string(strip(string(epoch_to_datetime(number($lt))), "", "Z") + "+" + substr($DATE_OF_CAPTURE, 20, 24))
+else
+    $lt = datetime_to_epoch(datetime($utc)) - datetime_to_epoch(datetime($ut))
+    time = string(strip(string(epoch_to_datetime(number($lt))), "", "Z") + "-" + substr($DATE_OF_CAPTURE, 20, 24))
+endif
+
+msgid = $MONITOR_CODE
+
+if $USER_DECISION == "NotProcessed" then
+    if $VIOLATION_TYPE == null then
+        importance = "info"
+    else
+        importance = "high"
+    endif
+elif $USER_DECISION == "NoViolation" then
+    importance = "info"
+elif $USER_DECISION == "Violation" then
+    importance = "high"
+else
+    importance = "medium"
+endif
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.hostname = $CAPTURE_SERVER_HOSTNAME
+event_src.ip = $CAPTURE_SERVER_IP
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_6_odbc_Sensors_email_transfer"

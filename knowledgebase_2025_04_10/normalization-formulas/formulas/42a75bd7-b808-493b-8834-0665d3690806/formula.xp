@@ -1,0 +1,24 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} zorp/scb_rdp
+        {'['NUMBER']'?}: rdp.error({NUMBER}): ({subject.account.session_id=UNTIL(')')}:
+        {reason='Received PDU from unexpected side'}; side=\'{datafield1=UNTIL('\\'')}"
+
+action = "receive"
+object = "message"
+status = "success"
+
+# datafield1 - сторона-отправитель неожиданного пакета
+
+importance = "info"
+
+event_src.vendor = "one_identity"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "safeguard_for_privileged_sessions"
+event_src.category = "Other"
+
+id = "PT_One_Identity_Safeguard_for_Privileged_Sessions_syslog_Received_PDU_from_unexpected_side"

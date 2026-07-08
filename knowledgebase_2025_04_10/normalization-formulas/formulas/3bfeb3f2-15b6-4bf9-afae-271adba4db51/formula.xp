@@ -1,0 +1,60 @@
+TABULAR = '{time=date_time},
+           {logon_service=connector_id},
+           {subject.account.session_id=session_id},
+           local_endpoint,
+           remote_endpoint,
+           {datafield4=auth_type},
+           {msgid=event_type}'
+
+COND = $event_type == "client_authentication"
+
+subject = "account"
+action = "login"
+object = "application"
+if $result_code == "235 2.7.0 Authentication successful" then
+    status = "success"
+    importance = "info"
+elif $result_code == "535 5.7.3 Authentication unsuccessful" then
+    status = "failure"
+    reason = $reason
+    importance = "medium"
+else
+    status = "failure"
+    reason = $result_code
+    importance = "medium"
+endif
+
+subformula "SPLIT1"
+    # Извлечение src.ip и src.port из $remote_endpoint
+    TEXT = '{src.ip=IPV4|src.ip=IPV6}{"%"NUMBER?}:{src.port=NUMBER}'
+endsubformula
+
+subformula "SPLIT2"
+    # Извлечение dst.ip и dst.port из $local_endpoint
+    TEXT = '{dst.ip=IPV4|dst.ip=IPV6}{"%"NUMBER?}:{dst.port=NUMBER}'
+endsubformula
+
+if find_substr($client, "\\") != null then
+    $csv=csv($client, "\\", "'")
+    subject.account.domain = lower($csv[0])
+    subject.account.name = lower($csv[1])
+elif upper($client) != "NULL" then 
+    subject.account.name = lower($client)
+endif
+
+submessage("TEXT", "SPLIT1", $remote_endpoint)
+submessage("TEXT", "SPLIT2", $local_endpoint)
+
+datafield2 = $helo_content  #HELO (EHLO) контент
+#datafield4 - тип аутентификации
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "exchange"
+event_src.ip = dst.ip
+event_src.category = "Mail server"
+
+id = "PT_Microsoft_Exchange_customeventcollector_smtp_receive_client_authentication"

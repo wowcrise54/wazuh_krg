@@ -1,0 +1,71 @@
+EVENTLOG = 'EventID="5143"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "file_object"
+status = "success"
+
+subject.account.name = if $Data["SubjectUserName"] != "-" then lower($Data["SubjectUserName"]) else null endif
+subject.account.domain = if $Data["SubjectDomainName"] != "-" then lower($Data["SubjectDomainName"]) else null endif
+subject.account.id = if $Data["SubjectUserSid"] != "S-1-0-0" then $Data["SubjectUserSid"] else null endif
+if subject.account.id == null and subject.account.name != null then
+    subject.account.id = "synthetic:" + subject.account.name
+    if subject.account.domain != null then
+        subject.account.id = subject.account.id + "@" + subject.account.domain
+    endif
+endif
+subject.account.session_id = maybe_number16($Data["SubjectLogonId"])
+
+object.storage.id = lower($Data["ShareName"])
+
+object.storage.fullpath = lower(strip($Data["ShareLocalPath"], "\\??\\", "\\"))
+$name_and_path_local = csv(object.storage.fullpath, "\\", "'")
+if $name_and_path_local[0] == object.storage.fullpath then
+    object.storage.path = object.storage.fullpath 
+else
+    object.storage.name = $name_and_path_local[length($name_and_path_local) - 1]    
+    object.storage.path = strip(object.storage.fullpath, "", object.storage.name)     
+endif
+
+object.fullpath = lower(strip($Data["ShareName"], "\\\\*", "\\"))
+$name_and_path_public = csv(object.fullpath, "\\", "'")
+if $name_and_path_public[0] == object.fullpath then
+    object.path = object.fullpath 
+else
+    object.name = $name_and_path_public[length($name_and_path_public) - 1]    
+    object.path = strip(object.fullpath, "", object.name)     
+endif
+
+object.type = lower($Data["ObjectType"])
+
+object.property = "Remark|MaxUsers|ShareFlags|SD"
+object.value = join([$Data["OldRemark"], $Data["OldMaxUsers"], $Data["OldShareFlags"], $Data["OldSD"]], "|")
+object.new_value = join([$Data["NewRemark"], $Data["NewMaxUsers"], $Data["NewShareFlags"], $Data["NewSD"]], "|")
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    src.fqdn = lower($Computer)
+    src.hostname = lower(substr($Computer, 0, $dot_pos))
+else
+    src.hostname = lower($Computer)
+endif
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+importance = "medium"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+event_src.hostname = src.hostname
+event_src.fqdn = src.fqdn
+
+id = "PT_Microsoft_Windows_eventlog_5143_A_network_share_object_was_modified"

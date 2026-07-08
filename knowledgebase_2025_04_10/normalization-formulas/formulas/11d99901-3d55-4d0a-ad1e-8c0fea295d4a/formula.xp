@@ -1,0 +1,46 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {NUMBER+},{DATETIME},{event_src.id=WORD?},SYSTEM,{'general'|'auth'},{NUMBER},{time=DATETIME},
+        {UNTIL(',')}{msgid='auth-success'},{UNTIL(',')}{NUMBER},{NUMBER},{WORD},{WORD},
+        {'\"'?}authenticated for user '{subject.account.name = NTUSER}'.
+        {STRING*?} From: {$src=UNTIL(',')} {REST}"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+$src = strip(strip($src, '', '"'), '', '.')
+
+if maybe_ipv4($src) != null or maybe_ipv6($src) != null then
+    src.ip = $src
+elif find_substr($src, 'Console or telnet') != null then
+    datafield1 = $src  # Источник входа
+else
+    src.hostname = $src
+endif
+
+dst.hostname = $Computer
+dst.ip = event_src.ip
+
+if src.ip != null or src.hostname != null then
+    logon_auth_method = "remote"
+endif
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_System_Authentication_success_2"

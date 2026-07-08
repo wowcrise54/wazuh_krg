@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to an email account from a new address or mobile device. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="15d96617-a625-b335-d7dd-e97563348592">New user {subject.account.name} from host {external_src.ip} logged in to an email account from device {datafield8} on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="49d91077-7632-e50d-2167-c8c11c5b5871">User {subject.account.name} from host {external_src.ip} logged in to an email account from device {datafield8} on host {event_src.host}. The device is missing from the collected profile.</EventDescription>
+    <EventDescription id="ecb7dd74-1b3f-e629-f68a-99af402db3d2">User {subject.account.name} from new host {external_src.ip} logged in to an email account on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

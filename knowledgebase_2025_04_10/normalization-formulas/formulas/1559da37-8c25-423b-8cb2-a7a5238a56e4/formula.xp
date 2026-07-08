@@ -1,0 +1,69 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4} {event_src.hostname=HOSTNAME} - {'Log'|'Alert'}
+        [Fields@{STRING} Action=\"{$action='accept'|$action='drop'|$action='reject'}\" UUid={STRING} {$kv=REST}"
+
+$kv = keyvalue($kv, " ", "=", "\"")
+
+subject = "rule"
+
+if $action == "accept" then
+    action = "allow"
+else
+    action = "deny"
+endif
+
+object = "connection"
+status = "success"
+
+subject.id = $kv["rule"]
+subject.name = $kv["rule_name"]
+
+if maybe_ipv4($kv["src"]) != null or maybe_ipv6($kv["src"]) != null then
+    src.ip = $kv["src"]
+else
+    src.hostname = $kv["src"]
+endif
+src.port = $kv["s_port"]
+
+if maybe_ipv4($kv["dst"]) != null or maybe_ipv6($kv["dst"]) != null then
+    dst.ip = $kv["dst"]
+else
+    dst.hostname = $kv["dst"]
+endif
+dst.port = $kv["service"]
+
+protocol = $kv["proto"]
+
+if $kv["xlatesrc"] != "Unknown" and $kv["xlatesrc"] != src.ip then
+    assigned_src_ip = $kv["xlatesrc"]
+endif
+if $kv["xlatesport"] != "Unknown" and $kv["xlatesport"] != string(src.port) and $kv["xlatesport"] != "0" then
+    assigned_src_port = $kv["xlatesport"]
+endif
+if $kv["xlatedport"] != "Unknown" and $kv["xlatedport"] != string(dst.port) and $kv["xlatedport"] != "0" then
+    assigned_dst_port = $kv["xlatedport"]
+endif
+if $kv["xlatedst"] != "Unknown" and $kv["xlatedst"] != dst.ip then
+    assigned_dst_ip = $kv["xlatedst"]
+endif
+
+datafield1 = $kv["inzone"]             # входная зона (ingress zone)
+datafield3 = $kv["outzone"]            # исходящая зона (egress zone)
+datafield5 = $kv["icmp"]               # icmp общее имя
+datafield6 = $kv["icmp_type"]          # icmp тип
+datafield7 = $kv["icmp_code"]          # icmp код
+datafield8 = $kv["originsicname"]      # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+numfield1 = $kv["NAT_rulenum"]         # номер правила NAT
+numfield2 = $kv["NAT_addtnl_rulenum"]  # номер дополнительного правила NAT
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_VPN_and_Firewall_FW_and_NAT_rule"

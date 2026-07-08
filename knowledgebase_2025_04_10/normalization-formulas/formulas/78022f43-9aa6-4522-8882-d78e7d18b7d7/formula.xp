@@ -1,0 +1,53 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME}
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["application"] == "su"
+
+if find_substr($kv["default_device_message"], "session opened for user") != null then
+    subject = "account"
+    action = "elevate"
+
+    status = "success"
+
+    subject.account.name = $kv["login_from_user"]
+
+    object.account.name = $kv["user"]
+
+    importance = "low"
+elif find_substr($kv["default_device_message"], "authentication failure") != null then
+    subject = "account"
+    action = "elevate"
+    status = "failure"
+
+    $kv_mes = keyvalue($kv["default_device_message"], " ", "=", "")
+    subject.account.id = $kv_mes["uid"]
+    subject.account.name = $kv_mes["ruser"]
+
+    object.account.name = $kv_mes["user"]
+
+    importance = "low"
+elif find_substr($kv["default_device_message"], "session closed for user") != null then
+    action = "deelevate"
+    status = "success"
+
+    object.account.name = $kv["user"]
+
+    importance = "info"
+endif
+
+object = "account"
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Command_su_used"

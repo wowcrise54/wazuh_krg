@@ -1,0 +1,39 @@
+TEXT = '[{time=DATETIME}] INFO Scheduler: The schedule {"successfully"?} {$tmp_action="created"|
+        $tmp_action="changed"|$tmp_action="started"|$tmp_action="finished"|$tmp_action="removed"|
+        $tmp_action="canceled"|$tmp_action="paused"|$tmp_action="resumed"|}.
+        {$kv=KEYVALUE(", ", ": ", "\'")}'
+
+if $tmp_action == "created" then
+    action = "create"
+elif $tmp_action == "changed" then
+    action = "modify"
+elif $tmp_action == "started" then
+    action = "start"
+elif $tmp_action == "resumed" then
+    action = "start"
+    object.state = "resumed"
+elif $tmp_action == "finished" then
+    action = "stop"
+    object.state = "finished"
+elif $tmp_action == "paused" then
+    action = "stop"
+    object.state = "paused"
+elif $tmp_action == "removed" then
+    action = "remove"
+elif $tmp_action == "canceled" then
+    action = "disable"
+endif
+object = "task"
+status = "success"
+
+object.type = "schedule"
+object.name = $kv["Name"]
+object.id = $kv["Id"]
+
+importance = "low"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_schedule"

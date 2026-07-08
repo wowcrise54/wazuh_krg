@@ -1,0 +1,64 @@
+TABULAR = ''
+
+COND = $MONITOR_CODE == "Crawler"
+       and $DATE_OF_CAPTURE != null
+       and $VERDICT != null
+
+# Formula was not changed for IWTM 6.10+ format because of lack of the Crawler module
+
+subject = "account"
+
+if $USER_DECISION == "NoViolation" then
+    action = "upload"
+else
+    action = "leak"
+endif
+
+object = "resource"
+status = "success"
+
+$sep = find_substr($SENDERSDOMAINACCOUNTNAME, "@")
+subject.name = lower(substr($SENDERSDOMAINACCOUNTNAME, 0, $sep))
+subject.domain = lower(substr($SENDERSDOMAINACCOUNTNAME, $sep + 1, length($SENDERSDOMAINACCOUNTNAME) - $sep))
+subject.id = $SENDERSCONTACTS
+
+object.group = $CATEGORIES
+object.fullpath = $FILEPATH
+
+$csv_filepath = csv($FILEPATH, "\\", "")
+$filename = $csv_filepath[length($csv_filepath) - 1]
+object.name = $filename
+object.path = strip($FILEPATH , "", $filename)
+
+if $POLICIES != null then
+    object.property = "triggered policies"
+    object.value = $POLICIES
+endif
+
+src.ip = $SENDERMACHINEIP
+src.hostname = $SENDERMACHINEDOMAINNAME
+
+datafield1 = $USER_DECISION                             # Решение оператора DLP по событию
+datafield2 = coalesce($PERIMETERSIN, $PERIMETERSOUT)    # Перечень периметров через запятую
+datafield3 = $TAGS                                      # Перечень тегов через запятую
+datafield4 = $PROTECTED_DOCUMENTS                       # Перечень защищаемых документов через запятую
+datafield6 = $POLICIES                                  # Перечень нарушенных политик через запятую
+
+reason = $VIOLATION_TYPE
+
+time = $DATE_OF_CAPTURE
+msgid = $MONITOR_CODE
+
+if $USER_DECISION == "NotProcessed" then
+    importance = "high"
+elif $USER_DECISION == "NoViolation" then
+    importance = "low"
+else
+    importance = "medium"
+endif
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_6_odbc_Sensors_Crawler"

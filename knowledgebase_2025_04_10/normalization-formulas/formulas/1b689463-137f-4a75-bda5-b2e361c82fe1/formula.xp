@@ -1,0 +1,80 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VDS_HIGH_MEM_USE",  # 532
+           "VDS_LOW_MEM",  # 531
+           "VDS_HIGH_CPU_USE",  # 534
+           "VDS_HIGH_SWAP_USE",  # 535
+           "VDS_LOW_SWAP",  # 536
+           "HOST_INTERFACE_HIGH_NETWORK_USE"  # 608
+       ], $event_class)
+
+action = "alert"
+object = "resource"
+status = "success"
+
+subformula "parse_body"
+    # VDS_HIGH_MEM_USE
+    TEXT = "Used memory of host {$host_name=STRING+} in cluster {$cluster=STRING+} [{$used=NUMBER}%] exceeded defined threshold [{$threshold=NUMBER}%]."
+endsubformula
+
+subformula "parse_body"
+    # VDS_LOW_MEM
+    TEXT = "Available memory of host {$host_name=STRING+} in cluster {$cluster=STRING+} [{$available=NUMBER} MB] is under defined threshold [{$threshold=NUMBER} MB]."
+endsubformula
+
+subformula "parse_body"
+    # VDS_HIGH_CPU_USE
+    TEXT = "Used CPU of host {$host_name=STRING+} [{$used=NUMBER}%] exceeded defined threshold [{$threshold=NUMBER}%]."
+endsubformula
+
+subformula "parse_body"
+    # VDS_HIGH_SWAP_USE
+    TEXT = "Used swap memory of host {$host_name=STRING+} [{$used=NUMBER}%] exceeded defined threshold [{$threshold=NUMBER}%]."
+endsubformula
+
+subformula "parse_body"
+    # VDS_LOW_SWAP
+    TEXT = "Available swap memory of host {$host_name=STRING+} [{$available=NUMBER} MB] is under defined threshold [{$threshold=NUMBER} MB]."
+endsubformula
+
+subformula "parse_body"
+    # HOST_INTERFACE_HIGH_NETWORK_USE
+    TEXT = "Host {$host_name=STRING+} has network interface which exceeded the defined threshold [{$threshold=NUMBER}%] ({$interface_name=STRING+} transmit rate[{NUMBER}%], receive rate [{NUMBER}%])"
+    
+    $interface_name = strip($interface_name, "", ":")
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+object.type = "vds"
+object.name = $host_name
+if in_list(["VDS_HIGH_MEM_USE", "VDS_HIGH_CPU_USE", "VDS_HIGH_SWAP_USE"], $event_class) then
+    object.property = "used|threshold"
+    object.value = string($used) + "%" + " | " + string($threshold) + "%"
+elif $event_class == "HOST_INTERFACE_HIGH_NETWORK_USE" then
+    object.property = "interface|threshold"
+    object.value = $interface_name + " | " + string($threshold) + "%"
+else
+    object.property = "available|threshold"
+    object.value = string($available) + " | " + string($threshold)
+endif
+
+datafield3 = $cluster  # Cluster Name
+datafield6 = $host_name  # VDS (Host) Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_VDS_Computing_Resources"

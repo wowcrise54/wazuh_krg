@@ -1,0 +1,111 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VDS_INITIATED_RUN_VM",  # 506
+           "VDS_INITIATED_RUN_VM_FAILED",  # 507
+           "VDS_INITIATED_RUN_VM_AS_STATELESS",  # 537
+           "USER_REBOOT_VM",  # 157
+           "USER_FAILED_REBOOT_VM",  # 158
+           "USER_RESET_VM",  # 221
+           "USER_FAILED_RESET_VM"  # 222
+       ], $event_class)
+
+subject = "account"
+action = "restart"
+object = "virtual_machine"
+
+if in_list(["USER_REBOOT_VM", "VDS_INITIATED_RUN_VM"], $event_class) then
+    status = "ongoing"
+elif in_list(["VDS_INITIATED_RUN_VM_AS_STATELESS", "USER_RESET_VM"], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # VDS_INITIATED_RUN_VM
+    TEXT = "Trying to restart VM {$vm_name=STRING+} on Host {$vds_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # VDS_INITIATED_RUN_VM_FAILED
+    TEXT = "Failed to restart VM {$vm_name=STRING+} on Host {$vds_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # VDS_INITIATED_RUN_VM_AS_STATELESS
+    TEXT = "VM {$vm_name=STRING+} was restarted on Host {$vds_name=STRING+} as {object.state='stateless'}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REBOOT_VM (v4.3)
+    TEXT = "User {$user=STRING+} initiated reboot of VM {$vm_name=REST}"
+    
+    $vm_name = strip($vm_name, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_REBOOT_VM (v4.4)
+    TEXT = "VM {$vm_name=STRING+} is rebooting. Rebooted by: {$user=REST}"
+    
+    $user = strip($user, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_REBOOT_VM
+    TEXT = "Failed to reboot VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_RESET_VM
+    TEXT = "VM {$vm_name=STRING+} is resetting. Reset by: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_RESET_VM
+    TEXT = "Failed to reset VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+if in_list(["USER_FAILED_REBOOT_VM", "USER_FAILED_RESET_VM"], $event_class) then
+    $user = strip($user, "", ").")
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $vds_name  # VDS (Host) Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_VM_Reboot"

@@ -1,0 +1,30 @@
+# All rules have been deleted from the Windows Firewall configuration on this computer
+
+EVENTLOG = 'EventID.text="2033"'
+!COND = $Channel=="Microsoft-Windows-Windows Firewall With Advanced Security/Firewall" and $Provider["Name"]=="Microsoft-Windows-Windows Firewall With Advanced Security"
+
+subject = "account"
+action = "remove"
+object = "rule"
+status = "success"
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "Firewall"
+event_src.id = $Provider["Name"]
+
+subject.name = lower($Data[1])
+
+id = "PT_Microsoft_Windows_eventlog_2033_All_rules_deleted"
+importance = "info"

@@ -1,0 +1,33 @@
+TEXT = '{NUMBER?} {"<"NUMBER">"?} {NUMBER?} {datafield1=DATETIME} {WORDDASH} - - - - 
+        CEF:{NUMBER}|xello|deception|{UNTIL("|")}Audit|{NUMBER}|rt={$raw_time=NUMBER} shost={src.hostname=HOSTNAME} 
+        dvc={$Computer=STRING} duser={subject.account.name=UNTIL("@")}{subject.account.domain=STRING} 
+        cat=xello:change msg=user \'{object.account.name=UNTIL("@")}{object.account.domain=UNTIL("\'")} 
+        role \'{object.account.privileges=UNTIL("\'")} has been changed to role \'{object.new_value=UNTIL("\'")} result=SUCCESS'
+        
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+object.property = "role"
+
+time = epoch_ms_to_datetime($raw_time)
+
+importance = "info"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "xello"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "xello_deception"
+event_src.category = "Honeypot"
+
+id = "PT_Xello_Xello_Deception_syslog_User_role_changed"

@@ -1,0 +1,44 @@
+TEXT = "{ '<' $priority=NUMBER '>' ?} {$recv_time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {$db=WORD}[{$port=NUMBER}]: {time=DATETIME};{$csv=CSV(';','\"')}"
+COND = $csv[12] == "DROP PSE"
+
+subject = "account"
+action = "remove"
+object = "db_object"
+
+status = switch $csv[20]
+    case "SUCCESSFUL" "success"
+    case "UNSUCCESSFUL" "failure"
+endswitch
+
+subject.name = $csv[13]
+
+object.name = $csv[15]
+object.type = "pse"
+
+src.ip = $csv[6]
+src.hostname = $csv[7]
+
+datafield1 = $csv[29]  # os user
+datafield2 = $csv[28]  # sessionid
+datafield3 = $csv[10]  # audit policy name
+
+reason = $csv[26]
+
+msgid = $csv[12]
+importance = "info"
+
+event_src.vendor = "sap"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "sap_hana"
+event_src.subsys = "audit"
+event_src.category = "Database server"
+event_src.id = $csv[2] + ":" + $csv[3]
+
+id = "PT_SAP_SAP_HANA_syslog_PSE_removing"

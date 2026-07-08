@@ -1,0 +1,15 @@
+event NAD_alert:
+    filter {
+        (
+        id == "PT_Positive_Technologies_NAD_filemonitor_alert"
+        or id == "PT_Positive_Technologies_NAD_filemonitor_reputation"
+        )
+        and datafield2 != null
+        and event_src.host != null
+    }
+
+enrichment External_link_to_NAD
+    enrich NAD_alert:
+        enrich_fields {
+            external_link = "https://" + string(event_src.host) + "/#/sessions/list/" + string(datafield2) + "?sources=2&from=" + string(datetime_to_epoch_ms(time - 600)) + "&to=" + string(datetime_to_epoch_ms(time + 600)) + "&filter=id%20%3D%3D%20" + "'" + string(datafield2) + "'"
+        }

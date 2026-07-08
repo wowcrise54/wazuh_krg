@@ -1,0 +1,148 @@
+event Unix_Process_Connection:
+    key:
+        event_src.host, subject.process.fullpath, dst.ip, dst.port
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and object == "connection"
+        and action == "open"
+        and direction == "egress"
+        and not filter::Loopback_Address(dst.ip)
+        and not filter::Loopback_Address(src.ip)
+        and (
+            (
+                dst.port == 445 and not in_list(["smbclient", "gvfsd-smb-browse", "smbmount", "winbindd", "mount.cifs", "dockerd"], subject.process.name)
+                and not (regex(subject.process.name, "^python([0-9\.]+)?$", 0) != null and subject.process.meta == "runc init")
+            )
+            or (in_list([22, 23], dst.port) and not in_list(["ssh", "sshd", "ssh-keyscan", "zabbix_agentd", "telnet"], subject.process.name))
+            or (dst.port == 3389 and not in_list(["remmina", "xfreerdp", "rdesktop", "krdc"], subject.process.name))
+            or (dst.port >= 1560 and dst.port <= 1591)
+            or (
+                in_list([443, 8443], dst.port) 
+                and (
+                    in_subnet(dst.ip, "10.0.0.0/8") 
+                    or in_subnet(dst.ip, "172.16.0.0/12") 
+                    or in_subnet(dst.ip, "192.168.0.0/16")
+                )
+                # Browsers
+                and regex(subject.process.name, "^(chrome|firefox|firefox-esr|chromium-browser|chromium|opera|yandex_browser|brave-browser)(\s\(deleted\))?$", 0) == null
+                # Web-servers
+                and regex(subject.process.name, "^((waf-)?nginx|zabbix_server|grafana-server|node|apache.*?)(\s\(deleted\))?$", 0) == null
+                # Containers
+                and regex(subject.process.name, "^(docker|dockerd|docker-proxy|containerd|kubectl|kubelet|kube-apiserver|cluster-proportional-autoscaler|flanneld|gitops-server|docker-buildx)(\s\(deleted\))?$", 0) == null
+                # Git
+                and regex(subject.process.name, "^(git-(remote-https|remote-http|lfs|verify_commit)|gitlab-(runner-helper|runner|kas|pages)|crossbuilder|verify_commit)(\s\(deleted\))?$", 0) == null
+                # Interpretators
+                and regex(subject.process.name, "^(((python|php-fpm|lua)([0-9\.]+)?)|java|ruby|go|dotnet)(\s\(deleted\))?$", 0) == null
+                # Virtual Infrastructure (vsphere)
+                and regex(subject.process.name, "^(vsphere-(cloud-controller-manager|syncer|csi)|govc)(\s\(deleted\))?$", 0) == null
+                # Other
+                and regex(subject.process.name, "^(zabbix_agentd|telegraf|http|https|curl|openssl|wget|heartbeat|mattermost|haproxy|mount.davfs|conan|calico(-ipam)?|vault|minio-operator|source-controller|pt-feeds)(\s\(deleted\))?$", 0) == null
+                # Drop Confluence/Youtrack FP from Java
+                and regex(lower(subject.process.fullpath), "\/atlassian\/confluence\b|\/youtrack\/internal\b", 0) == null
+            )
+        )
+        and filter::CheckWL_Linux_Networking("Unix_Tunnel_Process", lower(join([event_src.host, subject.process.name, dst.ip, string(dst.port)], "|")))
+    }
+
+rule Unix_Tunnel_Process: Unix_Process_Connection+ timer 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Networking"
+        $first_event = true
+        $dst_ips = []
+        $count_total_connections = 0
+    }
+
+    on Unix_Process_Connection {
+        if $first_event then
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            
+            $subject.process.id = subject.process.id
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.cmdline = subject.process.cmdline
+            $subject.process.meta = subject.process.meta
+            $subject.process.parent.id = subject.process.parent.id
+
+            $object.account.id = object.account.id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.group = object.account.group
+            
+            $object.property = object.property
+            $object.value = object.value
+            
+            $src.asset = src.asset
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.port = src.port
+            $src.mac = src.mac
+
+            $dst.port = dst.port
+            $direction = direction
+            
+            $event_src.host = event_src.host
+            $event_src.hostname = event_src.hostname
+            $event_src.asset = event_src.asset
+            $event_src.ip = event_src.ip
+            $event_src.id = event_src.id
+            $event_src.subsys = event_src.subsys
+            $event_src.title = event_src.title
+            $event_src.vendor = event_src.vendor
+            
+            $chain_id = chain_id
+            $datafield1 = datafield1
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $alert.key = lower(join([event_src.host, subject.process.name, dst.ip, string(dst.port)], "|"))
+            $first_event = false
+        endif
+        
+        if not in_list($dst_ips, string(dst.ip)) then
+            $dst_ips = append($dst_ips, string(dst.ip))
+            $dst_hosts = append($dst_hosts, string(dst.host))
+            $dst_assets = append($dst_assets, string(dst.asset))
+            $count_total_connections = $count_total_connections + 1
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "process"
+    $action = "open"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "medium"
+
+    if $count_total_connections == 1 then
+        $dst.ip = join($dst_ips, "")
+        $dst.host = join($dst_hosts, "")
+        $dst.asset = join($dst_assets, "")
+    endif
+
+    $alert.context = join($dst_ips, " | ")
+
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Protocol Tunneling"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

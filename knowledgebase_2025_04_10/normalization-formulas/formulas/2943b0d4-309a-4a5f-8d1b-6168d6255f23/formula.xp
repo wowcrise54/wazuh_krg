@@ -1,0 +1,25 @@
+!TEXT = '{"<"NUMBER">"?} {DATETIME} {$Computer=HOSTNAME} {subject.name=WORD+}:
+        [{time=DATETIME}] V3 [{WORD}][{WORD}] {"<"msgid=WORDDASH">"} Update finished,
+		actual virus signature db version: {object.version=STRING+} '
+
+subject = "application"
+action = "install"
+object = "update"
+status = "success"
+
+object.type = "virus signature"
+importance = "info"
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_remote_administrator_server"
+
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_remote_administrator_server_Update_finished"

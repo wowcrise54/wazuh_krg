@@ -1,0 +1,36 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1027"
+       and $event_category == "Registration"
+       and $event_type == "Audit failure"
+
+subject = "account"
+action = "access"
+object = "log"
+status = "failure"
+
+subject.name = $user_name
+subject.domain = $user_domain
+
+msgid = $event_id
+importance = "medium"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Регистрация" then
+    event_src.subsys = "registration"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1027_security_log_access_denied"

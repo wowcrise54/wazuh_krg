@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$Computer=HOSTNAME} notice mcpd[{NUMBER}]:
+        {NUMBER}:{NUMBER}: AUDIT - client {logon_service=WORD}, {STRING?} user {subject.account.name=STRING} -
+        transaction {STRING} - object {NUMBER} - obj_delete {"{"} dns_resolver_forward_zone {"{"}
+        dns_resolver_forward_zone_name "{object.name=WORDDASH}"
+        dns_resolver_forward_zone_cache_name {STRING} {"}"} {"}"} [Status=Command OK]'
+
+subject = "account"
+action = "remove"
+object = "service"
+status = "success"
+
+object.type = "dns resolver"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "f5_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "big_ip_virtual_edition"
+event_src.category = "Network device"
+
+id = "PT_F5_Networks_BIG_IP_Virtual_Edition_syslog_dns_resolver_del"

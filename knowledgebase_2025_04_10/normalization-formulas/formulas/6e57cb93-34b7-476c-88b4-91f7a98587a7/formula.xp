@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?} {$tmp_subsys=WORD}/{NUMBER}/{msgid="USER_ACCESSRESULT"}(s)
+        {"["NUMBER"]"?}: [WLAN_STA_INFO_AUTHENTICATION]
+        {$kv=KEYVALUE(";", ":")}'
+
+subject = "account"
+action = "connect"
+object = "host"
+status = "success"
+
+subject.name = $kv["USER"]
+
+if $kv["MAC"] != "ff-ff-ff-ff-ff-ff" then
+    src.mac = $kv["MAC"]
+endif
+dst.hostname = $kv["APNAME"]
+dst.mac = $kv["APMAC"]
+assigned_src_ip = maybe_ipv4($kv["IPADDRESS"])
+
+reason = "Wireless Client Association"
+
+importance = "info"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Wireless_client_association"

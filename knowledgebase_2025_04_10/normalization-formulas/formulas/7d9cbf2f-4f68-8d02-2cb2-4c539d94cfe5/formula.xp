@@ -1,0 +1,65 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {time=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?}
+        {"python3["?}{subject.process.id=NUMBER?}{"]"?}{":"?} 
+        ansible-ansible.{"builtin"|"legacy"}.file{":"?} Invoked with {$kv=KEYVALUE(" ","=","")}'
+
+subject = "process"
+object = "file_object"
+status = "success"
+
+if $kv["state"] == "absent" then
+    action = "remove"
+else
+    action = "create"
+endif
+
+switch $kv["state"]
+    case "link"
+        object.type = "symlink"
+        object.value = $kv["src"]
+    case "hard"
+        object.type = "link"
+        object.value = $kv["src"]
+    case "file"
+        object.type = "file"
+    case "touch"
+        object.type = "file"
+    case "directory"
+        object.type = "directory"
+endswitch
+    
+object.fullpath = $kv["dest"]
+$path_elements = csv(object.fullpath, "/", "\"")
+object.name = $path_elements[length($path_elements) - 1]
+object.path = strip(object.fullpath, "", object.name)
+
+if $kv["owner"] != "None" then
+    subject.account.name = $kv["owner"]
+endif
+
+if $kv["group"] != "None" then
+    subject.account.group = $kv["group"]
+endif
+
+if $kv["mode"] != "None" then
+    datafield2 = $kv["mode"]        # file permissions
+endif
+
+importance = "info"
+
+category.high = "System Management"
+category.generic = "File System Object"
+category.low = "Manipulation"
+
+event_src.vendor = "ansible"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ansible"
+event_src.category = "Other"
+
+id = "PT_Ansible_Ansible_syslog_file_manipulation"

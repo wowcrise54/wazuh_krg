@@ -1,0 +1,125 @@
+event RPC_User_Connection:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or (event_src.title == "sysmon" and msgid == "3")
+        )
+        and direction == "ingress"
+        and not match(lower(object.process.fullpath), "system")
+        and not match(lower(object.process.fullpath), "c:\\windows\\system32\\svchost.exe")
+        and not filter::Loopback_Address(src.ip)
+        and filter::UserAccount_Windows(lower(object.account.name), object.account.id)
+        and filter::CheckWL_Networking("Suspicious_RPC_Server", lower(join([object.account.name, object.process.name, src.ip], "|")))
+    }
+
+event Subrule_RPC_Logon:
+    key:
+        event_src.host, src.ip
+    filter {
+        correlation_name == "Subrule_Suspicious_RPC_Server"
+    }
+
+rule Suspicious_RPC_Server: Subrule_RPC_Logon and RPC_User_Connection within 5s
+
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+    }
+     
+    on Subrule_RPC_Logon {
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $direction = direction
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $datafield6 = datafield6  # AccessMask
+        $datafield9 = datafield9  # Полученные права (письменный вариант)
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $reason = reason
+        
+        $alert.context = lower(join([subject.account.name, src.ip, src.port], "|"))
+    }
+
+    on RPC_User_Connection {
+        $status = status
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+               
+        $alert.key = lower(join([object.account.name, object.process.name, src.ip], "|"))
+    }
+
+emit {
+    if $reason == "IPC_Access" then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: SMB/Windows Admin Shares"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

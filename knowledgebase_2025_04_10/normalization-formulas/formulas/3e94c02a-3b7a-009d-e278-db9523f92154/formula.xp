@@ -1,0 +1,37 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}{$message=REST}"
+
+COND = find_substr($message,"astra_interpreters_lock") != null
+
+action = "check"
+object = "rule"
+status = "success"
+
+subformula 'MSG'
+    JSON = ''
+endsubformula
+
+submessage("JSON", "MSG", $message)
+
+object.process.name = $MSG["astra-safepolicy"]["exe"]
+
+object.state = $MSG["astra-safepolicy"]["state"]
+
+time = epoch_to_datetime(number($MSG["astra-safepolicy"]["unixtime"]))
+msgid = $MSG["astra-safepolicy"]["message_id"]
+    
+importance = "low"
+
+event_src.vendor = "npo_rusbiteh"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "astra_linux"
+event_src.subsys = $FACILITY
+$Computer = $HOST
+event_src.category = "Other"
+
+id = "PT_NPO_Rusbiteh_Astra_Linux_parsec_syslog_astra_interpreters_lock"

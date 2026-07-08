@@ -1,0 +1,254 @@
+event AddType_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4103"
+        and object == "command"
+        and lower(object.process.name) == "add-type"
+        and find_substr(lower(object.process.cmdline), "[dllimport") != null
+        and (find_substr(lower(object.process.cmdline), "-memberdefinition") != null
+            or find_substr(lower(object.process.cmdline), "-typedefinition") != null)
+        and filter::CheckWL_Powershell("WinAPI_Access_From_Powershell", lower(object.process.cmdline))
+    }
+
+event AddType_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4104"
+        and object == "command"
+        and find_substr(lower(object.process.cmdline), "[dllimport") != null
+        and find_substr(lower(object.process.cmdline), "add-type") != null
+        and (find_substr(lower(object.process.cmdline), "-memberdefinition") != null
+            or find_substr(lower(object.process.cmdline), "-typedefinition") != null)
+        and filter::CheckWL_Powershell("WinAPI_Access_From_Powershell", lower(object.process.cmdline))
+    }
+
+event dotNET_Private_Type:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4104"
+        and object == "command"
+        and ( ( find_substr(lower(object.process.cmdline), ".gettype(") != null
+                and find_substr(lower(object.process.cmdline), ".getmethod(") != null
+                and find_substr(lower(object.process.cmdline), ".invoke(") != null )
+            or regex(lower(object.process.cmdline), "\[(microsoft\.)?win32\.((un)?(safe)?nativemethods|win32native).*?\]::", 0) != null
+            )
+        and filter::CheckWL_Powershell("WinAPI_Access_From_Powershell", lower(object.process.cmdline))
+    }
+
+event Reflection_Dynamic_Method:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4104"
+        and object == "command"
+        and find_substr(lower(object.process.cmdline), ".definedynamicassembly(") != null
+        and find_substr(lower(object.process.cmdline), ".definedynamicmodule(") != null
+        and find_substr(lower(object.process.cmdline), ".definetype(") != null
+        and regex(lower(object.process.cmdline), "\.define(pinvoke)?method\(", 0) != null
+        and filter::CheckWL_Powershell("WinAPI_Access_From_Powershell", lower(object.process.cmdline))
+    } 
+
+rule WinAPI_Access_From_Powershell: AddType_Pipeline or AddType_Command or dotNET_Private_Type or Reflection_Dynamic_Method
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+    }
+
+    on AddType_Pipeline {
+        $reason = "Add-Type"
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+
+        $object.process.name = object.process.name
+        $object.process.cmdline = object.process.cmdline
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield2 = regex(lower(object.process.cmdline), "\[dllimport\(\s*\"(.*?)\"", 1) # Imported DLL name
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = join([regex(lower(object.process.cmdline), "dllimport", 0), regex(lower(object.process.cmdline), "-(member|type)definition\\b", 0)], "|")
+        $alert.context = "Add-Type | regex_match: " + $alert.regex_match
+    }
+
+    on AddType_Command {
+        $reason = "Add-Type"
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.cmdline = object.process.cmdline
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield1 = datafield1
+        $datafield2 = regex(lower(object.process.cmdline), "\[dllimport\(\s*\"(.*?)\"", 1) # Imported DLL name
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = join([regex(lower(object.process.cmdline), "dllimport", 0), regex(lower(object.process.cmdline), "add-type", 0), regex(lower(object.process.cmdline), "-(member|type)definition\\b", 0)], "|")
+        $alert.context = $alert.regex_match
+    }
+
+    on dotNET_Private_Type {
+        $reason = ".NET Private Type Access"
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.cmdline = object.process.cmdline
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield1 = datafield1
+        $datafield2 = regex(lower(object.process.cmdline), "\[.*?win32.*?\]::(.*?)\(", 0) != null # Possible Called Function
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = join([regex(lower(object.process.cmdline), "gettype", 0), regex(lower(object.process.cmdline), "getmethod", 0), regex(lower(object.process.cmdline), "invoke", 0)], "|")
+        $alert.context = $alert.regex_match
+    }
+
+    on Reflection_Dynamic_Method {
+        $reason = "Reflection Dynamic Assembly"
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.cmdline = object.process.cmdline
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield1 = datafield1
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category     
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match =join([regex(lower(object.process.cmdline), "definedynamicassembly", 0), regex(lower(object.process.cmdline), "definedynamicmodule", 0), regex(lower(object.process.cmdline), "definetype", 0), regex(lower(object.process.cmdline), "\.define(pinvoke)?method", 0)], "|")
+        $alert.context = $alert.regex_match
+    }
+
+emit {
+
+    if $reason == "Reflection Dynamic Assembly" then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Native API"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

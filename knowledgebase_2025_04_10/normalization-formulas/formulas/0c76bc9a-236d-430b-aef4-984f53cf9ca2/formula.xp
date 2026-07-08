@@ -1,0 +1,46 @@
+EVENTLOG = 'EventID="5141"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "remove"
+object = "ds_object"
+status = "success"
+
+subject.account.name = if $Data["SubjectUserName"] != "-" then lower($Data["SubjectUserName"]) else null endif
+subject.account.domain = if $Data["SubjectDomainName"] != "-" then lower($Data["SubjectDomainName"]) else null endif
+subject.account.id = if $Data["SubjectUserSid"] != "S-1-0-0" then $Data["SubjectUserSid"] else null endif
+if subject.account.id == null and subject.account.name != null then
+    subject.account.id = "synthetic:" + subject.account.name
+    if subject.account.domain != null then
+        subject.account.id = subject.account.id + "@" + subject.account.domain
+    endif
+endif
+subject.account.session_id = maybe_number16($Data["SubjectLogonId"])
+
+object.name = $Data["ObjectDN"]
+object.type = $Data["ObjectClass"]
+
+chain_id = $Data["OpCorrelationID"]
+
+importance = "medium"
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "active_directory"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_5141_A_directory_service_object_was_deleted"

@@ -1,0 +1,118 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "GLUSTER_VOLUME_CREATE",  # 4,000
+           "GLUSTER_VOLUME_CREATE_FAILED",  # 4,001
+           "GLUSTER_VOLUME_DELETE",  # 4,010
+           "GLUSTER_VOLUME_DELETE_FAILED",  # 4,011
+           "GLUSTER_VOLUME_ADD_BRICK",  # 4,019
+           "GLUSTER_VOLUME_ADD_BRICK_FAILED",  # 4,020
+           "START_REMOVING_GLUSTER_VOLUME_BRICKS",  # 4,080
+           "START_REMOVING_GLUSTER_VOLUME_BRICKS_FAILED",  # 4,081
+           "GLUSTER_VOLUME_REMOVE_BRICKS",  # 4,014
+           "GLUSTER_VOLUME_REMOVE_BRICKS_FAILED"  # 4,015
+       ], $event_class)
+
+if substr($event_class, 0, 21) == "GLUSTER_VOLUME_CREATE" then
+    action = "create"
+elif substr($event_class, 0, 21) == "GLUSTER_VOLUME_DELETE" then
+    action = "remove"
+else
+    action = "modify"
+endif
+
+object = "volume"
+
+if $event_class == "START_REMOVING_GLUSTER_VOLUME_BRICKS" then
+    status = "ongoing"
+elif substr($event_class, -6, 6) != "FAILED" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # GLUSTER_VOLUME_CREATE
+    # GLUSTER_VOLUME_DELETE
+    TEXT = "Gluster Volume {$gv_name=STRING+} {'created'|'deleted'} on cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # GLUSTER_VOLUME_CREATE_FAILED
+    TEXT = "Creation of Gluster Volume {$gv_name=STRING+} failed on cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # GLUSTER_VOLUME_DELETE_FAILED
+    TEXT = "Could not delete Gluster Volume {$gv_name=STRING+} on cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # GLUSTER_VOLUME_ADD_BRICK
+    TEXT = "{$no_of_bricks=NUMBER} brick(s) added to volume {$gv_name=STRING+} of cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # GLUSTER_VOLUME_ADD_BRICK_FAILED
+    TEXT = "Failed to add bricks to the Gluster Volume {$gv_name=STRING+} of cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # START_REMOVING_GLUSTER_VOLUME_BRICKS
+    TEXT = "Started removing bricks from Volume {$gv_name=STRING+} of cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # START_REMOVING_GLUSTER_VOLUME_BRICKS_FAILED
+    TEXT = "Could not start remove bricks from Volume {$gv_name=STRING+} of cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # GLUSTER_VOLUME_REMOVE_BRICKS
+    TEXT = "Bricks removed from Gluster Volume {$gv_name=STRING+} of cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # GLUSTER_VOLUME_REMOVE_BRICKS_FAILED
+    TEXT = "Could not remove bricks from Gluster Volume {$gv_name=STRING+} of cluster {$cluster_name=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+object.type = "gluster"
+object.name = $gv_name
+
+if substr($event_class, 0, 24) == "GLUSTER_VOLUME_ADD_BRICK" then
+    object.property = "added_bricks"
+elif in_list([
+    "START_REMOVING_GLUSTER_VOLUME_BRICKS", "START_REMOVING_GLUSTER_VOLUME_BRICKS_FAILED",
+    "GLUSTER_VOLUME_REMOVE_BRICKS", "GLUSTER_VOLUME_REMOVE_BRICKS_FAILED"
+    ], $event_class) then
+    object.property = "removed_bricks"
+endif
+
+object.value = $no_of_bricks
+
+if not in_list([
+    "START_REMOVING_GLUSTER_VOLUME_BRICKS", "START_REMOVING_GLUSTER_VOLUME_BRICKS_FAILED"
+    ], $event_class) then
+    $cluster_name = strip($cluster_name, "", ".")
+endif
+
+datafield3 = $cluster_name  # Cluster Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_Gluster_Volume_Management"

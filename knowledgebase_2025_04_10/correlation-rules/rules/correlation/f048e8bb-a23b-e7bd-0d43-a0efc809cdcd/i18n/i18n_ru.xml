@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Запуск утилиты SharpHound (BloodHound), которая применяется для сбора информации об объектах Active Directory, с использованием одного из методов сбора: DCOnly, LocalGroup (--Stealth), ComputerOnly (--Stealth), RDP (--Stealth), DCOM (--Stealth), GPOLocalGroup, LocalAdmin (--Stealth)</Description>
+  <EventDescriptions>
+    <EventDescription id="ca868531-0bef-de57-aaea-316336b033db">Пользователь {subject.account.name} с узла {src.host} выполнил действия, похожие на активность программного обеспечения SharpHound (BloodHound), для сбора информации с контроллера домена {event_src.host}</EventDescription>
+    <EventDescription id="d31bd54d-7f3d-cc45-796f-6cc56c23b399">Пользователь {subject.account.name} с узла {src.host} запустил утилиту {object.process.name}, поведение которой характерно для программного обеспечения SharpHound (BloodHound), для сбора информации с контроллера домена {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

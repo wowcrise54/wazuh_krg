@@ -1,0 +1,55 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME?} {event_src.ip=IPV4|$Computer=HOSTNAME}
+        apt-detects[{NUMBER}]: \"Kaspersky Anti Targeted Attack Platform\",\"1.{UNTIL('\",')} \"{msgid='file_web'}\",
+        {$csv=CSV(',','\"')}"
+
+action = "detect"
+object = "alert"
+status = "success"
+
+object.name = $csv[18]
+object.property = "Malicious object"
+object.value = $csv[8]
+
+submessage ("TEXT", "src", $csv[4])
+submessage ("TEXT", "dst", $csv[5])
+
+subformula "src"
+    TEXT = '{src.ip=IPV4}:{src.port=NUMBER}'
+endsubformula
+
+subformula "dst"
+    TEXT = '{datafield5=IPV4}:{dst.port=NUMBER}'
+endsubformula
+
+# Workaround for the old subformula bug:
+$space = find_substr(datafield5, " ")
+if $space != null then
+    dst.ip = substr(datafield5, 0, $space)
+else
+    dst.ip = datafield5
+endif
+datafield5 = null
+
+src.hostname = $csv[6]  # FQDN
+protocol = $csv[20]     # May be HTTP/FTP, but HTTP is hardcoded now
+
+datafield1 = $csv[7]    # domain/username
+datafield2 = $csv[24]   # requested page
+
+time = $csv[3]
+if in_list(["Low", "Medium", "High"], $csv[1]) then
+    importance =  lower($csv[1])
+endif
+
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v1_file_web"

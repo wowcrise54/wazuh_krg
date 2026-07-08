@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["application"] != "su"
+       and $kv["facility"] == "security/authorization messages"
+       and find_substr($kv["default_device_message"], "session opened for user") != null
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subject.account.name = $kv["user"]
+
+$symb1 = find_substr($kv["default_device_message"], "uid=") + 4
+$subs = substr($kv["default_device_message"], $symb1, length($kv["default_device_message"]) - $symb1)
+$symb2 = find_substr($subs, ")")
+subject.account.id = substr($subs, 0, $symb2)
+
+if find_substr($kv["default_device_message"], "(sshd:session)") != null then
+    protocol.layer7 = "ssh"
+    
+    logon_auth_method = "remote"
+elif find_substr($kv["default_device_message"], "(remote:session)") != null then
+    protocol.layer7 = "telnet"
+    
+    logon_auth_method = "remote"
+else
+    logon_auth_method = "local"
+endif
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Session_opened"

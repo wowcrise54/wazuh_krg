@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+MID {object.id=NUMBER} DKIM: permfail {reason=STRING+} (d={object.domain=STRING} s={object.value=STRING} i={$tmp=STRING}'
+
+action = "check"
+object = "message"
+status = "failure"
+
+object.type = "email"
+object.property = "signature"
+
+datafield1 = strip($tmp,"",")")  # ID of user or agent
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_dkim_permfail_signature"

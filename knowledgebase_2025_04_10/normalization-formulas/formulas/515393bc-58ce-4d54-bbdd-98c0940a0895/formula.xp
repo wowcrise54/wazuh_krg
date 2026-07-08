@@ -1,0 +1,33 @@
+!JSON = 'EventIdentifier=671'
+!COND = $Logfile=="Security" and $Category==7
+
+subject = "account"
+action = "unlock"
+object = "account"
+status = "success"
+
+subject.name = lower($InsertionStrings[3])
+subject.domain = lower($InsertionStrings[4])
+
+object.name = lower($InsertionStrings[0])
+object.domain = lower($InsertionStrings[1])
+object.id = strip($InsertionStrings[2], "%{","}")
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_671_A_user_account_was_unlocked"

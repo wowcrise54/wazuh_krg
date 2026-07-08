@@ -1,0 +1,31 @@
+JSON = 'category=35'
+
+COND = $data["ID"] == "ADD_CGW_LINK"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+subject.name = $data["AdminName"]
+object.name = $data["Link"]["PeerName"]
+object.id = $data["Link"]["PeerID"]
+
+datafield1 = $cg_name  # имя криптошлюза
+datafield2 = $cg_cssid  # id криптошлюза
+
+if $data["Link"]["CgwAddr"] != "0.0.0.0" then
+    datafield3 = $data["Link"]["CgwAddr"]  # gate address
+endif
+
+time = $time
+msgid = $data["ID"]
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.subsys = "vpn"
+event_src.ip = recv_ipv4
+event_src.category = "VPN"
+
+id = "PT_Security_Code_Kontinent_odbc_add_cgw_link"

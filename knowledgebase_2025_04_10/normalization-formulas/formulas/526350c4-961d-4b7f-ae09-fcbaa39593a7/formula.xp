@@ -1,0 +1,90 @@
+EVENTLOG = 'EventID.text="7045"'
+!COND = $Channel=="System" and $Provider["Name"]=="Service Control Manager"
+
+subject = "account"
+action = "create"
+object = "service"
+status = "success"
+
+subject.account.id = $Security["UserID"]
+
+object.account.name = lower($Data["AccountName"])
+
+if not in_list(['драйвер режима ядра', 'kernel mode driver'], $Data["ServiceType"]) then
+    object.process.cmdline = $Data["ImagePath"]
+    if find_substr($Data["ImagePath"],"\"") == 0 then
+        object.process.fullpath = csv(lower($Data["ImagePath"]), "\"", "")[1]
+    elif find_substr($Data["ImagePath"]," ") != null and find_substr($Data["ImagePath"],":\\") != null then
+        $tmp_cmdline = $Data["ImagePath"]
+        if find_substr($Data["ImagePath"],"\"") != null then
+            $tmp_cmdline = csv($Data["ImagePath"], "\"", "")[0]
+        endif
+        $tmp_path = csv(lower($tmp_cmdline), "\\", "")
+        $tmp_path = $tmp_path[length($tmp_path)-1]
+        object.process.fullpath = replace(lower($tmp_cmdline),"",$tmp_path) + csv($tmp_path," ","")[0]
+    else
+        object.process.fullpath = csv(lower($Data["ImagePath"]), " ", "")[0]
+    endif
+    if ((substr(object.process.fullpath, 0, 1) == "%") and (substr(object.process.fullpath, -1, 1) == "%")) then
+        object.process.fullpath = null
+    endif
+    $tmp_list = csv(object.process.fullpath, "\\", "")
+    object.process.name = $tmp_list[length($tmp_list) - 1]
+    if length($tmp_list) > 1 then
+        object.process.path = strip(object.process.fullpath, '', object.process.name)
+    endif
+else
+    if find_substr($Data["ImagePath"],"\"") == 0 then
+        datafield1 = csv(lower($Data["ImagePath"]), "\"", "")[1]
+    elif find_substr($Data["ImagePath"]," ") != null and find_substr($Data["ImagePath"],":\\") != null then
+        $tmp_cmdline = $Data["ImagePath"]
+        if find_substr($Data["ImagePath"],"\"") != null then
+            $tmp_cmdline = csv($Data["ImagePath"], "\"", "")[0]
+        endif
+        $tmp_path = csv(lower($tmp_cmdline), "\\", "")
+        $tmp_path = $tmp_path[length($tmp_path)-1]
+        datafield1 = replace(lower($tmp_cmdline),"",$tmp_path) + csv($tmp_path," ","")[0]
+    else
+        datafield1 = csv(lower($Data["ImagePath"]), " ", "")[0]
+    endif
+    if ((substr(datafield1, 0, 1) == "%") and (substr(datafield1, -1, 1) == "%")) then
+        datafield1 = null
+    endif
+    $tmp_list = csv(datafield1, "\\", "")
+    datafield3 = $tmp_list[length($tmp_list) - 1]
+    if length($tmp_list) > 1 then
+        datafield2 = strip(datafield1, '', datafield3)
+    endif
+endif
+
+object.name = $Data["ServiceName"]
+object.type = $Data["ServiceType"]
+object.property = "start type"
+object.value = $Data["StartType"]
+
+# datafield1 - Driver fullpath
+# datafield2 - Driver path
+# datafield3 - Driver name
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.generic = "Service"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_7045_New_Windows_Service"

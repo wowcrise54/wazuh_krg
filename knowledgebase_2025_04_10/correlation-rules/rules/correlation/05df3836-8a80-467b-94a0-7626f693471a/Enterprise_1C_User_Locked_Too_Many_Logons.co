@@ -1,0 +1,137 @@
+event Login_Failure:
+    key:
+        event_src.host, subject.application.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::Login_except_Windows()
+        and event_src.title == "1c_enterprise"
+        and status == "failure"
+    }
+
+event User_Lock:
+    key:
+        event_src.host, object.application.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "1c_enterprise"
+        and action == "lock"
+        and object == "account"
+        and filter::CheckWL_Specific_Only("Enterprise_1C_User_Locked_Too_Many_Logons", lower(join([object.application.account.name, src.host], "|")))
+    }
+
+rule Enterprise_1C_User_Locked_Too_Many_Logons: (Login_Failure[4,] -> (Login_Failure and User_Lock)) within 5m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+        $login_attempts = 0
+    }
+
+    on Login_Failure {
+        if $first_event then
+            $first_event = false
+
+            $subject.application.account.session_id = subject.application.account.session_id
+
+            $subject.process.name = subject.process.name
+
+            $object.name = object.name
+
+            $logon_auth_method = logon_auth_method
+
+            $event_src.id = event_src.id
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        endif
+
+        if $subject.application.account.id == null and subject.application.account.id != null then
+            $subject.application.account.id = subject.application.account.id
+        endif
+
+        if $subject.application.account.name == null and subject.application.account.name != null then
+            $subject.application.account.name = subject.application.account.name
+        endif
+
+        if $subject.account.id == null and subject.account.id != null then
+            $subject.account.id = subject.account.id
+        endif
+
+        if $subject.account.name == null and subject.account.name != null then
+            $subject.account.name = subject.account.name
+        endif
+
+        if $subject.account.domain == null and subject.account.domain != null then
+            $subject.account.domain = subject.account.domain
+        endif
+
+        if $src.host == null and src.host != null then
+            $src.host = src.host
+        endif
+
+        if $src.asset == null and src.asset != null then
+            $src.asset = src.asset
+        endif
+
+        if reason != null and not in_list($reasons, reason) then
+            $reasons = append($reasons, reason)
+        endif
+
+        $login_attempts = $login_attempts + 1
+    }
+
+    on User_Lock {
+        if $subject.application.account.name == null and object.application.account.name != null then
+            $subject.application.account.name = object.application.account.name
+        endif
+
+        $object.state = "locked"
+
+        if $src.host == null and src.host != null then
+            $src.host = src.host
+        endif
+
+        if $src.asset == null and src.asset != null then
+            $src.asset = src.asset
+        endif
+
+        $datafield1 = subject.application.account.id
+
+        $alert.key = lower(join([$subject.application.account.name, $src.host], "|"))
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit { 
+    if coalesce($subject.application.account.name, $subject.application.account.id) != null then
+        $correlation_type = "incident"
+    else 
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+    $action = "login"
+    $object = "application"
+    $status = "failure"
+
+    $reason = join($reasons, "|")
+    
+    $alert.context = join(remove([$object.state, "login attempts count: " + string($login_attempts), $reason], null), " | ")
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Brute Force: Password Guessing"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.application.account.name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "BruteForce"
+    $incident.aggregation.timeout = 2h
+}

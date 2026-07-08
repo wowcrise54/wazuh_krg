@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля для сетевого устройства MikroTik. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="2c8b64da-0486-703a-4629-3c346dfd4770">Успешное распыление пароля (password spraying) с узла {src.host} на узле {event_src.host}. Подобран пароль для пользователя {subject.account.name}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="4c7f93b8-287e-3cd6-7f48-84edda318ed0">Успешное распыление пароля (password spraying) с узла {src.host} на узле {event_src.host}. Подобран пароль для следующих пользователей: {datafield2}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="d41aca8e-df2f-bc41-4fd2-267adfd663a1">Попытки распыления пароля (password spraying) с узла {src.host} на узле {event_src.host}. Количество попыток входа: {datafield1}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,47 @@
+JSON = ''
+
+COND = $event["iokit_open"] != null
+
+subject = "process"
+action = "access"
+object = "module"
+status = "success"
+
+subject.account.id = $process["audit_token"]["ruid"]
+subject.account.session_id = $process["session_id"]
+
+subject.process.id = $process["audit_token"]["pid"]
+subject.process.parent.id = $process["ppid"] 
+subject.process.fullpath = $process["executable"]["path"]
+$temp_name = csv(subject.process.fullpath, "/", "'")
+subject.process.name = $temp_name[length($temp_name) - 1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+subject.process.hash = "UNKNOWN:" + $process["cdhash"]
+
+object.name = $event["iokit_open"]["user_client_class"]
+object.type = $event["iokit_open"]["user_client_type"]
+
+datafield1 = $process["audit_token"]["euid"]  # effective user ID
+datafield2 = $process["audit_token"]["rgid"]  # real group ID
+datafield3 = $process["audit_token"]["auid"]  # audit user ID
+datafield4 = $process["audit_token"]["egid"]  # effective group ID
+datafield5 = $process["is_platform_binary"]          # является ли исполняемый файл предустановленным Apple в ОС
+datafield6 = $process["is_es_client"]                # имеет ли данный процесс разрешение на работу с EndpointSecurity API
+datafield7 = $process["signing_id"]                  # идентификатор подписи кода исполняемого файла
+datafield8 = $process["codesigning_flags"]           # флаги подписи кода исполняемого файла
+datafield9 = $process["tty"]                         # tty ассоциированный с процессом
+datafield11 = $process["team_id"]                    # идентификатор разработчика исполняемого файла
+
+category.high = "System Management"
+category.generic = "Executable Module"
+category.low = "Manipulation"
+
+msgid = $event_type
+time = $time
+importance = "info"
+
+event_src.category = "Host security"
+event_src.vendor = "positive_technologies"
+event_src.title = "edr"
+
+id = "PT_Positive_Technologies_XDR_es_logger_open_IOKit_device"

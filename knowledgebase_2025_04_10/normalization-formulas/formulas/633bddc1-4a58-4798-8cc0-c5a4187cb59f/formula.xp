@@ -1,0 +1,87 @@
+EVENTLOG = 'EventID="24"'
+
+COND = $Provider["Name"] == "Microsoft-Windows-Sysmon"
+
+subject = "account"
+action = "modify"
+object = "resource"
+status = "success"
+
+$client_info = keyvalue($Data["ClientInfo"], " ", ":", "")
+
+$subject_name_domain = csv($client_info["user"], "\\", "'")
+if length($subject_name_domain) > 1 then
+    subject.account.domain = lower($subject_name_domain[0])
+    subject.account.name = lower($subject_name_domain[1])
+    subject.account.id = "synthetic:" + subject.account.name
+    if subject.account.domain != null then
+        subject.account.id = subject.account.id + "@" + subject.account.domain
+    endif
+elif $client_info["user"] != '-' then
+    subject.account.id = $client_info["user"]
+endif
+subject.account.session_id = $Data["Session"]
+
+subject.process.id = $Data["ProcessId"]
+$process_fullpath = lower($Data["Image"])
+$process_fullpath_csv = csv($process_fullpath, "\\", "'")
+$process_name = $process_fullpath_csv[length($process_fullpath_csv) - 1]
+subject.process.name = $process_name
+subject.process.path = strip($process_fullpath, "", $process_name)
+subject.process.fullpath = $process_fullpath
+subject.process.guid = strip($Data['ProcessGuid'], "{", "}")
+
+$temp_object_hash = keyvalue($Data["Hashes"], ",", "=")
+if $temp_object_hash["SHA256"] != null then
+    object.hash.sha256 = $temp_object_hash["SHA256"]
+endif
+if $temp_object_hash["MD5"] != null then
+    object.hash.md5 = $temp_object_hash["MD5"]
+endif
+if $temp_object_hash["SHA1"] != null then
+    object.hash.sha1 = $temp_object_hash["SHA1"]
+endif
+if $temp_object_hash["IMPHASH"] != null then
+    object.hash.imphash = $temp_object_hash["IMPHASH"]
+endif
+
+object.type = "clipboard"
+
+if $Data["Archived"] == "true" then
+    object.state = "saved to disk"
+endif
+
+$dot_pos = find_substr($client_info["hostname"], '.')
+
+if $dot_pos != null then
+    src.fqdn = lower($client_info["hostname"])
+    src.hostname = lower(substr($client_info["hostname"], 0, $dot_pos))
+else
+    src.hostname = lower($client_info["hostname"])
+endif
+
+src.ip = $client_info["ip"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "sysmon"
+event_src.subsys = lower($Channel)
+
+if $Data["RuleName"] != "-" and $Data["RuleName"] != null then
+    event_src.rule = $Data["RuleName"]
+endif
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Sysmon_24_Clipboard_change"

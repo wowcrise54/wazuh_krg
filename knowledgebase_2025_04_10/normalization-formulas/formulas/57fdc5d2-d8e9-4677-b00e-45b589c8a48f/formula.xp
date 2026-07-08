@@ -1,0 +1,48 @@
+EVENTLOG = 'EventID="201"'
+COND = $Channel == "Microsoft-Windows-TaskScheduler/Operational"
+        and $Provider["Name"] == "Microsoft-Windows-TaskScheduler"
+
+action = "start"
+object = "process"
+status = "success"
+  
+object.fullpath = lower($Data["TaskName"])
+$temp = csv(lower($Data["TaskName"]), "\\", "")
+object.name = $temp[length($temp) - 1]
+$path = strip(object.fullpath, "", object.name)
+if  $path != "\\" then
+    object.path = $path
+else
+    object.path = null
+endif
+object.process.fullpath = lower($Data['ActionName'])
+object.process.name = lower(replace(lower($Data['ActionName']), "","*\\\\"))
+object.process.path = strip(object.process.fullpath, "", object.process.name )
+object.process.guid = lower(strip($Data['TaskInstanceId'], '{', '}'))
+
+datafield1 = $Data['ResultCode']  # Result code
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+reason = "Task Scheduler completed an action"
+
+category.generic = "Process"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Common_TaskScheduler_201_Task_Scheduler_Action_Success"

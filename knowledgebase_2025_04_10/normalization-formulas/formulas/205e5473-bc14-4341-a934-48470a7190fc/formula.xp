@@ -1,0 +1,34 @@
+# Windows Installer requires a system restart after installed the product/an update for product
+
+EVENTLOG = 'EventID.text="1038"'
+!COND = $Channel=="Application" and $Provider["Name"]=="MsiInstaller"
+
+action = "restart"
+object = "application"
+status = "success"
+
+object.name = $Data[0]
+object.version = $Data[1]
+object.vendor = $Data[5]
+
+reason = $Data[4]
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1038_Windows_Installer_requires_a_system_restart"

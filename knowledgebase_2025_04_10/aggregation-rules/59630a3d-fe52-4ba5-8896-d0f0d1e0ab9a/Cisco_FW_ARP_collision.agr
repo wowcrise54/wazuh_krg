@@ -1,0 +1,8 @@
+event ARP_collision:
+    key:
+        event_src.host, src.host, src.mac, reason, action, object, status, importance,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Cisco_ASA_FWSM_PIX_syslog_405001_Received_ARP_request_response_collision"
+
+aggregate Cisco_FW_ARP_collision: ARP_collision[3,100] within 5m

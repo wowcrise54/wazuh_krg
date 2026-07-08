@@ -1,0 +1,179 @@
+event Get_Url_Command:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and find_substr(object.process.cmdline, "salt-call cp.get_url") != null
+        and action == "start"
+        and object == "process"
+        and filter::CheckWL_Linux_Process_Creation("SaltStack_Run_Get_Url_Dir_Command", lower(join([subject.account.id, object.process.cmdline], "|")))
+    }
+    
+event Get_Dir_Command:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and find_substr(object.process.cmdline, "salt-call cp.get_dir") != null
+        and action == "start"
+        and object == "process"
+        and filter::CheckWL_Linux_Process_Creation("SaltStack_Run_Get_Url_Dir_Command", lower(join([subject.account.id, object.process.cmdline], "|")))
+    }
+    
+event File_Create:
+    key:
+        event_src.host, subject.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "create"
+        and object == "file_object"
+    }
+
+rule SaltStack_Run_Get_Url_Dir_Command: (Get_Url_Command -> File_Create?) timer 10s or Get_Dir_Command
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Get_Url_Command {
+        $action = action
+        $object = object
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+        
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        $object.process.chain = object.process.chain
+        
+        $object.storage.fullpath = regex(object.process.cmdline, "salt-call cp\.get_url salt:\/\/(.+) \/|salt-call cp\.get_url salt:\/\/(.+) \.",2)
+        
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+        
+        $numfield2 = numfield2    # Owner User ID      
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+               
+        $alert.key = lower(join([subject.account.id, object.process.cmdline], "|"))
+        $alert.context = $subject.account.name + " | cp.get_url"
+    }
+    
+    on Get_Dir_Command {
+        $action = action
+        $object = object
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+        
+        $object.storage.path = regex(object.process.cmdline, "salt-call cp\.get_dir salt:\/\/(.+) \/|salt-call cp\.get_dir salt:\/\/(.+) \.",1)
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+        
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        $object.process.chain = object.process.chain
+        
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+        
+        $numfield2 = numfield2    # Owner User ID      
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+               
+        $alert.key = lower(join([subject.account.id, object.process.cmdline], "|"))
+        $alert.context = $subject.account.name + " | cp.get_dir"
+    }
+    
+    on File_Create {
+        $object.fullpath = object.fullpath
+        $object.name = object.name
+        $object.path = object.path
+    }
+
+emit {  
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Data from Cloud Storage"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = "low"
+    $incident.category = "Undefined"
+    $incident.aggregation.timeout = 2h
+}

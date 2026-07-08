@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Недоверенный пользователь выполнил действие с критически важной базой данных в облачном сервисе VK Cloud.\nЗлоумышленники могут обойти защиту или закрепиться в системе путем изменения, удаления, создания резервной копии или пользователя важной базы данных. Перечисленные действия позволят злоумышленникам получить доступ к закрытой информации, хранящейся в базе данных, и использовать ее для развития атаки</Description>
+  <EventDescriptions>
+    <EventDescription id="60852eb1-245c-7f3a-52de-ce1912906756">Недоверенный пользователь {subject.account.name} создал нового пользователя {object.account.name} для экземпляра критически важной БД на узле {event_src.host}</EventDescription>
+    <EventDescription id="93f21c83-044a-50ab-f1ba-c4db80ed9ffb">Недоверенный пользователь {subject.account.name} удалил экземпляр критически важной БД на узле {event_src.host}</EventDescription>
+    <EventDescription id="d5506f52-8316-92d3-2983-8c423e00e6a3">Недоверенный пользователь копировал экземпляр критически важной БД на узле {event_src.host}</EventDescription>
+    <EventDescription id="e0186df9-58ee-66ed-fa26-3d6a67850881">Недоверенный пользователь {subject.account.name} изменил экземпляр критически важной БД на узле {event_src.host}</EventDescription>
+    <EventDescription id="fdc140fd-6ef6-52ab-406b-bf5d338dd31c">Недоверенный пользователь {subject.account.name} копировал экземпляр критически важной БД на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

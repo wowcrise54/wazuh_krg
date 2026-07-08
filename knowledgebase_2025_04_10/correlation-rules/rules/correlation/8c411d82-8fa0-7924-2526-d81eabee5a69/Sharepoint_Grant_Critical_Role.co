@@ -1,0 +1,69 @@
+query MatchCriticalRole($privileges, $event_src_title) from Applications_Critical_Roles {
+    regex_match($privileges, column::role_regex)
+    and event_src_title == $event_src_title
+}
+
+event Grant_User_Critical_Role:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sharepoint"
+        and action == "modify"
+        and object == "account"
+        and object.property == "role"
+        and object.value != null
+        and exec_query("MatchCriticalRole", [lower(object.value), event_src.title])
+        and filter::CheckWL_Specific_Only("Sharepoint_Grant_Critical_Role", lower(join([event_src.host, object.account.name, object.value], "|")))
+    }
+
+rule Sharepoint_Grant_Critical_Role: Grant_User_Critical_Role
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Grant_User_Critical_Role {
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+
+        $object.value = object.value
+
+        $datafield2 = datafield2  # path to Sharepoint 
+
+        $reason = reason
+
+        $alert.key = lower(join([event_src.host, object.account.name, object.value], "|"))
+        $alert.regex_match = select_query_first("MatchCriticalRole", [lower(object.value), event_src.title], "role_regex")
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit { 
+    $correlation_type = "incident"
+
+    $action = "modify"
+    $object = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

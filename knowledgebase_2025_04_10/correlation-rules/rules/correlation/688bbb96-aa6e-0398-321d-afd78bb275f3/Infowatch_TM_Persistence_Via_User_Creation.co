@@ -1,0 +1,87 @@
+event User_Creation:
+    key: 
+        object.account.name, event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::AccountCreated()
+        and event_src.title == "traffic_monitor"
+        and event_src.vendor == "infowatch"
+        and not in_list([subject.account.name, object.account.name], null)
+        and filter::CheckWL_Specific_Only("Infowatch_TM_Persistence_Via_User_Creation", lower(join([event_src.host, subject.account.name], "|")))
+    }
+
+event User_Login:
+    key:
+        subject.account.name, event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "traffic_monitor"
+        and event_src.vendor == "infowatch" 
+        and action == "login"
+        and status == "success"
+    }
+
+rule Infowatch_TM_Persistence_Via_User_Creation: (User_Creation -> User_Login) timer 10m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on User_Creation {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.contact = subject.account.contact
+        
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+        $object.account.contact = object.account.contact
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([event_src.host, subject.account.name], "|"))
+    }
+    
+    on User_Login {
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "create"
+    $object = "account"
+    $status = "success"
+    
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Create Account: Local Account"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

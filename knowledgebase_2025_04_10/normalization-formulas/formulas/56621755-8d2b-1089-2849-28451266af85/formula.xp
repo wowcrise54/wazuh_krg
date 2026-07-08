@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {time=DATETIME} {$act="add"|$act="remove"} {datafield1=STRING} {object.type=WORDDASH} {datafield2=STRING} {datafield3=WORDDASH} {object.name=STRING} {object.version=STRING}'
+
+if $act == "add" then
+    action = "create"
+elif $act == "remove" then
+    action = "remove"
+endif
+
+object = "package"
+status = "success"
+
+# datafield1 - Кодовое имя дистрибутива
+# datafield2 - Компонент дистрибутива
+# datafield3 - Архитектура
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "reprepro"
+event_src.category = "Other"
+
+id = "PT_Opensource_Reprepro_syslog_add_remove_package"

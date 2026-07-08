@@ -1,0 +1,42 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} zorp/scb_rdp
+        {'['NUMBER']'?}: core.session({NUMBER}): ({object.id=UNTIL(')')}: Server connection established; {$kv=REST}"
+
+action = "detect"
+object = "connection"
+status = "success"
+
+$result_list = keyvalue($kv, ",", "=", "'")
+
+submessage("TEXT", "parse_server_local", $result_list["server_local"])
+submessage("TEXT", "parse_server_address", $result_list["server_address"])
+
+subformula "parse_server_local"
+    TEXT = 'AF_INET({src.ip=IPV4}:{src.port=NUMBER})'
+endsubformula
+
+subformula "parse_server_address"
+    TEXT = 'AF_INET({dst.ip=IPV4}:{dst.port=NUMBER})'
+endsubformula
+
+datafield1 = $result_list["server_zone"]  # зона прокси
+
+protocol = $result_list["server_protocol"]
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "State"
+
+event_src.vendor = "one_identity"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "safeguard_for_privileged_sessions"
+event_src.category = "Other"
+
+id = "PT_One_Identity_Safeguard_for_Privileged_Sessions_syslog_Server_connection_established"

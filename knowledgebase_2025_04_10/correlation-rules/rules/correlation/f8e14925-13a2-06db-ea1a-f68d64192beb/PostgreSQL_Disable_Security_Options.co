@@ -1,0 +1,138 @@
+event Disable_Options_With_SQL_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and object == "request"
+        and event_src.title == "postgresql"
+        and (
+            # select set_config('log_statement', 'none', false)
+            regex(lower(object.query), "set_config\s*\(\s*'log_statement'\s*,\s*'none'\s*,\s*false\)", 0) != null
+            or
+            # alter system set log_statement = 'none'
+            # alter system set log_statement to 'none'
+            # ALTER DATABASE custom SET log_statement = 'none';
+            regex(lower(object.query), "alter\s+(?:system|database\s+(\S+))\s+set\s+log_statement\s*(?:=|to)\s*'none'", 0) != null
+            or
+            # alter system set ssl = off
+            # alter system set ssl to off
+            regex(lower(object.query), "alter\s+system\s+?set\s+ssl\s+(=|to)\s+off", 0) != null
+            or
+            # alter table repos.file disable row level security
+            regex(lower(object.query), "alter\s+table\s+(\S+)\s+disable\s+row\s+level\s+security", 0) != null
+            or
+            # Поддерживается в 11-16 версиях.
+            # [alter system] set password_encryption = 'md5'
+            # [alter system] set password_encryption = 'password'
+            # Поддерживается до 10ой версии.
+            # [alter system] set password_encryption = 'off'
+            regex(lower(object.query), "(alter\s+system\s+)?set\s+password_encryption\s*(=|to)\s*'(md5|password|off)'", 0) != null
+        )
+        and filter::CheckWL_Database_Actions(
+            "PostgreSQL_Disable_Security_Options",
+            lower(join([coalesce(subject.application.account.name, subject.application.account.id), object.query], "|"))
+        )
+    }
+
+rule PostgreSQL_Disable_Security_Options: Disable_Options_With_SQL_Command
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+    
+    on Disable_Options_With_SQL_Command {
+        $status = status
+
+        $subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+
+        $object.query = object.query
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $logon_service = logon_service     # application (driver) name
+
+        $object.path = object.path     # database name
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category     
+
+        $alert.key = lower(join([coalesce(subject.application.account.name, subject.application.account.id), object.query], "|"))
+    }
+    
+emit {
+    # Тип корреляции и важность по умолчанию.
+    $correlation_type = "event"
+    $importance = "medium"
+
+    # alter system set log_statement = 'none'
+    $disableLoggingUsingFunction = regex(lower($object.query), "set_config\s*\(\s*'log_statement'\s*,\s*'none'\s*,\s*false\)", 0)
+    if $disableLoggingUsingFunction != null then 
+        $reason = "disable_logging"
+
+        $alert.regex_match = $disableLoggingUsingFunction
+    endif
+
+    #ALTER system SET log_statement = 'none';
+    $disableLoggingUsingAlter = regex(lower($object.query), "alter\s+(?:system|database\s+(\S+))\s+set\s+log_statement\s*(?:=|to)\s*'none'", 0)
+    if $disableLoggingUsingAlter != null then 
+        $reason = "disable_logging"
+        
+        # ALTER DATABASE custom SET log_statement = 'none';
+        $databaseName = regex(lower($object.query), "alter\s+database\s+(\w+)\s+", 1)
+        if $databaseName != null then 
+            $object.value = $databaseName
+            $reason = "disable_logging_for_db"
+        endif
+
+        $alert.regex_match = $disableLoggingUsingAlter
+    endif
+
+    $setSslOff = regex(lower($object.query), "alter\s+system\s+set\s+ssl\s*=\s*off", 0)
+    if $setSslOff != null then 
+        $reason = "set_ssl_off"
+
+        $alert.regex_match = $setSslOff
+    endif
+    
+    # ALTER TABLE repos.file DISABLE ROW LEVEL SECURITY
+    $disableRowSecurity = regex(lower($object.query), "alter\s+table\s+(\S+)\s+disable\s+row\s+level\s+security", 0)
+    if $disableRowSecurity != null then 
+        $reason = "disable_row_level_security"
+
+        # Имя таблицы, для которой отключена безопасность строк.
+        $object.name = regex(lower($object.query), "alter\s+table\s+(\S+)\s+disable\s+row\s+level\s+security", 1)
+        $alert.regex_match = $disableRowSecurity
+    endif
+
+    $passwordEncryption = regex(lower($object.query), "alter\s+system\s+set\s+password_encryption\s*=\s*'(md5|password|off)'", 0)
+    if $passwordEncryption != null then 
+        $reason = "weak_or_disabled_password_encryption"
+
+        $alert.regex_match = $passwordEncryption
+    endif
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.application.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

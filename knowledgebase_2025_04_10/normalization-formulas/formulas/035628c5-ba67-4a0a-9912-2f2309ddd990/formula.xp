@@ -1,0 +1,35 @@
+TABULAR = 'Additional_Info,
+           {subject.account.name=Administrator},
+           Machine,
+           {dst.hostname=ObjectName},
+           {msgid=Operation},
+           client_ip,
+           orig,
+           {time=time}'
+
+COND = $Operation == "Install Policy"
+       and $Audit_Status == "Success"
+
+subject = "account"
+action = "update"
+object = "policy"
+status = "success"
+
+object.name = csv($Additional_Info, ":", "'")[1]
+object.id = strip($Uid, "{", "}")
+
+src.ip = $client_ip                                                # ip-адрес клиента
+if maybe_ipv4($Machine) == null and maybe_ipv6($Machine) == null then
+    src.hostname = $Machine                                              # имя устройства администратора
+endif
+datafield4 = $origin_sic_name                                          # полное доменное имя
+
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+event_src.ip = recv_ipv4
+event_src.subsys = lower($product)
+
+id = "PT_Checkpoint_Gaia_opseclog_Common_Install_policy"

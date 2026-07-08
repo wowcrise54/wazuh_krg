@@ -1,0 +1,51 @@
+EVENTLOG = ''
+
+COND = (
+            $Channel == "Kaspersky Endpoint Security"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "219"
+        )
+        or
+        (
+           $Channel == "Kaspersky Event Log"
+           and $Provider["Name"] == "avp"
+           and $EventID["text"] == "4660"
+           and find_substr($Data[0], "Применена групповая политика") != null
+        )
+
+subject = "application"
+action = "apply"
+object = "policy"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+subject.name = $kv["Программа\\Название"]
+subject.type = $kv["Компонент"]
+
+object.type = "group"
+
+datafield1 = substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' ('))         # Имя пользователя
+
+time = $TimeCreated["SystemTime"]
+
+msgid = switch $EventID["text"]
+    case "4660" $kv["Тип события"]
+    case "219" $EventID["text"]
+endswitch
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_219_group_policy_applied"

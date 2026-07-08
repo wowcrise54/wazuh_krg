@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{time=DATETIME}{":"?} {WORD":"?}
+        %{msgid="CRYPTO-6-VPN_TUNNEL_STATUS"}: (Server)  Authentication {$tmp_status="PASSED"|$tmp_status="REJECTED."}
+        {reason=STRING*}  User={subject.account.name=WORD}  Group={subject.account.group=WORDDASH}  Client_public_addr={src.ip=IPV4}
+        Server_public_addr={dst.ip=IPV4}'
+
+if ($origin_id_ip == "127.0.0.1" or $origin_id_ip == "0.0.0.0") then
+    $origin_id_ip = null
+endif
+
+if number($hostname) == null then
+    event_src.hostname = coalesce($hostname, $origin_id_hostname)
+    event_src.ip = coalesce($ip, $origin_id_ip)
+endif
+
+subject = "account"
+action = "login"
+object = "system"
+
+status = if $tmp_status=="PASSED" then "success" else "failure" endif
+
+logon_auth_method = "remote"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "ios"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_syslog_CRYPTO_VPN_TUNNEL_STATUS_Authentication"

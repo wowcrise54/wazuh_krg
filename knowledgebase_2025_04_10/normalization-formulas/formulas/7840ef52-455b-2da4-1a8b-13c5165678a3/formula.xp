@@ -1,0 +1,51 @@
+TEXT = "<{NUMBER?}>{time=DATETIME} {$Computer=STRING} 
+        multifactor-{event_src.subsys=WORD}[{NUMBER}]: [{STRING} WRN] Second factor 
+        {$case='verification'|$case='authentication'} for user '{$user=UNTIL('\\'')} 
+        {'from'?} {src.ip=IPV4|src.ip=IPV6|}{':'?}{src.port=NUMBER|} 
+        failed {'with reason=\\''?}{reason=UNTIL('\\'.')?}{'User phone'?} {object.account.contact=STRING*}"        
+
+subject = "application"
+action = "validate"
+object = "request"
+status = "success"
+
+object.type = "2FA authentication"
+
+if find_substr($user, '@') != null then
+    $temp_csv = csv(lower($user), "@", "`")
+    object.account.name = $temp_csv[0]
+    object.account.domain = $temp_csv[1]
+elif find_substr($user, '\\') != null then
+    $temp_csv2 = csv(lower($user), "\\", "`")
+    object.account.name = $temp_csv2[1]
+    object.account.domain = $temp_csv2[0]
+else 
+    object.account.name = lower($user)
+endif
+
+object.account.id = "synthetic:" + $user
+
+if object.account.contact == "null" then
+    object.account.contact = null
+endif
+
+datafield18 = "failure" # Validation result
+
+if reason == null then
+    reason = "second factor " + $case + " failed"
+endif
+
+importance = "medium"
+
+event_src.vendor = "multifactor"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_syslog_2FA_verification_failed"

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Attackers can perform reconnaissance of the system infrastructure to determine possible further actions</Description>
+  <EventDescriptions>
+    <EventDescription id="047e3283-e1c0-0cf2-ceb8-3c5328cb099a">User {subject.account.name} read one or more important secrets in engine {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="480dd617-9fca-12a1-f113-11c6eb498ca8">User {subject.account.name} requested information about available engines on host {event_src.host}</EventDescription>
+    <EventDescription id="6d077933-1106-d5be-ade0-c8c986a6ab30">User {subject.account.name} requested information about available authentication methods on host {event_src.host}</EventDescription>
+    <EventDescription id="6dd3983c-fb93-53c4-36e8-e37853a175bb">User {subject.account.name} requested information about the security policy on host {event_src.host}</EventDescription>
+    <EventDescription id="d09aefea-3f17-ae90-93a8-64c62d96393d">User {subject.account.name} requested information about the token with hash {object.hash.sha256} on host {event_src.host}</EventDescription>
+    <EventDescription id="ddbf8b52-4bd1-16a2-ca5d-d3cea3222f61">User {subject.account.name} checked the rights of the token with hash {subject.process.parent.hash.sha256} for access to the directory with hash {object.hash.sha256} on host {event_src.host}</EventDescription>
+    <EventDescription id="f39c9065-627a-0b53-7fbf-61a5aaff6480">User {subject.account.name} requested information about available secrets on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

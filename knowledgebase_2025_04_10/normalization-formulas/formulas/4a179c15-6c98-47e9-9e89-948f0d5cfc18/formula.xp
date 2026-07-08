@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time = DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {$tmp_subsys = STRING} - - [meta language="ru-RU"][origin enterpriseId="{STRING} software="vGate"
+        swVersion="{$maj = NUMBER}.{$min1 = NUMBER}.{$min2 = NUMBER}.{$min3 = NUMBER}"][event@{STRING} id="{msgid = "16785452"}"
+        category="Аутентификация"] {STRING} {object.name = WORDDASH}@{object.domain = STRING} успешно создан.
+        {STRING+?} Учетная запись VMware: {datafield2 = STRING} Является администратором {STRING+?}
+        Администратор: {subject.name = WORDDASH}@{subject.domain = STRING} Адрес: {src.ip = IPV4 | src.ip = IPV6 | src.hostname = HOSTNAME}'
+
+subject = "account"
+action = "create"
+object = "account"
+status = "success"
+
+datafield1 = string($maj) + '.' + string($min1) + '.' + string($min2) + '.' + string($min3)  # Версия ПО vGate
+# datafield2 - связанный логин в vCenter
+
+importance = "info"
+
+event_src.title = "vgate"
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Host security"
+event_src.subsys = switch $tmp_subsys
+    case "Служба_удаленного_управления" "remote_management_services"
+    case "Служба_аутентификации" "authentication_service"
+    case "Компонент_защиты_VMware_vCenter" "vmware_vcenter_protection_component"
+    case "Компонент_защиты_VMware_ESXi" "vmware_esxi_protection_component"
+    case "Служба_контроля_доступа_к_vCenter" "vcenter_access_control_service"
+endswitch
+
+id = "PT_Security_code_vGate_syslog_16785452_user_added"

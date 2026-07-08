@@ -1,0 +1,45 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}
+        {UNTIL("Site:")} {"Site"?} {datafield1=UNTIL(",Server")} {"Name"?}: {datafield2=UNTIL(",")}
+        Domain {"Name"?}: {datafield3=UNTIL(",")} Admin: {subject.account.name=UNTIL(",")} {"Event Description: "?}
+        {$stat="Administrator log on succeeded"|$stat="Administrator logout"|$stat="Administrator log on failed"}'
+
+subject = "account"
+
+switch $stat
+    case "Administrator log on succeeded"
+        action = "login"
+        object = "system"
+        status = "success"
+        importance = "info"
+    case "Administrator logout"
+        action = "logout"
+        object = "system"
+        status = "success"
+        importance = "info"
+    case "Administrator log on failed"
+        action = "login"
+        object = "system"
+        status = "failure"
+        importance = "high"
+endswitch
+
+dst.ip = coalesce($ip2, $ip1)
+dst.hostname = coalesce($host2, $host1)
+
+logon_auth_method = 'remote'
+
+# datafield1 - Site Name
+# datafield3 - Domain name
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = dst.ip
+event_src.hostname = dst.hostname
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_administrator_log_on_out_succeeded_failure_en_ru"

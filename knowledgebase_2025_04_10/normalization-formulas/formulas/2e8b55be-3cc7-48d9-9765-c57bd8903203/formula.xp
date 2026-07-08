@@ -1,0 +1,45 @@
+TABULAR = 'time_stamp,
+           {time=datetime},
+           event_id,
+           hostname,
+           severity,
+           event_source,
+           event_desc,
+           antivirus_version,
+           ip_address'
+
+COND = $event_id == 302452736
+
+subject = "application"
+action = "start"
+object = "service"
+status = "success"
+
+subject.name = "Symantec Endpoint Security Agent"
+
+subject.version = $antivirus_version
+
+object.name = $event_source
+
+msgid = $event_id
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.ip = $ip_address
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($hostname)
+    event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    event_src.hostname = lower($hostname)
+endif
+event_src.vendor = "symantec"
+event_src.title = "endpoint_protection_manager"
+event_src.category = "Host security"
+event_src.subsys = lower($event_source)
+
+id = "PT_Symantec_EPM_odbc_network_protection_enabled"

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to DBMS PostgreSQL. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="434ae875-b010-bee6-7c82-55a8b66d3b4c">User {subject.application.account.name} from host {src.host} logged in to DB {object.path} in application {event_src.title} on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="b9ecaea3-4663-1cb1-3789-ee228c839a55">New user {subject.application.account.name} from host {src.host} logged in to application {event_src.title} on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="e71fa2dd-e561-d9c3-3812-e077911daa81">User {subject.application.account.name} from new host {src.host} logged in to application {event_src.title} on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="fa0fa609-0c6d-c81b-0534-bfffdc3bfc15">User {subject.application.account.name} from host {src.host} logged in to application {event_src.title} in a new way {logon_service} on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

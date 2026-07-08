@@ -1,0 +1,16 @@
+Filter:
+    Name:
+        en: "A service is restarted (Linux OS)"
+        ru: "Перезапущен сервис (ОС Linux)"
+    Description:
+        en: "A command that restarts a service on a host running Linux was executed"
+        ru: "Выполнена команда, перезапускающая сервис на узле с ОС Linux"
+    UseAsEventName: True
+Args:
+    serviceNameRegex:
+        Type: string
+        Name:
+            en: "A regular expression that matches the service name"
+            ru: "Регулярное выражение, соответствующее названию сервиса"
+ObjectId: PT-RF-81
+Origin: PT

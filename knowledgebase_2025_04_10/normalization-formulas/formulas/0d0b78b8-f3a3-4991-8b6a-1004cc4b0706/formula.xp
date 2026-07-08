@@ -1,0 +1,38 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+         CEF:{NUMBER}|Cyber-Ark|Vault|10.{NUMBER}.{NUMBER}|{msgid="130"}|Failure: CPM Disable Password|
+         {NUMBER}|{$future_kv=UNTIL("cn2=")} {$temp_reason=REST}'
+
+subject = "application"
+action = "disable"
+object = "account"
+status = "success"
+
+$kv = keyvalue($future_kv, " ", "=", "'")
+subject.name = $kv["suser"]
+object.name = $kv["duser"]
+
+if maybe_ipv4($kv["shost"]) != null or maybe_ipv6($kv["shost"]) != null then
+    if $kv["shost"] != "0.0.0.0" and $kv["shost"] != "::" then
+        src.ip = $kv["shost"]
+    endif
+else
+    src.hostname = $kv["shost"]
+endif
+
+datafield2 = $kv["fname"]       # Путь до базы с паролями для учетной записи пользователя
+reason = strip($temp_reason, "'", ".")
+
+importance = "medium"
+
+event_src.vendor = "cyberark"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "enterprise_password_vault"
+event_src.category = "Other"
+
+id = "PT_CyberArk_Enterprise_Password_Vault_syslog_CEF_130_CPM_disable_password"

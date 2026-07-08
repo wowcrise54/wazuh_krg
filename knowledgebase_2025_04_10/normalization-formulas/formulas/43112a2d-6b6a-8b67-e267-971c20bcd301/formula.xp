@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"} {time=DATETIME} {$Computer=HOSTNAME} {object.process.name=WORD}
+        : {$info=UNTIL("]")} {$cond=REST}'
+
+COND = $Computer == "fw"
+       and find_substr($cond, "start") != null
+
+action = "start"
+object = "process"
+status = "success"
+
+object.process.cmdline = "start"
+$info_borders = strip($info, "[", "]")
+$info_split = csv($info_borders, " ", "")
+$pair_split_first = csv($info_split[1], "=", "\"")
+object.process.original_name = $pair_split_first[1]
+$pair_split_second = csv($info_split[2], "=", "\"")
+object.process.version = $pair_split_second[1]
+$pair_split_third = csv($info_split[3], "=", "\"")
+object.process.parent.id = $pair_split_third[1]
+$pair_split_fourth = csv($info_split[4], "=", "")
+external_link = strip($pair_split_fourth[1], "\"", "\"")
+importance = "low"
+
+category.high = "Process"
+category.generic = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "factor_ts"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dionis_dps"
+event_src.category = "IDS/IPS"
+
+id = "PT_Factor_TS_Dionis_DPS_syslog_process_start"

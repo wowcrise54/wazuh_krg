@@ -1,0 +1,41 @@
+# В событиях о планах репликации и планах проверки (валидации) в поле 'name', по умолчанию, отсутствует
+# информация о типе события, в связи с этим, таким событиям присваивается тип события None_type
+
+TABULAR = "{object.name=name},
+           {src.hostname=machine},
+           state,
+           {object.value=progress},
+           {time=start_time},
+           elapsed_time,
+           estimated_time,
+           {datafield1=guid},
+           result,
+           {msgid=event_type}"
+
+COND = $event_type == "None_type"
+
+action = "info"
+object = "application"
+if $state == "completed" then
+    status = switch $result
+        case "Succeeded" "success"
+        case "Failed" "failure"
+    endswitch
+else
+    status = "ongoing"
+    datafield3 = duration($estimated_time)
+endif
+
+object.property = "percent of progress"
+
+# datafield1 - GUID процесса, если использовать данный GUID в acrocmd, можно посмотреть весь лог
+# datafield3 - предполагаемое время, необходимое для завершения задачи
+
+duration = duration($elapsed_time)
+importance = "info"
+
+event_src.vendor = "acronis"
+event_src.title = "backup"
+event_src.category = "Backup server"
+
+id = "PT_Acronis_Backup_customeventcollector_None_type"

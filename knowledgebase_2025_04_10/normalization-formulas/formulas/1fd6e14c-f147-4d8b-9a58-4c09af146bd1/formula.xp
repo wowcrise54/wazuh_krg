@@ -1,0 +1,40 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Управление сервисами"
+       and ($event_id == 570425861
+            or $event_id == 570425856)
+
+action = "stop"
+object = "service"
+status = "success"
+
+subformula "message"
+    # Извлечение object.name из $event_message
+    TEXT = "Остановка сервиса\n\r\n\rservice_mgr: stop service '{object.name=UNTIL(' service')}': success{'\n'?}"
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+
+importance = "high"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+$dot_pos = find_substr($station, '.')
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_stop_service"

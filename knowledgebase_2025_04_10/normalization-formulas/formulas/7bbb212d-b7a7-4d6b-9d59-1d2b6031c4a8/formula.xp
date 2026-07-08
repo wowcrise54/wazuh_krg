@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$Computer=HOSTNAME}
+        TRAPMGR {"["?} trapTask {"]"?}{"- ["?}{"origin ip="?}{"\\""?}{event_src.ip=IPV4|src.ip=IPV6|}
+        {UNTIL(": ")} traputil.c({NUMBER}) {NUMBER} %%{"[NOTE]"?}Link{$act="Up"|$act="Down"}: {$int=REST}'
+
+action = switch $act
+    case "Up" "up"
+    case "Down" "down"
+endswitch
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+interface = strip($int, '', '\\u0000')
+
+importance = "info"
+
+event_src.vendor = "eltex"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fastpath"
+event_src.category = "Network device"
+
+id = "PT_Eltex_MES5448_syslog_Interface_change_status"

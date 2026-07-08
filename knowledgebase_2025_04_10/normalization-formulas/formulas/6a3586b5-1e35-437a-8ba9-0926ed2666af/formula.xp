@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{"v"NUMBER"xxxx"?} date={$date=WORDDASH} time={$time=STRING} log_id={msgid=NUMBER} msg_id={NUMBER}
+        device_id={event_src.hostname=WORDDASH} vd="{subject.privileges=WORD}" timezone={STRING?} {"timezone_dayst="STRING?}
+        type=event subtype="admin" pri={WORD}{UNTIL(" user=")}{subject.name=STRING} ui={STRING} action=delete
+        status=success msg="User {STRING} deleted static-route {object.value=NUMBER} from {WORD}({src.ip=IPV4|src.ip=IPV6})"'
+
+subject = "account"
+action = "modify"
+object = "table"
+status = "success"
+
+object.property = "id"
+object.state = "remove"
+object.type = "routing"
+
+time = $date + " " + $time
+importance = "info"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortiweb"
+event_src.category = "Web security"
+
+id = "PT_Fortinet_Fortiweb_syslog_Delete_route"

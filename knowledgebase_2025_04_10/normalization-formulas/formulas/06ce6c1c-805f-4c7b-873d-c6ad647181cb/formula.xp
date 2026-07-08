@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} fnp[{NUMBER}]:
+        I-{msgid="1105"}-Изменение привилегий пользователя - {$object_user=STRING}
+        {STRING} - {object.value=STRING} ({subject.name=UNTIL(",")} {src.ip=IPV4|src.ip=IPV6})'
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+object.name = strip($object_user, "", ",")
+object.property = "privileges"
+
+importance = "info"
+
+event_src.vendor = "npo_fraktel"
+event_src.title = "sspt_2"
+event_src.category = "Firewall"
+
+id = "PT_NPO_Fraktel_SSPT_2_1105_change_user_privileges"

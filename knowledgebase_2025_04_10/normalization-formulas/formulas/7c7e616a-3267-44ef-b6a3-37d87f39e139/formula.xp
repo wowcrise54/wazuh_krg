@@ -1,0 +1,44 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER} : {"default"?}
+        {$msgid_part_1=WORD} {$msgid_part_2="CMD_EXECUTED"} {NUMBER+} : {$kv=KEYVALUE("- ", " ", "\\"")}'
+
+subject = "account"
+action = "execute"
+object = "command"
+
+if $kv["Status"] == "Success" then
+    status = "success"
+else
+    status = "failure"
+    reason = strip($kv["Status"], "ERROR: ", "")
+endif
+
+subject.account.name = $kv["User"]
+
+object.property = "Command"
+object.value = strip($kv["Command"]," "," ") 
+
+object.account.name = subject.account.name
+object.process.cmdline = object.value
+
+src.ip = $kv["Remote_ip"]
+
+time = $sys_time
+msgid = $msgid_part_1 + " " + $msgid_part_2
+importance = "low"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.title = "netscaler"
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Terminal services"
+
+id = "PT_Citrix_NetScaler_syslog_command_execute"

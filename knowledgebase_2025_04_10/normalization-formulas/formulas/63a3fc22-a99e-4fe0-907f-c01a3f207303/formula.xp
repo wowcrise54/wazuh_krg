@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["application"] != "su"
+       and $kv["facility"] == "security/authorization messages"
+       and find_substr($kv["default_device_message"], "session closed for user") != null
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+if find_substr($kv["default_device_message"], "(sshd:session)") != null then
+    $sym1 = find_substr($kv["default_device_message"], "user") + 5
+    subject.account.name = strip(substr($kv["default_device_message"], $sym1, length($kv["default_device_message"]) - $sym1), " ", " ")
+    
+    protocol.layer7 = "ssh"
+    
+    logon_auth_method = "remote" 
+elif find_substr($kv["default_device_message"], "(remote:session)") != null then
+    subject.account.name = $kv["user"]
+    
+    protocol.layer7 = "telnet"
+    
+    logon_auth_method = "remote"
+elif find_substr($kv["default_device_message"], "(login:session)") != null then
+    subject.account.name = $kv["user"]
+    
+    logon_auth_method = "local"
+endif
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Session_closed"

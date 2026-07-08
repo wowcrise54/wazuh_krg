@@ -1,0 +1,162 @@
+event Merge_Request_Approve:
+    key:
+        event_src.asset, event_src.host, datafield1, datafield2, numfield3
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "allow"
+        and object.type == "merge_request"
+        and status == "success"
+        and object.state == "approved by creator"
+        and (
+             table::SupplyChain_Important_Branches {
+                (
+                 column::event_src_asset == event_src.asset
+                 or (
+                     column::event_src_asset == null
+                     and column::event_src_host == event_src.host
+                 )
+                )
+                and column::repository == join([datafield2, datafield1], "/")
+                and column::branch == object.new_value
+             }
+             or table::SupplyChain_Important_Branches_Registry {
+                    (
+                     column::event_src_asset == event_src.asset
+                     or (
+                         column::event_src_asset == null
+                         and column::event_src_host == event_src.host
+                     )
+                    )
+                    and column::repository == join([datafield2, datafield1], "/")
+                    and regex_match(object.new_value, column::branch)
+             }
+        )
+        and filter::CheckWL_Gitlab_Repositories("SupplyChain_Merge_Request_Approve_By_Creator",
+                lower(join([subject.account.id, object.new_value, join([datafield2, datafield1], "/"), event_src.host], "|"))
+            )
+    }
+
+event Merge_Request_Unapprove:
+    key:
+        event_src.asset, event_src.host, datafield1, datafield2, numfield3
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "reject"
+        and object.type == "merge_request"
+        and status == "success"
+        and object.state == "unapproved by creator"
+    }
+
+event Merge_Request_Apply:
+    key:
+        event_src.asset, event_src.host, datafield1, datafield2, numfield3
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "apply"
+        and object.type == "merge_request"
+        and status == "success"
+        and find_substr(datafield15, "|") == null  # No other approvers 
+        and datafield16 == "branch is important"
+    }
+
+rule SupplyChain_Merge_Request_Approve_By_Creator: (Merge_Request_Approve
+                                                             -> not Merge_Request_Unapprove
+                                                             -> Merge_Request_Apply?
+                                                            ) timer 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Gitlab_Repositories"
+    }
+
+    on Merge_Request_Approve {
+        $subject.account.id = subject.account.id
+        $subject.account.name = coalesce(subject.account.name, subject.account.fullname)
+
+        $subject.process.meta = subject.process.meta
+
+        $object.type = object.type
+        $object.state = object.state
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $chain_id = chain_id
+        $external_link = external_link
+
+        $datafield1 = datafield1  # Project Slug
+        $datafield2 = datafield2  # Namespace Fullpath
+
+        $numfield1 = numfield1    # Project ID
+        $numfield3 = numfield3    # MR Internal ID (!x)
+
+        $alert.key = lower(join([subject.account.id, object.new_value, join([datafield2, datafield1], "/"), event_src.host], "|"))
+        $alert.context = join(remove([coalesce(subject.account.name, subject.account.fullname),
+                                      src.host,
+                                      numfield3,
+                                      join([object.value, object.new_value], " → ")
+                                     ], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on Merge_Request_Apply {
+        $mr_applied = true
+
+        $object.account.id = subject.account.id
+        $object.account.name = subject.account.name
+        $object.account.privileges = subject.account.privileges
+
+        $object.process.meta = subject.process.meta
+
+        $object.name = object.name
+
+        $datafield15 = datafield15  # Approvers list
+        $datafield16 = datafield16  # Is branch important
+        $datafield17 = datafield17  # Is address new
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+
+    if $mr_applied then
+        $action = "apply"
+
+        $importance = "high"
+    else
+        $action = "allow"
+
+        $importance = "medium"
+    endif
+
+    $object = "resource"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Valid Accounts: Domain Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

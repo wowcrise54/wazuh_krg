@@ -1,0 +1,87 @@
+TABULAR = '{msgid=auditType_actionI18nKey},
+           author_id,
+           author_name,
+           author_type,
+           affectedObjects,
+           changedValues,
+           extraAttributes,
+           timestamp_epochSecond'
+
+COND = in_list([
+            "audit.logging.summary.space.permission.added",
+            "audit.logging.summary.space.permission.removed"
+       ], $auditType_actionI18nKey)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subject = switch $author_type
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+$act_type = csv(msgid, ".", "'")
+action = switch $act_type[5]
+    case "added" "grant"
+    case "removed" "revoke"
+endswitch
+
+submessage("JSON", "parse_json", '{"affectedObjects_json": ' + $affectedObjects + '}')
+object = switch $affectedObjects_json[0]["type"]
+    case "User" "account"
+    case "Group" "user_group"
+endswitch
+
+status = "success"
+
+if $author_type == "user" then
+    subject.account.fullname = $author_name
+    subject.account.id = $author_id
+endif
+
+switch $affectedObjects_json[0]["type"]
+    case "User"
+        object.account.fullname = $affectedObjects_json[0]["name"]
+        object.account.id = $affectedObjects_json[0]["id"]
+    case "Group"
+        object.account.group = $affectedObjects_json[0]["name"]
+        object.account.id = $affectedObjects_json[0]["id"]
+endswitch
+
+submessage("JSON", "parse_json", '{"changedValues_json": ' + $changedValues + '}')
+$cv_0 = $changedValues_json[0]
+$cv_1 = $changedValues_json[1]
+$cv_2 = $changedValues_json[2]
+
+if $cv_0["i18nKey"] == "User" then $obj_acct_name = $cv_0 endif
+if $cv_1["i18nKey"] == "User" then $obj_acct_name = $cv_1 endif
+if $cv_2["i18nKey"] == "User" then $obj_acct_name = $cv_2 endif
+
+object.account.name = coalesce($obj_acct_name["from"], $obj_acct_name["to"])
+
+if $cv_0["i18nKey"] == "Type" then $permission_info = $cv_0 endif
+if $cv_1["i18nKey"] == "Type" then $permission_info = $cv_1 endif
+if $cv_2["i18nKey"] == "Type" then $permission_info = $cv_2 endif
+
+switch strip(msgid, "audit.logging.summary.space.permission.", "")
+    case "added"
+        object.property = "added_permission"
+        object.new_value = $permission_info["to"]
+    case "removed"
+        object.property = "removed_permission"
+        object.value = $permission_info["from"]
+endswitch
+
+src.ip = $source
+
+datafield1 = $affectedObjects_json[1]["name"]  # Space Name
+
+time = epoch_to_datetime($timestamp_epochSecond)
+importance = "info"
+
+event_src.vendor = "atlassian"
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_odbc_Audit_Space_Permissions"

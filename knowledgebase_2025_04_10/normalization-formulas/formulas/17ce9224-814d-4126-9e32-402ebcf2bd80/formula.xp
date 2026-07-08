@@ -1,0 +1,143 @@
+TABULAR = '{msgid=auditType_actionI18nKey},
+           author_id,
+           author_name,
+           author_type,
+           affectedObjects,
+           changedValues,
+           extraAttributes,
+           timestamp_epochSecond'
+
+COND = in_list([
+            "audit.logging.summary.blog.created",
+            "audit.logging.summary.blog.updated",
+            "audit.logging.summary.blog.deleted",
+            "audit.logging.summary.blog.restored",
+            "audit.logging.summary.blog.moved",
+            "audit.logging.summary.blog.shared",
+            "audit.logging.summary.blog.purged"
+       ], $auditType_actionI18nKey)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subject = switch $author_type
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = switch strip(msgid, "audit.logging.summary.blog.", "")
+    case "created" "create"
+    case "updated" "modify"
+    case "deleted" "remove"
+    case "restored" "restore"
+    case "moved" "move"
+    case "shared" "grant"
+    case "purged" "remove"
+endswitch
+
+object = "resource"
+status = "success"
+
+if $author_type == "user" then
+    subject.account.fullname = $author_name
+    subject.account.id = $author_id
+endif
+
+object.type = "blog_post"
+submessage("JSON", "parse_json", '{"affectedObjects_json": ' + $affectedObjects + '}')
+object.name = $affectedObjects_json[1]["name"]
+object.id = $affectedObjects_json[1]["id"]
+object.group = $affectedObjects_json[0]["name"]
+
+submessage("JSON", "parse_json", '{"extraAttributes_json": ' + $extraAttributes + '}')
+
+if action == "move" then
+    switch strip($extraAttributes_json[0]["nameI18nKey"], "audit.logging.extra.attribute.key.content.moved.", "")
+        case "source.space" $source_space = $extraAttributes_json[0]["value"]
+        case "target.space" $target_space = $extraAttributes_json[0]["value"]
+    endswitch
+    switch strip($extraAttributes_json[1]["nameI18nKey"], "audit.logging.extra.attribute.key.content.moved.", "")
+        case "source.space" $source_space = $extraAttributes_json[1]["value"]
+        case "target.space" $target_space = $extraAttributes_json[1]["value"]
+    endswitch
+    
+    object.property = "Space"
+    object.value = $source_space
+    object.new_value = $target_space
+elif action == "send" then
+    $property = ""
+    $value = ""
+
+    if $extraAttributes_json[0] != null then
+        $property = $property + $extraAttributes_json[0]["name"]
+        $value = $value + $extraAttributes_json[0]["value"]
+    endif
+    if $extraAttributes_json[1] != null then
+        $property = $property + " | " + $extraAttributes_json[1]["name"]
+        $value = $value + " | " + $extraAttributes_json[1]["value"]
+    endif
+    if $extraAttributes_json[2] != null then
+        $property = $property + " | " + $extraAttributes_json[2]["name"]
+        $value = $value + " | " + $extraAttributes_json[2]["value"]
+    endif
+else
+    $property = ""
+    $value = ""
+    $new_value = ""
+
+    submessage("JSON", "parse_json", '{"changedValues_json": ' + $changedValues + '}')
+    $cv_0 = $changedValues_json[0]
+    $cv_1 = $changedValues_json[1]
+    $cv_2 = $changedValues_json[2]
+    $cv_3 = $changedValues_json[3]
+
+    if $cv_0 != null then
+        $property = $property + $cv_0["key"]
+        $value = $value + $cv_0["from"]
+        $new_value = $new_value + $cv_0["to"]
+    endif
+    if $cv_1 != null then
+        $property = $property + " | " + $cv_1["key"]
+        $value = $value + " | " + $cv_1["from"]
+        $new_value = $new_value + " | " + $cv_1["to"]
+    endif
+    if $cv_2 != null then
+        $property = $property + " | " + $cv_2["key"]
+        $value = $value + " | " + $cv_2["from"]
+        $new_value = $new_value + " | " + $cv_2["to"]
+    endif
+    if $cv_3 != null then
+        $property = $property + " | " + $cv_3["key"]
+        $value = $value + " | " + $cv_3["from"]
+        $new_value = $new_value + " | " + $cv_3["to"]
+    endif
+    if $cv_4 != null then
+        $property = $property + " | and " + string(length($changedValues_json) - 4) + " more"
+        $value = $value + " | and " + string(length($changedValues_json) - 4) + " more"
+        $new_value = $new_value + " | and " + string(length($changedValues_json) - 4) + " more"
+    endif
+endif
+
+if action != "move" then
+    object.property = if $property != "" then $property else null endif
+    if (substr($value, 0, 16) != " |  |  |  | and ") and (replace($value, "", " | ") != "") then
+        object.value = if $value != "" then $value else null endif
+    endif
+    if (substr($new_value, 0, 16) != " |  |  |  | and ") and (replace($new_value, "", " | ") != "") then
+        object.new_value = if $new_value != "" then $new_value else null endif
+    endif
+endif
+
+src.ip = $source
+
+numfield1 = $affectedObjects_json[0]["id"]  # Space ID
+
+time = epoch_to_datetime($timestamp_epochSecond)
+importance = "info"
+
+event_src.vendor = "atlassian"
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_odbc_Audit_Blog_Post_Management"

@@ -1,0 +1,96 @@
+# {"class":"vim.event.VmResumingEvent","key":"722661106","chainId":"722661105","createdTime":"2022-02-18 09:10:38.652999+00:00","userName":"DOMAIN\\username","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"DCenter","datacenter":"vim.Datacenter:datacenter-2"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"STAND-CC","computeResource":"vim.ClusterComputeResource:domain-c15169"},"host":{"class":"vim.event.HostEventArgument","name":"storage12.vs.domain.ru","host":"vim.HostSystem:host-14338"},"vm":{"class":"vim.event.VmEventArgument","name":"Test","vm":"vim.VirtualMachine:vm-64180"},"fullFormattedMessage":"Test on  storage12.vs.domain.ru in DCenter is resumed","template":"False"}
+
+JSON = ''
+COND = in_list([
+           "VmPoweredOnEvent",
+           "VmPoweredOffEvent",
+           "VmSuspendingEvent",
+           "VmSuspendedEvent",
+           "VmResettingEvent",
+           "VmFailedToPowerOnEvent",
+           "VmFailedToPowerOffEvent",
+           "VmFailedToSuspendEvent",
+           "VmFailedToResetEvent",
+           "VmStartingEvent",
+           "VmStoppingEvent",
+           "VmResumingEvent"
+       ], strip($class, "vim.event.", ""))
+ 
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+if in_list([
+    "VmPoweredOffEvent", "VmFailedToPowerOffEvent", "VmStoppingEvent", "VmFailedToSuspendEvent",
+    "VmSuspendingEvent", "VmSuspendedEvent"], strip($class, "vim.event.", "")) then
+    action = "stop"
+elif in_list([
+    "VmPoweredOnEvent", "VmFailedToPowerOnEvent",
+    "VmStartingEvent", "VmResumingEvent"], strip($class, "vim.event.", "")) then
+    action = "start"
+elif in_list(["VmResettingEvent", "VmFailedToResetEvent"], strip($class, "vim.event.", "")) then
+    action = "restart"
+endif
+
+object = "virtual_machine"
+
+if in_list(["VmSuspendingEvent", "VmStartingEvent", "VmStoppingEvent", "VmResumingEvent"], strip($class, "vim.event.", "")) then
+    status = "ongoing"
+elif substr($class, 0, 20) == "vim.event.VmFailedTo" then
+    status = "failure"
+else
+    status = "success"
+endif
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.name = $vm["name"]
+object.id = strip($vm["vm"], "vim.VirtualMachine:", "")
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+ 
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = object.name  # Entity Name
+datafield5 = $vm["name"]  # Virtual Machine Name
+datafield6 = $host["name"]  # Host Name
+datafield7 = $parent["name"]  # Parent Entity Name
+datafield10 = object.id  # Internal Entity ID
+
+chain_id = $chainId
+
+reason = $reason["msg"]
+ 
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "low"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_VM_State"

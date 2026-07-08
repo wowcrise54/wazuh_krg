@@ -1,0 +1,29 @@
+TEXT = 'P {WORD} {time=DATETIME}:{NUMBER} change gw/logging from
+        {$old_state=STRING+} => {$new_state=STRING+}'
+
+action = "modify"
+object = "logging"
+status = "success"
+
+object.property = "Parameter gw/logging"
+$old_dict = keyvalue($old_state, " ", "=")
+$new_dict = keyvalue($new_state, " ", "=")
+
+
+datafield1 = $old_dict["ACTION"]     # old ACTION
+datafield2 = $old_dict["LOGFILE"]    # old LOGFILE
+datafield3 = $old_dict["SWITCHTF"]   # old SWITCHTF
+datafield4 = $old_dict["MAXSIZEKB"]  # old MAXSIZEKB
+datafield5 = $new_dict["ACTION"]     # new ACTION
+datafield6 = $new_dict["LOGFILE"]    # new LOGFILE
+datafield7 = $new_dict["SWITCHTF"]   # new SWITCHTF
+datafield8 = $new_dict["MAXSIZEKB"]  # new MAXSIZEKB
+
+importance = "info"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.category = "Application server"
+event_src.subsys = "gateway log"
+
+id = "PT_SAP_SAP_AS_ABAP_Gateway_Log_filemonitor_Change_logging"

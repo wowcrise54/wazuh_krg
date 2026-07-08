@@ -1,0 +1,8 @@
+filter Check_Network_Whitelist(string $rule_name, string $user, string $src_subnet, string $dst_subnet) {
+    table::Common_IP_Subnet_Whitelist {
+        (column::rule == $rule_name or column::rule == "*")
+        and (column::user_id == $user or column::user_id == "*")
+        and (in_subnet($src_subnet, column::src_subnet) or column::src_subnet == "*")
+        and (in_subnet($dst_subnet, column::dst_subnet) or column::dst_subnet == "*")
+    }
+}

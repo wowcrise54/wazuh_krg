@@ -1,0 +1,111 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {":"?}
+        %{$event_src_title="ASA"|$event_src_title="PIX"|$event_src_title="FWSM"|$event_src_title="FTD"} {"-session"?}-{NUMBER}-{msgid="302013"}: Built
+        {$direction_raw="inbound"|$direction_raw="outbound"} TCP connection {object.id=NUMBER} for
+        {$first_interface=UNTIL(":")}{$first_side_ip=IPV4|$first_side_ip=IPV6|$first_side_hostname=HOSTNAME}/{$first_side_port=NUMBER}
+        ({$first_side_assigned_ip=IPV4|$first_side_assigned_ip=IPV6|$first_side_assigned_hostname=HOSTNAME}/{$first_side_assigned_port=NUMBER}) {$first_side_account=STRING?} to
+        {$second_interface=UNTIL(":")}{$second_side_ip=IPV4|$second_side_ip=IPV6|$second_side_hostname=HOSTNAME}/{$second_side_port=NUMBER}
+        ({$second_side_assigned_ip=IPV4|$second_side_assigned_ip=IPV6|$second_side_assigned_hostname=HOSTNAME}/{$second_side_assigned_port=NUMBER}) {$second_side_account=STRING?}'
+
+action = "create"
+object = "conntrack"
+status = "success"
+
+switch $direction_raw
+    case "inbound"
+        if $first_side_account != null then
+            $raw_uname = strip($first_side_account, "(", ")")
+            if find_substr($raw_uname, "\\") != null then
+                $name_domain = csv($raw_uname, "\\", "`")
+                object.account.name = $name_domain[1]
+                object.account.domain = $name_domain[0]
+            else
+                object.account.name = $raw_uname
+            endif
+        endif
+        
+        datafield2 = $first_interface   # ingress interface
+        datafield4 = $second_interface  # egress interface
+        
+        src.ip = $first_side_ip
+        src.port = $first_side_port
+        src.hostname = $first_side_hostname
+        if ($first_side_assigned_ip != src.ip) or ($first_side_assigned_hostname != src.hostname) then
+            assigned_src_ip = $first_side_assigned_ip
+            assigned_src_host = $first_side_assigned_hostname
+        endif
+        if ($first_side_assigned_port != src.port) then
+            assigned_src_port = $first_side_assigned_port
+        endif
+
+        dst.ip = $second_side_ip
+        dst.port = $second_side_port
+        dst.hostname = $second_side_hostname
+        if ($second_side_assigned_ip != dst.ip) or ($second_side_assigned_hostname != dst.hostname) then
+            assigned_dst_ip = $second_side_assigned_ip
+            assigned_dst_host = $second_side_assigned_hostname
+        endif
+        if ($second_side_assigned_port != dst.port) then
+            assigned_dst_port = $second_side_assigned_port
+        endif
+        
+        direction = "ingress"
+
+    case "outbound"
+        if $second_side_account != null then
+            $raw_uname = strip($second_side_account, "(", ")")
+            if find_substr($raw_uname, "\\") != null then
+                $name_domain = csv($raw_uname, "\\", "`")
+                object.account.name = $name_domain[1]
+                object.account.domain = $name_domain[0]
+            else
+                object.account.name = $raw_uname
+            endif
+        endif
+
+        datafield2 = $second_interface  # ingress interface
+        datafield4 = $first_interface   # egress interface
+        
+        dst.ip = $first_side_ip
+        dst.port = $first_side_port
+        dst.hostname = $first_side_hostname
+        if ($first_side_assigned_ip != dst.ip) or ($first_side_assigned_hostname != dst.hostname) then
+            assigned_dst_ip = $first_side_assigned_ip
+            assigned_dst_host = $first_side_assigned_hostname
+        endif
+        if ($first_side_assigned_port != dst.port) then
+            assigned_dst_port = $first_side_assigned_port
+        endif
+
+        src.ip = $second_side_ip
+        src.port = $second_side_port
+        src.hostname = $second_side_hostname
+        if ($second_side_assigned_ip != src.ip) or ($second_side_assigned_hostname != src.hostname) then
+            assigned_src_ip = $second_side_assigned_ip
+            assigned_src_host = $second_side_assigned_hostname
+        endif
+        if ($second_side_assigned_port != src.port) then
+            assigned_src_port = $second_side_assigned_port
+        endif
+        
+        direction = "egress"
+endswitch
+    
+if coalesce(assigned_src_ip, assigned_src_host, assigned_dst_ip, assigned_dst_host) != null then
+    object.type = "nat"
+else
+    object.type = "stateful"
+endif
+
+protocol = "tcp"
+
+importance = "info"
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src_title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_302013_Built_TCP_connection"

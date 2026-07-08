@@ -1,0 +1,14 @@
+TEXT = 'P {WORD} {time=DATETIME}:{NUMBER} {object.type="trace"|"log"} file opened'
+
+action = "start"
+object = "logging"
+status = "success"
+
+importance = "info"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.category = "Application server"
+event_src.subsys = "gateway log"
+
+id = "PT_SAP_SAP_AS_ABAP_Gateway_Log_filemonitor_Trace_file_opened"

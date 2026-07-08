@@ -1,0 +1,42 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1103"
+       and $event_category == "Контроль целостности"
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+action = "check"
+object = "resource"
+status = "success"
+
+subformula "message"
+    TEXT = 'Успешная проверка целостности ресурса. Тип ресурса: {object.type=STRING+} Имя ресурса:
+            {object.name=STRING+} Задание: {REST}'
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Контроль целостности" then
+    event_src.subsys = "integrity control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1103_integrity_check_success"

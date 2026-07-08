@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        snort{"["NUMBER"]"?}: WARNING: {object.path=STRING} ({object.value=NUMBER}) => {reason=REST}'
+
+action = "info"
+object = "file"
+status = "success"
+
+object.type = "configuration"
+object.property = "warning line number"
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "snort"
+event_src.category = "IDS/IPS"
+
+id = "PT_Opensource_Snort_syslog_warning_occurred_while_parsing_configuration_file"

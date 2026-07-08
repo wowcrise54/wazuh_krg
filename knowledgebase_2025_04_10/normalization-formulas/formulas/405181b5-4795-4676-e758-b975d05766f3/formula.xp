@@ -1,0 +1,14 @@
+TEXT = '{time=DATETIME} [{msgid=HOSTNAME}]: INFO: T-FLEX CAD {subject.version=REST}'
+
+subject = "application"
+action = "create"
+object = "log"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "top_systems"
+event_src.title = "t_flex_cad"
+event_src.category = "Application security"
+
+id = "PT_Top_systems_T_FLEX_CAD_filemonitor_Created_event"

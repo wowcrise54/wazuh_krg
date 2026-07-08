@@ -1,0 +1,113 @@
+event Recon_Command:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "start"
+        and object == "process"
+        and (
+            # В некоторых случаях в object.process.name пишется реальное имя процесса (w.procs), а в некоторых то, что указано в команде запуска (w), тогда реальное имя будет в df4
+            in_list(["who", "w", "w.procps", "logins"], object.process.name)
+            or find_substr(datafield4, "w.procps") != null
+            or (object.process.name == "getent" and regex(object.process.cmdline, "\\b(group|passwd|shadow|gshadow)\\b", 0) != null)
+            or (object.process.name == "compgen" and regex(object.process.cmdline, "\s-[a-zA-Z]*u", 0) != null)
+            or (
+                regex(object.process.cmdline, "\/etc\/(passwd|group)\\b", 0) != null
+                and not in_list(["chown", "cmp"], object.process.name)
+            )
+        )
+        and filter::CheckWL_Linux_Process_Creation("Unix_Local_Account_Discovery", join([subject.account.name, coalesce(object.process.cmdline, object.process.fullpath), lower(object.process.cwd)], "|"))
+    }
+
+rule Unix_Local_Account_Discovery: Recon_Command[1,10] timeout_timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+        $first_event = true
+        $count.subevents = 0
+        $object_process_names = []
+    }
+
+    on Recon_Command {
+        if $first_event then
+            $first_event = false
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.cmdline = object.process.cmdline
+            $object.process.meta = object.process.meta
+            $object.process.cwd = object.process.cwd 
+            $object.process.parent.id = object.process.parent.id
+
+            $datafield1 = datafield1
+            $datafield2 = datafield2
+            $datafield3 = datafield3
+            $datafield4 = datafield4
+            $datafield5 = datafield5
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.asset = event_src.asset
+            $event_src.host = event_src.host
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.rule = event_src.rule
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+
+            $alert.key = join([subject.account.name, coalesce(object.process.cmdline, object.process.fullpath), lower(object.process.cwd)], "|")
+            $object_process_names = append($object_process_names, object.process.name)
+            $alert.regex_match = regex(object.process.cmdline, "getent.{0,10}(group|passwd|shadow|gshadow)|compgen|\\b(who|w|logins)\\b|\/etc\/(passwd|group)\\b", 0)
+        else
+            if not in_list($object_process_names, object.process.name) then
+                $object_process_names = append($object_process_names, object.process.name)
+            endif
+        endif
+        
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "low"
+
+    if length($object_process_names) > 1 then
+        $alert.context = join($object_process_names, " | ")
+    else
+        $alert.context = $object_process_names[0]
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery: Local Account"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($object.process.parent.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

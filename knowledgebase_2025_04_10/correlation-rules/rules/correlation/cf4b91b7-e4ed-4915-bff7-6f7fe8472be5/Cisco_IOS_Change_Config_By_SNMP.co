@@ -1,0 +1,139 @@
+event Cisco_Config_Changed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "SYS-5-CONFIG_I"
+        and event_src.vendor == "cisco"
+        and event_src.title == "ios"
+        and filter::CheckWL_Networking("Cisco_IOS_Change_Config_By_SNMP", join(remove([lower(event_src.host), src.ip, dst.ip], null), "|"))
+    }
+
+event NAD_Cisco_Config_Changed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "positive_technologies"
+        and event_src.title == "nad"
+        and action == "detect"
+        and object == "alert"
+        and object.id == "2015856"  # ET SNMP Attempt to retrieve Cisco Config via TFTP (CISCO-CONFIG-COPY)
+        and filter::CheckWL_Specific_Only("Cisco_IOS_Change_Config_By_SNMP", join(remove([lower(event_src.host), src.ip, dst.ip], null), "|"))
+    }
+
+rule Cisco_IOS_Change_Config_By_SNMP: Cisco_Config_Changed or NAD_Cisco_Config_Changed
+
+    init {
+        $labels = "w_auto"
+    }
+    
+    on Cisco_Config_Changed {
+        $subject = subject
+        $subject.account.name = subject.account.name
+        
+        $object.fullpath = datafield1  # полный путь к файлу
+        
+        $src.host = coalesce(src.host, dst.host)
+        $src.fqdn = coalesce(src.fqdn, dst.fqdn)
+        $src.hostname = coalesce(src.hostname, dst.hostname)
+        $src.ip = coalesce(src.ip, dst.ip)
+        $src.port = coalesce(src.port, dst.port)
+        $src.asset = coalesce(src.asset, dst.asset)
+    
+        $protocol = protocol
+            
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+    
+        $alert.key = join(remove([lower(event_src.host), src.ip, dst.ip], null), "|")
+        if $object.fullpath != null then
+            $alert.context = "configuration path: " + $object.fullpath
+        endif
+        
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+    on NAD_Cisco_Config_Changed {
+        $object.name = object.name
+        $object.id = object.id
+        $object.name = object.name
+        $object.group = object.group
+        $object.type = object.type
+        $object.version = object.version
+        $object.state = object.state
+        $object.path = object.path    # URL сигнатуры
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+        $src.mac = src.mac
+        $src.geo.country = src.geo.country
+        $src.geo.city = src.geo.city
+        $src.geo.org = src.geo.org
+        $src.geo.asn = src.geo.asn
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        $dst.ip = dst.ip
+        $dst.mac = dst.mac
+        $dst.geo.country = dst.geo.country
+        $dst.geo.city = dst.geo.city
+        $dst.geo.org = dst.geo.org
+        $dst.geo.asn = dst.geo.asn
+
+        $protocol.layer7 = protocol.layer7
+        $direction = direction
+
+        $datafield2 = datafield2  # Идентификатор потока
+        $datafield3 = datafield3  # Содержимое пакета
+        $datafield4 = datafield4  # Информация о тактиках-техниках ATT&CK
+        $datafield6 = datafield6  # Флаги потока (теоретический максимум - 14)
+        $datafield8 = datafield8  # Адрес атакующего
+        $datafield9 = datafield9  # Адрес атакованного
+
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.key = join(remove([lower(event_src.host), src.ip, dst.ip], null), "|")
+        $alert.context = object.name
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $action = "modify"
+    $object = "configuration"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Exploit Public-Facing Application"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $src.ip], "|")
+    $incident.severity = $importance 
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 3h
+}

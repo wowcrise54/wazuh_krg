@@ -1,0 +1,50 @@
+EVENTLOG = ''
+!COND = $Channel=="TrustAccess" and ($EventID["text"]=="258" or $EventID["text"]=="2050")
+
+action  = "stop"
+object  = "service"
+status = "success"
+
+if $Data[3] == "%%49" then
+    object.name = "Kerberos AS"
+elif $Data[3] == "%%50" then
+    object.name = "Kerberos TGS"
+elif $Data[3] == "%%51" then
+    object.name = "TrustAccess Authentication Service"
+elif $Data[3] == "%%52" then
+    object.name = "TrustAccess KDC"
+elif $Data[3] == "%%53" then
+    object.name = "TrustAccess Kerberos Administration"
+elif $Data[3] == "%%54" then
+    object.name = "TrustAccess Configuration Service"
+elif $Data[3] == "%%100" then
+    object.name = "TrustAccess Events Collecting Service"
+elif $Data[3] == "%%101" then
+    object.name = "TrustAccess Firewall Agent Event Sending Service"
+elif $Data[3] == "%%102" then
+    object.name = "TrustAccess Management Server Event Sending Service"
+elif $Data[3] == "%%103" then
+    object.name = "TrustAccess Events Collecting Server Event Sending Service"
+elif $Data[3] == "%%104" then
+    object.name = "TrustAccess Kerberos CA Service"
+elif find_substr($Data[3],'%%') != null then
+    object.name = strip ( strip($Data[3],'%',''),'%','')
+else object.name = $Data[3]
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.hostname = lower($Computer)
+
+event_src.vendor = "security_code"
+event_src.title = "trustaccess"
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_TrustAccess_eventlog_service_stop"

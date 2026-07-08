@@ -1,0 +1,130 @@
+event Add_Administrator:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and id == "PT_Checkpoint_Gaia_syslog_LogExporter_Configuration_Create_object"
+        and action == "create"
+        and status == "success"
+        and lower(object.type) == "administrator"
+
+        and subject.account.name != null
+        and object.name != null
+
+        # Логин админа|логин добавленного пользователя.
+        and filter::CheckWL_Specific_Only("Checkpoint_Admin_Modification", lower(join([subject.account.name, object.name])))
+    }
+
+event Remove_Administrator:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and id == "PT_Checkpoint_Gaia_syslog_LogExporter_Configuration_Delete_object"
+        and action == "remove"
+        and status == "success"
+        and lower(object.type) == "administrator"
+
+        and subject.account.name != null
+        and object.name != null
+        
+        # Логин админа|логин добавленного пользователя.
+        and filter::CheckWL_Specific_Only("Checkpoint_Admin_Modification", lower(join([subject.account.name, object.name], "|")))
+    }
+
+rule Checkpoint_Admin_Modification: Add_Administrator or Remove_Administrator
+
+    init {
+        $labels = "CheckWL_Specific_Only"
+    }
+
+    on Add_Administrator {
+        $action = action
+
+        # Логин администратора чекпоинта.
+        $subject.account.name = subject.account.name
+
+        # Логин добавленного пользователя
+        $object.name = object.name
+        # Тип добавленной УЗ. Administrator в нашем случае.
+        $object.type = object.type
+
+        # src
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.asset = src.asset
+
+        $datafield1 = datafield1
+        $datafield9 = datafield9
+
+        # event src host
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on Remove_Administrator {
+        $action = action
+
+        # Логин администратора чекпоинта.
+        $subject.account.name = subject.account.name
+
+        # Логин добавленного пользователя
+        $object.name = object.name
+        # Тип добавленной УЗ. Administrator в нашем случае.
+        $object.type = object.type
+
+        # src
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.asset = src.asset
+
+        $datafield1 = datafield1
+        $datafield9 = datafield9
+
+        # event src host
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $object = "account"
+    $status = "success"
+
+    $alert.key = lower(join([$subject.account.name, $object.name], "|"))
+
+    if $action == "create" then
+        $importance = "medium"
+
+        $category.generic = "Attack"
+        $category.high = "Persistence"
+        $category.low = "Create Account"   
+    else 
+        $importance = "high"
+
+        $category.generic = "Attack"
+        $category.high = "Impact"
+        $category.low = "Account Access Removal"         
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

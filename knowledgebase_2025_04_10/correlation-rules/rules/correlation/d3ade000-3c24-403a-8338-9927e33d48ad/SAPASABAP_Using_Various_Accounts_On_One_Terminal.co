@@ -1,0 +1,73 @@
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid
+    and group == "Production"
+}
+
+event Success_Diag_Login:
+    key:
+        event_src.host, event_src.id, src.host, datafield1
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and in_list(["AU1", "AU5"], msgid)
+        and src.host != null
+        and datafield1 != null
+        and subject.account.id != null
+        and exec_query("SAP_Check_Groups", [event_src.id])
+    }
+
+rule SAPASABAP_Using_Various_Accounts_On_One_Terminal: (Success_Diag_Login[3,] with different subject.account.id) timer 30m
+
+    init {
+        $first_event = true
+    }
+
+    on Success_Diag_Login {
+        if $first_event then
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+        
+            $logon_service = datafield1
+
+            $event_src.id = event_src.id
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            
+            $first_event = false
+        endif
+
+        $account_list = append($account_list, subject.account.id)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $datafield2 = join($account_list, "|")  # Перечень аккаунтов
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Valid Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id, $src.host, $datafield1], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

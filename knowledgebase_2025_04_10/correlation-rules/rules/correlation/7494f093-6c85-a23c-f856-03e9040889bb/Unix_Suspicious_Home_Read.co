@@ -1,0 +1,123 @@
+event Syscall_Home_Read_Evil:
+    key:
+        event_src.host, subject.process.id, numfield2
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::Explicit_FileRead_Linux("^/home/")
+        and in_list(["open", "openat", "openat2"], msgid)
+        and status == "success"
+        and (
+            match(object.path, "/home/*")
+            and regex(coalesce(object.fullpath, object.path), "/home/(.*?)(/|$)", 1) != null
+            and regex(coalesce(object.fullpath, object.path), "/home/(.*?)(/|$)", 1) != subject.account.name
+            and not in_list([object.account.id, subject.account.id], string(numfield2))  # file ouid
+        )
+        and filter::CheckWL_Linux_File_Operations("Unix_Suspicious_Home_Read",
+            lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|")))
+
+    }
+
+rule Unix_Suspicious_Home_Read: Syscall_Home_Read_Evil[1,10] timeout_timer 10s
+
+    init {
+        $first_event = true
+        $count.subevents = 0
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+        $context = ""
+    }
+
+    on Syscall_Home_Read_Evil {
+        if $first_event then
+            $first_event = false
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            
+            if subject != null then
+                $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") - "
+            else
+                $prefix = "[sys] "
+            endif
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.cmdline = subject.process.cmdline
+            $subject.process.meta = subject.process.meta
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.parent.id = subject.process.parent.id
+            
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+            
+            $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") - "
+
+            $object.name = object.name
+            $object.id = object.id
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.type = object.type
+            $object.state = object.state
+
+            $logon_service = logon_service
+            
+            $datafield1 = datafield1  # Executable Name
+            $datafield2 = datafield2  # Owner User Name
+            $datafield3 = datafield3  # File Access Mode
+
+            $numfield2 = numfield2  # Owner User ID
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.asset = event_src.asset
+            $event_src.host = event_src.host
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.rule = event_src.rule
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            
+            $alert.key = lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|"))
+            $alert.context = $prefix + $context + $object.path
+        else
+            $object.id = null
+            $object.name = null
+            $object.type = null
+            $object.fullpath = null
+            $object.state = null
+        endif
+        
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Data from Local System"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

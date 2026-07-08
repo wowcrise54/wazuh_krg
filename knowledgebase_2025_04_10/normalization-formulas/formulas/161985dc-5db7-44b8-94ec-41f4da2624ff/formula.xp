@@ -1,0 +1,58 @@
+TABULAR = "{time=lastaccessed},
+           operation,
+           operationresult,
+           {subject.type=logontype},
+           destfolderpathname,
+           folderpathname,
+           {src.ip=clientipaddress},
+           clientmachinename,
+           {subject.name=logonuserdisplayname},
+           {subject.id=logonusersid},
+           itemsubject,
+           itemid,
+           originatingserver"
+
+COND = $operation == "Copy"
+
+subject = "account"
+action = "copy"
+object = "resource"
+
+if ($operationresult == "Succeeded") then
+    status = "success"
+else
+    status = "failure"
+endif
+
+if $destfolderpathname != "" then
+    object.path = $destfolderpathname
+endif
+if $itemsubject != "" then
+    object.property = "subject"
+    object.value = $itemsubject
+endif
+
+if $clientmachinename != "" then
+    src.hostname = lower($clientmachinename)
+endif
+
+if $mailboxownerupn != "" then
+    datafield1 = $mailboxownerupn  # имя пользователя владельца почтового ящика назначения
+endif
+
+if $recipienttypedetails != "" then
+    datafield2 = $recipienttypedetails  # тип почтового ящика
+endif
+
+if $recipienttypedetails != "" then
+    datafield3 = strip($clientinfostring, "Client=", "")  # useragent клиента
+endif
+
+importance = "info"
+
+event_src.hostname = lower(substr($originatingserver, 0, find_substr($originatingserver, ' ')))
+event_src.vendor = "microsoft"
+event_src.title = "exchange"
+event_src.category = "Mail server"
+
+id = "PT_Microsoft_Exchange_customeventcollector_mailbox_audit_Copy"

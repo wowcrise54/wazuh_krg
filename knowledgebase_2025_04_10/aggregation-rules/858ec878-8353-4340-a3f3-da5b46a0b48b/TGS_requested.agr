@@ -1,0 +1,7 @@
+event TGS_request:
+	key:
+   		event_src.vendor
+        
+    id = "PT_Microsoft_Windows_eventlog_4769_Kerberos_service_ticket_requested"    
+    
+aggregate Kerberos_service_ticket_requested: TGS_request[1,50] within 1m

@@ -1,0 +1,151 @@
+query isDomainControllerName($sam) from List_Servers{
+    (
+        (
+            asset_fqdn == $sam
+            and asset_fqdn != null
+        )
+        or (
+            host == $sam
+            and host != null
+        )
+    )
+}
+
+query Check_If_Host_Is_DC_AssetGrid($fqdn) from AssetGrid_Servers {
+    asset_fqdn == $fqdn
+    and asset_fqdn != null
+}
+
+event Computer_Account_Changed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4742"
+        and object.account.name != null
+        and not(match(object.account.name, "*$"))
+        and filter::CheckWL_Specific_Only("SAM_Account_Name_Spoofing", lower(object.account.name))
+    }
+
+event TGT_Request_From_Spoofed_Account:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and (msgid == "4768" or msgid == "4771")
+        and (
+                not(match(subject.account.name, "*$"))
+                or lower(src.host) != "localhost"
+            )
+        and (
+            match(lower(select_query_first("isDomainControllerName", [lower(subject.account.name) + regex(lower(event_src.host), "\..*$", 0)], "roles")), "*domain controller*")
+            or match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [lower(subject.account.name) + regex(lower(event_src.host), "\..*$", 0)], "roles"), "*\"Domain Controller\"*")
+        )
+        and filter::CheckWL_Specific_Only("SAM_Account_Name_Spoofing", join([lower(subject.account.name), lower(src.host)], "|"))
+    }
+
+rule SAM_Account_Name_Spoofing: Computer_Account_Changed or TGT_Request_From_Spoofed_Account
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Computer_Account_Changed {
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.dn = subject.account.dn
+        $subject.account.contact = subject.account.contact
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $datafield2 = datafield2  # Имена серверов, которые используются установленными на нём сервисами
+
+        $alert.key = lower(object.account.name)
+        $alert.context = join([subject.account.id, object.account.id], " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on TGT_Request_From_Spoofed_Account {
+        $status = status
+        $object = object
+        $action = action
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $logon_type = logon_type
+        $logon_service = logon_service
+        
+        $datafield4 = datafield4  # Расшифровка результата запроса выдачи билета
+        $datafield5 = datafield5  # Расшифровка Pre-Authentication Type
+        $datafield6 = datafield6  # Расшифровка типа шифрования билета
+        $datafield8 = datafield8  # Флаги-свойства билета в шестнадцатеричном формате
+
+        $reason = reason
+
+        $alert.key = join([lower(subject.account.name), lower(src.host)], "|")
+        $alert.context = status
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+    
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

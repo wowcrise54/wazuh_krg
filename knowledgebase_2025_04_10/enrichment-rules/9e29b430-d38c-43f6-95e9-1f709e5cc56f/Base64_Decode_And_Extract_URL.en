@@ -1,0 +1,721 @@
+query GetBase64Regex($type) from Generic_Regexes {
+    column::regex_type == $type
+}
+
+query GetURLRegex() from Generic_Regexes {
+    column::regex_type == "common_url"
+}
+
+
+event Object_process_with_base64:
+    filter {
+        filter::FromCorrelator()
+        and correlation_type != "subrule"
+        and (
+             (
+                 event_src.vendor == "microsoft"
+                 and in_list(["sysmon", "windows"], event_src.title)
+             )
+             or (
+                 event_src.title == "unix_like"
+                 and event_src.subsys == "auditd"
+             )
+        )
+        and object.process.decoded_data == null
+        and not match(labels, "*obj_proc_decoded_data_enriched*")
+        and filter::ContainsBase64Encoding(object.process.cmdline)
+    }
+
+event Object_process_parent_with_base64:
+    filter {
+        filter::FromCorrelator()
+        and correlation_type != "subrule"
+        and (
+             (
+                 event_src.vendor == "microsoft"
+                 and in_list(["sysmon", "windows"], event_src.title)
+             )
+             or (
+                 event_src.title == "unix_like"
+                 and event_src.subsys == "auditd"
+             )
+        )
+        and object.process.parent.decoded_data == null
+        and not match(labels, "*obj_proc_parent_decoded_data_enriched*")
+        and filter::ContainsBase64Encoding(object.process.parent.cmdline)
+    }
+
+event Subject_process_with_base64:
+    filter {
+        filter::FromCorrelator()
+        and correlation_type != "subrule"
+        and (
+             (
+                 event_src.vendor == "microsoft"
+                 and in_list(["sysmon", "windows"], event_src.title)
+             )
+             or (
+                 event_src.title == "unix_like"
+                 and event_src.subsys == "auditd"
+             )
+        )
+        and subject.process.decoded_data == null
+        and not match(labels, "*subj_proc_decoded_data_enriched*")
+        and subject.process.cmdline != object.process.cmdline
+        and filter::ContainsBase64Encoding(subject.process.cmdline)
+    }
+
+event Subject_process_parent_with_base64:
+    filter {
+        filter::FromCorrelator()
+        and correlation_type != "subrule"
+        and (
+             (
+                 event_src.vendor == "microsoft"
+                 and in_list(["sysmon", "windows"], event_src.title)
+             )
+             or (
+                 event_src.title == "unix_like"
+                 and event_src.subsys == "auditd"
+             )
+        )
+        and subject.process.parent.decoded_data == null
+        and not match(labels, "*subj_proc_parent_decoded_data_enriched*")
+        and subject.process.parent.cmdline != object.process.parent.cmdline
+        and filter::ContainsBase64Encoding(subject.process.parent.cmdline)
+    }
+
+
+enrichment Base64_Decode_And_Extract_URL
+
+    enrich Object_process_with_base64:
+
+        enrich_fields {
+            $base64_pattern = select_query_first("GetBase64Regex", ["base64"], "regex_value")
+
+            $cmdline = object.process.cmdline
+
+            $raw_base64 = regex($cmdline, $base64_pattern, 1)
+
+            if $raw_base64 != null then
+                $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                if find_substr($decoded, "\u0000") != null then
+                    $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                endif
+
+                if find_substr($decoded, "\u0000") != null then
+                    $decoded = null
+                endif
+
+                if $decoded != null and find_substr($decoded, "�") == null then
+                    $base64_pattern = select_query_first("GetBase64Regex", ["base64_short"], "regex_value")
+                    $raw_base64 = regex($decoded, $base64_pattern, 1)
+
+                    if $raw_base64 != null then
+                        $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                        if find_substr($decoded, "\u0000") != null then
+                            $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                        endif
+
+                        if find_substr($decoded, "\u0000") != null then
+                            $decoded = null
+                        endif
+                    endif
+                endif
+
+                if $decoded != null and find_substr($decoded, "�") == null then
+                    object.process.decoded_data = $decoded
+
+                    labels = if labels == null then "obj_proc_decoded_data_enriched" else labels + "|obj_proc_decoded_data_enriched" endif
+
+                    if table::Common_whitelist_for_labeling {
+                            column::rule == correlation_name or column::rule == "*"
+                            and column::specific_value == lower(object.process.decoded_data)
+                            and column::tag == "object_process_decoded_data"
+                        }
+                        or table::Common_whitelist_for_labeling_regex{
+                            column::rule == correlation_name or column::rule == "*"
+                            and regex_match(lower(object.process.decoded_data), column::specific_value)
+                            and column::tag == "object_process_decoded_data"
+                        }
+                    then
+                        drop
+                    endif
+
+                    if subject.process.cmdline == object.process.cmdline and subject.process.decoded_data == null then
+                        subject.process.decoded_data = $decoded
+
+                        labels = if labels == null then "subj_proc_decoded_data_enriched" else labels + "|subj_proc_decoded_data_enriched" endif
+
+                        if table::Common_whitelist_for_labeling {
+                                column::rule == correlation_name or column::rule == "*"
+                                and column::specific_value == lower(subject.process.decoded_data)
+                                and column::tag == "subject_process_decoded_data"
+                            }
+                            or table::Common_whitelist_for_labeling_regex{
+                                column::rule == correlation_name or column::rule == "*"
+                                and regex_match(lower(subject.process.decoded_data), column::specific_value)
+                                and column::tag == "subject_process_decoded_data"
+                            }
+                        then
+                            drop
+                        endif
+                    endif
+
+                    $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+                    $url = regex($decoded, $url_pattern, 1)
+
+                    if $url != null then
+                        $url_pos = find_substr($decoded, $url)
+                        $prefix = substr($decoded, $url_pos - 1, 1)
+
+                        if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                            if $prefix == "(" then
+                                $postfix = ")"
+                            elif $prefix == "[" then
+                                $postfix = "]"
+                            elif $prefix == "{" then
+                                $postfix = "}"
+                            else
+                                $postfix = $prefix
+                            endif
+
+                            $url_to_rest = substr($decoded, $url_pos, length($decoded))
+                            $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                            if $url_to_postfix != null then
+                                $url = substr($url_to_rest, 0, $url_to_postfix)
+                            endif
+                        endif
+
+                        if find_substr($url, ";") != null then
+                            $bytenum = find_substr($url, ";")
+                            $first_url = substr($url, 0, $bytenum)
+                            $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                            if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                            endif
+                        elif find_substr($url, ",") != null then
+                            $bytenum = find_substr($url, ",")
+                            $first_url = substr($url, 0, $bytenum)
+                            $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                            if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                            endif
+                        endif
+
+                        if external_link == null then
+                            external_link = $url
+
+                        elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                            external_link = join([external_link, $url], " | ")
+                        endif   
+
+                        $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                        $ipv4_in_url = ipv4($domain)
+
+                        if ($ipv4_in_url != null
+                            and external_dst.ip == null
+                            and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                            and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                            and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                            and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                            and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                            and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                            and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                            external_dst.ip = $domain
+
+                        elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                            $at = find_substr($domain, ".")
+
+                            if $at != null then
+                                external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                                external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                            else
+                                external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                            endif
+                        endif
+
+                        external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+                    endif
+                endif
+            endif
+        }
+
+        insert_into URLs_Extraction_Stats if $url != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+    enrich Object_process_parent_with_base64:
+
+        enrich_fields {
+            $base64_pattern = select_query_first("GetBase64Regex", ["base64"], "regex_value")
+
+            $cmdline = object.process.parent.cmdline
+
+            $raw_base64 = regex($cmdline, $base64_pattern, 1)
+
+            if $raw_base64 != null then
+                $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                if find_substr($decoded, "\u0000") != null then
+                    $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                endif
+
+                if find_substr($decoded, "\u0000") != null then
+                    $decoded = null
+                endif
+
+                if $decoded != null and find_substr($decoded, "�") == null then
+                    $base64_pattern = select_query_first("GetBase64Regex", ["base64_short"], "regex_value")
+                    $raw_base64 = regex($decoded, $base64_pattern, 1)
+
+                    if $raw_base64 != null then
+                        $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                        if find_substr($decoded, "\u0000") != null then
+                            $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                        endif
+
+                        if find_substr($decoded, "\u0000") != null then
+                            $decoded = null
+                        endif
+                    endif
+                endif
+
+                if $decoded != null and find_substr($decoded, "�") == null then
+                    object.process.parent.decoded_data = $decoded
+
+                    labels = if labels == null then "obj_proc_parent_decoded_data_enriched" else labels + "|obj_proc_parent_decoded_data_enriched" endif
+
+                    if table::Common_whitelist_for_labeling {
+                            column::rule == correlation_name or column::rule == "*"
+                            and column::specific_value == lower(object.process.parent.decoded_data)
+                            and column::tag == "object_process_parent_decoded_data"
+                        }
+                        or table::Common_whitelist_for_labeling_regex{
+                            column::rule == correlation_name or column::rule == "*"
+                            and regex_match(lower(object.process.parent.decoded_data), column::specific_value)
+                            and column::tag == "object_process_parent_decoded_data"
+                        }
+                    then
+                        drop
+                    endif
+
+                    if subject.process.parent.cmdline == object.process.parent.cmdline and subject.process.parent.decoded_data == null then
+                        subject.process.parent.decoded_data = $decoded
+
+                        labels = if labels == null then "subj_proc_parent_decoded_data_enriched" else labels + "|subj_proc_parent_decoded_data_enriched" endif
+
+                        if table::Common_whitelist_for_labeling {
+                                column::rule == correlation_name or column::rule == "*"
+                                and column::specific_value == lower(subject.process.parent.decoded_data)
+                                and column::tag == "subject_process_parent_decoded_data"
+                            }
+                            or table::Common_whitelist_for_labeling_regex{
+                                column::rule == correlation_name or column::rule == "*"
+                                and regex_match(lower(subject.process.parent.decoded_data), column::specific_value)
+                                and column::tag == "subject_process_parent_decoded_data"
+                            }
+                        then
+                            drop
+                        endif
+                    endif
+
+                    $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+                    $url = regex($decoded, $url_pattern, 1)
+
+                    if $url != null then
+                        $url_pos = find_substr($decoded, $url)
+                        $prefix = substr($decoded, $url_pos - 1, 1)
+             
+                        if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                            if $prefix == "(" then
+                                $postfix = ")"
+                            elif $prefix == "[" then
+                                $postfix = "]"
+                            elif $prefix == "{" then
+                                $postfix = "}"
+                            else
+                                $postfix = $prefix
+                            endif
+
+                            $url_to_rest = substr($decoded, $url_pos, length($decoded))
+                            $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                            if $url_to_postfix != null then
+                                $url = substr($url_to_rest, 0, $url_to_postfix)
+                            endif
+                        endif
+
+                        if find_substr($url, ";") != null then
+                            $bytenum = find_substr($url, ";")
+                            $first_url = substr($url, 0, $bytenum)
+                            $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                            if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                            endif
+                        elif find_substr($url, ",") != null then
+                            $bytenum = find_substr($url, ",")
+                            $first_url = substr($url, 0, $bytenum)
+                            $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                            if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                            endif
+                        endif
+
+                        if external_link == null then
+                            external_link = $url
+
+                        elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                            external_link = join([external_link, $url], " | ")
+                        endif   
+
+                        $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                        $ipv4_in_url = ipv4($domain)
+
+                        if ($ipv4_in_url != null
+                            and external_dst.ip == null
+                            and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                            and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                            and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                            and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                            and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                            and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                            and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                            external_dst.ip = $domain
+
+                        elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                            $at = find_substr($domain, ".")
+
+                            if $at != null then
+                                external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                                external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                            else
+                                external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                            endif
+                        endif
+
+                        external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+                    endif
+                endif
+            endif
+        }
+
+        insert_into URLs_Extraction_Stats if $url != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+    enrich Subject_process_with_base64:
+
+        enrich_fields {
+            $base64_pattern = select_query_first("GetBase64Regex", ["base64"], "regex_value")
+
+            $cmdline = subject.process.cmdline
+
+            $raw_base64 = regex($cmdline, $base64_pattern, 1)
+
+            if $raw_base64 != null then
+                $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                if find_substr($decoded, "\u0000") != null then
+                    $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                endif
+
+                if find_substr($decoded, "\u0000") != null then
+                    $decoded = null
+                endif
+
+                if $decoded != null and find_substr($decoded, "�") == null then
+                    $base64_pattern = select_query_first("GetBase64Regex", ["base64_short"], "regex_value")
+                    $raw_base64 = regex($decoded, $base64_pattern, 1)
+
+                    if $raw_base64 != null then
+                        $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                        if find_substr($decoded, "\u0000") != null then
+                            $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                        endif
+
+                        if find_substr($decoded, "\u0000") != null then
+                            $decoded = null
+                        endif
+                    endif
+                endif
+
+                if $decoded != null and find_substr($decoded, "�") == null then
+                    subject.process.decoded_data = $decoded
+
+                    labels = if labels == null then "subj_proc_decoded_data_enriched" else labels + "|subj_proc_decoded_data_enriched" endif
+
+                    if table::Common_whitelist_for_labeling {
+                            column::rule == correlation_name or column::rule == "*"
+                            and column::specific_value == lower(subject.process.decoded_data)
+                            and column::tag == "subject_process_decoded_data"
+                        }
+                        or table::Common_whitelist_for_labeling_regex{
+                            column::rule == correlation_name or column::rule == "*"
+                            and regex_match(lower(subject.process.decoded_data), column::specific_value)
+                            and column::tag == "subject_process_decoded_data"
+                        }
+                    then
+                        drop
+                    endif
+
+                    $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+                    $url = regex($decoded, $url_pattern, 1)
+
+                    if $url != null then
+                        $url_pos = find_substr($decoded, $url)
+                        $prefix = substr($decoded, $url_pos - 1, 1)
+             
+                        if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                            if $prefix == "(" then
+                                $postfix = ")"
+                            elif $prefix == "[" then
+                                $postfix = "]"
+                            elif $prefix == "{" then
+                                $postfix = "}"
+                            else
+                                $postfix = $prefix
+                            endif
+
+                            $url_to_rest = substr($decoded, $url_pos, length($decoded))
+                            $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                            if $url_to_postfix != null then
+                                $url = substr($url_to_rest, 0, $url_to_postfix)
+                            endif
+                        endif
+
+                        if find_substr($url, ";") != null then
+                            $bytenum = find_substr($url, ";")
+                            $first_url = substr($url, 0, $bytenum)
+                            $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                            if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                            endif
+                        elif find_substr($url, ",") != null then
+                            $bytenum = find_substr($url, ",")
+                            $first_url = substr($url, 0, $bytenum)
+                            $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                            if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                            endif
+                        endif
+
+                        if external_link == null then
+                            external_link = $url
+
+                        elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                            external_link = join([external_link, $url], " | ")
+                        endif   
+
+                        $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                        $ipv4_in_url = ipv4($domain)
+
+                        if ($ipv4_in_url != null
+                            and external_dst.ip == null
+                            and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                            and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                            and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                            and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                            and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                            and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                            and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                            external_dst.ip = $domain
+
+                        elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                            $at = find_substr($domain, ".")
+
+                            if $at != null then
+                                external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                                external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                            else
+                                external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                            endif
+                        endif
+
+                        external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+                    endif
+                endif
+            endif
+        }
+
+        insert_into URLs_Extraction_Stats if $url != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+    enrich Subject_process_parent_with_base64:
+
+        enrich_fields {
+            $base64_pattern = select_query_first("GetBase64Regex", ["base64"], "regex_value")
+
+            $cmdline = subject.process.parent.cmdline
+
+            $raw_base64 = regex($cmdline, $base64_pattern, 1)
+
+            if $raw_base64 != null then
+                $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                if find_substr($decoded, "\u0000") != null then
+                    $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                endif
+
+                if find_substr($decoded, "\u0000") != null then
+                    $decoded = null
+                endif
+
+                if $decoded != null and find_substr($decoded, "�") == null then
+                    $base64_pattern = select_query_first("GetBase64Regex", ["base64_short"], "regex_value")
+                    $raw_base64 = regex($decoded, $base64_pattern, 1)
+
+                    if $raw_base64 != null then
+                        $decoded = decode(buffer_from_base64($raw_base64), "UTF-8")
+
+                        if find_substr($decoded, "\u0000") != null then
+                            $decoded = decode(buffer_from_base64($raw_base64), "UCS2-LE")
+                        endif
+
+                        if find_substr($decoded, "\u0000") != null then
+                            $decoded = null
+                        endif
+                    endif
+                endif
+
+                if $decoded != null and find_substr($decoded, "�") == null then
+                    subject.process.parent.decoded_data = $decoded
+
+                    labels = if labels == null then "subj_proc_parent_decoded_data_enriched" else labels + "|subj_proc_parent_decoded_data_enriched" endif
+
+                    if table::Common_whitelist_for_labeling {
+                            column::rule == correlation_name or column::rule == "*"
+                            and column::specific_value == lower(subject.process.parent.decoded_data)
+                            and column::tag == "subject_process_parent_decoded_data"
+                        }
+                        or table::Common_whitelist_for_labeling_regex{
+                            column::rule == correlation_name or column::rule == "*"
+                            and regex_match(lower(subject.process.parent.decoded_data), column::specific_value)
+                            and column::tag == "subject_process_parent_decoded_data"
+                        }
+                    then
+                        drop
+                    endif
+
+                    $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+                    $url = regex($decoded, $url_pattern, 1)
+
+                    if $url != null then
+                        $url_pos = find_substr($decoded, $url)
+                        $prefix = substr($decoded, $url_pos - 1, 1)
+             
+                        if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                            if $prefix == "(" then
+                                $postfix = ")"
+                            elif $prefix == "[" then
+                                $postfix = "]"
+                            elif $prefix == "{" then
+                                $postfix = "}"
+                            else
+                                $postfix = $prefix
+                            endif
+
+                            $url_to_rest = substr($decoded, $url_pos, length($decoded))
+                            $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                            if $url_to_postfix != null then
+                                $url = substr($url_to_rest, 0, $url_to_postfix)
+                            endif
+                        endif
+
+                        if find_substr($url, ";") != null then
+                            $bytenum = find_substr($url, ";")
+                            $first_url = substr($url, 0, $bytenum)
+                            $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                            if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                            endif
+                        elif find_substr($url, ",") != null then
+                            $bytenum = find_substr($url, ",")
+                            $first_url = substr($url, 0, $bytenum)
+                            $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                            if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                                $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                            endif
+                        endif
+
+                        if external_link == null then
+                            external_link = $url
+
+                        elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                            external_link = join([external_link, $url], " | ")
+                        endif   
+
+                        $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+                        $ipv4_in_url = ipv4($domain)
+
+                        if ($ipv4_in_url != null
+                            and external_dst.ip == null
+                            and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                            and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                            and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                            and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                            and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                            and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                            and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                            external_dst.ip = $domain
+
+                        elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                            $at = find_substr($domain, ".")
+
+                            if $at != null then
+                                external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                                external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                            else
+                                external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                            endif
+                        endif
+
+                        external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+                    endif
+                endif
+            endif
+        }
+
+        insert_into URLs_Extraction_Stats if $url != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }

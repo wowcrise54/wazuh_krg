@@ -1,0 +1,55 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {UNTIL(" traffic - - ")}CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|traffic|
+        firewall|{WORDDASH}|rt={$temp_time=NUMBER} deviceExternalId={event_src.id=STRING+}
+        suser={$user=STRING+} act={$act="accept"|$act="drop"} {$kv=KEYVALUE(" ","=")}'
+
+if $kv["cs1Label"] == "Rule" then
+    subject = "rule"
+    subject.name = $kv["cs1"]
+endif
+switch $act
+    case "accept"
+        action = "allow"
+        importance = "info"
+    case "drop"
+        action = "deny"
+        importance = "low"
+endswitch
+object = "connection"
+status = "success"
+
+if lower($user) != "unknown" then
+    subject.account.name = $user
+endif
+
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+src.geo.country = $kv["cs3"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+dst.geo.country = $kv["cs5"]
+
+protocol = $kv["proto"]
+
+count.bytes_out = $kv["out"]
+count.bytes_in = $kv["in"]
+count.packets_out = $kv["cn2"]
+count.packets_in = $kv["cn1"]
+
+time = epoch_ms_to_datetime($temp_time)
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_firewall_traffic"

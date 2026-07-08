@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {WORDDASH}: {NUMBER}: {"warning"|"info"}: {msgid="virDomainAuditResource"}:
+        {NUMBER} : success={$sc="no"|$sc="yes"} virt=kvm resrc=vcpu reason=update
+        vm={$object_name=STRING} uuid={object.id=STRING} old-vcpu=
+        {datafield1=NUMBER} new-vcpu={object.value=NUMBER}'
+
+action = "modify"
+object = "virtual_machine"
+status = switch $sc
+    case "no" "failure"
+    case "yes" "success"
+endswitch
+
+object.name = strip($object_name,'"','"')
+object.property = "vcpu count"
+
+reason = "VCPU count change"
+
+# datafield1 - old vcpu
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "qemu_kvm_libvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_QEMU_KVM_libvirt_syslog_VM_vcpu_count_change"

@@ -1,0 +1,69 @@
+EVENTLOG = 'EventID="342"'
+COND = in_list(["AD FS 2.0/Admin", "AD FS/Admin"], $Channel) and
+       in_list(["AD FS 2.0", "AD FS"], $Provider["Name"])
+
+# данный идентификатор повторяется в событии "PT_Microsoft_Windows_eventlog_364_error_during_federation_passive_request",
+# который в данном случае является основным. Вместе с этим идентификатором в новых версиях появляется событие
+# PT_Microsoft_Windows_eventlog_1000__token_request_error имеющий характер предупреждения,
+# также порождаются события проверки в журнале Security
+#   PT_Microsoft_Windows_eventlog_403_HTTP_Request_Was_Received (указыавает IP-адрес клиента)
+#   PT_Microsoft_Windows_eventlog_410_Following_Request_Context_Headers_Present (указывает конечную точку ADFS)(не информативный, стерт)
+#   PT_Microsoft_Windows_eventlog_404_HTTP_Response_Was_Dispatched_With (сообщение об отправке результата)(не информативный, стерт)
+#   PT_Microsoft_Windows_eventlog_411_Token_Validation_Failed  (такая же информация что и в этом идентификаторе, но в журнале security)(не информативный, стерт)
+#   PT_Microsoft_Windows_eventlog_413_Error_Occurred_During_Processing_Of_A_Token_Request (указывает конечную точку ADFS)(не информативный, стерт)
+#   группировка выполняется по полю datafield2
+
+action = "check"
+object = "ds_object"
+status = "failure"
+
+$data_raw = $UserData["Event"]["EventData"]["Data"]
+
+if length($data_raw) < 4 then  # область в данных в старых версиях адфс представляет собой строку
+                               # в новых версиях это список, но функция is_list() не работает,
+                               # поэтому тут костыль
+    reason = $data_raw[1]
+    submessage("TEXT", "Search_login", $data_raw[2])
+else
+    reason = strip($data_raw, "", ".")
+endif
+
+subformula "Search_login"
+    !TEXT = '{STRING}{$field_with_name = STRING} --->{REST}'
+    subject = "account"
+    if find_substr($field_with_name, "\\") != null then
+        $name_domain = csv($field_with_name, "\\", "'")
+        subject.domain = $name_domain[0]
+        subject.name = $name_domain[1]
+    elif find_substr($field_with_name, "@") != null then
+        $name_domain = csv($field_with_name, "@", "'")
+        subject.domain = $name_domain[1]
+        subject.name = $name_domain[0]
+    else
+        subject.name = $field_with_name
+    endif
+endsubformula
+object.type = "security token"
+
+# Поле группировки событий
+datafield2 = $Correlation["ActivityID"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "high"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "ad fs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_342_Token_validation_failed_for_request"
+

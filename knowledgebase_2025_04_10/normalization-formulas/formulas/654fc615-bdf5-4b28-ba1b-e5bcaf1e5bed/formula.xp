@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?}{":"?} {$Computer=HOSTNAME}{"["event_src.ip=IPV4"]"?} %{time=DATETIME}
+        {"<warnings>"?} {"MODULE_PORT"|"DEFAULT"}[{$src=WORD}]:%{msgid="LINEPROTO-5-UPDOWN"}: Line protocol on Interface
+        {$ifname=STRING} changed state to {$new_state="UP"|$new_state="DOWN"}'
+
+action = lower($new_state)  # 'up'/'down'
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "data link"
+
+interface = strip($ifname, "", ",")
+
+reason = "Line protocol changed state to " + string(action)
+
+if $src == "tLoopback" then
+    reason = reason + " due to loopback"
+endif
+
+importance = "info"
+
+event_src.vendor = "dcn_oem"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nos"
+event_src.category = "Network device"
+
+id = "PT_DCN_oem_nos_syslog_iface_protocol_up_down"

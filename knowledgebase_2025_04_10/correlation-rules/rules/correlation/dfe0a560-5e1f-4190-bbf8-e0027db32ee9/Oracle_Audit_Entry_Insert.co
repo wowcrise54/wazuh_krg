@@ -1,0 +1,75 @@
+query Check_Audit_Table($table_name) from Oracle_Audit_Tables {
+    table == $table_name
+}
+
+event Table_Entry_Inserted:
+    key:
+        event_src.host
+    filter {
+        (
+            id == "PT_Oracle_Oracle_Database_filemonitor_Insert_entry"
+            or id == "PT_Oracle_Oracle_Database_odbc_Insert_entry"
+        )
+        and exec_query("Check_Audit_Table", [upper(object.value + "." + object.name)])
+        and filter::CheckWL_Database_Actions("Oracle_Audit_Entry_Insert", lower(object.query))
+    }
+
+rule Oracle_Audit_Entry_Insert: Table_Entry_Inserted
+
+    init {
+        $labels = "w_auto"
+    }
+    
+    on Table_Entry_Inserted {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = datafield5
+
+        $object.query = object.query
+        $object.name = upper(object.value + "." + object.name)
+        
+        $alert.key = lower(object.query)
+        
+        $protocol = protocol
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $labels = $labels + "|CheckWL_Database_Actions"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "log"
+
+    $object.state = "entry inserted"
+    $object.property = "table"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Spoof Security Alerting"
+    
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,50 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}conf_ids|{NUMBER}|cat=System:
+        Configuration{$kv=KEYVALUE(" ", "=", "\\"")}'
+          
+COND = $kv["act"] != "conf_ids_network"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+subject.account.name = $kv["suser"]
+
+if find_substr($kv["act"], "malware") != null then
+    object.name = "Malware Detection"
+elif find_substr($kv["act"], "mod_ad") != null then
+    object.name = "Heuristic Analysis"
+elif find_substr($kv["act"], "aggregation") != null then
+    object.name = "Event Aggregation"
+elif find_substr($kv["act"], "ml_settings") != null then
+    object.name = "Traffic Anomalies"
+elif find_substr($kv["act"], "mod_vipnet") != null then
+    object.name = "ViPNet Traffic"
+elif find_substr($kv["act"], "arpspoof") != null then
+    object.name = "ARP Spoofing"
+elif find_substr($kv["act"], "dns") != null then
+    object.name = "DNS"
+elif find_substr($kv["act"], "dns") != null then
+    object.name = "DNS"
+elif find_substr($kv["act"], "whois_servers") != null then
+    object.name = "Info About IP Addresses"     
+endif    
+
+if $kv["cs3Label"] == "Change Mode" then
+    object.new_value = $kv["cs3"]
+    object.property = "state"
+else   
+    object.new_value = $kv["cs2"]
+    object.property = $kv["cs1"]
+endif   
+
+time = recv_time 
+msgid = $kv["act"]
+importance = "info" 
+    
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_cef_service_activate"

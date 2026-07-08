@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Запуск процесса от имени учетной записи базы данных может свидетельствовать о попытке злоумышленника, получившего возможность выполнять запросы к базе данных, повысить привилегии</Description>
+  <EventDescriptions>
+    <EventDescription id="10400083-44ea-4c8f-9641-3406765e7420">Попытка создать пользовательскую функцию {object.name} на узле {event_src.host}</EventDescription>
+    <EventDescription id="46b57f3b-9924-454f-8d38-710f9b320890">Процесс {object.process.name} запущен от имени пользователя {subject.account.name} (пользователь {subject.application.account.name} базы данных MySQL) на узле {event_src.host}</EventDescription>
+    <EventDescription id="f633ec57-9a0a-4386-b831-20ad626994e2">Попытка запустить процесс от имени пользователя {subject.application.account.name} базы данных MySQL на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

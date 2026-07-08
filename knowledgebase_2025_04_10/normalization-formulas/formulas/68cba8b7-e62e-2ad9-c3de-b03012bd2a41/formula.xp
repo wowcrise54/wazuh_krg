@@ -1,0 +1,173 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {$Computer=STRING} 
+        multifactor-{event_src.subsys=WORD}[{NUMBER}]: 
+        [{STRING} DBG] Received response from API: {$json=STRING+}'
+        
+COND = find_substr($json, '"identity"') != null
+       or find_substr($json, '"Identity"') != null
+       
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = "application"
+action = "receive"
+object = "request"
+status = "success"
+
+if $Model["Status"] == "Granted" or $model["status"] == "Granted" then
+   object.state = "success"
+   importance = "info"
+elif $Model["Status"] == "Denied" or $model["status"] == "Denied" then
+   object.state = "failure"
+   importance = "medium"
+else
+   object.state = "ongoing"
+   importance = "info"
+endif
+
+if $Model["Identity"] != null then
+    if find_substr($Model["Identity"], '@') != null then
+        $temp_csv = csv(lower($Model["Identity"]), "@", "`")
+        object.account.name = $temp_csv[0]
+        object.account.domain = $temp_csv[1]
+    elif find_substr($Model["Identity"], '\\') != null then
+        $temp_csv2 = csv(lower($Model["Identity"]), "\\", "`")
+        object.account.name = $temp_csv2[1]
+        object.account.domain = $temp_csv2[0]
+    else 
+        object.account.name = lower($Model["Identity"])
+    endif
+    
+    object.account.id = "synthetic:" + $Model["Identity"]
+    
+    object.account.contact = lower($Model["Email"])
+    object.id = $Model["Id"]
+    object.type = $["$type"]
+    
+    datafield1 = $Model["ReplyMessage"]   # Message for entering a one-time code or reason for refusal
+    datafield2 = $Model["Authenticator"]  # Type of token used
+    datafield3 = $["Success"]             # Request processed true or false
+    datafield4 = $Model["Bypassed"]       # Disabling the second factor authentication requirement
+    datafield5 = $Model["Account"]        # Device name or account full name
+    datafield6 = $['Model']['Url']        # URL
+    
+    $totp = string($['Model']['Policy']['Totp'])
+    $telegram = string($['Model']['Policy']['Telegram'])
+    $mobileApp = string($['Model']['Policy']['MobileApp'])
+    $phone = string($['Model']['Policy']['Phone'])
+    if $totp != null or $telegram != null or $mobileApp != null or $phone != null then 
+        datafield8 = "totp: " + $totp + "\r\ntelegram: " + $telegram + "\r\nmobileApp: " + $mobileApp + "\r\nphone: " + $phone 
+    endif
+    
+    reason = $['Message']
+
+elif $model["identity"] != null then
+    if find_substr($model["identity"], '@') != null then
+        $temp_csv = csv(lower($model["identity"]), "@", "`")
+        object.account.name = $temp_csv[0]
+        object.account.domain = $temp_csv[1]
+    elif find_substr($model["identity"], '\\') != null then
+        $temp_csv2 = csv(lower($model["identity"]), "\\", "`")
+        object.account.name = $temp_csv2[1]
+        object.account.domain = $temp_csv2[0]
+    else 
+        object.account.name = lower($model["identity"])
+    endif
+    
+    object.account.id = "synthetic:" + $model["identity"]
+    
+    object.account.contact = lower($model["email"])
+    object.id = $model["id"]
+    object.type = $model["type"]
+    
+    datafield1 = $model["replymessage"]   # Message for entering a one-time code or reason for refusal
+    datafield2 = $model["authenticator"]  # Type of token used
+    datafield3 = $["success"]             # Request processed true or false
+    datafield4 = $model["bypassed"]       # Disabling the second factor authentication requirement
+    datafield5 = $model["account"]        # Device name or account full name
+    datafield6 = $['model']['url']        # URL
+    
+    $totp = string($['model']['policy']['totp'])
+    $telegram = string($['model']['policy']['telegram'])
+    $mobileApp = string($['model']['policy']['mobileApp'])
+    $phone = string($['model']['policy']['phone'])
+    if $totp != null or $telegram != null or $mobileApp != null or $phone != null then 
+        datafield7 = "totp: " + $totp + "\r\ntelegram: " + $telegram + "\r\nmobileApp: " + $mobileApp + "\r\nphone: " + $phone 
+    endif
+    
+    reason = $['message']
+       
+endif
+
+if object.type == null then
+    object.type = "response"
+endif
+
+if $Model["CountryCode"] != null and $Model["Region"] != null and $Model["City"] != null then
+    src.geo.country = $Model["CountryCode"]
+    src.geo.city = $Model["City"]
+elif $model["countrycode"] != null and $model["region"] != null and $model["city"] != null then
+    src.geo.country = $model["countrycode"]
+    src.geo.city = $model["city"]
+endif
+
+subformula "parse_authenticators"
+    
+    TEXT = '{UNTIL(\'totpAuthenticators":[\')}{$totp_auth=UNTIL("]")}{UNTIL(\'telegramAuthenticators":[\')}{$telegram_auth=UNTIL("]")}{UNTIL(\'mobileAppAuthenticators":[\')}{$mobile_auth=UNTIL("]")}{UNTIL(\'phoneAuthenticators":[\')}{$phone_auth=UNTIL("]")}{REST}'
+    
+    if $totp_auth != null
+        and $['model']['totpAuthenticators'][0]["id"] != null
+        and $['model']['totpAuthenticators'][0]["label"] !=null then
+        $totp_ids = $['model']['totpAuthenticators'][0]["id"]
+        $totp_labels = $['model']['totpAuthenticators'][0]["label"]
+        
+        datafield8 = datafield8 + "totpAuth:" + $totp_labels + "|" + $totp_ids + "\r\n"
+    endif
+    
+    if $telegram_auth != null
+        and $['model']['telegramAuthenticators'][0]["id"] != null
+        and $['model']['telegramAuthenticators'][0]["label"] !=null then
+        $telegram_ids = $['model']['telegramAuthenticators'][0]["id"]
+        $telegram_labels = $['model']['telegramAuthenticators'][0]["label"]
+        
+        datafield9 = datafield9 + "telegramAuth:" + $telegram_labels + "|" + $telegram_ids + "\r\n"
+    endif
+    
+    if $mobile_auth != null
+        and $['model']['mobileAppAuthenticators'][0]["id"] != null
+        and $['model']['mobileAppAuthenticators'][0]["label"] !=null then
+        $mobile_ids = $['model']['mobileAppAuthenticators'][0]["id"]
+        $mobile_labels = $['model']['mobileAppAuthenticators'][0]["label"]
+        
+        datafield10 = datafield10 + "mobileAppAuth:" + $mobile_labels + "|" + $mobile_ids + "\r\n"
+    endif
+  
+    if $phone_auth != null
+        and $['model']['phoneAuthenticators'][0]["id"] != null
+        and $['model']['phoneAuthenticators'][0]["label"] !=null then
+        $mobile_ids = $['model']['phoneAuthenticators'][0]["id"]
+        $mobile_labels = $['model']['phoneAuthenticators'][0]["label"]
+        
+        datafield8 = datafield8 + "phoneAuth:" + $phone_labels + "|" + $phone_ids + "\r\n"
+    endif
+ 
+endsubformula
+
+if $['model']['mobileAppAuthenticators'] != null or $['Model']['MobileAppAuthenticators'] != null then
+    submessage("TEXT", "parse_authenticators", $json)
+endif       
+
+event_src.vendor = "multifactor"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_syslog_API_received_response"

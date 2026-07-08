@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {$time1=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        Category:{NUMBER},{$tmp_subsys="Smc"},{"Event Description: "?}{subject.name=STRING+}
+        {"применил новую библиотеку IPS ."|"applied a new IPS library ."},
+        Event time: {$time2=DATETIME}{",Group Name: "?} {$raw_group=REST?}'
+
+subject = "system"
+action = "apply"
+object = "resource"
+status = "success"
+
+object.type = "IPS library"
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name 
+
+datafield10 = if $raw_group == "" then null else $raw_group endif  # Group name
+
+time = coalesce($time2, $time1)
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_library_update_en_ru"

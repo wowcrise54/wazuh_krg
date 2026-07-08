@@ -1,0 +1,39 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "AD FS" and $number == 407
+
+submessage("XML","Event_data",$eventdata)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    object.name = lower($DataItem /  UserData / Event / eventdata / Data [0])  # имя пользователя
+    reason = $DataItem / UserData / Event / eventdata / Data [3]               # причина ошибки
+endsubformula
+
+msgid = $number
+
+object = "account"
+action = "modify"
+status = "failure"
+subject = "host"
+
+importance = "high"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_407_password_change_failed"

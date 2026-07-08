@@ -1,0 +1,189 @@
+query Check_CVE_In_Msg($cve, $host) from Vulnerable_Hosts {
+    cve == $cve
+    and host == $host
+}
+
+event NAD_CVE_Alerts:
+    key: 
+        src.ip, src.port
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "nad"
+        and action == "detect"
+        and object == "alert"
+        and src.ip != null
+        and dst.ip != null
+        and object.name != null
+        and (
+              object.property != null 
+              and ( # cve in object.value
+                    exec_query("Check_CVE_In_Msg", [
+                        regex(object.value, "CVE.+?\d+.+?\d+", 0), 
+                        dst.ip
+                    ])
+                    or exec_query("Check_CVE_In_Msg", [
+                        regex(strip(object.value, regex(object.value, "CVE.+?\d+.+?\d+", 0), ""), "CVE.+?\d+.+?\d+", 0), 
+                        dst.ip
+                    ])
+            )  # validate object.name
+            or exec_query("Check_CVE_In_Msg", [
+                "CVE-" + regex(upper(object.name), "CVE(-|_)(\d+(-|_)\d+)", 2),
+                dst.ip
+            ])
+        )
+        and filter::CheckWL_NAD_Alert("NAD_CVE_On_Vulnerable_Host", lower(join([src.ip, object.id, dst.ip], "|")))
+    }
+
+event SIEM_Connection_Open_Src:
+    key:
+        src.ip, src.port
+    filter {
+        correlation_name != null
+        and event_src.title != "nad"
+        and not filter::Loopback_Address(dst.ip)
+        and src.ip != dst.ip
+        and direction == "egress"
+        and 
+        (
+            (
+                in_list(["windows", "sysmon"], event_src.title)
+                and dst.port != null
+                and dst.ip != null
+                and src.ip != null
+            ) 
+            or (
+                event_src.subsys == "auditd"
+                and src.ip != null
+            )
+        )
+    }
+
+rule NAD_CVE_On_Vulnerable_Host: (SIEM_Connection_Open_Src? and NAD_CVE_Alerts) timer 3m
+
+    init {
+        $labels = "w_auto|CheckWL_NAD_Alert"
+    }
+
+    on SIEM_Connection_Open_Src {
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+        $subject.process.version = object.process.version
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.guid = object.process.guid
+        $subject.process.meta = object.process.meta
+        $subject.process.original_name = object.process.original_name
+        $subject.process.cwd = object.process.cwd
+        $subject.process.chain = object.process.chain
+        
+        $subject.process.parent.id = object.process.parent.id
+        $subject.process.parent.name = object.process.parent.name
+        $subject.process.parent.path = object.process.parent.path
+        $subject.process.parent.fullpath = object.process.parent.fullpath
+        $subject.process.parent.cmdline = object.process.parent.cmdline
+
+        if $reason == null then
+            $reason = correlation_name
+        else
+            $reason = $reason + "|" + correlation_name
+        endif
+
+        $datafield14 = event_src.asset
+        $datafield15 = event_src.title
+    }
+
+    on NAD_CVE_Alerts {
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+
+        $object.name = object.name
+        $object.id = object.id
+        $object.type = object.type
+
+        if object.property != null then 
+            $object.property = object.property
+            $object.value = object.value
+            $detect = object.value
+        else
+            $object.property = "Detected CVE in alert"
+            $detect = "CVE-" + regex(upper(object.name), "CVE(-|_)(\d+(-|_)\d+)", 2)
+            $object.value = $detect
+        endif 
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $src.geo.country = src.geo.country
+        $src.geo.city = src.geo.city
+        $src.geo.asn = src.geo.asn
+        $src.geo.org = src.geo.org
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $dst.geo.country = dst.geo.country
+        $dst.geo.city = dst.geo.city
+        $dst.geo.asn = dst.geo.asn
+        $dst.geo.org = dst.geo.org
+
+        $direction = direction
+        $protocol.layer7 = protocol.layer7
+        $protocol = protocol
+        
+        $external_link = external_link
+
+        $datafield2 = datafield2   # Идентификатор сессии (потока)
+        $datafield4 = datafield4   # Информация о тактиках-техниках ATT&CK
+        $datafield8 = datafield8   # Ip-адрес атакующего
+        $datafield9 = datafield9   # Ip-адрес жертвы (атакуемого)
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([src.ip, object.id, dst.ip], "|"))
+        $alert.context = join([object.id, object.name], " | ")
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "rule"
+    $action = "detect"
+    $object = "attack"
+    $status = "success"
+
+    if $reason != null then
+        $importance = "high"
+    else 
+        $importance = "medium"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Exploit Public-Facing Application"
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $dst.ip], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} SI-{STRING} 1 {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        auditor {NUMBER} - - {$msgid_raw_1="4205"}{$msgid_raw_2="Connection_rejected"}, Src: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}, Src Port:
+        {src.port=NUMBER}, Dst: {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}, Dst Port: {dst.port=NUMBER}, Username:
+        {subject.account.name=WORDDASH}, Session-Id: {subject.account.session_id=NUMBER}, Channel Id: {object.value=NUMBER},
+        "{WORD+}", Rule: {datafield1=WORD}, "{$reason_raw=UNTIL("\\"")?}{REST}'
+
+subject = "account"
+action = "start"
+object = "session"
+status = "failure"
+
+object.property = "channel id"
+
+# datafield1 - Имя правила
+
+reason = strip($reason_raw, '', '.')  # обрезаем лишние символы в конце
+reason = strip(reason, '', ': ')
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+importance = "low"
+
+event_src.title = "safeinspect"
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_4_syslog_4205_connection_rejected_rdp"

@@ -1,0 +1,63 @@
+EVENTLOG = 'EventID="4696"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "start"
+object = "process"
+status = "success"
+
+subject.account.name = if $Data["SubjectUserName"] != "-" then lower($Data["SubjectUserName"]) else null endif
+subject.account.domain = if $Data["SubjectDomainName"] != "-" then lower($Data["SubjectDomainName"]) else null endif
+subject.account.id = if $Data["SubjectUserSid"] != "S-1-0-0" then $Data["SubjectUserSid"] else null endif
+if subject.account.id == null and subject.account.name != null then
+    subject.account.id = "synthetic:" + subject.account.name
+    if subject.account.domain != null then
+        subject.account.id = subject.account.id + "@" + subject.account.domain
+    endif
+endif
+subject.account.session_id = maybe_number16($Data["SubjectLogonId"])
+
+if string(maybe_number16($Data["TargetLogonId"])) != "0" then
+    object.account.name = if $Data["TargetUserName"] != "-" then lower($Data["TargetUserName"]) else null endif
+    object.account.domain = if $Data["TargetDomainName"] != "-" then lower($Data["TargetDomainName"]) else null endif
+    object.account.id = if $Data["TargetUserSid"] != "S-1-0-0" then $Data["TargetUserSid"] else null endif
+    if object.account.id == null and object.account.name != null then
+        object.account.id = "synthetic:" + object.account.name
+        if object.account.domain != null then
+            object.account.id = object.account.id + "@" + object.account.domain
+        endif
+    endif
+    object.account.session_id = maybe_number16($Data["TargetLogonId"])
+else
+    object.account.name = subject.account.name
+    object.account.domain = subject.account.domain
+    object.account.id = subject.account.id
+    object.account.session_id = subject.account.session_id
+endif
+
+object.process.name = lower($Data["TargetProcessName"])
+object.process.id = maybe_number16($Data["TargetProcessId"])
+object.process.parent.id = maybe_number16($Data["ProcessId"])
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+category.generic = "Process"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Common_Security_4696_A_primary_token_is_assigned_to_process"

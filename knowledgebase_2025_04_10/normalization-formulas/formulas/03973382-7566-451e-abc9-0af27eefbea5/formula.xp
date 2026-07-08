@@ -1,0 +1,57 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "1291"
+       and (
+        $event_category == "Администрирование"
+        or $event_category == "Administration"
+       )
+       and (
+        $event_type == "Information"
+        or $event_type == "Информация"
+       )
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Смена пароля пользователя"|"Password changed successfully"}. {"Пароль изменил"|"Changed by"}:
+            {$raw_subject=STRING} {"Имя пользователя"|"User name"}: {$raw_object=STRING} {"Имя компьютера"|"Computer"}:
+            {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}'
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+
+$csv_subj_domain_name = csv($raw_subject, '@', '')
+$csv_obj_domain_name = csv($raw_object, '@', '')
+
+subject.name = $csv_subj_domain_name[0]
+subject.domain = $csv_subj_domain_name[1]
+
+object.name = $csv_obj_domain_name[0]
+object.domain = $csv_obj_domain_name[1]
+
+reason = "password changed"
+
+msgid = $event_id
+importance = "low"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Администрирование" then
+    event_src.subsys = "administration"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1291_user_password_changed"

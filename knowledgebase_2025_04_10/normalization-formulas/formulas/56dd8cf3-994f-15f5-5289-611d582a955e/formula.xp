@@ -1,0 +1,65 @@
+TEXT = "<{NUMBER?}>{time=DATETIME} {$Computer=STRING} 
+        multifactor-{event_src.subsys=WORD}[{NUMBER}]: [{STRING} INF] 
+        User '{$tempuser=UNTIL('\\'')} {object.type='credential'} {$object_type='and status'?} 
+        verified successfully {'at'|'in'} {$domain=STRING}"
+
+subject = "application"
+action = "validate"
+object = "request"
+status = "success"
+
+if find_substr($tempuser, '@') != null then
+    $temp_csv = csv(lower($tempuser), "@", "`")
+    object.account.name = $temp_csv[0]
+    object.account.domain = $temp_csv[1]
+elif find_substr($tempuser, '\\') != null then
+    $temp_csv2 = csv(lower($tempuser), "\\", "`")
+    object.account.name = $temp_csv2[1]
+    object.account.domain = $temp_csv2[0]
+else 
+    object.account.name = lower($tempuser)
+endif
+
+object.account.id = "synthetic:" + $tempuser
+
+if $object_type != null then
+    object.type = join([object.type, $object_type], ' ')
+endif
+
+if find_substr($domain, ":") != null then
+    $tempip = csv($domain, ":", "")
+    dst.ip = ipv4($tempip[0])
+    dst.port = $tempip[1]
+else
+    dst.hostname = $domain # Might be different domain here
+endif
+
+if find_substr($domain, 'DC=') != null then
+    $cut_quotas = strip($domain, "'", "'") 
+    $csv_cn = csv($cut_quotas, "DC=", "")
+    object.account.domain = strip($csv_cn[1], "", ",")  + "." + $csv_cn[2]
+    if $csv_cn[3] != null then
+        object.account.domain = strip($csv_cn[1], "", ",") + "." + strip($csv_cn[2], "", ",")  + "." + $csv_cn[3]
+    endif
+    object.account.id = "synthetic:" + object.account.domain + "\\" + object.account.name
+    dst.hostname = null
+endif
+
+datafield18 = "success"    # Validation result
+
+reason = "credential and status verified successfully"
+
+importance = "info"
+
+event_src.vendor = "multifactor"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_syslog_Credential_Verified"

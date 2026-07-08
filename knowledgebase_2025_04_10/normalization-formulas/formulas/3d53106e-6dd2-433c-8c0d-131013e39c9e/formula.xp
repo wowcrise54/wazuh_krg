@@ -1,0 +1,24 @@
+!TEXT = 'MonitoringType={msgid = "Storage_free_space"} Data: {$hdinfo = KEYVALUE("|", "=")}'
+
+event_src.ip = recv_ipv4
+time = recv_time
+
+object.type = "storage"
+object.name = $hdinfo["Device-Name"]
+object.property = "load_percentage"
+object.num_value = number(strip($hdinfo["UsePct"],"","%"))
+object.path = $hdinfo["MountedOn"]
+
+numfield1 = number($hdinfo["Size"])                                # kbytes
+numfield2 = number($hdinfo["Size"]) - number($hdinfo["Avail"])     # kbytes
+
+action = "info"
+object = "resource"
+status = "success"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.category = "Network monitoring system"
+
+importance = "info"
+id = "PT_Monitoring_UNIX_like_ssheventcollector_Harddisk_Info"

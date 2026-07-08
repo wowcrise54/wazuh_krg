@@ -1,0 +1,102 @@
+event Anomaly_Logon_Teamcity:
+    key:
+        event_src.host, subject.account.name, subject.account.id
+    filter {
+        correlation_name == "Teamcity_Abnormal_Access"
+    }
+
+event Build_Config_Modify_WebUI:
+    key:
+        event_src.host, subject.account.name, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teamcity"
+        and (
+                (
+                    id == "PT_JetBrains_TeamCity_syslog_Activities_BuildType_Management"
+                    and lower(object) == "configuration"
+                )
+                or (
+                    id == "PT_JetBrains_TeamCity_syslog_Activities_VCS_Root_Management"
+                    and lower(object.type) == "vcs_root"
+                )
+        )
+        and in_list(["modify", "create"], lower(action))
+        and filter::CheckWL_Profiling("Teamcity_Abnormal_BuildConfig_Modify", lower(join([subject.account.name, object.fullpath], "|")))
+    }
+
+rule Teamcity_Abnormal_BuildConfig_Modify: (Anomaly_Logon_Teamcity -> Build_Config_Modify_WebUI) timer 30m
+
+    init {
+        $labels = "CheckWL_Profiling"
+    }
+    
+    on Anomaly_Logon_Teamcity {
+        $subject = subject
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+
+        $subject.process.meta = subject.process.meta
+        
+        $datafield1 = object.query
+
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.geo.org = src.geo.org
+        $src.geo.country = src.geo.country
+
+        $assigned_src_ip = assigned_src_ip
+
+        $logon_service = logon_service
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $reason = reason
+
+        $alert.context = alert.context
+    }
+
+    on Build_Config_Modify_WebUI {
+        $object = object
+        $action = action 
+        $status = status        
+        
+        $object.name = object.name
+        $object.id = object.id
+        $object.type = object.type
+        $object.version = object.version
+        $object.fullpath = object.fullpath
+        
+        $reason = join([$reason, reason], " | ")
+
+        $alert.key = lower(join([subject.account.name, object.fullpath], "|"))
+    }
+    
+emit {
+    $correlation_type = "event"
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"   
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

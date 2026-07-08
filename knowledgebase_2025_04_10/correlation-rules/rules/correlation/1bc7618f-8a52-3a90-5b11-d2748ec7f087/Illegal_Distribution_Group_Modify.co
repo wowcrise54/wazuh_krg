@@ -1,0 +1,72 @@
+event AD_5136_MsExchGroupJoinRestriction_Set_1:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5136"
+        and event_src.title == "active_directory"
+        and lower(object.property) == "msexchgroupjoinrestriction"
+        and object.value == "1"
+        and filter::CheckWL_Specific_Only("Illegal_Distribution_Group_Modify", lower(join([subject.account.name, object.name], "|")))
+    }
+
+rule Illegal_Distribution_Group_Modify: AD_5136_MsExchGroupJoinRestriction_Set_1
+
+    on AD_5136_MsExchGroupJoinRestriction_Set_1 {
+        #The msExchGroupJoinRestriction must be one of the following numbers:
+        #0: Closed: Members can be added only by the group owners. All requests to join will be rejected automatically.
+        #1: Open: Anyone can join this group without being approved by the group owners.
+        #2: Owner approval: All requests are approved or rejected by the group owners.
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object = object
+        $object.value = object.value
+        $object.name = object.name
+        $object.id = object.id
+        $object.property = object.property
+        $object.state = object.state
+        $object.group = lower(object.id)
+
+        $datafield1 = "msexchgroupjoinrestriction_changed"
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([subject.account.name, object.name], "|"))
+        $alert.context = join([$datafield1, $object.id], "|")
+
+        $labels = "CheckWL_Specific_Only"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "grant"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Internal Spearphishing"
+
+    $incident.aggregation.key = join([$correlation_name, $object.group], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

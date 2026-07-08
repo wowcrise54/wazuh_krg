@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{"%"|"#"}{msgid="USER-I-DEL"}:
+        User {object.account.name=WORD}was removed.'
+
+action = "remove"
+object = "account"
+status = "success"
+
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_remove_user"

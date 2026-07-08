@@ -1,0 +1,42 @@
+EVENTLOG = 'EventID.text="18452"'
+
+COND = find_substr($Provider["Name"], "MSSQL$") != null or $Provider["Name"] == 'MSSQLSERVER'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subformula "get_ip"
+    TEXT = '[{"CLIENT"|"КЛИЕНТ"}: {"<local machine>"|src.ip=IPV4|src.ip=IPV6}]'
+endsubformula
+
+submessage("TEXT", "get_ip", $Data[0])
+
+$first_dot = find_substr($Computer, '.')
+if $first_dot != null then
+    dst.fqdn = lower($Computer)
+    dst.hostname = lower(substr($Computer, 0, $first_dot))
+else
+    dst.hostname = lower($Computer)
+endif
+
+reason = "The login is from an untrusted domain and cannot be used with Windows Authentication"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "sql_server"
+event_src.subsys = lower($Channel)
+event_src.fqdn = lower(dst.fqdn)
+event_src.hostname = lower(dst.hostname)
+event_src.category = "Database server"
+
+id = "PT_Microsoft_SQL_Server_eventlog_18452_Login_failed"

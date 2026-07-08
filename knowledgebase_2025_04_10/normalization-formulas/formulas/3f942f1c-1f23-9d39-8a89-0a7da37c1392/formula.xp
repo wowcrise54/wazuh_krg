@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}localhost 
+        {subject.process.name="ideco-sysupdate-backend"}
+        {"["?}{NUMBER}{"]"?}- - Download update error:
+        ClientConnectorError(ConnectionKey(host={"\'"}
+        {dst.hostname=HOSTNAME}{"\'"}, port={dst.port=NUMBER},
+        is_ssl={WORD},ssl={WORD}, proxy={WORD}, proxy_auth={WORD},
+        proxy_headers_hash={WORD}),gaierror(-{NUMBER},
+        {"\'"}{$f1=UNTIL("))")}.'
+        
+subject = "service"
+action = "update"
+object = "system"
+status = "failure"
+
+reason = strip($f1,'','\'')
+
+importance = "info"
+
+event_src.vendor = "ideco"
+event_src.title = "ngfw"
+event_src.category = "Network device"
+
+id = "PT_Ideco_IdecoNGFW_syslog_system_update_failed"

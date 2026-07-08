@@ -1,0 +1,36 @@
+!TABULAR = "id,
+            {time = start_time},
+            {datafield1 = node_name},
+			{event_src.ip = ip},
+			rule_name,
+			message"
+			
+!COND = ($rule_name == "Изменения версии ПО ViPNet")
+
+if find_substr($message, "Обновление") != null then
+    action = "upgrade"
+else
+    action = "rollback"
+endif
+
+object = "application"
+status = "success"
+
+submessage("TEXT", "vers", $message)
+
+subformula "vers"
+    # Извлечение object.version из $message
+    !TEXT = '{STRING} версии ПО c {STRING} {"до версии"|"на версию"} {object.version = REST}'
+endsubformula
+
+# datafield1 - имя узла
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_statewatcher"
+event_src.category = "Network monitoring system"
+
+id = "PT_Infotecs_VipNet_StateWatcher_odbc_Change_version"
+
+

@@ -1,0 +1,20 @@
+TEXT = '{time=DATETIME} [{WORD}] info: Загрузка SSH ключа для {STRING} пользователя: {"{"} {$raw_kv=STRING}'
+
+subject = "account"
+action = "upload"
+object = "resource"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.type = "ssh key"
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_add_ssh_key"

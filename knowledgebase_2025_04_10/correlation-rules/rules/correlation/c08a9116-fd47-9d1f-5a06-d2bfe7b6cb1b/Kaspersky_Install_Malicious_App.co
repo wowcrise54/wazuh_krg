@@ -1,0 +1,75 @@
+event Create_Package_And_Task:
+    key:
+        object.name
+    filter {
+        correlation_name == "Subrule_Kaspersky_Create_Package_And_Task"
+    }
+
+event Install_App:
+    key:
+        object.name
+    filter {
+        correlation_name == "Subrule_Kaspersky_Run_Task_Install_App"
+        and filter::CheckWL_Specific_Only("Kaspersky_Install_Malicious_App", lower(datafield3))
+    }
+
+rule Kaspersky_Install_Malicious_App: Create_Package_And_Task and Install_App
+
+    init {       
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Create_Package_And_Task {
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $datafield1 = datafield1  # имя группы, в которую входит узел-источник
+        $datafield5 = datafield5  # имя затрагиваемого продукта
+        $datafield6 = datafield6  # имя изменяемого объекта конфигурации
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+    on Install_App {
+        $datafield3 = datafield3  # название установленного приложения
+        $datafield4 = datafield4  # версия установленного приложения
+
+        $alert.key = lower(datafield3)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "install"
+    $object = "application"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Software Deployment Tools"
+
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $datafield3, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SecurityBackdoorDetection"
+    $incident.aggregation.timeout = 2h
+}

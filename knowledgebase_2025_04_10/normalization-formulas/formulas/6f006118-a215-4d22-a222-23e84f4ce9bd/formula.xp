@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} 
+        {$Computer=HOSTNAME} {subject.name="sshguard"} 
+        {subject.process.id = NUMBER} - - Blocking "
+        {datafield1=UNTIL(\'"\')} for {numfield1=NUMBER} secs 
+        ({reason = UNTIL(".")})'
+
+subject = "service"
+action = "lock"
+object = "ip_address"
+status = "success"
+
+# datafield1 - ip/mask that had been locked
+datafield2 = csv(datafield1, '/', '*')[0]    # ip
+numfield2 = csv(datafield1, '/', '*')[1]    # mask
+# numfield1 - duration of ip blocking
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "sshguard"
+event_src.category = "Host security"
+
+id = "PT_Opensource_Sshguard_syslog_ip_blocked"

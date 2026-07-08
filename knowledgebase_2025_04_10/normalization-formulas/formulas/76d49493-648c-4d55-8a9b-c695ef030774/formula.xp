@@ -1,0 +1,44 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0100029003"
+
+subject = "account"
+action = "login"
+object = "service"
+status = "failure"
+
+subformula "additional_data"
+    TEXT = 'User {$subject_name_raw=STRING} is trying to connect using {protocol=STRING} with authentication protocol 
+            {datafield1=UNTIL(",")} failed'
+
+    subject.account.name = strip($subject_name_raw, "'", "'")
+endsubformula
+
+submessage("TEXT", "additional_data", $kv["msg"])
+
+src.ip = $kv["remote"]
+dst.ip = $kv["local"]
+assigned_src_ip = $kv["assigned"]
+
+datafield2 = $kv["vd"]                                 # Virtual domain name
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")  # Event type
+datafield11 = $kv["action"]                            # Action
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv['logid']
+importance = "info"
+
+category.generic = "Service"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.subsys = "vpn-gateway"
+event_src.hostname = $kv["devname"]
+event_src.id = $kv["devid"]
+event_src.category = "VPN"
+
+id = "PT_Fortinet_Fortigate_syslog_29003_l2tp_login_failed"

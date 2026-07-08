@@ -1,0 +1,53 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        django{"["NUMBER"]"?}: {WORD}: {"["?} {$subject_raw=UNTIL("]")?}
+        Настройк{"а"|"и"} SSH {$flag="включена"?}{$flag="выключена"?}
+        {$flag="обновлены после восстановления из резервной копии"?}'
+
+switch $flag
+    case "включена"
+        action = "start"
+    case "выключена"
+        action = "stop"
+    case "обновлены после восстановления из резервной копии"
+        action = "modify"
+endswitch
+object = "service"
+status = "success"
+
+submessage("TEXT", "subject", $subject_raw)
+
+subformula "subject"
+    TEXT = 'subject: {$subject_name_raw=STRING+} issuer: {$issuer_raw=STRING+} validity: {STRING+?}'
+    
+    subject = "account"
+    subject.account.dn = strip($subject_name_raw, "", ",")
+
+    # УЦ, выдавший сертификат пользователя
+    datafield1 = strip($issuer_raw, "", ",")
+endsubformula
+
+object.name = "SSH"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = switch action
+    case "start" "Control"
+    case "stop" "Control"
+    case "modify" "Control"
+endswitch
+
+event_src.title = "kontinent_tls_vpn"
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Security_Code_Kontinent_TLS_VPN_syslog_ssh_setting_modified"

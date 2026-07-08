@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        en: "Event fields are present in a list of exclusions (process access)"
+        ru: "Поля события доступа к процессам есть в списке исключений"
+    Description:
+        en: "Correlated event field values match values from a list of exclusions. The macro is only applicable to events of the \"Process access\" type."
+        ru: "Значения полей корреляционного события совпадают со значениями из списка исключений. Макрос применим только к событиям типа \"Доступ к процессу\""
+    UseAsEventName: False
+Args:
+    rule_name:
+        Type: string
+        Name:
+            en: "correlation rule name"
+            ru: "название правила корреляции"
+    specific_value:
+        Type: string
+        Name:
+            en: "correlated event field value"
+            ru: "значение поля корреляционного события"
+ObjectId: PT-RF-51
+Origin: PT

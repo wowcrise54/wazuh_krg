@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Possible code execution using the CVE-2024-29510 vulnerability. It is a format string vulnerability in Ghostscript versions before 10.03.1 that allows you  to bypass the sandbox and execute arbitrary commands. This vulnerability can be used via libraries such as ImageMagick.</Description>
+  <EventDescriptions>
+    <EventDescription id="3edef870-e9aa-c4c4-0512-07f55b7873b9">User {subject.account.name} started process {object.process.name} using Ghostscript vulnerability CVE-2024-29510 on host {event_src.host}</EventDescription>
+    <EventDescription id="b3e44cc9-c9bf-3079-5ffa-0bc7283dae59">User {subject.account.name} started process {object.process.name} with a Ghostscript parent process on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

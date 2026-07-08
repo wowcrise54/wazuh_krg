@@ -1,0 +1,14 @@
+TEXT = '[{time=DATETIME}] INFO TaskManager: No more hosts to send to scan in task.
+        taskId={object.id=NUMBER}, scanId={NUMBER}, taskState={object.state=NUMBER}'
+
+action = "info"
+object = "task"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_task_no_host"

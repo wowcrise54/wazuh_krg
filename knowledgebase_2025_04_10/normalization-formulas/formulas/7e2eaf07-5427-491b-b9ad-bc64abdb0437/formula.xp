@@ -1,0 +1,19 @@
+!TEXT = 'MonitoringType={msgid = "Service_availability"} Data: {$serviceinfo = KEYVALUE("|", "=")}'
+
+event_src.ip = recv_ipv4
+time = recv_time
+
+object.type = "service"
+object.name = $serviceinfo["Service-Name"]
+object.state = $serviceinfo["State"]
+
+action = "info"
+object = "resource"
+status = "success"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.category = "Network monitoring system"
+
+importance = "info"
+id = "PT_Monitoring_UNIX_like_ssheventcollector_Service_Info"

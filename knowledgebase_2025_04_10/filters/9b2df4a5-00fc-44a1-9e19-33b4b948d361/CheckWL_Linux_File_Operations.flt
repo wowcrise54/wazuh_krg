@@ -1,0 +1,181 @@
+filter CheckWL_Linux_File_Operations(string $rule_name, string $specific_value) 
+{
+    (
+        # check if specific value is manually elevated and whitelisted
+        not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            $specific_value
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            $specific_value
+        )
+        and not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            $specific_value
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            $specific_value
+        )
+    )
+    and
+    (
+        # check if specific value is manually elevated
+        filter::CheckWL_BlackListValue(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            $specific_value
+        )
+        or filter::CheckWL_BlackListRegex(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            $specific_value
+        )
+        or filter::CheckWL_BlackListValue(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            $specific_value
+        )
+        or filter::CheckWL_BlackListRegex(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            $specific_value
+        )
+    )
+    or
+    (
+        # check manual whitelists for the specific value
+        not filter::CheckWL_WhiteListValue(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_WhiteListRegex(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_WhiteListValue(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_WhiteListRegex(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower($specific_value)
+        )
+
+        # check manual whitelist for the exceptions inserted from UI
+        # atomic fields
+        and not filter::CheckWL_WhiteListValue_4(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower(subject.process.fullpath),
+            lower(subject.process.path),
+            lower(subject.process.name),
+            subject.process.meta
+        )
+        and not filter::CheckWL_WhiteListValue_4(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower(subject.process.fullpath),
+            lower(subject.process.path),
+            lower(subject.process.name),
+            subject.process.meta
+        )
+        and not filter::CheckWL_WhiteListValue_4(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower(object.fullpath),
+            lower(object.path),
+            lower(object.name),
+            lower(object.account.id)
+        )
+        and not filter::CheckWL_WhiteListValue_4(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower(object.fullpath),
+            lower(object.path),
+            lower(object.name),
+            lower(object.account.name)
+        )
+
+        # field combinations
+        and not filter::CheckWL_WhiteListValue_4(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower(subject.process.name + "|" + object.path),
+            lower(subject.process.name + "|" + object.name),
+            lower(subject.process.fullpath + "|" + object.name),
+            lower(subject.process.fullpath + "|" + object.path)
+        )
+        and not filter::CheckWL_WhiteListValue_4(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower(subject.process.name + "|" + object.path),
+            lower(subject.process.name + "|" + object.name),
+            lower(subject.process.fullpath + "|" + object.name),
+            lower(subject.process.fullpath + "|" + object.path)
+        )
+        and not filter::CheckWL_WhiteListValue_3(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower(datafield2),
+            lower(subject.process.name + "|" + datafield2),
+            lower(subject.process.fullpath + "|" + datafield2)
+        )
+        and not filter::CheckWL_WhiteListValue_3(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower(datafield2),
+            lower(subject.process.name + "|" + datafield2),
+            lower(subject.process.fullpath + "|" + datafield2)
+        )
+
+        # regex combination
+        and not filter::CheckWL_WhiteListRegex(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower(subject.process.fullpath + "|" + object.fullpath)
+        )
+        and not filter::CheckWL_WhiteListRegex(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower(subject.process.fullpath + "|" + object.fullpath)
+        )
+
+        # check auto whitelist for the specific value
+        and not filter::CheckWL_Auto(
+            $rule_name,
+            lower($specific_value)
+        )
+    )
+}

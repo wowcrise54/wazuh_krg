@@ -1,0 +1,256 @@
+event Process_Start:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            in_list(["xcopy.exe", "robocopy.exe"], lower(object.process.name))
+            or regex(lower(object.process.cmdline), "\/c\s+copy\s+", 0) != null
+        )
+        and filter::CheckWL_Process_Creation("Copying_Files", join([subject.account.name, object.process.name, object.process.cmdline], "|"))
+    }
+
+event Powershell_Pipeline_Execute:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            (
+                lower(object.process.name) == "copy-item"
+                and object.name != null
+                and lower(object.name) != "vmware.vimautomation.core.ps1"
+                # Чтобы исключить ненужные коммандлайны типа таких:
+                # "Copy-Item" -Path "function:\TabExpansion2" -Destination "Function:\global:TabExpansionDefault"
+                and regex(lower(object.process.cmdline), "copy-item([\"\'])?\s+.*?-path\s+([\"\'])?function:", 0) == null
+            )
+            or regex(lower(object.process.cmdline), "(\\\\|^|\\\"|\/c\s+)(copy-item|(x|robo)copy\s+)", 0) != null
+            or (
+                # Проверка, чтобы "copy" не входил в состав комментария
+                regex(lower(object.process.cmdline), "^([^#\n\r]){0,50}\bcopy\b\s+", 0) != null
+                # Проверка, чтобы "copy" не входил в состав значений строчных переменных и сообщений вывода в консоль
+                and regex(lower(object.process.cmdline), "(=|\s+-message)\s+[\"\']([^\"\']{0,50})\bcopy\b\s+", 0) == null
+            )
+        ) 
+        and filter::CheckWL_Powershell("Copying_Files", join([subject.account.name, object.fullpath, object.process.name, object.process.cmdline], "|"))
+    }
+
+event Powershell_Command_Execute:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            regex(lower(object.process.cmdline), "(\\\\|^|\\\"|\/c\s+)(copy-item|(x|robo)copy\s+)", 0) != null
+            or (
+                # Проверка, чтобы "copy" не входил в состав комментария
+                regex(lower(object.process.cmdline), "^([^#\n\r]){0,50}\bcopy\b\s+", 0) != null
+                # Проверка, чтобы "copy" не входил в состав значений строчных переменных и сообщений вывода в консоль
+                and regex(lower(object.process.cmdline), "(=|\s+-message)\s+[\"\']([^\"\']{0,50})\bcopy\b\s+", 0) == null
+            )
+        )
+        and filter::CheckWL_Powershell("Copying_Files", join([subject.account.name, object.fullpath, object.process.cmdline], "|"))
+    }
+
+rule Copying_Files: Process_Start or Powershell_Pipeline_Execute or Powershell_Command_Execute
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Process_Start {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $datafield18 = datafield18  # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        
+        $alert.key = join([subject.account.name, object.process.name, object.process.cmdline], "|")
+        $alert.regex_match = coalesce(regex(lower(object.process.cmdline), "\/c\s+copy\\b", 0), lower(object.process.name))
+               
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Powershell_Pipeline_Execute {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $datafield8 = datafield8  # Версия модуля
+        $datafield9 = datafield9  # Командлайн без приведения к нижнему регистру
+
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([subject.account.name, object.fullpath, object.process.name, object.process.cmdline], "|")
+        $alert.regex_match = regex(lower(object.process.cmdline), "\\bcopy-item|(x|robo)?copy\\b", 0)
+        
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Powershell_Command_Execute {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.id = object.process.id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([subject.account.name, object.fullpath, object.process.cmdline], "|")
+        $alert.regex_match = regex(lower(object.process.cmdline), "\\bcopy-item|(x|robo)?copy\\b", 0)
+        
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Data from Local System"
+
+    $alert.context = "regex_match: " + $alert.regex_match
+    if regex($object.process.cmdline, "\/c\s+copy\s+", 0) != null then 
+        $possible_share = strip(regex($object.process.cmdline, "\/c\s+copy\s+.*?\s+[\"\']?((\\\\\\\\)(.*)(\\\\.*?)+[\"\']?(\s+|$))", 1), '', ' ')
+        if $possible_share != null then
+            # Проверяем, находится ли в конце пути конечное имя копируемого файла (для object.storage.* это лишнее)
+            $possible_filename = regex($possible_share, "\\\\(\w+)\.\S{2,5}$", 0)
+            if $possible_filename != null then
+                $object.storage.fullpath = substr($possible_share, 0, find_substr($possible_share, $possible_filename))
+                $datafield10 = strip($possible_filename, '\\', '') # конечное имя файла на шаре, куда осуществляется копирование
+            else
+                $object.storage.fullpath = $possible_share
+            endif
+            $object.storage.name = strip(regex($object.storage.fullpath, "\\\\[^\\\\]+$", 0), '\\', '')
+            $object.storage.path = substr($object.storage.fullpath, 0, find_substr($object.storage.fullpath, $object.storage.name))
+            $alert.context = join([$alert.context, "destination share: " + $object.storage.fullpath, "destination filename:" + $datafield10], " | ")
+        endif    
+    endif    
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

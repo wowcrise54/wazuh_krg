@@ -1,0 +1,81 @@
+event Remote_Uninstall_Task_Create:
+    key:
+        event_src.host, subject.account.name, object.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "kaspersky"
+        and event_src.title == "security_center"
+        and msgid == "KLAUD_EV_OBJECTMODIFY"
+        and action == "create"
+        and object == "task"
+        and find_substr(lower(object.name), "удаленная деинсталляция программы") != null
+        and regex(lower(object.name), "kaspersky|ios\smdm|activesync|kesl?|endpoint", 0) != null
+        and filter::CheckWL_Specific_Only("Kaspersky_Remove_AV_By_Task", lower(join([subject.account.name, object.name], "|")))
+    }
+    
+event Remote_Uninstall_Run_Task:
+    key:
+        event_src.host, subject.account.name, object.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "kaspersky"
+        and event_src.title == "security_center"
+        and msgid == "KLAUD_EV_TASK_STATE_CHANGED"
+        and action == "start"
+        and object == "task"
+    }
+
+rule Kaspersky_Remove_AV_By_Task: (Remote_Uninstall_Task_Create and Remote_Uninstall_Run_Task) within 5m
+
+    init {       
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Remote_Uninstall_Task_Create {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $datafield1 = datafield1  # имя группы, в которую входит узел-источник
+        $datafield5 = datafield5  # имя затрагиваемого продукта
+        $datafield6 = datafield6  # имя изменяемого объекта конфигурации
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([subject.account.name, object.name], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "remove"
+    $object = "application"
+    $status = "success"
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $object.name, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

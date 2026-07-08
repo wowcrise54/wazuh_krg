@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$Computer=HOSTNAME} notice tmsh[{NUMBER}]: 
+        {NUMBER}:{NUMBER}: AUDIT - {$kv=KEYVALUE(" ", "=", "\'")}'
+COND = find_substr($kv["cmd_data"], "save") != null
+
+subject = "account"
+action = "apply"
+object = "configuration"
+
+if $kv["status"] == "[Command OK]" then
+    status = "success"
+    importance = "low"
+else 
+    status = "failure"
+    reason = $kv["status"]
+    importance = "info"
+endif
+
+subject.account.name = $kv["user"]
+
+object.query = $kv["cmd_data"]
+
+event_src.vendor = "f5_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "big_ip_virtual_edition"
+event_src.category = "Network device"
+
+id = "PT_F5_Networks_BIG_IP_Virtual_Edition_syslog_configuration_saved"

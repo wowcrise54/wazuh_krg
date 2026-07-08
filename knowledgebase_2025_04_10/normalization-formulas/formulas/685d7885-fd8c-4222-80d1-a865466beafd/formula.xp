@@ -1,0 +1,61 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "33540"
+       and (
+        $event_category == "Вход/выход"
+        or $event_category == "Logon/Logoff"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Вход администратора в систему"|"Administrator logged in"}. {"Подсистема"|"Subsystem"}: {STRING+?}
+    {"Имя пользователя"|"User name"}: {$raw_subject=STRING} {"Узел клиента"|"Client host"}: {src.ip=IPV4|src.ip=IPV6|
+            src.hostname=HOSTNAME} {"Узел сервера"|"Server host"}: {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}'
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+
+$csv_name_domain = csv($raw_subject, '@', '')
+subject.account.name = $csv_name_domain[0]
+subject.account.domain = $csv_name_domain[1]
+
+if coalesce(dst.ip, dst.hostname) == coalesce(src.ip, src.hostname) then
+    logon_auth_method = 'local'
+else
+    logon_auth_method = 'remote'
+endif
+
+msgid = $event_id
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Вход/выход" then
+    event_src.subsys = "logon/logoff"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_33540_admin_login"

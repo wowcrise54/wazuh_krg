@@ -1,0 +1,45 @@
+TEXT = '{"<"NUMBER">"?} {STRING} CEF:0|FireEye|{WORDDASH}|{NUMBER}{"."?}{NUMBER?}{"."?}{NUMBER?}
+        {"."?}{NUMBER?}|MC|{msgid="malware-callback"}|{object.value=NUMBER}|rt={time=DATETIME}
+        src={src.ip=IPV4} cn3Label=cncPort cn3={datafield1=NUMBER} cn2Label=sid
+        cn2={object.id=NUMBER} shost={src.hostname=HOSTNAME} proto={$proto=WORDDASH}
+        dvchost={$Computer=HOSTNAME} cs3Label=osinfo cs3={datafield3=STRING*}
+        cs5Label=cncHost cs5={datafield2=STRING*} spt={src.port=NUMBER} dvc={event_src.ip=IPV4}
+        smac={src.mac=MACADDR} cn1Label=vlan cn1={NUMBER} dpt={dst.port=NUMBER} externalId={NUMBER}
+        cs4Label=link cs4={datafield4=STRING*} act=notified cs6Label=channel
+        cs6={datafield5=STRING*} dmac={dst.mac=MACADDR} dst={dst.ip=IPV4} cs1Label=sname
+        cs1={object.name=STRING*}'
+
+action = "detect"
+object = "malware"
+status = "success"
+
+object.property = "threat level"
+
+protocol = upper($proto)
+
+# datafield1 - cncHost
+# datafield2 - cncPort
+# datafield3 - osinfo
+# datafield4 - link
+# datafield5 - channel
+
+if number(object.value) <= 3 then
+    importance = "low"
+elif number(object.value) > 3 and number(object.value) <= 6 then
+    importance = "medium"
+elif number(object.value) > 6 then
+    importance = "high"
+endif
+
+event_src.vendor = "fireeye"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nx"
+event_src.category = "Network security"
+
+id = "PT_FireEye_NX_CEF_malware_callback"

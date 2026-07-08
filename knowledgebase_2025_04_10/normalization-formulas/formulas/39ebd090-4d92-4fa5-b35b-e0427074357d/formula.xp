@@ -1,0 +1,45 @@
+TEXT = '{DATETIME} {STRING} CEF:{NUMBER}|Infotecs|IDS HS|{UNTIL("|")}{msgid=NUMBER}|
+        {UNTIL("|")}{$priority=NUMBER}|InfotecsIDSHShost={$Computer=STRING} InfotecsIDSHShostId={event_src.id=STRING} deviceExternalId={STRING} cnt={NUMBER} dvc={event_src.ip=IPV4|event_src.ip=IPV6} rt={$time=NUMBER} deviceFacility={event_src.subsys=STRING} cat={STRING} msg={$msg=REST}'
+
+COND = msgid == "880004"
+
+subject = "account"
+action = "elevate"
+object = "account"
+status = "success"
+
+subformula "subject"
+    TEXT = "{DATETIME} {STRING} {STRING} user : TTY\={datafield1=STRING} ; PWD\={subject.process.cwd=STRING} ; USER\={subject.account.name=STRING} ; COMMAND\={object.process.cmdline=STRING}"
+endsubformula
+
+submessage("TEXT", "subject", $msg)
+
+object.account.name = subject.account.name
+
+# datafield1    # tty
+
+time = epoch_ms_to_datetime($time)
+
+importance = switch $priority
+    case 0 "info"
+    case 6 "low"
+    case 8 "medium"
+    case 10 "high"
+endswitch
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_ids_hs"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_HS_syslog_execute_command_sudo"

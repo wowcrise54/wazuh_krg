@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {datafield1="KLMS"|datafield1="KSMG"} : {object.process.fullpath=STRING} restarted'
+
+action = "restart"
+object = "service"
+status = "success"
+
+$csv_name_path = csv(object.process.fullpath, "/", "'")
+object.process.name = $csv_name_path[length($csv_name_path) - 1]
+if length($csv_name_path) > 1 then
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+endif
+
+object.name = object.process.name
+
+# datafield1 - имя продукта kaspersky
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = switch datafield1
+    case "KLMS" "kaspersky_security_for_linux_mail_server"
+    case "KSMG" "kaspersky_secure_mail_gateway"
+endswitch
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KLMS_KSMG_syslog_restart_service"

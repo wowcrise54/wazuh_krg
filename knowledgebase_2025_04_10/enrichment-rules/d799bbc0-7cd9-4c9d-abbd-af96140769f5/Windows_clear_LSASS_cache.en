@@ -1,0 +1,29 @@
+query Host_Reboot_recently($host) from Host_Reboot_Time {
+    host_name == $host
+}
+
+event Windows_reboot_for_any_reason:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and in_list(["12", "41", "1074", "1076", "4608", "6005", "6006", "6008", "6009"], msgid)
+        and datetime_to_epoch(time) - datetime_to_epoch(select_query_first("Host_Reboot_recently", [event_src.host], "reboot_time")) > 300
+    }
+
+enrichment Windows_clear_LSASS_cache
+    enrich Windows_reboot_for_any_reason:
+        enrich_fields {
+            $host = lower(event_src.host)
+        }
+
+    # realization for O2
+    remove_from LSASS_Cached_Accounts {
+            column::host == $host
+        }
+
+    # realization for TME
+    insert_into Host_Reboot_Time {
+        column::host_name = $host
+        column::host_asset = string(event_src.asset)
+        column::reboot_time = time
+    }

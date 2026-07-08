@@ -1,0 +1,199 @@
+# Кейс, который ловит:
+# ObjectProps (в т.ч. Stealth)
+# ACL (в т.ч. Stealth)
+# Trusts
+# Container
+ 
+event Event_1644_Other_Methods:
+    key:
+        event_src.asset, subject.account.name, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "1644"
+        and event_src.title == "windows"
+        and (
+            (
+                find_substr(lower(object.query), "(samaccounttype=805306369)") != null
+                and find_substr(lower(object.query), "(samaccounttype=805306368)") != null
+                and find_substr(lower(object.query), "(samaccounttype=268435456)") != null 
+                and find_substr(lower(object.query), "(samaccounttype=268435457)") != null  
+                and find_substr(lower(object.query), "(samaccounttype=536870912)") != null  
+                and find_substr(lower(object.query), "(samaccounttype=536870913)") != null
+                and find_substr(lower(object.value), "ms-mcs-admpwdexpirationtime") != null
+                and find_substr(lower(object.value), "msds-groupmsamembership") != null
+                and (
+                    # ObjectProps
+                    (
+                        find_substr(lower(object.value), "pwdlastset") != null
+                        and find_substr(lower(object.value), "lastlogon") != null
+                    )
+                    # ACL
+                    or find_substr(lower(object.value), "ntsecuritydescriptor") != null
+                )
+            )
+            # Trusts
+            or (
+                lower(object.query) == "(objectclass=trusteddomain)"
+                and find_substr(lower(object.value), "trustattributes") != null
+                and find_substr(lower(object.value), "trustdirection") != null
+                and find_substr(lower(object.value), "trusttype") != null
+            )
+            # Container
+            or (
+                regex(lower(object.query), "^\(\s+\|\s+\(objectclass=container\)\s+\(objectclass=domain\)\s+\)$", 0) != null
+                and find_substr(lower(object.value), "gplink") != null
+                and find_substr(lower(object.value), "ms-mcs-admpwdexpirationtime") != null
+                and find_substr(lower(object.value), "msds-groupmsamembership") != null
+            )
+        )
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and filter::CheckWL_LDAP_Request("SharpHound_LDAP_Requests", lower(join([subject.account.name, src.host], "|")))
+    }
+
+event Connect_To_DC:
+    key:
+        dst.asset, object.account.name, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "3"
+        and event_src.title == "sysmon"
+        and object.process.name != null
+        and object.process.name != "<unknown process>"
+        and not filter::Loopback_Address(src.ip)
+        and not filter::Loopback_Address(dst.ip)
+        and direction == "egress"
+        and dst.port == 389
+        and (
+            not match(lower(object.process.path), "?:\\windows\\*") 
+            or in_list(["powershell.exe", "powershell_ise.exe"], lower(object.process.name))
+        )
+        and (
+            not match(lower(object.process.path), "?:\\program files\\*")
+            or lower(object.process.name) == "pwsh.exe"
+        )
+        and not match(object.process.path, "?:\\program files (x86)\\*") 
+        and filter::UserAccount_Windows(object.account.name, object.account.id)
+    }
+
+rule SharpHound_LDAP_Requests: (Event_1644_Other_Methods and Connect_To_DC?) timer 40s
+
+    init {
+        $labels = "w_auto|CheckWL_LDAP_Request"
+    }
+
+    on Event_1644_Other_Methods {
+
+        $status = status
+        
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.provider = subject.account.provider
+
+        $object.query = object.query
+        $object.value = object.value
+        $object.property = object.property
+
+        if $src.host == null then # Если поля src.* еще не заполнены событием 3 (или его не будет)
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.mac = src.mac
+            $src.asset = src.asset
+            $src.port = src.port
+        endif
+
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.asset = dst.asset
+        $dst.mac = dst.mac
+        $dst.port = dst.port
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $datafield4 = datafield4 # starting node
+
+        $alert.key = lower(join([subject.account.name, src.host], "|"))
+
+        $reason = "Suspicious ldap-query"
+    }
+
+    on Connect_To_DC {
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+
+        # Содержит более полную информацию, чем события 1644, например, hostname, fqdn
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.mac = src.mac
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $protocol = protocol
+        $direction = direction
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    
+    # Trusts
+    if lower($object.query) == "(objectclass=trusteddomain)" then
+        $category.low = "Domain Trust Discovery"
+        $collection_method = "Trusts"
+    # Container
+    elif regex(lower($object.query), "^\(\s+\|\s+\(objectclass=container\)\s+\(objectclass=domain\)\s+\)$", 0) != null then
+        $category.low = "Group Policy Discovery"
+        $collection_method = "Container"
+    # ACL
+    elif find_substr(lower($object.value), "ntsecuritydescriptor") != null then
+        $category.low = "Permission Groups Discovery"
+        $collection_method = "ACL"
+    # ObjectProps
+    elif find_substr(lower($object.value), "ntsecuritydescriptor") == null and find_substr(lower($object.value), "pwdlastset") != null
+        and find_substr(lower($object.value), "lastlogon") != null then
+        $category.low = "System Owner/User Discovery"
+        $collection_method = "ObjectProps"
+    else
+        $category.low = "System Information Discovery"
+        $collection_method = "undefined"
+    endif
+    
+    $alert.context = join(
+        [
+            "process name: " + coalesce($object.process.name, "not identified"),
+            "supposed collection method: " + $collection_method
+        ], " | ")
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

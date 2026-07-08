@@ -1,0 +1,29 @@
+!JSON = "EventCode=6525"
+!COND = $Logfile=="DNS Server" and $SourceName=="Microsoft-Windows-DNS-Server-Service"
+
+action = "copy"
+object = "database"
+status = "failure"
+
+dst.ip = $InsertionStrings[1]
+
+datafield1 = $InsertionStrings[0]    # Имя зоны
+
+msgid = $EventCode
+time = $TimeGenerated
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "DNS server"
+
+id = "PT_Microsoft_Windows_wmi_6525_zone_transfer_request_for_secondary_zone_was_refused_by_master"

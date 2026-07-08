@@ -1,0 +1,76 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VM_BACKUP_STARTED",  # 10,790
+           "VM_BACKUP_SUCCEEDED",  # 10,793
+           "VM_BACKUP_FAILED",  # 10,792
+           "VM_BACKUP_FINALIZED",  # 10,794
+           "VM_BACKUP_FAILED_TO_FINALIZE",  # 10,795
+           "VM_BACKUP_STOPPED"  # 10,796
+       ], $event_class)
+
+subject = "account"
+action = "backup"
+object = "virtual_machine"
+
+if in_list(["VM_BACKUP_STARTED", "VM_BACKUP_SUCCEEDED"], $event_class) then
+    status = "ongoing"
+elif $event_class == "VM_BACKUP_FINALIZED" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # v4.3
+    TEXT = "VM {$vm_name=STRING+} backup has been {'started'|'completed successfully'|'failed'|'finalized'|'failed to finalize'} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # v4.4
+    TEXT = "Backup {$backup_id=STRING} for VM {$vm_name=STRING+} {'started'|'completed successfully'|'failed'|'finalized'|'failed to finalize'|'stopped'} (User: {$user=REST}"
+    
+    object.property = "backup_id"
+    object.value = $backup_id
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+$user = strip($user, "", ").")
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+$vm_name = strip($vm_name, "'", "'")
+object.name = $vm_name
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_VM_Backup"

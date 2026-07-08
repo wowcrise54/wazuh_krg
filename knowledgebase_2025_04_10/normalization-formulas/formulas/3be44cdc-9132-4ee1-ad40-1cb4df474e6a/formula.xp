@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{event_src.hostname=HOSTNAME?} clish[{UNTIL("]")}:
+        cmd by {subject.account.name = UNTIL(":")}{$state=UNTIL(":")}
+        {$cmdline = UNTIL("(")}{REST}'
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "ongoing"
+
+object.state = strip($state, '', ' ')
+object.process.cmdline =  strip($cmdline, '', ' ')
+
+time = recv_time
+importance = "low"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_Common_Clish_execute_commands"

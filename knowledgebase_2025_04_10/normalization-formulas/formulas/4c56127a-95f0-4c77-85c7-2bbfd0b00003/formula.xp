@@ -1,0 +1,87 @@
+!TABULAR = "hostname,
+            {msgid=event_type},
+            {time=event_time},
+            severity,
+            {datafield1=group_name},
+            {datafield2=last_update},
+            {datafield3=virus_count},
+            {datafield4=platform_id},
+            {object.name=par5}"
+
+!COND = $event_type == "FSEE_AKPLUGIN_OBJECT_FOUND"
+
+subject = "application" 
+action = "detect"
+object = "malware"
+status = "success"
+
+submessage ("TEXT", "object", $description)
+subformula "object"
+    !TEXT = "Обнаружен объект: {object.type='Другая программа'}{STRING+?} Имя объекта: {$fullpath=UNTIL('. PID')} {UNTIL('Пользователь:')} {$acc=UNTIL('.')} MD5 хеш файла: {$md5_hash=UNTIL('.')} Хеш SHA256 файла: {$sha256_hash=STRING}"
+endsubformula
+subformula "object"
+    !TEXT = "Обнаружен объект: {object.type='Вредоносная программа'}{STRING+?} Имя объекта: {$fullpath=UNTIL('\\r\\n\\r\\nИмя процесса')} {UNTIL('Пользователь:')} {$acc=UNTIL('\\r\\nMD5 ')} хеш файла: {$md5_hash=STRING} Хеш SHA256 файла: {$sha256_hash=STRING}"
+endsubformula
+
+subject.name = lower($product_name)
+subject.version = $product_version
+
+$acc_csv =csv(lower($acc), "\\", "'")
+if length($acc_csv) == 2 then
+    subject.account.name = lower($acc_csv[1])
+    subject.account.domain = lower($acc_csv[0])
+else
+    subject.account.name = lower($acc)
+endif
+
+object.storage.fullpath = lower($fullpath)
+$csv_p = replace(object.storage.fullpath, "/", "\\\\")
+$csv_path = csv($csv_p, '/', '')
+if length($csv_path) > 1 then
+    object.storage.name = $csv_path[length($csv_path) - 1]
+    object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+else
+    object.storage.name = $csv_p
+endif
+
+object.hash.sha256 = lower($sha256_hash) 
+object.hash.md5 = lower($md5_hash) 
+object.hash = "SHA256:" + lower($sha256_hash) + " MD5:" + lower($md5_hash)
+
+# datafield1 - имя группы, в которую входит узел-источник
+# datafield2 - время последнего обновления
+# datafield3 - количество найденных вирусов
+# datafield4 - идентификатор ОС
+
+importance = switch $severity
+    case 1 "info"
+    case 2 "low"
+    case 3 "medium"
+    case 4 "high"
+endswitch
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $ip_address != "127.0.0.1" then
+    event_src.ip = $ip_address
+endif
+if ipv4($fqdn) == null and find_substr($fqdn, ".") != null then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_odbc_FSEE_AKPLUGIN_OBJECT_FOUND"

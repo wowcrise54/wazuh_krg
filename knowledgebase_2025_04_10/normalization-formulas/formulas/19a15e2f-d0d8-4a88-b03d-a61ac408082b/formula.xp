@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$host=HOSTNAME|}{":"?}
+        #ILO 4{":"?} {$month=WORD?}{"/"?}{$day=WORD?}{"/"?}{$year=WORD?} {$hour=WORD?}{":"?}{$min=WORD?}
+        {"- - - "?}{$protocol_raw=STRING} login failure from: 
+        {src.ip=IPV4|src.ip=IPV6}({$src_hostname_raw=REST}'
+
+action = "login"
+object = "system"
+status = "failure"
+
+# Deleting the final character
+$src_hostname_raw = strip($src_hostname_raw, "", "\\u0000")
+
+if $src_hostname_raw != "DNS name not found)." then
+    src.hostname = strip($src_hostname_raw, "", ").")
+endif
+
+dst.ip = event_src.ip
+dst.hostname = lower($host)
+
+if lower($protocol_raw) == "browser" then
+    protocol.layer7 = "https"
+else
+    protocol.layer7 = lower($protocol_raw)
+endif
+
+logon_auth_method = "remote"
+if protocol.layer7 == "https" then
+    logon_service = "browser"
+else
+    logon_service = protocol.layer7
+endif
+
+if time == null then
+    time = $year + "-" + $month + "-" + $day + "T" + $hour + ":" + $min + ":00"
+endif
+
+importance = "high"
+
+category.high = "Access Management"
+category.generic = "Operating System"
+category.low = "Communication"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "ilo"
+event_src.hostname = lower($host)
+event_src.category = "Server management"
+
+id = "PT_Hewlett_Packard_Enterprise_iLO_syslog_system_login_failure"

@@ -1,0 +1,44 @@
+# событие приходит почти одновременно с событием "PT_Acronis_Backup_customeventcollector_Backup_plan",
+# однако, в этом событии присутствует название того, что именно копируется
+
+TABULAR = "name,
+           {src.hostname=machine},
+           state,
+           {object.value=progress},
+           {time=start_time},
+           elapsed_time,
+           estimated_time,
+           {datafield1=guid},
+           {object.name=resource},
+           result,
+           {msgid=event_type}"
+
+COND = $event_type == "Backing_up"
+
+action = "backup"
+object = "resource"
+if $state == "completed" then
+    status = switch $result
+        case "Succeeded" "success"
+        case "Failed" "failure"
+    endswitch
+else
+    status = "ongoing"
+    datafield3 = duration($estimated_time)
+endif
+
+# поле object.type выставить невозможно, поскольку в данном событии может быть любой вариант
+# из тех, что представлены в "PT_Acronis_Backup_customeventcollector_Backup_plan"
+object.property = "percent of progress"
+
+# datafield1 - GUID процесса, если использовать данный GUID в acrocmd, можно посмотреть весь лог
+# datafield3 - предполагаемое время, необходимое для завершения задачи
+
+duration = duration($elapsed_time)
+importance = "info"
+
+event_src.vendor = "acronis"
+event_src.title = "backup"
+event_src.category = "Backup server"
+
+id = "PT_Acronis_Backup_customeventcollector_Backing_up"

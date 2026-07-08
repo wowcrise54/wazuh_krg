@@ -1,0 +1,38 @@
+query GetAccountSID($username, $domain) from Known_Windows_Accounts {
+    name == $username
+    and (
+        domain_full == $domain
+        or domain_netbios == $domain
+    )
+} qhandler {
+    $id = id
+    $storage = storage
+    $domain_full = domain_full
+}
+
+event user_login:
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "_$Session$_.Authentication"
+        and event_src.title == "1c_enterprise"
+        and subject.application.account.id != null
+        and subject.account.domain != null
+        and subject.account.name != null
+    }
+
+enrichment Enterprise_1C_windows_account_to_table_list
+    enrich user_login:
+        enrich_fields {
+            $subject_data = exec_query("GetAccountSID", [lower(subject.account.name), lower(subject.account.domain)])
+            subject.account.id = $subject_data["$id"]
+            if $subject_data["$domain_full"] != null and $subject_data["$domain_full"] != subject.account.domain then subject.account.domain = $subject_data["$domain_full"] endif
+            subject.account.provider = $subject_data["$storage"]
+        }
+        
+    insert_into Enterprise_1C_Windows_Accounts {
+        account_id_1c = subject.application.account.id
+        account_name_1c = subject.application.account.name
+        windows_account_name = subject.account.name
+        windows_account_domain = subject.account.domain
+        windows_account_id = subject.account.id
+    }

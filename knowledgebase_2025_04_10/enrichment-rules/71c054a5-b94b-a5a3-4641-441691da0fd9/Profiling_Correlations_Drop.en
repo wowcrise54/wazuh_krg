@@ -1,0 +1,12 @@
+event EnrichmentEvent:
+    filter {
+        match(lower(correlation_name), "*abnormal_access")
+        and detect == "drop"
+    }
+
+enrichment Profiling_Correlations_Drop
+
+    enrich EnrichmentEvent:
+        enrich_fields {
+            drop
+        }

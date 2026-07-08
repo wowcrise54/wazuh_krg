@@ -1,0 +1,146 @@
+query IsProtectiveUserDefined($datacenter, $name) from VSphere_Protective_VMs_Custom {
+    (
+        datacenter == $datacenter
+        or datacenter == "*"
+    )
+    and (
+        name == $name
+        or name == "*"
+    )
+}
+
+query IsProtectiveSystemDefined($datacenter, $name) from VSphere_Protective_VMs_Assets {
+    dc_name == $datacenter
+    and vm_name == $name
+}
+
+query Get_Data_Sphere_Protective_VMs_Assets($datacenter, $name) from VSphere_Protective_VMs_Assets {
+    dc_name == $datacenter
+    and vm_name == $name
+}
+qhandler {
+    $guest_hostid = guest_hostid
+    $guest_ip = guest_ip
+    $esxi_hostid = esxi_hostid
+    $esxi_ip = esxi_ip
+}
+
+event Event_Disabling_Protective_VM:
+    key:
+        subject.account.name, object.name, msgid
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "vsphere"
+        and action == "stop"
+        and object == "virtual_machine"
+        and (
+            exec_query("IsProtectiveUserDefined", [datafield1, object.name])
+            or exec_query("IsProtectiveSystemDefined", [datafield1, object.name])
+        )
+        and filter::CheckWL_Specific_Only("Disabling_Protective_VM", lower(object.name))
+    }
+
+rule Disabling_Protective_VM: Event_Disabling_Protective_VM+ timer 30s
+
+    init {
+        $labels_raw = "w_auto|CheckWL_Specific_Only"
+        $first_event = true
+    }
+
+    on Event_Disabling_Protective_VM {
+        if $first_event then
+            $subject = subject
+            $action = action
+            $object = object
+            $status = status
+
+            $object.name = object.name
+            
+            $datafield1 = datafield1  # Datacenter Name
+            $datafield5 = datafield5  # Virtual Machine Name
+            
+            $asset_grid_data = exec_query("Get_Data_Sphere_Protective_VMs_Assets", [datafield1, object.name])
+            $datafield8 = $asset_grid_data["$guest_hostid"]
+            $datafield9 = $asset_grid_data["$guest_ip"]
+            $datafield11 = $asset_grid_data["$esxi_hostid"]
+            $datafield12 = $asset_grid_data["$esxi_ip"]
+            
+            $msgid = msgid
+
+            $user_reason = select_query_first("IsProtectiveUserDefined", [datafield1, object.name], "reason")
+            if $user_reason != null then
+                $reason = $user_reason
+
+                $alert.context = "user-defined"
+            else
+                $alert.context = "system-defined"
+            endif
+
+            $alert.key = lower(object.name)
+
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            
+            $labels_raw = $labels_raw + "|event_source_to_related_assets"
+
+            $first_event = false
+        endif
+        
+        if coalesce(subject.account.name, subject.name) != null then
+            $subject.account.name = coalesce(subject.account.name, subject.name)
+            $subject.account.domain = coalesce(subject.account.domain, subject.domain)
+            if find_substr($labels_raw, "subject_account_to_attacking_assets") == null then
+                $labels_raw = $labels_raw + "|subject_account_to_attacking_assets"
+            endif
+        endif
+        
+        if dst.host != null then
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.port = dst.port
+            $dst.asset = dst.asset
+            if find_substr($labels_raw, "dst_to_related_assets") == null then
+                $labels_raw = $labels_raw + "|dst_to_related_assets"
+            endif
+        endif
+        
+        if datafield6 != null then
+            $datafield6 = datafield6  # Host Name
+        endif
+        
+        if find_substr(id, "vsphereeventlog") != null then
+            $object.id = object.id
+                
+            $datafield3 = datafield3  # Cluster Name
+            $datafield4 = datafield4  # Entity Name
+            $datafield7 = datafield7  # Parent Entity Name
+            $datafield10 = datafield10  # Internal Entity ID
+        endif
+    }   
+
+emit {
+    $correlation_type = "incident"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $subject.account.domain, $object.name, $datafield1], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+    
+    $labels = $labels_raw
+}

@@ -1,0 +1,50 @@
+TABULAR = '{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message'
+
+COND = $event_category == "Управление контролем доступа"
+       and $event_id == 637534981
+
+action = "modify"
+object = "file_object"
+status = "success"
+
+$path = substr(
+               $event_message, 
+               find_substr($event_message, "acl:") + 5, 
+               find_substr($event_message, " - ACLs") - find_substr($event_message, "acl:") - 5
+               )
+               
+object.fullpath = strip($path, "", "/")
+$csv_path = csv(object.fullpath, "/", "")
+object.name = $csv_path[length($csv_path) - 1]
+if strip(object.fullpath, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+object.property = "permissions"
+object.type = "attribute"
+
+msgid = $event_id
+importance = "low"
+
+category.generic = "File System Object"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_637534981_modify_resource_permissions_ACL"

@@ -1,0 +1,15 @@
+TEXT = 'M {WORD} {time=DATETIME}:{NUMBER} received monitor command {object.name=STRING}'
+
+action = "execute"
+object = "command"
+status = "success"
+
+object.type = "monitor command"
+importance = "info"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.category = "Application server"
+event_src.subsys = "gateway log"
+
+id = "PT_SAP_SAP_AS_ABAP_Gateway_Log_filemonitor_Received_monitor_command"

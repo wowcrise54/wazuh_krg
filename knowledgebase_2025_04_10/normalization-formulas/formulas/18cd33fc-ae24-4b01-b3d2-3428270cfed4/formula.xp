@@ -1,0 +1,41 @@
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Compliance_Policy_status_changed"
+
+TABULAR = ' event_type,
+            product,
+            product_family,
+            src,
+            src_machine_name,
+            src_user_name,
+            time,
+            action,
+            ep_rule_id,
+            new_status,
+            old_status,
+            rule_name'
+
+COND = ($product == "Compliance" and $product_family == "Endpoint" and $event_type == "Status Changed")
+
+object = "policy"
+object.name = $rule_name
+object.state = $new_status
+
+action = "modify"
+status = "success"
+
+subject = "account"
+subject.name = $src_user_name
+
+datafield1 = $old_status
+
+msgid = $event_type
+
+time = $time
+
+importance = "medium"
+
+event_src.subsys = lower($product)
+event_src.ip = $src
+event_src.hostname = $src_machine_name
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.category = "Host security"

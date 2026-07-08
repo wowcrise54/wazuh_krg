@@ -1,0 +1,31 @@
+EVENTLOG = 'Channel = "Netwrix Auditor"'
+
+COND = $EventID["text"] == "2222"
+
+action = "check"
+object = "resource"
+status = "failure"
+
+object.type = "license"
+
+reason = strip($Data[0],"",".")
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($Provider["Name"])
+event_src.category = "Other"
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_License_out_of_compliance"

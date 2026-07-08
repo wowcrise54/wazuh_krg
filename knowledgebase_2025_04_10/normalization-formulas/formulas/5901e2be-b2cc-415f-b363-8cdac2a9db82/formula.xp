@@ -1,0 +1,67 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Контроль доступа к файлам"
+       and ($event_id == 131088
+            or $event_id == 65552)
+
+subject = "account"
+action = "rename"
+object = "file_object"
+status = switch $event_type
+    case "Аудит успеха" "success"
+    case "Аудит отказа" "failure"
+endswitch
+
+subject.account.id = $user_id
+subject.account.name = $user_name
+subject.account.domain = $user_domain
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение $kv из $event_message
+    TEXT = "Переименование {$kv=REST}"
+
+    $kv = keyvalue($kv, "\n\r\n\r", ":")
+
+    subject.process.fullpath = $kv["Приложение"]
+    $tmp_app = csv(subject.process.fullpath, "/", "")
+    subject.process.name = $tmp_app[length($tmp_app) - 1]
+    if strip(subject.process.fullpath, "", subject.process.name) != '' then
+        subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+    endif
+    
+    object.fullpath = $kv["Объект"]
+    $tmp_list = csv(object.fullpath, "/", "")
+    object.name = $tmp_list[length($tmp_list) - 1]
+    if strip(object.fullpath, "", object.name) != '' then
+        object.path = strip(object.fullpath, "", object.name)
+    endif
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_131088_65552_modify_resource_rename"

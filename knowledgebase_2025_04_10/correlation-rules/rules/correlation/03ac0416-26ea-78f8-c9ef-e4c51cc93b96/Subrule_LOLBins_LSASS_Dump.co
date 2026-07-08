@@ -1,0 +1,139 @@
+event Process_Started:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and (
+                (
+                    (
+                        filter::ProcessStart_Windows("rundll32.exe")
+                        or filter::ProcessStart_Windows("procdump")
+                    )
+                    and regex(lower(object.process.cmdline), "\.dmp\\b", 0) != null
+                )
+                or (filter::ProcessStart_Windows_any() 
+                    and regex(lower(object.process.parent.cmdline), "\s+--procdump($|\s)", 0) != null # Случай применения MultiDump
+                )   
+        )
+        and filter::CheckWL_Process_Creation("Subrule_LOLBins_LSASS_Dump", lower(join([object.process.fullpath, object.process.cmdline], "|")))
+    }
+
+event LSASS_Dump_Created:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        correlation_name == "LSASS_Memory_Dump"
+    }
+
+rule Subrule_LOLBins_LSASS_Dump: (Process_Started and LSASS_Dump_Created?) timer 65s
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+        $dump_created = false
+    }
+
+    on Process_Started {        
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.parent.id = object.process.parent.id
+        $subject.process.parent.name = object.process.parent.name
+        $subject.process.parent.path = object.process.parent.path
+        $subject.process.parent.cmdline = object.process.parent.cmdline
+        $subject.process.parent.fullpath = object.process.parent.fullpath
+        $subject.process.parent.guid = object.process.parent.guid
+
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+        $subject.process.version = object.process.version
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.guid = object.process.guid
+        $subject.process.meta = object.process.meta
+        $subject.process.original_name = object.process.original_name
+        $subject.process.cwd = object.process.cwd
+        $subject.process.chain = object.process.chain
+
+        $datafield18 = datafield18  # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([object.process.fullpath, object.process.cmdline], "|"))
+
+        if in_list(["rundll32.exe", "procdump"], lower(coalesce(object.process.original_name, object.process.name))) then
+            $alert.regex_match = regex(lower(object.process.cmdline), "\.dmp\\b", 0)
+        else
+            $alert.regex_match = regex(lower(object.process.parent.cmdline), "\s+--procdump($|\s)", 0)
+        endif
+
+        if lower(coalesce(object.process.original_name, object.process.name)) == "rundll32.exe" then
+            $reason = "rundll32.exe"
+        else
+            $reason = "procdump.exe"
+        endif
+    }
+
+    on LSASS_Dump_Created {
+        $object.property = object.property
+        $object.value = object.value
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $object.process.path = object.process.path
+        $object.process.name = object.process.name
+        $object.process.fullpath = object.process.fullpath
+        $object.process.id = object.process.id
+        $object.process.guid = object.process.guid
+        $object.process.chain = object.process.chain 
+        
+        $datafield18 = datafield18  # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # Цепочка процесса-объекта с идентификаторами
+
+        $datafield5 = datafield5    # Идентификатор потока субъекта
+        $datafield9 = datafield9    # Цепочка вызовов процесса
+
+        $dump_created = true
+    }
+
+ emit {
+    $correlation_type = "subrule"
+
+    $object = "process"
+    $status = "success"
+
+    if $dump_created then
+        $alert.context = join(["Process", $subject.process.name, "created dump file:", $object.name, "of LSASS"], " ")
+        $subject = "process"
+        $action = "access"
+    else
+        $alert.context = lower(join([$subject.process.parent.name, "->", coalesce($subject.process.original_name, $subject.process.name)], " "))
+        $subject = "account"
+        $action = "start"
+    endif
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+}

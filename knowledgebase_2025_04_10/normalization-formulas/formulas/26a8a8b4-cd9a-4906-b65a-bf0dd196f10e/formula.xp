@@ -1,0 +1,67 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+    auditor{"["datafield1=NUMBER"]"}: {$msgid_raw_1="4202"}{$msgid_raw_2="Disconnected"},{"Hound:"$hound_raw1=UNTIL(",")?}
+    {"Rule:"$rule_raw1=UNTIL(",")?}Src:{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME},{"Src""Port:"src.port=NUMBER","?}
+    {"Dst:"$dst_ip4_1=IPV4","?}{"Dst:"$dst_ip6_1=IPV6","?}{"Dst:"$dst_hostname_1=HOSTNAME","?}
+    {"Dst:"$dst_hostname_until_1=UNTIL(",")?}{"Dst""Port:"$dst_port_1=NUMBER","?}{"Username:"datafield3=UNTIL(",")?}
+    {"Username:"object.account.name=UNTIL(",")?}{"Session-Id:"object.account.session_id=NUMBER","?}{"Channel""Id:"NUMBER","?}
+    {"Hound:"$hound_raw2=UNTIL(",")?}{"Rule:"$rule_raw2=UNTIL(",")?}
+    {"Dst:"$dst_ip4_2=IPV4","?}{"Dst:"$dst_ip6_2=IPV6","?}{"Dst:"$dst_hostname_2=HOSTNAME","?}
+    {"Dst:"$dst_hostname_until_2=UNTIL(",")?}{"Dst""Port:"$dst_port_2=NUMBER","?}"{$reason_raw=UNTIL("\\", Syslog")?}
+    server:"{datafield4=IPV4}:{datafield5=NUMBER}"'
+
+object = "session"
+
+if find_substr($reason_raw, "Logon error") != null then
+    importance = "low"
+    if find_substr($reason_raw, "ERRINFO_DISCONNECTED_BY_OTHER_CONNECTION") != null 
+      || find_substr($reason_raw, "SESSION TERMINATE") != null then
+        action = "terminate"
+        status = "success"
+    else
+        action = "start"
+        status = "failure"
+    endif
+elif find_substr($reason_raw, "No password given") != null || find_substr($reason_raw, "LDAP-INVALID-CREDENTIALS") != null then
+    action = "start"
+    status = "failure"
+    importance = "low"
+elif find_substr($reason_raw, "requests user-mapping for user") != null 
+  || find_substr($reason_raw, "LDAP-SERVER-DISCONNECTED") != null
+  || find_substr($reason_raw, "No target server IP, or not a jumpserver") != null
+  || find_substr($reason_raw, "does not resolve") != null then
+    action = "start"
+    status = "failure"
+    importance = "info"
+else
+    action = "terminate"
+    status = "success"
+    importance = "info"
+endif
+
+dst.ip = coalesce($dst_ip4_1, $dst_ip4_2, $dst_ip6_1, $dst_ip6_2)
+dst.port = coalesce($dst_port_1, $dst_port_2)
+dst.hostname = coalesce($dst_hostname_1, $dst_hostname_2, $dst_hostname_until_1, $dst_hostname_until_2)
+
+# datafield1 - PID
+datafield2 = coalesce($hound_raw1, $hound_raw2)  # Collector name
+# datafield3 - Remote user
+# datafield4 - Syslog server IP
+# datafield5 - Syslog server Port
+
+reason = $reason_raw
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+
+event_src.rule = coalesce($rule_raw1, $rule_raw2)
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "safeinspect"
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_4_3_syslog_4202_disconnected"

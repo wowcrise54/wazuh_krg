@@ -1,0 +1,48 @@
+TEXT ='<{NUMBER}> {NUMBER?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME} {datafield1=WORD} {msgid="7920"} - - {$data=REST}'
+
+COND = find_substr($data, "Duplicate IP addresses on network") != null
+
+subformula "get_json_data"
+    JSON = ''
+endsubformula
+
+submessage("JSON","get_json_data",$data)
+
+action = "unassign"
+object = "ip_address"
+status = "success"
+
+object.property = 'Target IP address'
+object.state = $action
+object.value = $source_address
+object.new_value = $target_address
+
+src.fqdn = lower($hostname)
+src.hostname = csv(src.fqdn, ".", "")[0]
+src.ip = $ipv4
+
+# datafield1 - Era Server Name
+datafield2 = $event_type  # Event type
+
+protocol = $protocol
+
+importance = switch $severity
+    case "Information" "info"
+    case "Low" "low"
+    case "Medium" "medium"
+    case "Warning" "medium"
+    case "Critical" "high"
+endswitch
+
+reason = 'Duplicate IP addresses on network'
+
+category.generic = "Address"
+category.high = "Network Management"
+category.low = "Manipulation"
+
+event_src.vendor = "eset"
+event_src.title = "protect"
+event_src.category = "Host security"
+event_src.hostname = csv(event_src.fqdn, ".", "")[0]
+
+id = "PT_ESET_Protect_8_syslog_Duplicate_IP_addresses_on_network"

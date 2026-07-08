@@ -1,0 +1,30 @@
+id = "PT_Cisco_IOS_XR_syslog_ROUTING_BGP_ADJCHANGE_DETAIL"
+
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {STRING?} {WORD}/{WORD}/{WORD}/{WORD}: {time=DATETIME}{":"?}
+        {WORDDASH?}{"[" NUMBER "]" ?}{":"?} %{msgid="ROUTING-BGP-5-ADJCHANGE_DETAIL"}:
+        neighbor {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME} {$ending=REST}'
+
+submessage("TEXT", "reason_parse", $ending)
+subformula "reason_parse"
+    TEXT = '{$state="Up"} (VRF: {REST}'
+endsubformula
+
+subformula "reason_parse"
+    TEXT = '{$state="Down"} - {reason=STRING+} (VRF: {REST}'
+endsubformula
+
+action = switch $state
+    case "Up"   "start"
+    case "Down" "stop"
+endswitch
+
+object = "session"
+status = "success"
+
+protocol = "BGP"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "ios_xr"
+event_src.category = "Network device"

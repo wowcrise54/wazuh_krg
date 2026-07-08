@@ -1,0 +1,7 @@
+filter IDS_Alert() {
+    event_src.category == "IDS/IPS"
+    and (
+        object == "alert"
+        or object == "attack"
+    )
+}

@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER":"?} {$Computer=HOSTNAME}{"["event_src.ip=IPV4"]"?} %{time=DATETIME}
+        MODULE_CONFIG_SHELL[zIMI]:
+        {reason="Write configuration successfully!"|reason="Write running-config to current startup-config successful"}'
+
+action = "configure"
+object = "system"
+status = "success"
+
+importance = "high"
+
+event_src.vendor = "dcn_oem"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nos"
+event_src.category = "Network device"
+
+id = "PT_DCN_oem_nos_syslog_write_config"

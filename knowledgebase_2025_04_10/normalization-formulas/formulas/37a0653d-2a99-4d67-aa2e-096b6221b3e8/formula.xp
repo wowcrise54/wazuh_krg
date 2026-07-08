@@ -1,0 +1,28 @@
+TEXT = "<{NUMBER}>{time=DATETIME} {STRING} Warning: {subject.name='sophos'} antivirus - MID {datafield1=NUMBER} {NUMBER} -
+        Virus {$object_name_raw=STRING} {$object_path_raw=STRING} {REST}"
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+subject.process.name = "sophos"
+object.name = strip($object_name_raw, "'", "'")
+object.storage.fullpath = strip($object_path_raw, "'", "'")
+$path_csv = csv(object.storage.fullpath, "/", "")
+object.storage.name = $path_csv[length($path_csv) - 1]
+if length($path_csv) > 1 then
+    object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+endif
+
+importance = "high"
+
+category.high = "Information Security"
+category.generic = "Malware"
+category.low = "Detection"
+
+event_src.title = "sophos_antivirus"
+event_src.vendor = "sophos"
+event_src.category = "Anti-virus"
+
+id = "PT_Sophos_Sophos_Antivirus_syslog_virusfound"

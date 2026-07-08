@@ -1,0 +1,49 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} application_json.log: {$json=REST}'
+COND = (
+    (
+        find_substr($json, '"message":"Group ') != null
+        and find_substr($json, ' was created"}') != null
+    )
+    or (
+        find_substr($json, '"message":"Group ') != null
+        and find_substr($json, ' was removed"}') != null
+    )
+)
+
+object = "resource"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_message"
+    TEXT = 'Group "{$obj_name=LITERAL*}" was {$action_raw="create"|$action_raw="remove"}d'
+    
+    action = $action_raw
+    status = "success"
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+submessage("TEXT", "parse_message", $message)
+
+object.type = "group"
+object.name = $obj_name
+
+chain_id = $correlation_id
+
+time = $time
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "application"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Application_JSON_Group_Management"

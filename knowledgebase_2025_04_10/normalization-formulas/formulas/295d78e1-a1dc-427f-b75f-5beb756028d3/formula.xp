@@ -1,0 +1,38 @@
+TEXT = '<{NUMBER}>[{time=DATETIME}]FW:{"RULE"|"IP_ERROR"|}: prio={$prio=NUMBER} id={NUMBER} rev={NUMBER} event=
+        {msgid="invalid_ip_checksum"|msgid="ruleset_drop_packet"} action=drop {$kv=KEYVALUE(" ", "=", "")}'
+
+subject = "rule"
+action = "deny"
+object = "packet"
+status = "success"
+
+subject.name = $kv['rule']
+
+src.ip = $kv['srcip']
+src.port = $kv['srcport']
+
+dst.ip = $kv['destip']
+dst.port = $kv['destport']
+
+interface = $kv['recvif']
+protocol = $kv['ipproto']
+
+if msgid == "invalid_ip_checksum" then
+    reason = "check sum of ip packet header is incorrect"
+endif
+
+importance = switch $prio
+    case 3 "high"
+    case 2 "medium"
+    case 1 "low"
+endswitch
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.title = "dfl-1660"
+event_src.vendor = "d-link"
+event_src.category = "Firewall"
+
+id = "PT_D_Link_DFL_1660_syslog_IP_packet_drop"

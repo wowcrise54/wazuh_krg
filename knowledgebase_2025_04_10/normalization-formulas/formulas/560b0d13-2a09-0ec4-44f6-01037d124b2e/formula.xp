@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME} {STRING?} FINE {msgid="o.e.j.s.AsyncContentProducer#nextContent"}: nextContent = Content{UNTIL("{")}{$csv_data=REST}'
+
+action = "receive"
+object = "request"
+status = "success"
+
+$csv_data = csv($csv_data, "={", "\\")
+$keyvalue_data = "request="+$csv_data[3]
+$keyvalue_data = keyvalue($keyvalue_data, "," ,"=" ,"\\")
+object.query = strip($keyvalue_data['request'],"","}")
+
+datafield1 = $keyvalue_data['uri']  # URI CLI Jenkins
+$temp_path = replace(datafield1,"","://")
+object.path = strip($temp_path, csv($temp_path,"/","\\")[0], "")
+$csv_uri = csv(csv(datafield1,"//","")[1],"/","")
+$csv_ip = $csv_uri[0]
+
+if find_substr($csv_ip,":") != null then
+    $csv_ip = csv($csv_ip,":","")
+    dst.port = $csv_ip[1]
+    if ipv4($csv_ip[0]) != null then
+        dst.ip = ipv4($csv_ip[0])
+    else 
+        dst.hostname = $csv_ip[0]
+    endif
+endif
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "jenkins"
+event_src.category = "Other"
+
+id = "PT_Opensource_Jenkins_syslog_AsyncContentProducer_nextContent"

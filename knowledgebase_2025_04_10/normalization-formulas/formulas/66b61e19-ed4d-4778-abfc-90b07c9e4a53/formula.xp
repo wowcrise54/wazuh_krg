@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{"#"|"%"}{msgid="STP-W-PORTSTATUS"}:
+        {object.name=STRING}{"of"?}{object.group=UNTIL(":")?}
+        STP status {object.state=WORD}'
+
+action = "info"
+object = "interface"
+status = "success"
+
+object.name = strip(object.name, ':', ':') 
+
+if $time != null then
+    time = $time
+else    
+    time = recv_time
+endif   
+importance = "info"
+
+event_src.vendor = "eltex"
+event_src.title = "ros"
+event_src.category = "Network device"
+
+id = "PT_Eltex_MES2348P_syslog_stp_port_status_change"

@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        en: "Check for presence on the exclusion list"
+        ru: "Проверка на присутствие в списке исключений"
+    Description:
+        en: "A check for the presence of correlated event key information on the exclusion list using the direct comparison of values. The macro must be used only with the events of the \"Task start\" type."
+        ru: "Проверка ключевой информации скоррелированного события на присутствие в списке исключений, используя прямое сравнение значений. Макрос можно использовать только вместе с событиями типа \"Запуск задачи\"."
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "Key information value of a correlated event"
+            ru: "Значение ключевой информации скоррелированного события"
+    rule_name:
+        Type: string
+        Name:
+            en: "Correlation rule name"
+            ru: "Название правила корреляции"
+ObjectId: PT-RF-54
+Origin: PT

@@ -1,0 +1,55 @@
+TEXT = '{time=DATETIME} {$Computer=HOSTNAME} CEF:{NUMBER}|SFERA-IB|IdSatNet|{UNTIL("|")}{NUMBER}:{msgid="0004"}:
+        {NUMBER}|{"Basic WWW-Autorization (Open Data) "}|{NUMBER}|{$message=REST}'
+
+action = "send"
+object = "request"
+status = "success"
+
+if find_substr($message,"content=") != null and find_substr($message,"realm=") != null then
+    $message = replace($message,"content=\"","content=")
+    $message = replace($message,"\" realm=","realm=")
+endif
+
+$kv = keyvalue($message," ","=","\"")
+
+object.query = strip($kv['content'],""," ")
+object.property = "VSAT MAC"
+object.value = $kv['vsat_dmac']
+
+src.ip = $kv['src_ip']
+src.port = $kv['sport']
+
+dst.ip = $kv['dst_ip']
+dst.port = $kv['dport']
+
+external_src.ip = $kv['vsat_src_ip']
+external_dst.ip = $kv['vsat_dst_ip']
+
+datafield1 = $kv['method']            # Метод аутентификации
+datafield5 = $kv['Lock']              # Текущий уровень сигнала VSAT
+datafield6 = $kv['C_N']               # Текущее значение соотношения сигнал/шум сигнала VSAT
+datafield7 = $kv['Mid_signal_level']  # Cреднее значение уровня сигнала VSAT
+datafield8 = $kv['Mid_C_N']           # Cреднее значение соотношения сигнал/шум сигнала VSAT
+datafield9 = $kv['sat']               # Несущая частота сигнала VSAT и наименование космического аппарата связи
+datafield11 = $kv['Multiplex']        # Наименование сети VSAT
+
+importance = switch $kv['Level_Event']
+    case "Low" "info"
+    case "Medium" "low"
+    case "High" "medium"
+    case "Very High" "high"
+endswitch
+
+event_src.ip = $kv['IdSatNet_IP']
+event_src.title = "idsatnet"
+event_src.vendor = "sfera_ib"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network monitoring system"
+
+id = "PT_SFERA_IB_IdSatNet_syslog_0004_Basic_WWW_Autorization_Open_Data"

@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} Minor {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} 
+{NUMBER}*|{NUMBER}*|{subject.account.name=UNTIL("*|")}{$user_type=WORD+}*|FC_Manage*|{DATETIME}*|Create VM*|
+{$temp_status="Success"|$temp_status="Fail"}*|{msgid="Create VM"}:  {$kv=KEYVALUE(",  ",":","")}'
+
+subject = "account"
+action = "create"
+object = "virtual_machine"
+
+if $temp_status == "Success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+if $user_type == "Local User"
+    or $user_type == "Interface interconnection User" then
+    subject.account.provider = "local"
+elif $user_type == "Domain User" then
+    subject.account.provider = "domain"
+else
+    subject.account.provider = "unknown"
+endif
+
+object.name = $kv["VM Name"]
+
+datafield1 = $kv["VM Name"]                             # Virtual machine name
+datafield10 = $kv["VM OS type"]                         # Virtual machine OS type
+datafield11 = $kv["CPU Quantity"]                       # Virtual machine CPU Quantity
+datafield12 = replace($kv["MEM Quantity"], "", "\*|*")  # Virtual machine MEM Quantity
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "fusioncompute"
+event_src.category = "Virtualization"
+
+id = "PT_Huawei_FusionCompute_syslog_create_vm"

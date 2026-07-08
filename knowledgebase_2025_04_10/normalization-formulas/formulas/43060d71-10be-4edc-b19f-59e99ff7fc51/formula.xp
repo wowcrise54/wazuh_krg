@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        snort{"["NUMBER"]"?}: FATAL ERROR: /{$object_path_raw=STRING} {$reason_raw=REST}'
+
+action = "alert"
+object = "file"
+status = "success"
+
+object.type = "configuration"
+object.property = "error line number"
+# parsing $object_path_raw for line number
+# using only last 8 symbols to avoid misunderstanding if '(' symbol exists in the filename
+# assuming that the line number can't be greater than 1e6 - 1
+$tmp = substr($object_path_raw, -8, 8)
+$line_num_raw = substr($tmp, find_substr($tmp, "("), 7)
+object.value = strip($line_num_raw, "(", ")")
+
+object.path = "/" + strip($object_path_raw, "", $line_num_raw)
+
+reason = strip($reason_raw, "", ".")
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "snort"
+event_src.category = "IDS/IPS"
+
+id = "PT_Opensource_Snort_syslog_fatal_error_while_parsing_configfile"

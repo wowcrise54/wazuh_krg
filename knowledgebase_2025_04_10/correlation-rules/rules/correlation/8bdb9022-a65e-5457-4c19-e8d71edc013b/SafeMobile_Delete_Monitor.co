@@ -1,0 +1,80 @@
+event Delete_Monitor:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "uem_safemobile"
+        and action == "uninstall"
+        and object == "application"
+        and status == "success"
+        and in_list(["ru.niisokb.mcc", "ru.safe-phone.Monitor"], object.id)
+        and filter::CheckWL_Specific_Only("SafeMobile_Delete_Monitor", lower(event_src.host))
+    }
+
+rule SafeMobile_Delete_Monitor: Delete_Monitor
+
+    init {
+        $labels = "w_auto" + "|CheckWL_Specific_Only"
+    }
+       
+    on Delete_Monitor {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+                
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.id = object.id
+        $object.type = object.type
+        $object.state = object.state
+
+        $datafield1 = datafield1       # IMEI устройства
+        $datafield2 = datafield2       # UDID устройства
+        $datafield3 = datafield3       # модель устройства
+        $datafield4 = datafield4       # Серийный номер устройства
+        $datafield5 = datafield5       # Версия ОС устройства
+        $datafield6 = datafield6       # Платформа устройства
+        $datafield7 = datafield7       # Идентификатор комплекта в системе
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+              
+        $alert.key = lower(event_src.host)
+        $alert.context = "Remove " + object.id + " from " + join([datafield1, datafield2, datafield3, datafield4], "|")
+    }
+
+emit {  
+    $correlation_type = "incident"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,36 @@
+TABULAR = "ID,
+           {time=ORIGIN},
+           MESSAGE_OWNER,
+           {msgid=MESSAGE_CODE},
+           {subject.account.name=STRPARAM1},
+           {$rule_name=STRPARAM2},
+           {$rule_code=STRPARAM3}"
+           
+COND = $MESSAGE_CODE == 402
+
+subject = "account"
+action = "remove"
+object = "rule"
+status = "success"
+
+if $rule_code == "1" then
+    object.type = "Клиент"       
+elif $rule_code == "2" then
+    object.type = "Координатор" 
+elif $rule_code == "3" then
+    object.type = "X-Firewall"
+endif    
+object.name = $rule_name
+
+importance = "info"
+
+category.generic = "Rule Or Policy"
+category.high = "Network Management"
+category.low = "Manipulation"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_policy_manager"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_ViPNet_Policy_Manager_customeventcollector_remove_secure_profile"

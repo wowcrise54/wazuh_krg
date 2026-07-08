@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}-{WORD?}{"-"?}{NUMBER}-{msgid="716002"}:
+        Group <{datafield4=WORDDASH}> User <{subject.account.name=UNTIL(">")} IP 
+        <{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}> WebVPN session terminated: {$reason=STRING+}'
+
+subject = "account"
+action = "stop"
+object = "session"
+status = "success"
+
+# datafield4 - group policy
+
+reason = strip($reason,"", ".")
+
+importance = "medium"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.subsys = "vpn-gateway"
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_716002_WebVPN_session_terminated"

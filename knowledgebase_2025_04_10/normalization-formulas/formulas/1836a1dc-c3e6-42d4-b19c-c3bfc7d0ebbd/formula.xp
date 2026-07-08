@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} {"%%"NUMBER?}
+        {$tmp_subsys=WORD+}/{NUMBER}/{msgid="SET_PORT_FORWARDING"|msgid="SET_PORT_LEARNING"}{"(l)"?}
+        {"["NUMBER"]"?}: In {"MSTP"?} process {datafield1=NUMBER}
+        instance {datafield2=NUMBER}, MSTP set port {interface=STRING}
+        state as {object.state=WORDDASH+}.'
+
+action = "info"
+object = "interface"
+status = "success"
+
+# datafield1 - process
+# datafield2 - instance
+
+importance = "info"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_STP_port_set"

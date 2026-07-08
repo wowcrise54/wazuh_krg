@@ -1,0 +1,139 @@
+event Run_Command_In_Cmd:
+    key:
+        event_src.host, object.process.name, object.process.id
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::ProcessStart_Windows_any()
+        and (
+            lower(object.process.name) == "certutil.exe"
+            or regex(lower(object.process.original_name), "certutil", 0) != null
+        )
+        and regex(lower(object.process.cmdline), "-(verifyctl|urlcache|split)|\\b(http|ftp)", 0) != null
+        and filter::CheckWL_Process_Creation("Remote_File_Download_Via_Certutil", lower(object.process.cmdline) )       
+}
+
+event File_Created:
+    key:
+        event_src.host, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and regex(lower(object.path),"\w:\\\\users\\\\\w+?\\\\appdata\\\\locallow\\\\microsoft\\\\cryptneturlcache\\\\", 0) == null
+    }
+
+rule Remote_File_Download_Via_Certutil: (Run_Command_In_Cmd and File_Created?) timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation" 
+    }
+
+    on Run_Command_In_Cmd {        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "-(verifyctl|urlcache|split)|\\b(http|ftp)", 0)
+    }
+
+    on File_Created{
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+
+        $alert.context = "File downloaded: " + object.name
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    if $object.name != null then
+        $importance = "high"
+    else
+        $importance = "medium"
+    endif
+    
+    $C2_host = regex(lower($object.process.cmdline), "(http(s)?|ftp|smb|dict|scp)://(.*?)(/|\\\\)", 3)
+    if $C2_host != null then
+        $port_raw = regex($C2_host,":(\d+)$", 1)
+        $dst.port = strip($port_raw, ":", "")
+        $dst.host = strip($C2_host, "", ":" + $port_raw)
+        
+        if maybe_ipv4($dst.host) != null or maybe_ipv6($dst.host) != null then
+            $dst.ip = $dst.host
+        else
+            $maybe_dot_pos = find_substr($dst.host, '.')
+            if $maybe_dot_pos != null then
+                $dst.fqdn = $dst.host
+                $dst.hostname = substr($dst.host, 0, $maybe_dot_pos)
+            else
+                $dst.hostname = $dst.host
+            endif
+        endif
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Ingress Tool Transfer"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name + "@" + $subject.account.domain], "|")
+    $incident.severity = $importance 
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

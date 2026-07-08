@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Limited resource-based delegation is configured in the domain. An attacker can use this setting to obtain the TGS ticket of the attacked account for administrator access to the server intended for the operation of the service. After that, an attacker can elevate privileges and perform a horizontal move to other infrastructure nodes</Description>
+  <EventDescriptions>
+    <EventDescription id="70b81cbf-ce96-cebc-9d17-7d0a31c222b8">User {subject.account.name} from host {src.host} set resource-based constrained delegation for host {object.account.name}</EventDescription>
+    <EventDescription id="c7fb8767-4928-cd0a-3b53-ef6d85cbcdeb">User {subject.account.name} from host {src.host} set resource-based constrained delegation for account {object.account.name}</EventDescription>
+  </EventDescriptions>
+</Localization>

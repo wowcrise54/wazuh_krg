@@ -1,0 +1,23 @@
+Category:
+EventDescriptions:
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and object = "process" and subject.account.id != null and subject.account.name = null'
+  LocalizationId: 1316eb11-2f4e-9a83-88a2-05ea568fb08a
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and count.subevents = 1 and subject.account.id = null and object != "process"'
+  LocalizationId: 192cec76-1a08-9b3f-6235-128d5492b6d7
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and count.subevents != 1 and subject.account.name != null and object != "process"'
+  LocalizationId: 4157820d-3016-d19a-bfbf-7e4ab9484e95
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and count.subevents != 1 and subject.account.id != null and subject.account.name = null and object != "process"'
+  LocalizationId: 6a7ba574-f07c-2b53-1464-28bd950f1de5
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and count.subevents = 1 and subject.account.name != null and object != "process"'
+  LocalizationId: 8f814c91-0d23-910c-1457-2bd1e3aa0068
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and object = "process" and subject.account.name != null'
+  LocalizationId: 93f4d5cb-9e21-8e9b-3d35-6f3418935954
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and count.subevents != 1 and subject.account.id = null and object != "process"'
+  LocalizationId: b2b2203c-6174-4b9f-78e2-8721740e8f4d
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and object = "process" and subject.account.id = null'
+  LocalizationId: c11fb10c-b9cf-c922-b07e-60efa6b297fd
+- Criteria: 'correlation_name = "Unix_Boot_Modify" and count.subevents = 1 and subject.account.id != null and subject.account.name = null and object != "process"'
+  LocalizationId: d985ae6a-2734-9ec2-b5d3-2c76d65a3feb
+PtkbId: 22a744c4-04bc-4304-9f84-8e7023ceec4d
+ObjectId: PT-CR-439
+Origin: PT

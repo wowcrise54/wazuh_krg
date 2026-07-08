@@ -1,0 +1,48 @@
+JSON = ''
+COND = $SLGTYPE.SUBID == "V" and $SLGTYPE.AREA == "CU"
+
+subject = "account"
+action = "start"
+object = "module"
+status = "success"
+
+subformula "slgdata_processing"
+    TEXT = "{object.name=WORD}{'&'$operation=REST}"
+endsubformula
+
+subject.account.id = $SLGUSER
+
+submessage("TEXT", "slgdata_processing", $SLGDATA)
+object.type = "executable module"
+
+if maybe_ipv4($SLGLTRM2) == null && $SLGLTRM2 != "" then
+    src.hostname = $SLGLTRM2
+elif maybe_ipv4($SLGLTRM2) != null then
+    src.ip = $SLGLTRM2
+endif
+
+if $SLGMAND != "" then
+    datafield1 = $SLGMAND                                                               # Client or mandant
+endif
+datafield2 = $SLGPROC.UNIXPID + $SLGPROC.TASKTNO + $SLGPROC.SLGTTYP + $SLGPROC.SLGMODE  # Other information
+if $SLGTC != "" then
+    datafield3 = $SLGTC                                                                 # Transaction code
+endif
+if $SLGREPNA != "" then
+    datafield4 = $SLGREPNA                                                              # Report name
+endif
+
+time = $SLGDATTIM.DATE + $SLGDATTIM.TIME
+msgid = $SLGTYPE.AREA + $SLGTYPE.SUBID
+importance = "low"
+
+category.high = "Availability Management"
+category.generic = "Executable Module"
+category.low = "Control"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_ABAP_filemonitor_Successful_WS_call"

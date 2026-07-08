@@ -1,0 +1,16 @@
+TEXT = 'R {WORD} {time=DATETIME}:{NUMBER} set registered server ({object.name=UNTIL(")")}
+        to RUNNING (hdl={NUMBER}, id={NUMBER}, lu={dst.hostname=HOSTNAME})'
+
+action = "install"
+object = "application"
+status = "success"
+
+object.type = "transport control program (tp)"
+importance = "info"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.category = "Application server"
+event_src.subsys = "gateway log"
+
+id = "PT_SAP_SAP_AS_ABAP_Gateway_Log_filemonitor_Set_Registered_server"

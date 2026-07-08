@@ -1,0 +1,179 @@
+query IsAddressWhitelisted($asset, $host, $repo, $user, $address) from SupplyChain_Artifactory_Subnets_Whitelist {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == "*"
+         and column::event_src_host == $host
+     )
+    )
+    and (column::repository == $repo or column::repository == "*")
+    and (column::user == $user or column::user == "*")
+    and in_subnet($address, column::subnet)
+}
+
+query GetAccount($asset, $host, $repo, $user, $src_host) from SupplyChain_Artifactory_Repositories_And_Addresses {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::user != $user
+    and column::src_host == $src_host
+}
+    qhandler {
+        $user = column::user
+     }
+
+query GetAddress($asset, $host, $repo, $user, $src_host) from SupplyChain_Artifactory_Repositories_And_Addresses {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::user == $user
+    and column::src_host != $src_host
+}
+    qhandler {
+        $src_host = column::src_host
+     }
+
+
+event File_Upload:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "artifactory"
+        and action == "upload"
+        and object == "file_object"
+        and status == "success"
+        and match(reason, "upload to important repository from new*")  # From new address and/or account
+        and not (
+                 match(reason, "*new address*")
+                 and exec_query("IsAddressWhitelisted", [event_src.asset, event_src.host, object.group, subject.account.name, src.ip])
+        )
+        and filter::CheckWL_Specific_Only("SupplyChain_File_Upload_To_Important_Repository",
+                                          lower(join([subject.account.name, object.group, object.path, event_src.host], "|")))
+    }
+
+
+rule SupplyChain_File_Upload_To_Important_Repository: File_Upload
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on File_Upload {
+        $subject.account.name = subject.account.name
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.group = object.group
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $chain_id = chain_id
+        $reason = reason
+
+        $datafield11 = datafield11  # Subnet with mask /32
+        $datafield12 = datafield12  # Subnet with mask /24
+        $datafield13 = datafield13  # Subnet with mask /16
+        $datafield14 = datafield14  # Subnet with mask /8
+
+        $numfield1 = numfield1      # Count of an accounts with same address
+        $numfield2 = numfield2      # Addresses count of same account 
+
+        $alert.key = lower(join([subject.account.name, object.group, object.path, event_src.host], "|"))
+
+        if numfield1 == 1 then
+            # TL SupplyChain_Artifactory_Repositories_And_Addresses
+            $account_data = exec_query("GetAccount", [event_src.asset, event_src.host, object.group, subject.account.name, src.host])
+            $account = "old account: " + $account_data["$user"]
+
+            $datafield1 = $account  # Previosly used account
+
+        elif numfield1 > 1 then
+            $account = "accounts used this address: " + string(numfield1)
+        endif
+
+        if numfield2 == 1 then
+            # TL SupplyChain_Artifactory_Repositories_And_Addresses
+            $address_data = exec_query("GetAddress", [event_src.asset, event_src.host, object.group, subject.account.name, src.host])
+            $address = "old address: " + $address_data["$src_host"]
+
+            $datafield2 = $address  # Previosly used address
+
+        elif numfield2 > 1 then
+            $address = "addresses for this account: " + string(numfield2)
+        endif
+
+        $reason_type = strip(reason, "upload to important repository from ", "")
+
+        $alert.context = join(remove([subject.account.name, src.host, $reason_type, $account, $address], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    if $reason_type == "new address and account" then
+        $correlation_type = "incident"
+
+        $importance = "high"
+
+    elif $reason_type == "new address" then
+        $correlation_type = "event"
+
+        if bool(ipv4($address)) then 
+            $first_dot = find_substr($address, ".")
+            $second_dot = find_substr(substr($address, $first_dot + 1, 4), ".")
+            $to_replace = substr($address, $first_dot + $second_dot + 2, 7)
+            $subnet = strip($address, "", $to_replace) + "0.0/16" 
+            $is_address_in_subnet = in_subnet($src.ip, $subnet)
+        endif
+
+        if $is_address_in_subnet then
+            $importance = "medium"
+        else
+            $importance = "high"
+        endif
+
+    elif $reason_type == "new account" then
+        $correlation_type = "incident"
+
+        $importance = "high"
+    endif
+
+    $subject = "account"
+    $action = "upload"
+    $object = "file_object"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Manipulation: Stored Data Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

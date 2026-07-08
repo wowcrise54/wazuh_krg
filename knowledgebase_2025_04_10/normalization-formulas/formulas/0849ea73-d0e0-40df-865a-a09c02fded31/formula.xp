@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["action"] == "Reject"
+       and $kv["fw_subproduct"] == "VPN-1"
+       and $kv["reject_category"] == "Remote Access Client authentication failure"
+
+subject = "account"
+action = "start"
+object = "session"
+status = "failure"
+
+subject.account.name = $kv["user"]
+
+src.ip = $kv["src"]
+protocol = lower(strip($kv["scheme"], ':"', '"'))
+
+datafield8 = $kv["originsicname"]  # полное доменное имя
+datafield9 = $hostname             # имя устройства с LogExporter
+
+reason = strip(strip($kv["ppp"], ':"', '"'), " ", "  ")
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = "vpn-gateway"
+event_src.ip = $kv["origin"]
+event_src.category = "VPN"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_VPN_and_Firewall_Reject_Login"

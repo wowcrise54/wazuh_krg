@@ -1,0 +1,75 @@
+# Cisco ASA PIX FWSM
+
+event Ip_Assigned:
+    key:
+        subject.account.name, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "722051" 
+        and event_src.vendor == "cisco"
+        and filter::CheckWL_Networking("Cisco_WebVPN_Start_Success", join([lower(subject.account.name), src.ip], "|"))
+    }
+
+event Session_Start:
+    key:
+        subject.account.name, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "716001" 
+        and event_src.vendor == "cisco"
+        and filter::CheckWL_Networking("Cisco_WebVPN_Start_Success", join([lower(subject.account.name), src.ip], "|"))
+    }
+
+rule Cisco_WebVPN_Start_Success: (Ip_Assigned? and Session_Start) timer 5s
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Ip_Assigned {
+        $assigned_src_ip = assigned_src_ip
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+    on Session_Start {
+        $subject.account.name = subject.account.name
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $datafield4 = datafield4  # group policy
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "start"
+    $object = "session"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "External Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+
+    $alert.key = lower(join([$subject.account.name, $src.ip], "|"))
+}

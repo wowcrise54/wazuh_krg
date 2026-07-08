@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}{"%%"NUMBER?} 
+        {$tmp_subsys=WORD}/{NUMBER}/{msgid="CONNECT_INPT"}({WORD}){"["NUMBER"]"?}:The switch is disconnected from the 
+        Controller. The Controller is master and the Controller IP address is {dst.ip=IPV4}.'
+
+action = "info"
+object = "device"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Connection_lost"

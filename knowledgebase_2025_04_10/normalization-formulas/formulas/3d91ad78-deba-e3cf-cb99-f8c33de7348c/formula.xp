@@ -1,0 +1,73 @@
+JSON = 'source="neutron"'
+
+COND = in_list(["create-subnet", "update-subnet", "delete-subnet"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "create-subnet" "create"
+    case "update-subnet" "modify"
+    case "delete-subnet" "remove"
+endswitch
+
+object = "resource"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["subnet"]
+
+if $properties["id"] != null then
+    object.id = $properties["id"]
+else
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[length($csv_uri) - 1]
+endif
+
+object.name = $properties["name"]
+object.type = "subnet"
+
+if $properties["cidr"] != null then
+    object.property = "cidr"
+    object.value = $properties["cidr"]
+endif
+
+datafield1 = $method                       # Method
+datafield2 = $uri                          # URL
+datafield3 = $properties["network_id"]  # The ID of the network to which the subnet belongs
+datafield6 = $properties["project_id"]     # The ID of the project
+
+if $properties["description"] != "" then
+    datafield9 = $properties["description"]  # A human-readable description for the resource
+endif
+
+reason = $response_body["NeutronError"]["message"]
+
+time = $timestamp
+msgid = $action
+importance = "low"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Neutron_Subnet_operations"

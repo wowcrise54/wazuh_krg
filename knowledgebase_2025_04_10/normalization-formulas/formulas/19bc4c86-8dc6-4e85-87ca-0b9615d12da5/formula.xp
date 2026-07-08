@@ -1,0 +1,95 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|"localhost"|$Computer=HOSTNAME}
+        BT_TDS[{NUMBER}]: {$json=REST}'
+
+# object differs
+action = "detect"
+status = "success"
+
+subformula "log"
+    # parse included JSON message
+    JSON = 'event_type = "alert"'
+    COND = in_list(["apt-trojan",
+                    "attempted-admin",
+                    "attempted-user",
+                    "backdoor",
+                    "banking-trojan",
+                    "mobile-trojan",
+                    "trojan-activity",
+                    "ek-activity",
+                    "general-suspicious",
+                    "phishing-activity",
+                    "policy-violation",
+                    "unwanted-software",
+                    "ransomware",
+                    "attempted-recon",
+                    "spyware"],
+                    $alert['category'])
+
+    if in_list(["trojan-activity", "mobile-trojan", "unwanted-software"], $alert['category']) then
+        object = "malware"
+        object.property = "severity"
+        object.value = $alert['severity']
+
+        if $alert['action'] != "allowed" then
+            object.state = $alert['action']
+        endif
+
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Detection"
+    else
+        object = "alert"
+        object.state = $alert['action']
+    endif
+    
+    object.storage.fullpath = $http['url']
+    $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+    $csv_path = csv($csv_p, '/', '')
+    if length($csv_path) > 1 then
+        object.storage.name = $csv_path[length($csv_path) - 1]
+        object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+    else
+        object.storage.name = $csv_p
+    endif 
+    object.id = $alert['signature_id']
+    object.name = $alert['signature']
+    object.type = $alert['category']
+    
+
+    src.ip = $src_ip
+    src.port = $src_port
+
+    dst.ip = $dest_ip
+    dst.port = $dest_port
+    dst.hostname = $http['hostname']    # http_hostname
+
+    interface = $in_iface
+    protocol = $proto
+
+    datafield1 = $http['status']        # http_status
+    datafield2 = $payload_printable     # printable payload
+
+    time = $timestamp
+    if ($alert['severity'] <= 2) then
+        importance = "low"
+    elif ($alert['severity'] == 3) then
+        importance = "medium"
+    elif ($alert['severity'] > 3) then
+        importance = "high"
+    endif
+endsubformula
+
+submessage("JSON", "log", $json)
+
+event_src.title = "bot_trek_tds"
+event_src.vendor = "group_ib"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network security"
+
+id = "PT_Group_IB_Bot_Trek_TDS_syslog_Detection"

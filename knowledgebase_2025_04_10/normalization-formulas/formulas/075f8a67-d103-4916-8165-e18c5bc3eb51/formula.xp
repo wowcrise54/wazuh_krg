@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "System Monitor"
+       and find_substr($kv["sys_message:"], "not protected by the anti-spoofing feature") != null
+
+action = "info"
+object = "interface"
+status = "success"
+
+interface = substr($kv["sys_message:"], 4, find_substr($kv["sys_message:"], "interface")-5)
+
+datafield4 = $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+reason = "interface is not protected by the anti-spoofing feature"
+time = epoch_ms_to_datetime(number($kv["rt"]))
+importance = "medium"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Common_Anti_spoofing"

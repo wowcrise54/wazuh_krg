@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME|} {$subsys="waf-user-actions:"} {DATETIME} [info]  \'Date\':\'{time=DATETIME}\'|\'Ip\':\'{src.ip=IPV4|src.ip=IPV6}\'|\'User\':\'{subject.account.name=WORD}\'|\'Action\':\'create\'|\'Modified Page\':\'{object.type=WORD}\'|\'Item\':\'{$object_name=WORD?}\'|\'ID\':\'{$object_id=WORD?}\''
+
+subject = "account"
+action = "create"
+
+object = switch object.type
+    case "users" "account"
+    case "user_groups" "user_group"
+    case "web_apps" "application"
+    case "actions" "rule"
+endswitch
+
+if object == null then
+    object = "resource"
+endif
+
+status = "success"
+
+if object == "account" then
+    object.account.name = $object_name
+    object.account.id = $object_id
+else
+    object.name = $object_name
+    object.id = $object_id
+endif
+
+if object == "account" or object == "user_group" then
+    category.high = "Users And Rights Management"
+    category.generic = switch object
+        case "account" "Account"
+        case "user_group" "Group"
+    endswitch
+    category.low = "Manipulation"
+endif
+
+importance = "info"
+
+event_src.title = "application_firewall"
+event_src.vendor = "positive_technologies"
+event_src.category = "Application security"
+ 
+id = "PT_Positive_Technologies_Application_Firewall_syslog_Create_object"

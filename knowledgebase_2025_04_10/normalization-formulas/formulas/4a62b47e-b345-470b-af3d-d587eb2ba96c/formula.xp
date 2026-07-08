@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        named{"-pkcs11"?}[{NUMBER}]: {$temp_time_1=STRING} {$temp_time_2=STRING} {event_src.subsys="network"}: {UNTIL(":")}
+        no longer listening on {dst.ip=IPV4|dst.ip=IPV6}#{dst.port=NUMBER}'
+
+action = "remove"
+object = "socket"
+status = "success"
+
+$temp_time_3 = $temp_time_1 + " " + $temp_time_2
+time = datetime(replace($temp_time_3, "", "-", 0))
+
+importance = "info"
+
+category.generic = "Socket"
+category.high = "Network Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "bind"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_BIND_syslog_listen_stopped"

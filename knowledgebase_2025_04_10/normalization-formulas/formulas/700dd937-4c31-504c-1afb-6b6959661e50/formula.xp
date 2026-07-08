@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?}{time=DATETIME_SYSLOG|time=DATETIME_ISO8601}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        {":"?}%{$title="ASA"|$title="PIX"|$title="FWSM"|$title="FTD"}-
+        {NUMBER}-{msgid="713041"}:{"Group ="?}{IPV4|WORD|}{","?}{"IP="?}{UNTIL(",")}
+        IKE Initiator:{"New"|"Rekey"}{datafield1=UNTIL(",")}
+        Intf{datafield2=UNTIL(",")}IKE Peer{dst.ip=IPV4|dst.ip=IPV6}
+        local Proxy Address{IPV4},remote Proxy Address{IPV4}
+        , Crypto map({datafield3=UNTIL(")")}'
+        
+subject = "system"
+action = "open"
+object = "connection"
+status = "ongoing"    
+
+# datafield1 - phase of IPSEC
+# datafield2 - source interface number
+# datafield3 - crypto map tag
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"   
+category.low = "Communication"
+
+event_src.vendor = "cisco"
+event_src.title = lower($title)
+event_src.subsys = "vpn-gateway"
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_713041_crypto_tunnel_initialization"     

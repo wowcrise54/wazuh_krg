@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {STRING?} {WORD}/{WORD}/{WORD}/{WORD}: {time=DATETIME}{":"?}
+        {WORDDASH?}{"[" NUMBER "]" ?}{":"?} %{msgid="PKT_INFRA-LINEPROTO-5-UPDOWN"}:
+        Line protocol on Interface {$interface_tmp=STRING} changed state to {$state="Down"|$state="Up"}'
+
+action = lower($state)
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "data link"
+
+interface = strip($interface_tmp, "", ",")
+
+reason = "Line protocol changed state to " + string(action)
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "ios_xr"
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_XR_syslog_PKT_INFRA_LINEPROTO_UPDOWN"

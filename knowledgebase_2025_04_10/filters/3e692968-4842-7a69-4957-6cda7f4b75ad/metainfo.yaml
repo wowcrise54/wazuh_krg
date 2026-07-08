@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        en: "Checks a specific value for password guessing events according to the whitelisting system"
+        ru: "Проверяет специфичное значение для событий, связанных с подбором пароля, по системе вайтлистинга"
+    Description:
+        en: "This filter is used to reduce the repetitive part of the check through the table list system"
+        ru: "Данный фильтр используется для сокращения повторяющейся части проверки через систему табличных списков"
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            ru: "проверяемое специфическое значение"
+            en: "specific value"
+    rule_name:
+        Type: string
+        Name:
+            en: "correlation rule name"
+            ru: "название правила корреляции"
+ObjectId: PT-RF-96
+Origin: PT

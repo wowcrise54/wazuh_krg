@@ -1,0 +1,46 @@
+TEXT = 'header,{NUMBER},{NUMBER},{msgid="bind(2)"},{WORDDASH?},
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|},
+        {$time_y=WORD"-"$time_mo=WORD"-"$time_d=WORD}
+        {$time_h=WORD":"$time_m=WORD":"$time_s=WORD"."NUMBER} {LITERAL}{NUMBER}:
+        {NUMBER}, argument,{NUMBER},{WORD},so, socket,{WORD},{NUMBER}x
+        {$proto=NUMBER},{WORD},{IPV4|IPV6},{WORD},{IPV4|IPV6}, subject,
+        {subject.account.name=WORDDASH},{object.account.name=WORDDASH},{object.account.group=WORDDASH},
+        {WORDDASH},{WORDDASH}, {NUMBER},{object.account.session_id=NUMBER},{NUMBER+}
+        {IPV4|IPV6|HOSTNAME},return,{$stat=WORD},
+        {NUMBER}'
+
+subject = "account"
+action = "assign"
+object = "socket"
+if $stat == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+if $proto == 0100 then
+    protocol = "UDP"
+else
+    protocol = "TCP"
+endif
+
+time = $time_y + $time_mo + $time_d + $time_h + $time_m + $time_s
+
+importance = "info"
+
+category.generic = "Socket"
+category.high = "Network Management"
+category.low = "Manipulation"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_bind_socket_csv"

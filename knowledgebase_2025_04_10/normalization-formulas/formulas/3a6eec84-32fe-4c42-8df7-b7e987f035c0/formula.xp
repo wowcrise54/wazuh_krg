@@ -1,0 +1,68 @@
+TEXT = 'LogMessageId: {WORDDASH?}, DriverId: {$sysid=WORDDASH},
+        DateTime: {$day=WORD}.{$month=WORD}.{$year=WORD} {$hour=WORD}:{$min=WORD}:{$sec=WORD},
+        IsKeyEvent: {WORD}, MessageType: {WORD}, MessageSubType:
+        {msgid="AccessPointPassUnknown"|msgid="AccessPointDoorClosed"|msgid="AccessPointPassRefusedByKey"|
+        msgid="AccessPointDoorLeftOpenedByKey"|msgid="AccessPointEntryByKey"|msgid="AccessPointExitByCardReceiver"|
+        msgid="AccessPointExitByKey"|msgid="AccessPointKeyAppliedExit"|msgid="AccessPointKeyAppliedEntry"|msgid="AccessPointPassDenied"},
+        EmployeeId: {$userid=WORDDASH?}, Message: {$reason=STRING+} Details:{$details=STRING+}
+        OperatorId: {WORDDASH?}, DriverName: {$sysname=STRING+} EmployeeFullName: {$name=STRING*}'
+
+if length($hour) == 1 then
+    $hour = "0" + $hour
+endif
+
+time = $month + "." + $day + "." + $year + " " + $hour + ":" + $min + ":" + $sec
+
+subject = "system"
+action = "allow"
+object = "account"
+
+if msgid == "AccessPointDoorClosed" or
+    msgid == "AccessPointPassDenied" or
+    msgid == "AccessPointPassRefusedByKey"
+    then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subject.id = $sysid
+subject.name = strip($sysname, "", ",")
+
+if $userid != "" then
+    object.id = $userid
+endif
+
+if $name != "" then
+    object.name = $name
+endif
+
+if msgid == "AccessPointExitByCardReceiver" or
+    msgid == "AccessPointExitByKey" or
+    msgid == "AccessPointKeyAppliedExit" or
+    msgid == "AccessPointPassRefusedByKey"
+then
+    object.state = "exit"
+else
+    object.state = "enter"
+endif
+
+if $details != "," and
+    $details != "По кнопке турникета,"
+then
+    submessage ("TEXT", "add_info", $details)
+endif
+
+subformula "add_info"
+    TEXT = '{STRING+?} Номер ключа {object.value=NUMBER} {REST}'  # Номер ключа
+    object.property = "key"
+endsubformula
+
+reason = strip($reason, "", ",")
+
+event_src.vendor = "rusguard"
+event_src.title = "rusguard_soft"
+event_src.category = "Physical security"
+
+id = "PT_RusGuard_RusGuard_Soft_filemonitor_Entrance_Exit"
+importance = "info"

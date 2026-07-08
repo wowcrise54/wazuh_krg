@@ -1,0 +1,90 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[vob.user.ssh.session."WORD"]"?}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[esx.audit.ssh.session."WORD"]"?}
+{$subsys="vobd:""[GenericCorrelator]" WORD":" "[vob.user.ssh.session."WORD"]"?}
+{$subsys="Hostd:" WORD "hostd["WORD"] [Originator@"NUMBER $kv=UNTIL("]")?}{"Event" NUMBER?}{":"?}
+SSH {$act="session was closed"|$act="session was opened"|$act="login has failed"} for {$data=REST}'
+
+# 1-4: события, возникающие одновременно при закрытии сессии
+# 5-8: события, возникающие одновременно при неудачном входе
+# 9-12: события, возникающие одновременно при успешном входе
+
+subject = "account"
+
+action = switch $act
+    case "session was closed" "logout"
+    case "session was opened" "login"
+    case "login has failed" "login"
+endswitch
+
+object = "system"
+
+status = switch $act
+    case "session was closed" "success"
+    case "session was opened" "success"
+    case "login has failed" "failure"
+endswitch
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$data = strip($data, "'", "'.")
+$list = csv($data, "@", "'")
+$arguments_2 = $list[length($list)-1]
+$arguments_1 = strip($data, "", "@" + $arguments_2)
+
+submessage("TEXT", "parse_user", $arguments_1)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+src.ip = $arguments_2
+
+logon_auth_method = "remote"
+logon_service = "ssh"
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+chain_id = $kv_msg["opID"]  # opID field of header
+
+msgid = switch $act
+    case "session was closed" "esx.audit.ssh.session.closed"
+    case "session was opened" "esx.audit.ssh.session.opened"
+    case "login has failed" "esx.audit.ssh.session.failed"
+endswitch
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = lower(strip($subsys, "", ":"))
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_SSH_Session"

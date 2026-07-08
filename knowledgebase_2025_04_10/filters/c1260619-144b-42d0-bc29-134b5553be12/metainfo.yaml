@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        ru: "Поля события запуска задач есть в списке исключений"
+        en: "Event fields are present in a list of exclusions (task start)"
+    Description:
+        ru: "Значения полей корреляционного события совпадают со значениями из списка исключений. Макрос применим только к событиям типа \"Запуск задачи\""
+        en: "Correlated event field values match values from a list of exclusions. The macro is only applicable to events of the \"Task start\" type."
+    UseAsEventName: False
+Args:
+    rule_name:
+        Type: string
+        Name:
+            ru: "название правила корреляции"
+            en: "correlation rule name"
+    specific_value:
+        Type: string
+        Name:
+            en: "correlated event field value"
+            ru: "значение поля корреляционного события"
+ObjectId: PT-RF-55
+Origin: PT

@@ -1,0 +1,39 @@
+# {"ApacheKafkaMessage": {"message": "{\"message\":\"\u0421\u0435\u0441\u0441\u0438\u044f \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u0442\u0435\u0440\u043c\u0438\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0430 admin\",\"token\":\"0c648bfa-0cff-4a1d-96f3-4690c8b82131\",\"result\":0,\"environment\":\"uss-rg\",\"@timestamp\":\"2022-09-07T11:12:38.262313684Z\",\"event_type\":\"AUTH_1\",\"service\":\"uss-event-registration\",\"@version\":\"1\"}", "topic": "uss-sp-events", "group_id": "maxpatrol-siem"}}
+
+JSON = ''
+
+COND = $ApacheKafkaMessage["message"] != null
+        and find_substr($ApacheKafkaMessage["message"], 'uss-event-registration') != null
+        and find_substr($ApacheKafkaMessage["message"], 'AUTH_1') != null
+
+$stripped = strip($ApacheKafkaMessage["message"], '{', '}')
+$replaced = replace($stripped, ' ', '\"')
+$kv = keyvalue($replaced, ',', ':', '\"')
+
+subject = "account"
+action = "terminate"
+object = "session"
+status = switch $kv["result"]
+   case "0" "success"
+   case "1" "failure"
+   case "2" "success"
+endswitch
+
+$term = find_substr($kv["message"], "терминирована") + 14
+subject.account.name = substr($kv["message"], $term, 100)
+
+reason = $kv["message"]
+
+time = $kv["@timestamp"]
+msgid = $kv["event_type"]
+importance = switch $kv["result"]
+   case "0" "info"
+   case "1" "low"    
+   case "2" "high"
+endswitch
+
+event_src.vendor = "otr"
+event_src.title = "uss"
+event_src.category = "AAA"
+
+id = "PT_OTR_USS_customeventcollector_Session_terminated"

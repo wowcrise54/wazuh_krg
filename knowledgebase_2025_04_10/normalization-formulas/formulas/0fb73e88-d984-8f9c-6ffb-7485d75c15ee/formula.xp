@@ -1,0 +1,52 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME} {$Computer=HOSTNAME} [{$time_date=DATETIME},{$time_rest=NUMBER}] TRACE
+        [{datafield2=UNTIL(' ')} Handling request:RequestHeader({$request_header=UNTIL(')')} 
+        -- {WORD}({$temp_data=UNTIL('from')} connection
+        {datafield3=UNTIL(';')} securityProtocol:{datafield6=WORD},principal:{datafield11=UNTIL(':')}
+        {object.account.name=UNTIL(' ')} ({datafield1=UNTIL(')')}"
+
+action = "receive"
+object = "request"
+status = "ongoing"
+
+$data = csv($request_header, ',', '')
+$req_data = csv($temp_data, ',', '')
+object.name = csv($data[0], 'apiKey=', '')[1]
+object.version = csv($data[1], 'apiVersion=', '')[1]
+
+datafield1 = strip(datafield1, '', ')')                                          # module created event
+datafield2 = strip(datafield2, '', ']')                                          # module name
+datafield4 = csv($data[2], 'clientId=', '')[1]                                   # client id
+datafield5 = csv($data[3], 'correlationId=', '')[1]                              # correlation id
+
+
+if csv($req_data[0], 'brokerId=', '')[1] !=null then
+    datafield7 = csv($req_data[0], 'brokerId=', '')[1]                           # broker id 
+    datafield8 = strip(csv($req_data[1], 'brokerEpoch=', '')[1], '', ') ')       # broker epoch
+else
+    datafield7 = csv($req_data[0], 'groupId=', '')[1]                            # group id 
+    datafield8 = strip(csv($req_data[1], 'generationId=', '')[1], '', ') ')      # generationId
+    datafield9 = csv($req_data[2], 'memberId=', '')[1]                           # memberId
+    datafield10 = strip(csv($req_data[3], 'groupInstanceId=', '')[1], '', ') ')  # groupInstanceId
+endif
+
+datafield11 = csv($data[4], 'headerVersion=', '')[1]                             # header version
+# datafield3 connection socket
+# datafield6 security protocol
+# datafield11 principal type
+
+time = epoch_ms_to_datetime(datetime_to_epoch_ms($time_date) + $time_rest)
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache_kafka"
+event_src.category = "Other"
+
+id = "PT_Opensource_ASF_Apache_Kafka_syslog_handling_request"

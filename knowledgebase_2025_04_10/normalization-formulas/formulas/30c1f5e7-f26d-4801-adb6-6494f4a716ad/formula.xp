@@ -1,0 +1,42 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1125"
+       and $event_category == "Разграничение доступа к устройствам"
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+action = "connect"
+object = "device"
+status = "success"
+
+subformula "message"
+    TEXT = 'Подключение устройства. Группа: {object.group=STRING+} Класс: {object.type=STRING+} Устройство:
+            {object.name=STRING+} Режим работы: {REST}'
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Разграничение доступа к устройствам" then
+    event_src.subsys = "device access control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1125_device_connected"

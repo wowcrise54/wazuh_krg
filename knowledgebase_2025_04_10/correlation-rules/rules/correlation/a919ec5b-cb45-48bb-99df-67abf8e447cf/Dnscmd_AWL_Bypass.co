@@ -1,0 +1,160 @@
+event Dnscmd_DLL_Injection_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("dnscmd.exe", "(-|/)serverlevelplugindll")
+        and filter::CheckWL_Process_Creation("Dnscmd_AWL_Bypass", lower(object.process.cmdline))
+    }
+
+event Dnscmd_DLL_Injection_Reg:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and find_substr(lower(object.path), "\\services\\dns\\parameters") != null
+        and lower(object.name) == "serverlevelplugindll"
+        and filter::CheckWL_Registry_Actions("Dnscmd_AWL_Bypass", lower(join([subject.process.fullpath, object.value], "|")))
+    }    
+    
+rule Dnscmd_AWL_Bypass: Dnscmd_DLL_Injection_Command or Dnscmd_DLL_Injection_Reg
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Dnscmd_DLL_Injection_Command {
+        $action = action  # start
+        $object = object  # process
+
+        $object.fullpath = strip(string(regex(lower(object.process.cmdline), "/serverlevelplugindll\s+([^\s]+)", 1)), '"', '"')
+        $object.name = string(regex($object.fullpath, "\\\\([a-z0-9-_\.]+\.dll)", 1))
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "serverlevelplugindll", 0)
+        $alert.context = "regex match: " + $alert.regex_match
+        
+        if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+            $reason = "Service execution"
+        elif $object.process.parent.name == "scheduler.exe" then
+            $reason = "Task execution"
+        else
+            $reason = "User execution"
+        endif 
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Dnscmd_DLL_Injection_Reg {
+        $action = action  # modify
+        $object = object  # reg_object
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        $subject.process.id = subject.process.id
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys       
+        $event_src.asset = event_src.asset
+        
+        $alert.key = lower(join([subject.process.fullpath, object.value], "|"))
+        $alert.context = join([$object.name, $object.value], " → ")
+        $labels = $labels + "|CheckWL_Registry_Actions"
+    }
+    
+emit {
+    $correlation_type = "incident"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    endif
+    $status = "success"
+
+    $object.type = "library"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Process Injection: Dynamic-link Library Injection"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

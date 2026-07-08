@@ -1,0 +1,68 @@
+event Client_Reject:
+    key:
+        event_src.host, event_src.id
+    filter {
+        correlation_name == "Subrule_SAPASABAP_GW_Check_Registered_Tp"
+    }
+
+rule SAPASABAP_GW_Check_Registered_Tp: (Client_Reject[3,] with different object.name) timer 5m
+
+    init {
+        $first_event = true
+    }
+
+    on Client_Reject {
+        if $first_event then 
+            $action = action
+            $object = object
+            $status = status
+
+            $event_src.id = event_src.id
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $first_event = false
+        endif
+
+        $object_name_list = append($object_name_list, object.name)
+
+        if src.host != null and not in_list($src_host, src.host) then
+            $src_host = append($src_host, src.host)
+        endif
+
+        if dst.host != null and not in_list($dst_host, dst.host) then
+            $dst_host = append($dst_host, dst.host)
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $object.name = join($object_name_list, "|")
+
+    if $src_host != null and $dst_host != null then
+        $alert.context = join(["source addresses: " + join($src_host, ", "), "destination addresses: " + join($dst_host, ", ")], " | ")
+    elif $src_host != null then
+        $alert.context = "source addresses: " + join($src_host, ", ")
+    elif $dst_host != null then
+        $alert.context = "destination addresses: " + join($dst_host, ", ")
+    endif
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "System Service Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

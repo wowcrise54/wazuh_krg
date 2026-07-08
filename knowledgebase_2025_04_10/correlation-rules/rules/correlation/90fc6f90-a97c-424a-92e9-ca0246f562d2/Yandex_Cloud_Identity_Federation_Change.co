@@ -1,0 +1,87 @@
+event Identity_Federation_Change:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "yandex_cloud"
+        and event_src.subsys == "organizationmanager.saml"
+        and action == "modify"
+        and object == "resource"
+        and object.type == "federation"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("Yandex_Cloud_Identity_Federation_Change", lower(join([src.ip, object.storage.fullpath, object.name], "|")))
+    }
+
+rule Yandex_Cloud_Identity_Federation_Change: Identity_Federation_Change
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Identity_Federation_Change {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+
+        $subject.process.meta = subject.process.meta
+
+        $subject.state = subject.state
+        $subject.type = subject.type
+
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $logon_auth_method = logon_auth_method
+
+        $datafield1 = datafield1  # Наименование организации
+        $datafield4 = datafield4  # Идентификатор IdP-сервера
+        $datafield5 = datafield5  # SSO метод
+        $datafield6 = datafield6  # Ссылка на страницу для входа в IdP
+
+        $chain_id = chain_id
+
+        $alert.key = lower(join([src.ip, object.storage.fullpath, object.name], "|"))
+        $alert.context = lower(join(remove([subject.account.name, src.ip, object.type, object.name, object.storage.fullpath], null), " | "))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "resource"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Valid Accounts: Cloud Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $object.storage.fullpath, $object.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

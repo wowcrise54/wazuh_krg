@@ -1,0 +1,22 @@
+TEXT = '{time=DATETIME} {STRING} ({WORD}) {WORD+} {msgid="8l0o"} {WORD}
+        Feature Installation: Calling Feature{$action_tmp="Installed"|"Uninstalling"} method
+        for Feature \'{$name_tmp=STRING+} (ID: \'{WORDDASH}\' {", Compatibility Level:"NUMBER?}).'
+
+if $action_tmp != null then
+    action = "install"
+else
+    action = "uninstall"
+endif
+
+object = "application"
+status = "success"
+
+object.name = strip($name_tmp,"","'")
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Feature_installed_or_uninstalled"

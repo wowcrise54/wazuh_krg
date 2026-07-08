@@ -1,0 +1,27 @@
+id = "PT_Juniper_Junos_syslog_transport_protocols_attack_detected"
+
+!TEXT = '{"<"NUMBER">"}{NUMBER} {time=DATETIME} {$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        {$tmp_subsys=WORDDASH} - RT_SCREEN_{protocol=WORD} [junos@2636.{STRING} attack-name=\"{$obj=STRING+} source-address = \"{src.ip = IPV4|src.ip = IPV6}\"
+        source-port = \"{src.port = NUMBER}\" destination-address = \"{dst.ip =IPV4|dst.ip = IPV6}\" destination-port = \"{dst.port = NUMBER}\"
+        source-zone-name = \"{datafield1=WORDDASH}\" interface-name = \"{$interface2 = STRING} action = \"{WORDDASH}\" ]'
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+interface = strip($interface2, ' ', '"')
+object.name = strip($obj, " ", "!\"")
+
+
+status = "success"
+action = "detect"
+object  = "attack"
+
+importance = "high"
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "IDS/IPS Alert"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "IDS/IPS"

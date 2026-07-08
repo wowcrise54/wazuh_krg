@@ -1,0 +1,74 @@
+event Add_Distribution_Group_Member:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and in_list(["1", "6"], msgid)
+        and event_src.title == "exchange"
+        and lower(object.name) == "add-distributiongroupmember"
+        and regex(lower(object.process.cmdline), 'add-distributiongroupmember -identity\s+\\"r\.', 0) == null
+        and filter::CheckWL_Process_Creation("Distribution_Group_Member_Added", lower(join([subject.account.name, object.process.cmdline], "|")))
+    }
+
+rule Distribution_Group_Member_Added: Add_Distribution_Group_Member
+
+    init {
+        $labels = "CheckWL_Process_Creation"
+    }
+
+    on Add_Distribution_Group_Member {
+        $status = status
+        
+        $subject.name = subject.name
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object = object
+        $object.value = object.value
+        $object.name = object.name
+        $object.group = regex(lower(object.process.cmdline), 'add-distributiongroupmember -identity "(.+?)"', 1)
+
+        $object.account.name = regex(lower(object.process.cmdline), 'add-distributiongroupmember -identity "(.+?)" -member "(.+?)"', 2)
+        if find_substr($object.account.name, "/") != null then
+            $object.account.name = regex(lower($object.account.name), '.*\/(.*)', 1)
+        endif
+
+        $object.process.id = object.process.id
+        $object.process.cmdline = object.process.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([subject.account.name, object.process.cmdline], "|"))
+        $alert.context = join(["member_added", $object.group, coalesce($object.account.name, $subject.account.name)], "|")
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "grant"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Valid Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $object.group], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

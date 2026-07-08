@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A user changed an object in Zabbix. This could be an attacker's attempt to disguise malicious activity, tools, or malware in the system or escalate privileges.</Description>
+  <EventDescriptions>
+    <EventDescription id="16b635f6-64db-4b88-78f6-344157c6011c">User {subject.account.name} changed application "{object.name}" in Zabbix on host {event_src.host}</EventDescription>
+    <EventDescription id="5e148595-d3bb-8b83-40e7-8ee375ebdf26">User {subject.account.name} changed host "{object.name}" in Zabbix on host {event_src.host}</EventDescription>
+    <EventDescription id="84170f64-98b9-c05e-fe9c-2efa553e6fed">User {subject.account.name} changed detection rule "{object.name}" in Zabbix on host {event_src.host}</EventDescription>
+    <EventDescription id="b966c463-8b2e-0a61-75c8-6a3ad40e8aff">User {subject.account.name} changed application configuration "{object.name}" in Zabbix on host {event_src.host}</EventDescription>
+    <EventDescription id="e03d000c-bb9f-fe8b-9e74-bbf4f5694a8b">User {subject.account.name} changed service "{object.name}" in Zabbix on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

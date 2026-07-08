@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        %%10LDP/{NUMBER}/{msgid="LDP_SESSION_DOWN"}(l): {"-DevIP="?}{event_src.ip=IPV4|event_src.ip=IPV6|} {";"?}
+        Session({src.ip=IPV4|src.ip=IPV6}:{src.port=NUMBER}, {datafield1=WORD+})\'s state changed to {object.state="down"}.'
+
+action = "stop"
+object = "session"
+status = "success"
+
+protocol = "ldp"
+
+importance = "low"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "comware_software"
+event_src.category = "Network device"
+
+id = "PT_Hewlett_Packard_Enterprise_Comware_Software_syslog_ldp_session_down"

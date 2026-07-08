@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+MID {object.id=NUMBER} antivirus positive {$name=REST}'
+
+action = "detect"
+object = "malware"
+status = "success"
+
+object.name = strip($name, "'", "'")
+
+importance = "medium"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_antivirus_positive"

@@ -1,0 +1,121 @@
+query IsBranchImportant($asset, $host, $repo, $branch) from SupplyChain_Important_Branches {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::branch == $branch
+}
+
+query IsBranchProtected($asset, $host, $repo, $branch) from SupplyChain_Important_Branches_Registry {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and regex_match($branch, column::branch)
+}
+
+query GerMergeRequestsCount($asset, $host, $repo, $branch) from SupplyChain_Important_Branches_Temporary {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::branch == $branch
+}
+
+
+event Merge_Request_Operations:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and (
+             (
+              object.type == "merge_request"
+              and (
+                   action == "create"
+                   or (
+                       action == "modify"
+                       and match(object.new_value, "*target_branch*")
+                   )
+              )
+             )
+             or (
+                 object.type == "branch"
+                 and action == "modify"
+                 and object.state == "protected"
+                 and find_substr(object.name, "*") == null
+                 and in_list(["Projects::ProtectedBranchesController#create", "Project::ProtectedBranch#protect"], msgid)
+             )
+        )
+        and status == "success"
+    }
+
+
+enrichment SupplyChain_Important_Branches_Definition
+    enrich Merge_Request_Operations:
+
+        enrich_fields {
+            $repository = join([datafield2, datafield1], "/")
+
+            $branch = switch object.type
+                case "merge_request" coalesce(regex(object.new_value, "'target_branch':\s*'([^']*)'", 1), object.new_value)
+                case "branch" object.name
+            endswitch
+
+            # TL SupplyChain_Important_Branches
+            $is_branch_important = exec_query("IsBranchImportant", [event_src.asset, event_src.host, $repository, $branch])
+
+            if not $is_branch_important then
+                # TL SupplyChain_Important_Branches_Registry
+                $is_branch_protected = exec_query("IsBranchProtected", [event_src.asset, event_src.host, $repository, $branch])
+            endif
+
+            if not ($is_branch_important or $is_branch_protected) then
+                if object.type == "merge_request" then
+                    # TL SupplyChain_Important_Branches_Temporary
+                    $mr_count = select_query_first("GerMergeRequestsCount", [event_src.asset,
+                                                                             event_src.host,
+                                                                             $repository,
+                                                                             $branch
+                                                                            ], "merge_requests_count")
+
+                    $mr_count = $mr_count + 1
+                    $threshold = 10  # May be changed
+
+                    if $mr_count =< $threshold then
+                        $insert_into_important_branches_temp_tl = true
+                    else
+                        $insert_into_important_branches_tl = true
+                    endif
+
+                elif object.type == "branch" then
+                    $insert_into_important_branches_tl = true
+                endif
+            endif
+        }
+
+        insert_into SupplyChain_Important_Branches_Temporary if $insert_into_important_branches_temp_tl {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = $repository
+            column::branch = $branch
+            column::merge_requests_count = $mr_count
+        }
+
+        insert_into SupplyChain_Important_Branches if $insert_into_important_branches_tl {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = $repository
+            column::branch = $branch
+        }

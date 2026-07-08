@@ -1,0 +1,41 @@
+!TABULAR = "{protocol=protocol},
+            {time = dateoccurred}"
+
+COND = $productname == "ESET Endpoint Security" and $event_descritpiton == "Обнаружена атака сканирования портов"
+
+action = "detect"
+object = "attack"
+status = "success"
+
+$src = csv($source, ":", "'")
+src.ip = $src[0]
+src.port = $src[1]
+
+$dst = csv($target, ":", "'")
+dst.ip = $dst[0]
+dst.port = $dst[1]
+
+$cl_ip = csv($client_ip_address, ":", "'")
+$n3 = $cl_ip[0]  # client ip address
+
+if src.ip == $n3 then
+    src.hostname = $client_name
+    src.mac = $client_macaddress
+elif dst.ip == $n3 then
+    dst.hostname = $client_name
+    dst.mac = $client_macaddress
+else
+    datafield1 = $client_name
+    datafield2 = $client_macaddress
+endif
+
+object.type = "port scanning"
+
+importance = "high"
+
+event_src.vendor = "eset"
+event_src.title = "eset_remote_administrator_server"
+
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_remote_administrator_server_odbc_Port_scan_attack_detected"

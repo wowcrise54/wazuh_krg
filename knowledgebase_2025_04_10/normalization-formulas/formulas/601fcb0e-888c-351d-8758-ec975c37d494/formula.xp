@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$host=HOSTNAME|}{":"?}
+        #ILO 4{":"?} {$additional_info=STRING+}
+        {$signal="Power-On"|$signal="Power-Off"} signal sent to host server by: {$subject_name_raw=REST}'
+
+subformula "get_real_time"
+    TEXT = '{$month=WORD}/{$day=WORD}/{$year=WORD} {$hour=WORD}:{$min=WORD}'
+    
+    time = $year + "-" + $month + "-" + $day + "T" + $hour + ":" + $min + ":00"
+endsubformula 
+        
+subject = "account"
+
+action = switch $signal
+   case "Power-On" "start"
+   case "Power-Off" "stop"
+endswitch
+
+object = "system"
+status = "success"
+
+# Deleting the final character
+$subject_name_raw = strip($subject_name_raw, "", "\\u0000")
+subject.account.name = lower(strip($subject_name_raw, "", "."))
+
+reason = "user sent " + lower($signal) + " signal"
+
+if find_substr($additional_info, ":") != null then
+    submessage("TEXT", "get_real_time", $additional_info)
+endif
+
+importance = switch action
+   case "start" "info"
+   case "stop" "medium"
+endswitch
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "ilo"
+event_src.hostname = lower($host)
+event_src.category = "Server management"
+
+id = "PT_Hewlett_Packard_Enterprise_iLO_syslog_user_sent_signal_power_on_off"

@@ -1,0 +1,49 @@
+!JSON = 'EventIdentifier=600'
+!COND = $Logfile=="Security" and $Category==5
+
+subject = "account"
+action = "start"
+object = "process"
+status = "success"
+
+subject.account.name = lower($InsertionStrings[7])
+subject.account.domain = lower($InsertionStrings[8])
+subject.account.session_id = maybe_number16(strip(csv($InsertionStrings[9], ",", "`")[1], "", ")"))
+
+object.process.id = $InsertionStrings[5]
+if $InsertionStrings[6] != null then
+    $name_tmp = csv(lower($InsertionStrings[6]), "\\", "'")
+    object.process.name = $name_tmp[length($name_tmp) - 1]
+    object.process.path = strip(lower($InsertionStrings[6]), "", object.process.name)
+endif
+
+object.process.parent.id = $InsertionStrings[0]
+if $InsertionStrings[1] != null then
+    $csv_path = csv(lower($InsertionStrings[1]), "\\","'")
+    object.process.parent.name = $csv_path[length($csv_path) - 1]
+    object.process.parent.path = strip(lower($InsertionStrings[1]), "", object.process.parent.name)
+endif
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_Common_Security_600_Process_was_assigned_a_primary_token"
+

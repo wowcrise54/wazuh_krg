@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {STRING?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        CEF:0|Imperva Inc.|SecureSphere|{NUMBER}{"."?}{NUMBER?}{"."?}{NUMBER?}|{object.type=WORDDASH*}|{object.name=UNTIL("|")}
+        {$severity=WORDDASH}|act={$waf_action=WORDDASH} {$kv=KEYVALUE(" ", "=")}'
+
+subject = "rule"
+action = "detect"
+object = "alert"
+status = "success"
+
+subject.name = $kv["cs1"]
+
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+protocol = $kv["proto"]
+
+datafield1 = $kv["cs2"]  # Server Group
+datafield2 = $kv["cs3"]  # Service Name
+reason = $kv["cs5"]
+
+importance = lower($severity)
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Network Attack"
+
+event_src.vendor = "imperva"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "waf"
+event_src.category = "Application security"
+
+id = "PT_Imperva_WAF_syslog_security_event"

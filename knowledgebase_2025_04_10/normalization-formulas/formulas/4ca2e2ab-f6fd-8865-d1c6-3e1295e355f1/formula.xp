@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{STRING?} {$maybe_time=DATETIME?} {event_src.ip=IPV4} {"WARN:"|"INFO:"}
+        {msgid="Login failed through Web"|msgid="Successful login through Web"} ({$kv=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = switch msgid
+    case "Login failed through Web" "failure"
+    case "Successful login through Web" "success"
+endswitch
+
+$kv = strip($kv, "", ")")
+$kv = keyvalue($kv, ", ", ": ", "~") 
+
+subject.account.name = lower($kv["Username"])
+
+src.ip = $kv["IP"]
+src.mac = $kv["MAC"]
+
+dst.ip = event_src.ip
+
+logon_auth_method = "remote"    
+logon_service = "web"
+
+time = coalesce($maybe_time, recv_time)
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "d-link"
+event_src.title = "des"
+event_src.category = "Network device"
+
+id = "PT_D_Link_DES_syslog_Web_login"

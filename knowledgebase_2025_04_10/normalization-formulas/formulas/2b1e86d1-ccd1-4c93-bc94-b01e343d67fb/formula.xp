@@ -1,0 +1,22 @@
+id = "PT_Avaya_ERS_5500_syslog_login_http_session"
+
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{event_src.hostname=HOSTNAME|STRING}  :
+        Web {$act = WORD} from IP address {src.ip = IPV4| src.ip = IPV6}'
+
+subject = "account"
+
+switch $act
+case "connection"
+  action = "start"
+case "disconnect"
+  action = "stop"
+endswitch
+
+object = "session"
+status = "success"
+
+importance = "info"
+
+event_src.title = "ers_5500"
+event_src.vendor = "avaya"
+event_src.category = "Network device"

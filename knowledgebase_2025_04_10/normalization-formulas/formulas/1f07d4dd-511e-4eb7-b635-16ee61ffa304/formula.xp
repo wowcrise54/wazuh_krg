@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["product"] == "System Monitor"
+       and find_substr($kv["sys_message"], "log server") != null
+       and find_substr($kv["sys_message"], "went down") != null
+
+action = "info"
+object = "host"
+status = "success"
+
+object.state = "down"
+
+$sym1 = find_substr($kv["sys_message"], "server") + 7
+$sym2 = find_substr($kv["sys_message"], "went") - 1
+dst.ip = substr($kv["sys_message"], $sym1, $sym2 - $sym1)
+
+datafield4 = $kv["originsicname"]  # полное доменное имя
+datafield9 = $hostname             # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Log_server_went_down"

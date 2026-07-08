@@ -1,0 +1,111 @@
+event IPC_Share_Access:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "5145"
+        and lower(object.storage.id) == "\\\\*\\ipc$"
+        # PetitPotam or PrinterBug
+        and in_list(["spoolss", "lsarpc", "efsrpc", "lsass", "srvsvc", "samr", "netlogon"], lower(object.storage.name))
+        and filter::CheckWL_Windows_Shares("Auth_Coerce_With_WebClient_Abuse", join([lower(src.host), lower(subject.account.name), lower(event_src.host), lower(object.storage.name)], "|"))
+    }
+
+event DavSetCookie:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("rundll32.exe", "@80\s+http:\/\/.*?\/pipe\/")
+        and lower(object.process.parent.name) == "svchost.exe"
+    }
+
+event Trigger_Auth:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and not filter::Loopback_Address(dst.ip)
+        and in_list(["3", "5156"], msgid)
+        and src.ip != dst.ip
+        and lower(direction) == "egress"
+        and dst.port == 80
+        and lower(object.process.name) == "svchost.exe"
+    }
+    
+rule Auth_Coerce_With_WebClient_Abuse: (IPC_Share_Access and DavSetCookie and Trigger_Auth) within 5s
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on IPC_Share_Access {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+    
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+    
+        $alert.key = join([lower(src.host), lower(subject.account.name), lower(event_src.host), lower(object.storage.name)], "|")
+        if lower(object.storage.name) == "spoolss" then
+            $alert.context = "PrinterBug"
+        else
+            $alert.context = "PetitPotam"
+        endif
+        $labels = $labels + "|CheckWL_Windows_Shares"
+    }
+
+    on DavSetCookie {
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+    }
+
+    on Trigger_Auth {
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Exploitation of Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, lower($src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 1h
+}

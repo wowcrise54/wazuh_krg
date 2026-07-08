@@ -1,0 +1,84 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} [{WORD} info \'Vimsvc.ha-eventmgr\' {$kvs=UNTIL("] ")} Event {NUMBER}: 
+Cannot login {$rest=REST}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subformula "no_access"
+    TEXT = 'user {$data=UNTIL(": no permission")}'
+    
+    msgid = "NoAccessUserEvent"
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING*}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+if (substr($rest, -15, 15) == ": no permission") then
+    submessage("TEXT", "no_access", $rest)
+else
+    $data = $rest
+    msgid = "BadUsernameSessionEvent"
+endif
+
+$list = csv($data, "@", "'")
+$ip_address = $list[length($list)-1]
+$user_name = strip($data, "", "@" + $ip_address)
+
+submessage("TEXT", "parse_user", $user_name)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+if in_list(["127.0.0.1", "[::1]"], $ip_address) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+    
+    src.ip = $ip_address
+    dst.ip = event_src.ip
+    dst.hostname = $Computer
+    dst.fqdn = event_src.fqdn
+endif
+
+$kv_msg = keyvalue($kvs, " ", "=", "'")
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_5_0_syslog_Cannot_login"

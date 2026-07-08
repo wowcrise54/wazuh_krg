@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {$time_raw=DATETIME?} {"Message forwarded from"?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?} {subject.process.name="rsyslogd"}{"["?}{subject.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+action \'{$r_action=LITERAL*}\' {$act="suspended"|$act="resumed"} (module \'{event_src.subsys=LITERAL*}\'){UNTIL(" try ")}{external_link=LITERAL+}]'
+
+subject = "process"
+
+action = switch $act
+    case "suspended" "stop"
+    case "resumed" "start"
+endswitch
+
+object = "resource"
+status = "success"
+
+object.type = "rsyslog_action"
+object.name = $r_action
+
+time = coalesce($time_raw, recv_time)
+importance = "low"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_rsyslog_syslog_action_suspend_resume"

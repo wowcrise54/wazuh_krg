@@ -1,0 +1,9 @@
+filter EventLogTruncate() {
+    event_src.title == "windows"
+    and (
+        msgid == "104"
+        or msgid == "1102"
+    )
+    and action == "clean"
+    and object == "log"
+}

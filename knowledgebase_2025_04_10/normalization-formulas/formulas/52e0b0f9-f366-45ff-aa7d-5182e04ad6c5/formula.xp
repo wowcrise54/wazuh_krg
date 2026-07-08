@@ -1,0 +1,47 @@
+JSON = "EventCode=20258"
+COND = $Logfile=="System" and $SourceName=="RemoteAccess"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+$name_domain = csv($InsertionStrings[2], "\\", "'")
+if length($name_domain) == 1 then
+    subject.account.name = lower($name_domain[0])
+else
+    subject.account.domain = lower($name_domain[0])
+    subject.account.name = lower($name_domain[1])
+endif
+
+interface = $InsertionStrings[3]
+
+logon_auth_method = "remote"
+
+reason = "The account does not have Remote Access privilege"
+
+time = $TimeGenerated
+msgid = $EventCode
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "vpn-gateway"
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+# Положение следующего блока строк в коде зафиксировано из-за порядка обработки данных
+dst.fqdn = event_src.fqdn
+dst.hostname = event_src.hostname
+
+id = "PT_Microsoft_Windows_wmi_20258_Authentication_failure"

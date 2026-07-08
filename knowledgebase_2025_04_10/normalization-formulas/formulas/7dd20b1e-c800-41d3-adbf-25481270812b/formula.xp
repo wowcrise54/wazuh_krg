@@ -1,0 +1,23 @@
+TEXT = '{time=DATETIME}{STRING} CEF:0|Lastline|Enterprise|{NUMBER}.{NUMBER}|file-download|{reason=WORD+}|{NUMBER}|{STRING}
+        cat={$object.type=STRING+} {UNTIL(" cs3=")}{object.property=STRING} {UNTIL(" dhost=")}{object.domain=STRING}
+        dpt={dst.port=NUMBER} dst={dst.ip=IPV4} {UNTIL(" fname=")}{object.name=STRING} {REST}'
+
+action = "detect"
+object = "alert"
+status = "success"
+
+$cn1_idx = find_substr($object.type, " cn1=")
+
+if $cn1_idx > 0 then
+    object.type = substr($object.type, 0, $cn1_idx)
+else
+    object.type = $object.type
+endif
+
+importance = "info"
+
+event_src.vendor = "lastline"
+event_src.title = "lastline_enterprise"
+event_src.category = "Honeypot"
+
+id = "PT_Lastline_Lastline_Enterprise_syslog_file_download"

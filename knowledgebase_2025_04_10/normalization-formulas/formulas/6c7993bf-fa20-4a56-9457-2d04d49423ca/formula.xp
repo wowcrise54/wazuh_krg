@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}
+        {UNTIL("Site:")} {"Site"?} {datafield1=UNTIL(",Server")}{"Name"?}: {datafield2=UNTIL(",")} Domain {"Name"?}:
+        {datafield3=UNTIL(",")}
+        Admin: {subject.account.name=UNTIL(",")} {"Event Description: "?} {"System"|"Domain"|"Limited"}
+        administrator \'{object.account.name=UNTIL("\'")} was {$stat="added"|$stat="deleted"} '
+
+subject = "account"
+
+if $stat == "added" then
+    action = "create"
+    importance = "info"
+else
+    action = "remove"
+    importance = "high"
+endif
+
+object = "account"
+status = "success"
+
+# datafield1 - Site Name
+# datafield2 - Server Name
+# datafield3 - Domain name
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip2, $ip1)
+event_src.hostname = coalesce($host2, $host1)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_administrator_add_remove_en_ru"

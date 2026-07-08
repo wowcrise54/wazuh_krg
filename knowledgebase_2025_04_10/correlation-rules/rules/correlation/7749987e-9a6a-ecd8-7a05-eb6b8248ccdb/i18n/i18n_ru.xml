@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Злоупотребление реестром Windows, что может быть признаком подготовки к атаке: закрепления, повышения привилегий, горизонтального перемещения, предотвращения обнаружения, сбора данных и другой вредоносной активности</Description>
+  <EventDescriptions>
+    <EventDescription id="1fef9d91-cbd9-0b7d-ec8b-2b5d33659164">Процесс {subject.process.name} добавил значение ключа реестра {object.name}, закодированное в Base64, на узле {event_src.host}. Признак обхода защиты для последующего выполнения закодированного файла</EventDescription>
+    <EventDescription id="43115d6c-b31d-4908-02b0-966942b058f7">Процесс {subject.process.name} добавил значение ключа реестра {object.name}, имеющее структуру закодированного Base64 сообщения, но с неправильным результатом декодирования на узле {event_src.host}. Признак обхода защиты для последующего выполнения закодированного файла</EventDescription>
+    <EventDescription id="7bbfbeab-6326-f972-b962-6ade74f9b532">Процесс {subject.process.name} добавил значение ключа реестра {object.name} большой длины на узле {event_src.host}. Признак обхода защиты для последующего выполнения закодированного файла</EventDescription>
+    <EventDescription id="943ccafa-93f9-91b3-725b-ad7fece36594">По артефактам в ключе реестра {object.name}, внедренным процессом {subject.process.name}, обнаружена возможная реализация атаки {datafield1} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

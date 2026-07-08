@@ -1,0 +1,41 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Системные сообщения"
+       and $event_id == 6
+       and find_substr($event_message, "Add Secret Net LSP in domain is successfull") != null
+
+action = "bind"
+object = "client"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение object.name и object.value из $event_message
+    TEXT = "Системное сообщение\n\r\n\rAdd {object.name='Secret Net LSP'} in {object.value='domain'} is successfull{'\n'?}"
+
+    object.property = "target"
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_client_connected_to_domain"

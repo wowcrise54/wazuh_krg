@@ -1,0 +1,35 @@
+TABULAR =  "id,
+            {subject.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name},
+            network_number,
+            {datafield1=participant_object_name},
+            {datafield2=participant_object_type}
+            "
+
+COND = $gr_name == "Действия со справочно-ключевой информацией"
+       and $ev_desc == "Создание справочников"
+       and $status == "Успешно"
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "success"
+
+object.type = "Dictionary"
+object.id = $network_number
+
+# datafield1 - имя получателя
+# datafield2 - тип получателя
+datafield3 = $participant_source_identifier  # идентификатор получателя
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_create_dictionary"

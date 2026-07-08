@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to 1C:Enterprise. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="242abfde-bb9b-039c-675d-b880b5145bf3">User {object.account.name} from host {src.host} logged in to 1C:Enterprise and connected to new database "{object.name}" on host {event_src.host}. The database is missing from the collected profile.</EventDescription>
+    <EventDescription id="2a21567d-ea3d-8d37-0d81-e29970de20e0">User {object.account.name} from host {src.host} logged in to 1C:Enterprise and established a connection to new 1C server {dst.host} on host {event_src.host}. The server is missing from the collected profile.</EventDescription>
+    <EventDescription id="2f9f1717-4480-d6cc-a917-5c8512187ff5">User {object.account.name} from new host {src.host} logged in to 1C:Enterprise on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="733eeff5-9a99-7db0-a5ac-3ca13d908deb">New user {object.account.name} from host {src.host} logged in to 1C:Enterprise on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="af5602b3-f175-ee77-6822-ab47c7f51aa0">User {object.account.name} from host {src.host} logged in to 1C:Enterprise on host {event_src.host}. The user account name in the operating system changed.</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,22 @@
+!TEXT = 'MonitoringType={msgid = "RAM_free_space"} Data: {$raminfo = KEYVALUE("|", "=")}'
+
+event_src.ip = recv_ipv4
+time = recv_time
+
+object.type = "ram"
+object.property = "load_percentage"
+object.num_value = $raminfo["memUsedPct"]
+numfield1 = number($raminfo["memTotalMB"]) * 1024                                    # kbytes
+numfield2 = (number($raminfo["memTotalMB"]) - number($raminfo["memFreeMB"])) * 1024  # kbytes
+
+action = "info"
+object = "resource"
+status = "success"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.category = "Network monitoring system"
+
+importance = "info"
+
+id = "PT_Monitoring_UNIX_like_ssheventcollector_RAM_Info"

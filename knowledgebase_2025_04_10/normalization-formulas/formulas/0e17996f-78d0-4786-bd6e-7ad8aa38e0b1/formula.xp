@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} audit:
+        [ID {NUMBER} audit.notice] {datafield1="rsh access"} {$stat="ok"|"failed"} session
+        {datafield2=NUMBER} by {subject.name=WORDDASH} as {datafield3=WORDDASH}:
+        {datafield4=WORDDASH} from {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}
+        text cmd {$cmd_message=REST}'
+
+subject = "account"
+action = "access"
+object = "system"
+if $stat == "ok" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula 'message'
+    TEXT = '{object.value=STRING?} / text remote user {WORDDASH} text local user {WORDDASH} text {reason=REST}'
+endsubformula
+
+object.property = "rsh command"
+if find_substr($cmd_message, 'text') != null then
+    submessage('TEXT', 'message', $cmd_message)
+elif $cmd_message != null then
+    object.value = $cmd_message
+endif
+
+# datafield1 - тип события
+# datafield2 - id сессии
+# datafield3 - от чьего имени выполняется команда (username)
+# datafield4 - от чьего имени выполняется команда (group)
+
+importance = "info"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_rsh_access"

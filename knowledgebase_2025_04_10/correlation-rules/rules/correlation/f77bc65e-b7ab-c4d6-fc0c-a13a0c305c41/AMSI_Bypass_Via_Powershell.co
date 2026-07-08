@@ -1,0 +1,329 @@
+event Forcing_An_Error_Or_Downgrading_PS_Version_Or_Providers_Patch:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and event_src.title == "windows"
+        and object == "command"
+        and action == "execute"
+        and (
+            regex(lower(object.process.cmdline), "\[ref\]\.assembly\.gettype\(.*?\)\.getfield\(.*?,.*?\)\.setvalue\(\$null,\$true\)", 0) != null
+            or regex(lower(object.process.cmdline), "powershell(\.exe)?\s+(-|\/)v(ersion)?\s+[\"\'\`]?[2-4][\"\'\`]?", 0) != null
+            or regex(lower(object.process.cmdline), "invoke\(\"(mpoav|amsi)\.dll\"\)", 0) != null
+        )
+        and filter::CheckWL_Powershell("AMSI_Bypass_Via_Powershell", lower(join([subject.account.id, object.process.cmdline], "|")))
+    }
+
+event Powershell_Library_Loaded:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        lower(correlation_name) == "powershell_library_loaded_into_process"
+        and lower(subject.process.name) == "powershell.exe"
+        and filter::CheckWL_Specific_Only("AMSI_Bypass_Via_Powershell", lower(alert.key))
+    }
+
+event Copied_PowerShell:
+    key:
+        event_src.host, object.process.id
+    filter {
+        lower(correlation_name) == "copied_or_renamed_executable"
+        and lower(object.process.name) == "powershell.exe"
+    }
+
+event Scanning_Interception:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and event_src.title == "windows"
+        and object == "command"
+        and action == "execute"
+        and find_substr(lower(object.process.cmdline), "add-type $") != null
+        and regex(lower(object.process.cmdline), "\\[system\.runtime\\.interopservices.marshal\\]", 0) != null
+        and filter::CheckWL_Powershell("AMSI_Bypass_Via_Powershell", lower(object.process.cmdline))
+    }
+
+event Scanning_Interception_PS_File_Create:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and regex(lower(object.name), "\.dll$", 0) != null
+        and lower(subject.process.name) == "powershell.exe"
+    }
+
+event Scanning_Interception_CSC_File_Create:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        lower(correlation_name) == "subrule_csc_start_and_file_create"
+    }
+
+
+rule AMSI_Bypass_Via_Powershell: 
+        Forcing_An_Error_Or_Downgrading_PS_Version_Or_Providers_Patch
+        or ((Scanning_Interception and Scanning_Interception_PS_File_Create and Scanning_Interception_CSC_File_Create)
+        or (Powershell_Library_Loaded and Copied_PowerShell) within 2m)
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on Forcing_An_Error_Or_Downgrading_PS_Version_Or_Providers_Patch {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.id = object.process.id
+
+        $labels = $labels + "|CheckWL_Powershell"
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([subject.account.id, object.process.cmdline], "|"))
+        if regex(lower(object.process.cmdline), "\[ref\]\.assembly\.gettype\(.*?\)\.getfield\(.*?,.*?\)\.setvalue\(\$null,\$true\)", 0) != null then 
+            $alert.regex_match = regex(lower(object.process.cmdline), "\[ref\]\.assembly\.gettype\(.*?\)\.getfield\(.*?,.*?\)\.setvalue\(\$null,\$true\)", 0)
+            $alert.context = $subject.account.name
+            $reason = "Forcing an Error"
+        elif regex(lower(object.process.cmdline), "powershell(\.exe)?\s+(-|\/)v(ersion)?\s+[\"\'\`]?[2-4][\"\'\`]?", 0) != null then
+            $alert.regex_match = regex(lower(object.process.cmdline), "powershell(\.exe)?\s+(-|\/)v(ersion)?\s+[\"\'\`]?[2-4][\"\'\`]?", 0)
+            $alert.context = $subject.account.name
+            $reason = "Powershell Downgrade Version"
+        elif regex(lower(object.process.cmdline), "invoke\(\"(mpoav|amsi)\.dll\"\)", 0) != null then
+            $alert.regex_match = regex(lower(object.process.cmdline), "invoke\(\"(mpoav|amsi)\.dll\"\)", 0)
+            $alert.context = $subject.account.name
+            $reason = "Reflection"
+        endif
+    }
+
+    on Powershell_Library_Loaded {
+        $object.name = object.process.name
+        $object.version = object.version
+        $object.type = object.type
+        $object.hash = object.process.hash
+        $object.property = object.property
+        $object.value = object.value
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    
+        $alert.key = alert.key
+}
+
+    on Copied_PowerShell {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield3 = datafield3    # Путь, по которому должен лежать исходный файл процесса
+        $datafield4 = datafield4    # Имя исходного исполняемого файла
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $alert.context = "Using the DLL Hijack method"
+        $reason = "DLL Hijack"
+    }
+
+    on Scanning_Interception {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.id = object.process.id
+
+        $labels = $labels + "|CheckWL_Powershell"
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "\\[system\\.runtime\\.interopservices.marshal\\]", 0)
+        $alert.context = "Using the Scanning Interception method"
+        $reason = "Scanning Interception"
+    }
+    
+    on Scanning_Interception_PS_File_Create {
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        if $first_event then  
+            $datafield1 = object.name
+            $datafield2 = object.property
+            $datafield3 = object.value
+            $datafield4 = object.path
+            $datafield5 = object.fullpath
+
+            $first_event = false
+        else     
+            $datafield1 = $datafield1 + "|" + object.name
+            $datafield3 = $datafield3 + "|" + object.value
+            $datafield4 = $datafield4 + "|" + object.path
+            $datafield5 = $datafield5 + "|" + object.fullpath
+        endif
+    }
+
+    on Scanning_Interception_CSC_File_Create {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        if $first_event then            
+            $datafield1 = object.name
+            $datafield2 = object.property
+            $datafield3 = object.value
+            $datafield4 = object.path
+            $datafield5 = object.fullpath
+
+            $first_event = false
+        else
+            $datafield1 = $datafield1 + "|" + object.name
+            $datafield3 = $datafield3 + "|" + object.value
+            $datafield4 = $datafield4 + "|" + object.path
+            $datafield5 = $datafield5 + "|" + object.fullpath
+        endif
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    if regex(lower($alert.context), "using the (scanning|forcing|powershell|reflection)", 0) != null then
+        $object = "command"
+        $action = "execute"
+    elif $alert.context == "Using the DLL Hijack method" then
+        $object = "module"
+        $action = "start"
+        $alert.regex_match = regex(lower($object.name), "(system\.(reflection|management\.automation(\.ni)?)\.dll|microsoft\.csharp(\.ni)?\.dll)", 0)
+        $alert.context = $alert.context
+    else
+        $object = "process"
+        $action = "start"
+    endif
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

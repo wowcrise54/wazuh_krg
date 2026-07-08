@@ -1,0 +1,92 @@
+event User_Add_In_Local_System:
+    key:
+        event_src.host, object.account.name
+    filter {
+        filter::NotFromCorrelator() 
+        and in_list(["4720", "624"], msgid)
+        and event_src.title == "windows"
+        and filter::CheckWL_Specific_Only("Fast_Create_And_Delete_Account", lower(join([event_src.host, object.account.name] , "|")))
+    }
+
+event Modify_Account_Password_Failure:
+    key:
+        event_src.host, object.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4724"
+        and status == "failure"
+        and event_src.title == "windows"
+    }
+
+event User_Delete_In_Local_System:
+    key:
+        event_src.host, object.account.name
+    filter {
+        filter::NotFromCorrelator() 
+        and in_list(["4726", "630"], msgid)
+        and event_src.title == "windows"
+    }
+
+rule Fast_Create_And_Delete_Account: (((User_Add_In_Local_System -> Modify_Account_Password_Failure?) within 1m) -> User_Delete_In_Local_System) within 24h
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on User_Add_In_Local_System {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $alert.context = join([subject.account.name + " created " + object.account.name], " | ")
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+    on Modify_Account_Password_Failure {
+        close
+    }
+
+    on User_Delete_In_Local_System {
+        $datafield2 = subject.account.name  # Пользователь, удаливший учетную запись
+
+        $alert.key = lower(join([event_src.host, object.account.name] , "|"))
+        $alert.context = join([$alert.context, subject.account.name + " deleted " + object.account.name], " | ")
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "create"
+    $object = "account"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Create Account: Local Account"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

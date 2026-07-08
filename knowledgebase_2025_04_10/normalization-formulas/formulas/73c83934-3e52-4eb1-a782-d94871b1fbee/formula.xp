@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {UNTIL("Info: ")}
+MID {object.id=NUMBER} was generated based on MID {datafield1=NUMBER}
+        by {subject.type=STRING+} filter \'{subject.name=UNTIL("\'")}'
+
+subject = "rule"
+action = "create"
+object = "message"
+status = "success"
+
+# datafield1 - message based on which object.id was created
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_create_new_message_by_filter"

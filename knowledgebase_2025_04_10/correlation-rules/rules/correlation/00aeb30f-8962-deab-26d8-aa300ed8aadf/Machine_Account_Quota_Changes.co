@@ -1,0 +1,102 @@
+event LDAP_Request:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::AD_LDAP_Query()
+        and 
+        (
+            find_substr(lower(object.value), "ms-ds-machineaccountquota") != null
+            or find_substr(lower(object.query), "objectclass=domaindns") != null
+        )
+    }
+
+event Machine_Account_Quota_Change:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and lower(object.type) == "domaindns"
+        and lower(object.state) == "value added"
+        and lower(object.property) == "ms-ds-machineaccountquota"
+        and filter::CheckWL_Specific_Only("Machine_Account_Quota_Changes", lower(join([subject.account.name, object.name, object.property], "|")))
+    }
+
+rule Machine_Account_Quota_Changes: Machine_Account_Quota_Change and LDAP_Request within 30s
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Machine_Account_Quota_Change {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+
+        $object.account.name = regex(lower(object.name), "cn=(.*?),", 1)
+        $object.name = object.name
+        $object.id = object.id
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.name, object.property], "|"))
+        $alert.context = "MS-DS-MachineAccountQuota attribute value was changed to " + $object.value
+    }
+
+    on LDAP_Request {
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.name = object.account.name        
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+        
+        $datafield1 = object.query
+        $datafield2 = object.value
+        
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.port = src.port
+    }    
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "ds_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

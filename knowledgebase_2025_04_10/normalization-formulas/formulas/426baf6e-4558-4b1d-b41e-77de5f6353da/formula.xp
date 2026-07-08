@@ -1,0 +1,51 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="FILE_Owner"|msgid="FILE_Mode"|msgid="FILE_Fchmod"|msgid="FILE_Fchmodat"|
+        msgid="FILE_Fchown"|msgid="FILE_Fchownat"|msgid="FILE_Acl"|msgid="FILE_Facl"|
+        msgid="FILE_Privilege"|msgid="FILE_Chpriv"|msgid="FILE_Fchpriv"} {subject.account.name=WORDDASH}
+        {$status="OK"|"FAIL"|"FAILURE"} {"chmod"|"chown"|"fchmod"|"fchmodat"|"fchown"|"fchownat"|
+        "chacl"|"fchacl"|"chacl"|"chpriv"} {object.property="mode"|object.property="owner"}:
+        {object.new_value=NUMBER} {"group:"?} {datafield1=NUMBER?} filename {$path_temp=REST}'
+
+subject = "account"
+action = "modify"
+object = "file_object"
+
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+if  find_substr($path_temp, "/etc") == 0 or
+    find_substr($path_temp, "/usr") == 0 or
+    find_substr($path_temp, "/bin") == 0 or
+    find_substr($path_temp, "/sbin") == 0 or
+    find_substr($path_temp, "/dev") == 0 or
+    find_substr($path_temp, "/unix") == 0 or
+    find_substr($path_temp, "/lib") == 0 or
+    find_substr($path_temp, "/proc") == 0 then
+
+    object.type = "system file"
+
+    importance = "low"
+else
+    importance = "info"
+endif
+
+object.fullpath = $path_temp
+$csv_temp = csv($path_temp, "/", "")
+object.name = $csv_temp[length($csv_temp) - 1]
+if length($csv_temp) > 1 then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+category.generic = "File System Object"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_file_permissions_modified"

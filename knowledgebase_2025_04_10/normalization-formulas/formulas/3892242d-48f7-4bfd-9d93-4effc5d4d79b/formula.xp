@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="SSHС_REKEY_FAIL"}{"(l)"|"(s)"|}:{"CID="UNTIL(";")?}
+        SSH client key renegotiation is failed.({$tmp=UNTIL(")")}'
+
+$kv = keyvalue($tmp,", ","=","~")
+
+subject = "system"
+action = "update"
+object = "resource"
+status = "failure"
+
+subject.account.session_id  = $kv["SessionID"]
+object.type = "virtual key"
+object.property = "rekey reason"
+object.state = $kv["RekeyReason"]
+
+src.ip = $kv["IPAddress"]
+dst.hostname = event_src.hostname
+protocol.layer7 = "ssh"
+
+#datafield10 - значение VRF ssh клиента
+datafield10 = $kv["VPNInstanceName"]
+
+reason = $kv["FailedReason"]
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_SSHC_rekey_fail"

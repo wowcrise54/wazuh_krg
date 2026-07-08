@@ -1,0 +1,48 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL(']')} {WORD} [{UNTIL(']')} - Processing request with authorization header protocol: '{datafield2=WORD}':{object.type=WORD}{$object.query=UNTIL(',')} from client {src.ip=IPV4|src.ip=IPV6|'<unknown IP address>'}:{src.port=NUMBER}, {object.process.meta=REST}"
+
+action = "execute"
+object = "request"
+status = "success"
+
+if find_substr(object.process.meta, "authenticated as") != null then
+    submessage("TEXT", "get_object_id", object.process.meta)
+endif
+ 
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+object.query = strip($object.query, "'", "'")
+
+subformula "get_object_id"
+    TEXT = "{UNTIL('authenticated as user with id=')}{object.account.id=NUMBER}"
+    
+    if number(object.account.id) == -42 then
+        object.account.privileges = "super_user"
+    elif number(object.account.id) == -1000 then
+        object.account.privileges = "guest_user"
+    endif
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+# datafield2 - token type
+
+time = replace($time, ".", ",")
+importance = "medium"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Auth_Request_Processing"

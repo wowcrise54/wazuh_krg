@@ -1,0 +1,28 @@
+!TABULAR = ".1.3.6.1.2.1.1.3.0,
+            .1.3.6.1.6.3.1.1.4.1.0,
+            {dst.mac = .1.3.6.1.4.1.14179.2.6.2.35.0},
+            .1.3.6.1.4.1.14179.2.6.2.36.0,
+            {src.mac = .1.3.6.1.4.1.14179.2.6.2.34.0},
+            {src.ip = .1.3.6.1.4.1.14179.2.6.2.43.0},
+            {object.name = .1.3.6.1.4.1.14179.2.2.1.1.3.0},
+            {subject.name = .1.3.6.1.4.1.14179.2.6.2.39.0}
+            "
+
+!COND = $.1.3.6.1.6.3.1.1.4.1.0 == ".1.3.6.1.4.1.14179.2.6.3.53"
+
+subject = "account"
+action = "connect"
+object = "device"
+status = "ongoing"
+
+reason = "Wireless Client Association"
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_snmp_Wireless_client_association"

@@ -1,0 +1,24 @@
+TEXT = ":T={$timestamp=NUMBER};:M={NUMBER} {NUMBER};[ERRO] [SECURITY] :C={NUMBER};
+        :A={src.ip=IPV4};Попытка входа пользователя '{subject.account.name=UNTIL(\"'\")} с неправильным паролем, номер попытки: {datafield1=NUMBER}"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+# datafield1 - количество неверных попыток
+reason = "invalid password"
+
+time = epoch_to_datetime($timestamp)
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "elvis_plus"
+event_src.title = "zastava"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Elvis_plus_Zastava_filemonitor_User_login_fail_wrong_password"

@@ -1,0 +1,11 @@
+filter LoginSuccessful_Windows_DC() {
+    filter::UserAccount_Windows(subject.account.name, subject.account.id)
+    and event_src.title == "windows"
+    and in_list(["4768", "4776"], msgid)
+    and category.high == "Access Management"
+    and category.low == "Communication"
+    and not in_list(["127.0.0.1", "::1", "-"], src.ip)
+    and src.host != null
+    and src.host != "-"    
+    and status == "success"
+}

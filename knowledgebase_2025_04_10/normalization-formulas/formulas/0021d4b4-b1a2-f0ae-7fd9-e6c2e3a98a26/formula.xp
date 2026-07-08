@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {WORD} {":"?} 
+        {"%"?} {msgid="ACCOUNTING-6-CMD"|msgid="ACCOUNTING-5-EXEC"}: {subject.account.name=STRING} {logon_service=WORD}
+        {src.ip=IPV4} {$csv=REST}'
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+$full_split = csv($csv," ","")
+$id_split = csv($full_split[1], "=", "")
+subject.process.id = number($id_split[1])
+$service_split = csv($full_split[4], "=", "")
+subject.process.name = $service_split[1]
+$privilege_split = csv($full_split[5], "=", "")
+if  $privilege_split[0] == "priv-lvl" then
+subject.account.privileges = $privilege_split[1]    
+endif
+$cmd_split = csv($full_split[6], "=", "")
+subject.process.cmdline = $cmd_split[1]
+
+importance = "low"
+
+category.high = "Command"
+category.generic = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "arista"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eos"
+event_src.category = "Network device"
+
+id = "PT_Arista_Arista_EOS_syslog_accounting_6_cmd"

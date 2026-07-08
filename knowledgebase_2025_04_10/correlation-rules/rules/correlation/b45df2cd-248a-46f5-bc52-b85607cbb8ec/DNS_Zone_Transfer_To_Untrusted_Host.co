@@ -1,0 +1,190 @@
+query DNS_Server_Check($host, $ip) from List_Servers {
+        (
+            (
+                asset_fqdn == $host
+                and asset_fqdn != null
+            )
+            or (
+                asset_ip == $ip
+                and asset_ip != null
+            )
+            or (
+                (
+                    host == $ip
+                    or host == $host
+                )
+                and host != null
+            )
+        )
+}
+
+query DNS_Server_Check_AssetGrid($host, $ip) from AssetGrid_Servers {
+        (
+            (
+                asset_fqdn == $host
+                and asset_fqdn != null
+            )
+            or (
+                asset_ip == $ip
+                and asset_ip != null
+            )
+            or (
+                (
+                    host == $ip
+                    or host == $host
+                )
+                and host != null
+            )
+        )
+}
+
+event Zone_Transfer_Completed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "6001"
+        and event_src.vendor == "microsoft"
+        and event_src.title == "windows"
+
+        and not match(lower(select_query_first("DNS_Server_Check", [lower(dst.host), dst.ip], "roles")), "*dns server*")
+        and not match(select_query_first("DNS_Server_Check_AssetGrid", [lower(dst.host), dst.ip], "roles"), "*DNS Server*")
+
+        and filter::CheckWL_Specific_Only("DNS_Zone_Transfer_To_Untrusted_Host", dst.ip)
+    }
+
+event Zone_Transfer_Refused:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "6525"
+        and event_src.vendor == "microsoft"
+        and event_src.title == "windows"
+        and not match(select_query_first("DNS_Server_Check", [lower(dst.host), dst.ip], "roles"), "*DNS Server*")
+        and not match(select_query_first("DNS_Server_Check_AssetGrid", [lower(dst.host), dst.ip], "roles"), "*DNS Server*")
+        and filter::CheckWL_Specific_Only("DNS_Zone_Transfer_To_Untrusted_Host", dst.ip)
+    }
+
+event Zone_Transfer_External_DNS:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title != null
+        and event_src.title != "windows"
+        and event_src.category == "DNS server"
+        and object.type == "DNS zone"
+        and action == "copy"
+        and not match(select_query_first("DNS_Server_Check", [lower(dst.host), dst.ip], "roles"), "*DNS Server*")
+        and not match(select_query_first("DNS_Server_Check_AssetGrid", [lower(dst.host), dst.ip], "roles"), "*DNS Server*")
+        and filter::CheckWL_Specific_Only("DNS_Zone_Transfer_To_Untrusted_Host", dst.ip)
+    }
+
+rule DNS_Zone_Transfer_To_Untrusted_Host: Zone_Transfer_Completed or Zone_Transfer_Refused or Zone_Transfer_External_DNS
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Zone_Transfer_Completed {
+        $status = "success"
+
+        $object.value = datafield2  # zone name
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = dst.ip
+        $alert.context = join([$object.value, dst.ip, $status], " | ")
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Zone_Transfer_Refused {
+        $status = "failure"
+
+        $object.value = datafield1  # zone name
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = dst.ip
+        $alert.context = join([$object.value, dst.ip, $status], " | ")
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Zone_Transfer_External_DNS {
+        $status = status
+
+        $object.value = object.name  # zone name
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = dst.ip
+        $alert.context = join([$object.value, dst.ip, $status], " | ")
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "copy"
+    $object = "database"
+
+    $object.property = "zone name"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Application Layer Protocol: DNS"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $status], "|")
+    $incident.severity = $importance
+    $incident.category = "Undefined"
+    $incident.aggregation.timeout = 2h
+}

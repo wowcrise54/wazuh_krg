@@ -1,0 +1,32 @@
+EVENTLOG = 'EventID.text="1288"'
+!COND = $Channel=="TrustAccess"
+
+subject = "account"
+action = "remove"
+object = "user_group"
+status = "success"
+
+submessage('TEXT', 'SPLIT1', $Data[0])
+
+subject.privileges = "administrator"
+subformula "SPLIT1"
+    # Извлечение subject.name и subject.domain из $Data[0]
+    TEXT = "{$csv = CSV('@','\"')}"
+    subject.name = $csv[0]
+    subject.domain = $csv[1]
+endsubformula
+
+object.name = $Data[6]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+event_src.hostname = $Computer
+
+event_src.vendor = "security_code"
+event_src.title = "trustaccess"
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_TrustAccess_eventlog_delete_group"

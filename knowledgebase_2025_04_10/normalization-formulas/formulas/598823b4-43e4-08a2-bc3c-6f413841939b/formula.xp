@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{$Computer=WORDDASH}
+        {object.type=STRING+}{reason="added"|reason="changed"|reason="removed"|reason="moved"}
+        by {subject.account.name=STRING}'
+
+COND = length(object.type) < 50
+       and find_substr(object.type, "passwd[") == null      
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+if find_substr(object.type, ":") != null then
+    object.type = csv(object.type, ": ", "")[1]
+endif
+
+importance = "low"
+
+event_src.vendor = "mikrotik"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "routeros"
+event_src.category = "Network device"
+
+id = "PT_Mikrotik_RouterOS_syslog_bsd_system_config_changed"

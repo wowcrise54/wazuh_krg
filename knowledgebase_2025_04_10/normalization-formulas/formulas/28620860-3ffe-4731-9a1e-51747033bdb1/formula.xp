@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} : *
+        {WORDDASH}: {time=DATETIME}: {"#"|"%"}{msgid="DOT1X-3-PSK_CONFIG_ERR"}: {STRING} Client {src.mac=MACADDR} may
+        be using an incorrect PSK'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+reason = "Client may be using an incorrect PSK"
+
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_syslog_DOT1X_3_PSK_CONFIG_ERR"

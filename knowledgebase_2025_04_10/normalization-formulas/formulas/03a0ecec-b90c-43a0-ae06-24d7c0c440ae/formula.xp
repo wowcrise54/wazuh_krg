@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {event_src.ip=IPV4|event_src.ip=IPV6|}: {time=DATETIME}: {"#"|"%"}
+        {msgid="UC_RTMT-3-RTMT_ALERT"}: %[AlertName=XcpCmPauseSockets]{UNTIL("TimeStamp :")}{datafield2=UNTIL(".")}
+        {UNTIL("NodeID=")}{event_src.hostname=HOSTNAME}]{REST}'
+
+action = "alert"
+object = "host"
+status = "success"
+
+# datafield2 - время самого алерта
+
+importance = "high"
+
+event_src.vendor = "cisco"
+event_src.title = "cucm"
+event_src.category = "Telecom"
+
+id = "PT_Cisco_CUCM_syslog_XcpCmPauseSockets"

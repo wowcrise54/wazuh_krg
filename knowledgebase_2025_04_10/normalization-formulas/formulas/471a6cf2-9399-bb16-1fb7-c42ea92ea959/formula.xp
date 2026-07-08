@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME?} {event_src.hostname=HOSTNAME?} {event_src.subsys=STRING?} 
+        {$raw_time=STRING+} {$timestamp=STRING} INFO {"*"msgid="UpdateUser""*"} 
+        Creating user {object.name=WORD}{"@"object.domain=UNTIL("|||")} 
+        {$kv=KEYVALUE(";", "=", "\\"")}'
+
+action = "create"
+object = "account"
+status = "success"
+
+object.process.id = $kv["@pid"]
+
+src.ip = $kv["ClientIp"]
+
+time = maybe_datetime($raw_time + $timestamp)
+importance = "low" 
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "iam"
+event_src.category = "AAA"
+
+id = "PT_Positive_Technologies_iam_filemonitor_create_user"

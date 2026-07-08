@@ -1,0 +1,44 @@
+!EVENTLOG = 'EventID.text="800"'
+!COND = $Provider["Name"] == "PowerShell"
+        and $Channel == "Windows PowerShell"
+        and $Data[0] == null
+        and find_substr($Data[2], "CommandInvocation(Out-Default)") == 0
+
+$kv = keyvalue($Data[1], "\r\n", "=")
+
+action = "info"
+object = "message"
+status = "success"
+
+$host_app = $kv["HostApplication"]
+$host_app_path = csv($host_app, " ", '"')[0]
+$list_host_app_path_name = csv($host_app_path,'\\','"')
+$application = $list_host_app_path_name[length($list_host_app_path_name) - 1]  # часть пути после последнего слеша
+
+datafield1 = $Data[1]  # контекcт выполнения конвейера Powershell
+datafield2 = $Data[2]  # детали выполнения конвейера Powershell
+datafield3 = strip($host_app_path, "", $application)  # родительский процесс
+datafield4 = $application
+datafield5 = $kv["CommandLine"]  # командная строка как она есть
+datafield7 = $kv["HostId"]  # идентификатор узла
+datafield8 = $kv["EngineVersion"]  # версия модуля
+datafield9 = $host_app
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Common_PowerShell_800_Out_Default"

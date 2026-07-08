@@ -1,0 +1,87 @@
+query Check_If_Local_Group_Significant($group_name, $group_id) from Significant_Windows_Groups {
+    name == $group_name
+    or sid == $group_id
+}
+
+query Check_If_AD_Group_Is_Critical($group_id) from AssetGrid_Critical_Domain_Accounts {
+    group_sid == $group_id
+    # Кейс для вложенных групп
+    or (
+        member_type == "DomainGroup"
+        and member_sid == $group_id
+    )
+}
+
+event Remove_From_Group:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and in_list(["4729", "4733", "4757"], msgid)
+        and (
+            exec_query("Check_If_AD_Group_Is_Critical", [lower(object.id)])
+            or exec_query("Check_If_Local_Group_Significant", [lower(object.name), lower(object.id)])
+        )
+        and filter::CheckWL_Specific_Only("Remove_Account_From_Sensitive_Group", lower(join([object.name, object.id, coalesce(object.account.name, object.account.id)], "|")))
+    }
+
+rule Remove_Account_From_Sensitive_Group: Remove_From_Group
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Remove_From_Group {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.domain = object.domain
+        $object.type = object.type
+
+        $alert.key = lower(join([object.name, object.id, coalesce(object.account.name, object.account.id)], "|"))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "user_group"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

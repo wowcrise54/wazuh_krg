@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Detects creation of suspicious files by legitimate processes</Description>
+  <EventDescriptions>
+    <EventDescription id="5ef4fabd-9263-44b5-b1b7-928a170bdff9">Security bypass attempt detected, process {subject.process.name} created file {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="c609a330-185a-4b20-9c25-930f9126f62b">Attempted security breach by the user {subject.account.name} who started process {subject.process.name} and created file {object.name} on the host {event_src.host}</EventDescription>
+    <EventDescription id="e0acb974-b2a8-438f-ab43-f699a21da2f9">Attempted security breach by the user with the SID {subject.account.id} who started process {subject.process.name} and created file {object.name} on the host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

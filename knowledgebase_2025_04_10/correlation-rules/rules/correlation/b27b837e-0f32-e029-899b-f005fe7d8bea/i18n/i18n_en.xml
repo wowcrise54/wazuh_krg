@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Possible exploitation of vulnerability CVE-2023-42793 in TeamCity. This vulnerability allows attackers to create bearer tokens for any user and manage TeamCity users, agents, and projects.</Description>
+  <EventDescriptions>
+    <EventDescription id="15a632dd-ee75-3970-eed3-083189dd8ed3">Rogue request for token "{object.name}" from host {src.host} for a user with ID {object.account.id} on host {event_src.host}</EventDescription>
+    <EventDescription id="c50e2910-04f0-aa67-b896-07d57d57cf07">A user with ID {subject.account.id} sent a rogue request for token "{object.name}" from host {src.host} for a user with ID {object.account.id} on host {event_src.host}</EventDescription>
+    <EventDescription id="c70beb83-c993-0908-bf9d-0c247d88f6a4">A user with ID {subject.account.id} sent a rogue request for token "{object.name}" from host {src.host} for user {object.account.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="e69e8eaa-8dc3-c93a-dd11-1b4fcaef4465">Rogue request for token "{object.name}" from host {src.host} for user {object.account.name} on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

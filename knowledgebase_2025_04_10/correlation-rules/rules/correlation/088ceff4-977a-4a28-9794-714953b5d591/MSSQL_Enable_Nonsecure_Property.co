@@ -1,0 +1,73 @@
+event Alter_Database_Property:
+    key:
+        event_src.host
+    filter {
+        filter::MSSQL_Query("AL", "DB")
+        and (
+            match(lower(object.query), "*set*encryption*off*")
+            or match(lower(object.query), "*set*trustworthy*on*")
+        )
+        and filter::CheckWL_Database_Actions("MSSQL_Enable_Nonsecure_Property", lower(object.property))
+    }
+
+rule MSSQL_Enable_Nonsecure_Property: Alter_Database_Property
+    
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Alter_Database_Property {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.property = object.property
+        $object.value = object.value
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower(object.property)
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "configuration"
+
+    $object.type = "database"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    
+    if match(lower($object.query), "*set*encryption*off*") then
+        $category.low = "Weaken Encryption"
+    else
+        $category.low = "Subvert Trust Controls"
+    endif
+    
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

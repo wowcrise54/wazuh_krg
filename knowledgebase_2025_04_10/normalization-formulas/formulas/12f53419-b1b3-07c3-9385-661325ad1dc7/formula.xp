@@ -1,0 +1,31 @@
+# INFO  [Native-Transport-Requests-1] 2023-11-20 18:37:31.064 FileAuditLogger.java:51 - user:anonymous|host:localhost/127.0.0.1:7200|source:/127.0.0.1|port:3523|timestamp:1700494651064|type:UNAUTHORIZED_ATTEMPT|category:AUTH|operation:CREATE ROLE new_role; You have to be logged in and not anonymous to perform this request
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|
+        type:{msgid=WORD}|category:{$category=WORD}|{$ks=UNTIL("|")?}{$sc=UNTIL("|")?}
+        operation:{$query=UNTIL(";")}{reason=STRING+}'
+COND = (msgid=='UNAUTHORIZED_ATTEMPT')        
+
+subject = "account"
+action = "execute"
+object = "request"
+status = "failure"
+
+object.query = $query + ";"
+
+datafield1 = $category # Категория CQL-запроса
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Unauthorized_user_action_attempt_failed" 

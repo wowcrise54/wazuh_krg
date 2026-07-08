@@ -1,0 +1,16 @@
+TEXT = ":T={$timestamp=NUMBER};:M={NUMBER} {NUMBER};[ERRO] [HTTP] :C={NUMBER};
+        :A={src.ip=IPV4};Разрыв соединения из-за ошибки: {reason=REST}"
+
+action = "terminate"
+object = "session"
+status = "success"
+
+time = epoch_to_datetime($timestamp)
+importance = "low"
+
+event_src.vendor = "elvis_plus"
+event_src.title = "zastava"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Elvis_plus_Zastava_filemonitor_Client_connection_broken"

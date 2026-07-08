@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?} PINsafe[{STRING} {"WARN"|"INFO"}
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} - {reason="No user exists with the attribute value"}
+        {$user=STRING}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+subject.account.name = strip($user, "\"", "\".")
+
+time = recv_time
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "swivel_secure"
+event_src.title = "pinsafe"
+event_src.category = "AAA"
+
+id = "PT_Swivel_Secure_PINsafe_syslog_login_failed2"

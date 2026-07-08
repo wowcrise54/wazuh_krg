@@ -1,0 +1,58 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [] [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+[Authentication of user {$arguments_1=STRING+} has failed. Please consult ESXi Embedded and vCenter Server Setup Guide or follow the Ask VMware link for more information.]'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $arguments_1)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = "Direct Console UI"
+
+logon_auth_method = "local"
+logon_service = "dcui"
+
+datafield1 = $def_dc_name  # Datacenter Name
+
+msgid = "esx.audit.dcui.login.failed"
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_DCUI_Login_Failed"

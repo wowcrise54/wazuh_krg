@@ -1,0 +1,23 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {NUMBER+},{DATETIME},{event_src.id=WORD?},SYSTEM,ha,{NUMBER},{time=DATETIME},{UNTIL(',')}{msgid='peer-version-match'},
+        {UNTIL(',')}{NUMBER},{NUMBER},{WORD},{WORD},{'\"'?}{object.group=WORD+}: {object.name=WORDDASH+}
+        {reason='version now matches'|reason='version does not match'}, {REST}"
+
+action = "info"
+object = "application"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_System_Application_version_match"

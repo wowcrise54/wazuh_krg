@@ -1,0 +1,243 @@
+event Normal_Dotm_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::FileCreate_Windows()
+        and lower(object.name) == "normal.dotm"
+        and (
+            find_substr(lower(object.path), "\\appdata\\roaming\\microsoft\\") != null              # Word Normal.dotm location
+            or find_substr(lower(object.path), "\\microsoft office\\root\\office16\\") != null      # Word 2016 will first look for Normal.dotm
+        )
+        and filter::CheckWL_File_Creation("Office_Template_Modification", lower(join([subject.process.name, object.fullpath], "|")))
+    }
+    
+event Personal_Xlsb_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::FileCreate_Windows()
+        and lower(object.name) == "personal.xlsb"
+        and (
+            find_substr(lower(object.path), "\\appdata\\roaming\\microsoft\\") != null              # Excel Personal.xlsb location
+            or find_substr(lower(object.path), "\\microsoft office\\root\\office16\\") != null      # Word 2016 will first look for Normal.dotm
+        )
+        and filter::CheckWL_File_Creation("Office_Template_Modification", lower(join([subject.process.name, object.fullpath], "|")))
+    }
+
+# By modifying the GlobalDotName registry key an adversary can specify an arbitrary location, file name, and file extension to use for the template that will be loaded on application startup.
+event GlobalDotName_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and (
+            (
+                msgid == "4657"
+                and event_src.title == "windows"
+            ) or (
+                msgid == "13"
+                and event_src.title == "sysmon"
+            )
+        )
+        and regex(lower(object.path), "software\\\\microsoft\\\\office\\\\\d\d\.\d\\\\word\\\\options", 0) != null
+        and lower(object.name) == "globaldotname"
+        and filter::CheckWL_Registry_Actions("Office_Template_Modification", lower(join([object.fullpath, object.new_value], "|")))
+    }
+
+rule Office_Template_Modification: Normal_Dotm_Created or Personal_Xlsb_Created or GlobalDotName_Created
+    
+    init {
+        $labels = "w_auto"
+    }
+
+    on Normal_Dotm_Created {
+        $subject = subject  # process
+        $object = object  # file_object
+        $action = action  # create
+        $status = status  # success
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.chain = subject.process.chain
+        
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.parent.name = subject.process.parent.name
+        $subject.process.parent.path = subject.process.parent.path
+        $subject.process.parent.fullpath = subject.process.parent.fullpath
+        $subject.process.parent.cmdline = subject.process.parent.cmdline
+        
+        $datafield18 = datafield18 # chain with PID for subject
+        $datafield19 = datafield19 # chain with PID for object
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+
+        $alert.key = lower(join([subject.process.name, object.fullpath], "|"))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|event_source_to_compromised_assets"
+        $labels = $labels + "|CheckWL_File_Creation"
+    }
+
+on Personal_Xlsb_Created {
+        $subject = subject  # process
+        $object = object  # file_object
+        $action = action  # create
+        $status = status  # success
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.chain = subject.process.chain
+        
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.parent.name = subject.process.parent.name
+        $subject.process.parent.path = subject.process.parent.path
+        $subject.process.parent.fullpath = subject.process.parent.fullpath
+        $subject.process.parent.cmdline = subject.process.parent.cmdline
+        
+        $datafield18 = datafield18 # chain with PID for subject
+        $datafield19 = datafield19 # chain with PID for object
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+
+        $alert.key = lower(join([subject.process.name, object.fullpath], "|"))
+        $alert.context = join([object.name, object.new_value], " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|event_source_to_compromised_assets"
+        $labels = $labels + "|CheckWL_File_Creation"
+    }
+
+    on GlobalDotName_Created {
+        if subject.account.name != null then
+            $subject = "account"
+        else
+            $subject = "process"
+        endif
+        $object = object  # reg_object
+        $action = action  # modify
+        $status = status  # success
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.chain = subject.process.chain
+        
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.parent.name = subject.process.parent.name
+        $subject.process.parent.path = subject.process.parent.path
+        $subject.process.parent.fullpath = subject.process.parent.fullpath
+        $subject.process.parent.cmdline = subject.process.parent.cmdline
+        
+        $datafield18 = datafield18 # chain with PID for subject
+        $datafield19 = datafield19 # chain with PID for object
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.query = object.query
+
+        $alert.key = lower(join([object.fullpath, object.new_value], "|"))
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $labels = $labels + "|event_source_to_compromised_assets"
+        $labels = $labels + "|CheckWL_Registry_Actions"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Office Application Startup: Office Template Macros"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

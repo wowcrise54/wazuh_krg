@@ -1,0 +1,49 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        apt-detects{'['NUMBER']'?}: \"{subject.name='Kaspersky Anti Targeted Attack Platform'}\", \"2.{$ver=UNTIL('\",')} \"{msgid='url'}\",
+        {$csv=CSV(',','\"')}"
+
+subject = "application"
+action = "detect"
+object = "alert"
+status = "success"
+
+object.name = $csv[7]
+object.type = "url"
+object.property = "suspicious resource"
+object.value = $csv[10]
+
+src.ip = substr($csv[3], 0, find_substr($csv[3], ':'))
+src.port = strip($csv[3], src.ip + ':', '')
+dst.ip = substr($csv[4], 0, find_substr($csv[4], ':'))
+dst.port = strip($csv[4], dst.ip + ':', '')
+
+if $csv[5] != "" and $csv[5] != "\"" then
+    datafield2 = $csv[5]        # Имя хоста, на котором обнаружено событие
+endif
+if $csv[6] != "" and $csv[6] != "\"" then
+    datafield3 = $csv[6]        # Имя учетной записи пользователя хоста, на котором обнаружено событие
+endif
+datafield8 = $csv[9]            # User Agent клиентского компьютера (только для протокола HTTP(S))
+datafield9 = $csv[12]           # Код HTTP-ответа
+if $csv[11] != "" and $csv[11] != "\"" then
+    datafield10 = $csv[11]      # Заголовок HTTP Referrer (только для протокола HTTP(S))
+endif
+
+time = $csv[0]
+
+if in_list(["Low", "Medium", "High"], $csv[1]) then
+    importance =  lower($csv[1])
+endif
+
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v2_url"

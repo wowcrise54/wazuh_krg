@@ -1,0 +1,28 @@
+JSON = 'category = 1'
+
+COND = $data["Type"] == "OUT_OF_ORDER"
+
+action = "info"
+object = "package"
+status = "success"
+
+object.type = "anomaly"
+
+count.packets = $count
+
+datafield1 = $cg_name        # имя криптошлюза
+datafield2 = $cg_cssid       # id криптошлюза
+datafield4 = $data["CgwID"]  # id криптошюза с ошибочным MAC
+
+time = $time
+msgid = $data["Type"]
+
+importance = "high"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.subsys = "vpn-gateway"
+event_src.ip = recv_ipv4
+event_src.category = "VPN"
+
+id = "PT_Security_Code_Kontinent_odbc_out_of_order"

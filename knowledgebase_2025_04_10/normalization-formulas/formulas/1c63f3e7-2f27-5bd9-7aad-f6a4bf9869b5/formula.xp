@@ -1,0 +1,105 @@
+JSON = ''
+
+COND = $event["uipc_connect"] != null
+
+subject = "process"
+action = "assign"
+object = "socket"
+status = "success"
+
+subject.account.id = $process["audit_token"]["ruid"]
+subject.account.session_id = $process["session_id"]
+
+subject.process.id = $process["audit_token"]["pid"]
+subject.process.parent.id = $process["ppid"] 
+subject.process.fullpath = $process["executable"]["path"]
+$temp_name = csv(subject.process.fullpath, "/", "'")
+subject.process.name = $temp_name[length($temp_name) - 1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+subject.process.hash = "UNKNOWN:" + $process["cdhash"]
+
+object.fullpath = $event["uipc_connect"]["file"]["path"]
+$temp_name = csv(object.fullpath, "/", "'")
+object.name = $temp_name[length($temp_name) - 1]
+object.path = strip(object.fullpath, "", object.name)
+
+object.property = "communications domain of the socket"
+object.value = switch $event["uipc_connect"]["domain"]
+    case 0 "unspecified"
+    case 1 "local to host (pipes)"
+    case 2 "internetwork: UDP, TCP, etc."
+    case 3 "arpanet imp addresses"
+    case 4 "pup protocols"
+    case 5 "mit CHAOS protocols"
+    case 6 "XEROX NS protocols"
+    case 7 "ISO protocols"
+    case 8 "European computer manufacturers"
+    case 9 "datakit protocols"
+    case 10 "CCITT protocols, X.25 etc"
+    case 11 "IBM SNA"
+    case 12 "DECnet"
+    case 13 "DEC Direct data link interface"
+    case 14 "LAT"
+    case 15 "NSC Hyperchannel"
+    case 16 "Apple Talk"
+    case 17 "Internal Routing Protocol"
+    case 18 "Link layer interface"
+    case 19 "eXpress Transfer Protocol (no AF)"
+    case 20 "connection-oriented IP, aka ST II"
+    case 21 "Computer Network Technology"
+    case 22 "Help Identify RTIP packets"
+    case 23 "Novell Internet Protocol"
+    case 24 "Simple Internet Protocol"
+    case 25 "Help Identify PIP packets"
+    case 27 "Network Driver 'raw' access"
+    case 28 "Integrated Services Digital Network"
+    case 29 "Internal key-management function"
+    case 30 "IPv6"
+    case 31 "native ATM access"
+    case 32 "Kernel event messages"
+    case 33 "NetBIOS"
+    case 34 "PPP communication protocol"
+    case 35 "Used by BPF to not rewrite headers"
+    case 36 "Reserved for internal usage"
+    case 37 "IEEE 802.11 protocol"
+    case 39 "raw-protocol interface"
+    case 40 "VM Sockets"
+endswitch
+
+protocol = $event["uipc_connect"]["protocol"]
+
+object.type = switch $event["uipc_connect"]["type"]
+    case 1 "stream socket"
+    case 2 "datagram socket"
+    case 3 "raw-protocol interface"
+    case 4 "reliably-delivered message"
+    case 5 "sequenced packet stream"
+endswitch
+
+datafield1 = $process["audit_token"]["euid"]  # effective user ID
+datafield2 = $process["audit_token"]["rgid"]  # real group ID
+datafield3 = $process["audit_token"]["auid"]  # audit user ID
+datafield4 = $process["audit_token"]["egid"]  # effective group ID
+datafield5 = $process["is_platform_binary"]          # является ли исполняемый файл предустановленным Apple в ОС
+datafield6 = $process["is_es_client"]                # имеет ли данный процесс разрешение на работу с EndpointSecurity API
+datafield7 = $process["signing_id"]                  # идентификатор подписи кода исполняемого файла
+datafield8 = $process["codesigning_flags"]           # флаги подписи кода исполняемого файла
+datafield9 = $process["tty"]                         # tty ассоциированный с процессом
+datafield11 = $process["team_id"]                    # идентификатор разработчика исполняемого файла
+
+numfield1 = $event["uipc_connect"]["type"]           # socket type
+numfield2 = $event["uipc_connect"]["domain"]         # domain
+
+category.high = "Network Interaction Management"
+category.generic = "Socket"
+category.low = "Manipulation"
+
+msgid = $event_type
+time = $time
+importance = "info"
+
+event_src.category = "Host security"
+event_src.vendor = "positive_technologies"
+event_src.title = "edr"
+
+id = "PT_Positive_Technologies_XDR_es_logger_socket_connection"

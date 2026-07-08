@@ -1,0 +1,34 @@
+JSON = 'category=35'
+
+COND = $data["ID"] == "SET_CGW_SOFTMODE"
+
+subject = "account"
+if $data["InfoValue"]["NewValue"] == 0 then
+    action = "enable"
+elif $data["InfoValue"]["NewValue"] == 4 then
+    action = "disable"
+endif
+object = "mode"
+if $data["Status"] == "SUCCESS" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subject.name = $data["AdminName"]
+object.state = "soft"
+
+datafield1 = $cg_name   # имя криптошлюза
+datafield2 = $cg_cssid  # идентификатор криптошлюза
+
+time = $time
+msgid = $data["ID"]
+importance = "medium"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.subsys = "vpn-gateway"
+event_src.ip = recv_ipv4
+event_src.category = "VPN"
+ 
+id = "PT_Security_Code_Kontinent_odbc_soft_mode"

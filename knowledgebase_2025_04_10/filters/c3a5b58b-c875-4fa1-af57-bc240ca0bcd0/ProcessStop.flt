@@ -1,0 +1,7 @@
+filter ProcessStop() {
+    filter::NotFromCorrelator()
+    and action == "stop"
+    and category.generic == "Process"
+    and category.high == "Availability Management"
+    and category.low == "Control"
+}

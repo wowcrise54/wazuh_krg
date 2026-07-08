@@ -1,0 +1,59 @@
+TABULAR = '{chain_id=TransactionId},
+           {datafield2=SequenceId},
+           {time=OccurredAt},
+           {$selector=ObjectSelector},
+           {$login=Login},
+           {$workstation=Workstation},
+           {$account=NTAccount},
+           SequenceNumber,
+           {$temp_action=Action},
+           {msgid=ObjectType},
+           {$server=Server},
+           ServerIsPrimary'
+
+COND = $ObjectType == "Log"
+
+subject = "account"
+
+if $temp_action == "Delete" then
+    action = "truncate"
+
+    object.property = "event id"
+    object.value = strip($selector, "< ", "")
+
+    importance = "high"
+else
+    action = switch $temp_action
+        case "Export" "download"
+        case "AnalyzeLogInExcel" "access"
+    endswitch
+
+    importance = "info"
+endif
+
+object = "log"
+status = "success"
+
+subject.account.name = lower($login)
+
+$csv_account = csv(lower($account), "\\", "")
+subject.name = $csv_account[1]    # Имя системного пользователя
+subject.domain = $csv_account[0]  # Домен системного пользователя
+
+src.hostname = lower($workstation)
+dst.hostname = lower($server)
+
+# datafield2 - Номер действия в рамках текущей транзакции
+
+if lower($workstation) == lower($server) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+event_src.vendor = "infowatch"
+event_src.title = "device_monitor"
+event_src.hostname = lower($server)
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Device_Monitor_odbc_log_event"

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Выполнена команда Salt для скачивания файла с мастера</Description>
+  <EventDescriptions>
+    <EventDescription id="0e49a254-6cec-f0e7-59af-f7191621d94d">Пользователь {subject.account.name} выполнил команду Salt cp.get_url для скачивания файла {object.storage.fullpath} с мастера на узле {event_src.host}. Злоумышленник может использовать эту команду для получения доступа к конфиденциальной информации</EventDescription>
+    <EventDescription id="800445f4-0162-2c8e-4b31-4dec68cda4d8">Пользователь {subject.account.name} выполнил команду Salt cp.get_dir для скачивания каталога "{object.storage.path}" с мастера на узле {event_src.host}. Злоумышленник может использовать эту команду для получения доступа к конфиденциальной информации</EventDescription>
+  </EventDescriptions>
+</Localization>

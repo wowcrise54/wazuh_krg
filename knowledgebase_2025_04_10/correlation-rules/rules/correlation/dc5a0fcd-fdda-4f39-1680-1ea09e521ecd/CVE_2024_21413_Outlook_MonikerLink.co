@@ -1,0 +1,66 @@
+event Process_Start:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "outlook"
+        and event_src.subsys == "oalerts"
+        and msgid == "300"
+        # Example URL: \\\\ip:port\\payload.exe\\!text
+        and regex(object.fullpath, "\\\\\\\\\S+\\\\(\S+\\\\)*?\!\S+", 0) != null
+        and filter::CheckWL_Specific_Only("CVE_2024_21413_Outlook_MonikerLink", lower(join([event_src.host, dst.ip, object.fullpath], "|")))
+    }
+
+rule CVE_2024_21413_Outlook_MonikerLink: Process_Start
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Process_Start {
+        $action = action
+        $object = object
+        $status = status
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.port = dst.port
+        
+        $object.name = object.name
+        $object.path = strip(regex(object.fullpath, "(\\\\\\\\\S+\\\\(\S+\\\\)*?)\!\S+", 1), "", "\\")
+        $object.fullpath = object.fullpath
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([event_src.host, dst.ip, object.fullpath], "|"))
+        $alert.context = $object.fullpath
+    }
+
+emit {
+    $subject = "account"
+
+    $correlation_type = "incident"
+
+    $detect = "CVE-2024-21413"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Phishing: Spearphishing Link"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

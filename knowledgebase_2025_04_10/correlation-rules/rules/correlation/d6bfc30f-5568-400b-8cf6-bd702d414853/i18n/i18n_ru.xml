@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Пользователь переименовал объект AD или запросил TGT-билет от имени учетной записи, совпадающей с именем контроллера домена. Это может свидетельствовать об атаке sAMAccountName spoofing. Она может позволить злоумышленнику получить TGT-билет, например на имя контроллера домена, закрепиться в системе и повысить свои привилегии</Description>
+  <EventDescriptions>
+    <EventDescription id="2298bef2-4331-41e7-a3a7-46951c5291d2">Пользователь {subject.account.name} с узла {src.host} запросил TGT-билет от имени учетной записи, совпадающей с именем контроллера домена, на узле {event_src.host}</EventDescription>
+    <EventDescription id="5e7de605-4826-4f94-9f9b-ce87a2ed2790">Пользователь {subject.account.name} переименовал объект AD в "{object.account.name}" на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

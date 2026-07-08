@@ -1,0 +1,56 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} {WORD} hostd[{WORD}] [Originator@{NUMBER} {$kv=UNTIL("]")} Event {NUMBER} :
+{$vm_name=STRING+} on {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}: {reason="Guest operating system has crashed."}'
+
+subject = "account"
+action = "info"  
+object = "system"
+status = "success"
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $host_name  # Host Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+msgid = "VmGuestOSCrashedEvent"
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_Crash_Guest_OS"

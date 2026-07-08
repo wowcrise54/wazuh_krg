@@ -1,0 +1,35 @@
+EVENTLOG = 'EventID.text="1202"'
+COND =  $Channel == "DFS Replication"
+        and ( $Provider["Name"] == "DFS Replication" or  $Provider["Name"] == "DFSR" )
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+subject = "application"
+subject.name = "DFS Replication"
+action = "connect"
+object = "ds_object"
+status = "failure"
+
+object.type = "domain controller"
+# error code
+datafield1 = $Data[2]
+
+reason = strip($Data[3], "", ".")
+
+importance = "high"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1202_failed_to_contact_domain_controller"

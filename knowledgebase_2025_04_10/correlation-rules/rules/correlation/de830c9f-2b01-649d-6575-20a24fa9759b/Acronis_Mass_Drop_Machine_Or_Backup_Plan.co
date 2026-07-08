@@ -1,0 +1,58 @@
+event Remove_Machine_Or_Backup_Plan:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and action == "remove"
+        and in_list(["task", "host"], object)
+        and event_src.vendor == "acronis"
+        and event_src.title == "backup"
+        and filter::CheckWL_Specific_Only("Acronis_Mass_Drop_Machine_Or_Backup_Plan", lower(event_src.host))
+    }
+     
+rule Acronis_Mass_Drop_Machine_Or_Backup_Plan: Remove_Machine_Or_Backup_Plan[5,] timer 5m
+
+    init {
+        $first_event = true
+        $labels = "w_auto"
+        $datafield3 = 0
+
+    }
+    
+    on Remove_Machine_Or_Backup_Plan {
+        if $first_event then  # блок выполняется только при первом событии инстанса
+            $action = action
+            $object = object
+            $status = status
+
+            $object.name = object.name
+
+            $dst.hostname = dst.hostname
+
+            $event_src.host = event_src.host
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.category = event_src.category
+
+            $first_event = false
+        endif
+
+        $datafield3 = number($datafield3) + 1       # количество удаленных бэкапов и планов бэкапа
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Inhibit System Recovery"
+
+    $alert.key = lower($event_src.host)
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "BackupMalfunction"
+    $incident.aggregation.timeout = 2h
+}

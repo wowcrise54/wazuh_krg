@@ -1,0 +1,121 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "IMPORTEXPORT_STARTING_IMPORT_TEMPLATE",  # 1,163
+           "IMPORTEXPORT_IMPORT_TEMPLATE",  # 1,158
+           "IMPORTEXPORT_IMPORT_TEMPLATE_FAILED",  # 1,159
+           "IMPORTEXPORT_STARTING_EXPORT_TEMPLATE",  # 1,164
+           "IMPORTEXPORT_EXPORT_TEMPLATE",  # 1,156
+           "IMPORTEXPORT_EXPORT_TEMPLATE_FAILED",  # 1,157
+           "IMPORTEXPORT_STARTING_EXPORT_TEMPLATE_TO_OVA",  # 1,226
+           "IMPORTEXPORT_EXPORT_TEMPLATE_TO_OVA",  # 1,227
+           "IMPORTEXPORT_EXPORT_TEMPLATE_TO_OVA_FAILED"  # 1,228
+       ], $event_class)
+
+if find_substr($event_class, "IMPORT_TEMPLATE") != null then
+    action = "create"
+else
+    action = "move"
+endif
+
+object = "resource"
+
+if substr($event_class, 0, 21) == "IMPORTEXPORT_STARTING" then
+    status = "ongoing"
+elif substr($event_class, -6, 6) == "FAILED" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subformula "parse_body"
+    # IMPORTEXPORT_STARTING_IMPORT_TEMPLATE
+    TEXT = "Starting to import Template {$vm_template_name=STRING+} to Data Center {$sp_cluster=REST}"
+endsubformula
+
+subformula "parse_body"
+    # IMPORTEXPORT_IMPORT_TEMPLATE
+    TEXT = "Template {$vm_template_name=STRING+} was imported successfully to Data Center {$sp_cluster=REST}"
+endsubformula
+
+subformula "parse_body"
+    # IMPORTEXPORT_IMPORT_TEMPLATE_FAILED
+    TEXT = "Failed to import Template {$vm_template_name=STRING+} to Data Center {$sp_cluster=REST}"
+endsubformula
+
+subformula "parse_body"
+    # IMPORTEXPORT_EXPORT_TEMPLATE
+    TEXT = "Template {$vm_template_name=STRING+} was exported successfully to {$storage_domain_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # IMPORTEXPORT_EXPORT_TEMPLATE_TO_OVA
+    TEXT = "Template {$vm_template_name=STRING+} was exported successfully as a Virtual Appliance to path {$ova_path=STRING+} on Host {$vds_name=REST}"
+endsubformula
+
+subformula "1164"
+    # IMPORTEXPORT_STARTING_EXPORT_TEMPLATE
+    TEXT = "Starting to export Template {$vm_template_name=STRING+} to {$storage_domain_name=REST}"
+endsubformula
+
+subformula "1226"
+    # IMPORTEXPORT_STARTING_EXPORT_TEMPLATE_TO_OVA
+    TEXT = "Starting to export Template {$vm_template_name=STRING+} as a Virtual Appliance"
+endsubformula
+
+subformula "1157"
+    # IMPORTEXPORT_EXPORT_TEMPLATE_FAILED
+    TEXT = "Failed to export Template {$vm_template_name=STRING+} to {$storage_domain_name=REST}"
+endsubformula
+
+subformula "1228"
+    # IMPORTEXPORT_EXPORT_TEMPLATE_TO_OVA_FAILED
+    TEXT = "Failed to export Template {$vm_template_name=STRING+} as a Virtual Appliance to path {$ova_path=STRING+} on Host {$vds_name=REST}"
+endsubformula
+
+if $event_class == "IMPORTEXPORT_STARTING_EXPORT_TEMPLATE" then
+    submessage("TEXT", "1164", $raw_message)
+elif $event_class == "IMPORTEXPORT_STARTING_EXPORT_TEMPLATE_TO_OVA" then
+    submessage("TEXT", "1226", $raw_message)
+elif $event_class == "IMPORTEXPORT_EXPORT_TEMPLATE_FAILED" then
+    submessage("TEXT", "1157", $raw_message)
+elif $event_class == "IMPORTEXPORT_EXPORT_TEMPLATE_TO_OVA_FAILED" then
+    submessage("TEXT", "1228", $raw_message)
+else
+    submessage("TEXT", "parse_body", $raw_message)
+endif
+
+object.type = "vm_temlate"
+object.name = $vm_template_name
+
+if $ova_path != null then
+    object.property = "ova_path"
+    object.value = $ova_path
+endif
+
+if find_substr($event_class, "IMPORT_TEMPLATE") != null then
+    $spc_list = csv($sp_cluster, ", Cluster ", "'")
+    $storage_pool_name = $spc_list[0]
+    $cluster_name = $spc_list[1]
+endif
+
+datafield1 = $storage_pool_name  # Data Center Name
+datafield2 = $storage_domain_name  # Storage Domain Name
+datafield3 = $cluster_name  # Cluster Name
+datafield6 = $vds_name  # VDS (Host) Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_VM_Template_Import_Export"

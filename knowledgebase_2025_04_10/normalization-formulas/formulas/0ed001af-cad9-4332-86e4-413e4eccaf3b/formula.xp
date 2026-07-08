@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {UNTIL(" events - - ")}CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|events|
+        core|{WORDDASH}|rt={$temp_time=NUMBER} deviceExternalId={event_src.id=STRING+}
+        suser={STRING} cat=updater act={msgid="download_started"|msgid="download_finished"}
+        src={src.ip=IPV4|src.ip=IPV6} {UNTIL(" cs1=")}{$rest=REST}'
+
+action = "download"
+object = "update"
+status = switch msgid
+    case "download_started" "ongoing"
+    case "download_finished" "success"
+endswitch
+
+submessage("JSON", "SPLIT", $rest)
+
+subformula "SPLIT"
+    # Извлечение object.name и object.version из $rest
+    JSON = "module"
+    object.value = $module
+
+    if object.value != null then
+        object.property = "module name"
+    endif
+
+    object.version = $new_version
+endsubformula
+
+time = epoch_ms_to_datetime($temp_time)
+importance = "info"
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_download_update"

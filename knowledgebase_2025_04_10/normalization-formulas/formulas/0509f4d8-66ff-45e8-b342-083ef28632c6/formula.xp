@@ -1,0 +1,27 @@
+!JSON = "EventCode=5107"
+!COND = $Logfile=="DNS Server" and $SourceName=="Microsoft-Windows-DNS-Server-Service"
+
+action = "create"
+object = "link"
+status = "success"
+
+reason = "The DNS server created CNAME (alias) loop caching CNAME resource records (RRs)"
+
+msgid = $EventCode
+time = $TimeGenerated
+
+importance = "info"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "DNS server"
+event_src.title = "windows"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_5107_dns_server_created_alias_loop_caching_cname_rrs"

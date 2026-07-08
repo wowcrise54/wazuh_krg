@@ -1,0 +1,19 @@
+event Powershell_Pipeline_Execute:
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and object.name != null
+        and regex(lower(object.process.cmdline), "^\"test\-path\"\s+\-path\s+\"[^\"]+\\\\[^\"\.\\\\]+\"$", 0) != null # Шаблон поиска использования командлета Test-Path, используемого для проверки существования элементов путей. Выполняется всегда при первом использовании psmapexec с помощью цикла foreach
+        and find_substr(lower(object.process.cmdline), '"hklm:') == null # Указываем исключения для путей реестра
+        and find_substr(lower(object.process.cmdline), '"hkcu:') == null
+    }
+
+enrichment Get_Path_from_Test_Path_Cmdlet
+    
+    enrich Powershell_Pipeline_Execute:
+        enrich_fields {
+            datafield3 = regex(lower(object.process.cmdline), "^\"test\-path\"\s+\-path\s+\"([^\"]+\\\\)[^\"\.\\\\]+\"$", 1)
+        }

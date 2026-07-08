@@ -1,0 +1,50 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        [{time=DATETIME}] ["application-akka.actor.default-dispatcher-{NUMBER}"/{dst.ip=IPV4|dst.ip=IPV6} INFO] 
+        [com.vmware.loginsight.api.providers.AuditLogger] [{$kv_str=UNTIL("]")}'
+
+COND = find_substr($kv_str, "Added new log mask rule") != null
+       or find_substr($kv_str, "Updated log mask rule") != null
+       or find_substr($kv_str, "Removed log mask rule") != null
+
+subject = "account"
+
+if find_substr($kv_str, "Added") != null then
+    action = "create"
+elif find_substr($kv_str, "Updated") != null then
+    action = "modify"
+elif find_substr($kv_str, "Removed") != null then
+    action = "remove"
+endif 
+
+object = "rule"
+status = "success"
+
+$kv = keyvalue($kv_str,",",":")
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.domain = lower($kv["Domain"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "Default (built-in)" "local"
+    case "Active Directory" "domain"
+endswitch
+
+if find_substr($kv["UserAction"], "Added new") != null then
+    object.name = lower(strip($kv["UserAction"], "Added new log mask rule: '", "'."))
+elif find_substr($kv["UserAction"], "Updated") != null then
+    object.name = lower(strip($kv["UserAction"], "Updated log mask rule: '", "'."))
+else
+    object.name = lower(strip($kv["UserAction"], "Removed log mask rule: '", "'."))
+endif
+
+object.type = "log mask"
+
+logon_service = replace($kv["AuthSource"], "", " (built-in)")
+
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_log_mask_rule_manipulation"

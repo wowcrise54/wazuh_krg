@@ -1,0 +1,44 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+ {event_src.subsys="rdpproxy"} {"["subject.process.id=NUMBER"]"?}: [rdpproxy]
+ {"psid=\\"" subject.account.session_id=STRING} {"user=\\"" subject.account.name=STRING}
+ {"type=\\"" $temp_type=STRING} {REST}'
+
+$temp_type = strip($temp_type, "", "\"")      
+
+subject = "account"
+action = "login"
+object = "system"
+status = switch $temp_type
+    case "AUTHENTICATION_TRY" "ongoing"
+    case "AUTHENTICATION_FAILURE" "failure"
+endswitch
+
+if subject.account.name == "\"" then
+    subject.account.name = null
+else
+    subject.account.name = lower(strip(subject.account.name, "", "\""))
+endif
+
+subject.account.session_id = strip(subject.account.session_id, "", "\"")
+
+protocol.layer7 = "rdp"
+
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+$Computer = lower($Computer)
+
+id = "PT_IT_Bastion_SKDPU_NT_syslog_rdp_login"

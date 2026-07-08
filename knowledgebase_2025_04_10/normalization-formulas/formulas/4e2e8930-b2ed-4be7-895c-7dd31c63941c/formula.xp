@@ -1,0 +1,67 @@
+# <134>2023-12-04T12:44:10.815Z HOME-PC 1C-SIEM-converter: CEF:0|1С_Positive|HTTPServiceConnection||_$Session$_.Authentication|66773|0| cs1={"Event":{"v8ibase":"test_base","Data":{"OSUser":"NT AUTHORITY\\IUSR"},"DataPresentation":"","Level":"Информация","Date":"2023-12-04T14:49:01","ApplicationName":"HTTPServiceConnection","ApplicationPresentation":"Сеанс.Аутентификация","Event":"_$Session$_.Authentication","EventPresentation":null,"User":"496047e4-d75e-4ac0-88f8-f41ecb91ac29","UserName":"Alkir","Computer":"","Metadata":"","Comment":"","TransactionStatus":"N","TransactionID":"01.01.1970 0:00:00 (0)","Connection":11042,"Session":66773,"ServerName":"load01","Port":1567,"SyncPort":0}} cs1Label=JsonData
+
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} 
+        1C-SIEM-converter: CEF:0|{UNTIL("|")}{subject.application.name=WORD}||_$Session$_.Authentication|{NUMBER}|{NUMBER}| cs1={$json=UNTIL(" cs1Label=JsonData")}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+        
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+$temp = csv(lower(coalesce($Event['Data']['OSUser'], $Event['Data']['CurrentOSUser'])), '\\', '')
+subject.account.domain = $temp[0]
+
+if $temp[2] != null then
+    subject.account.name = $temp[2]
+else
+    subject.account.name = $temp[1]
+endif
+
+subject.application.account.session_id = $Event['Session']
+
+if $Event['User'] != "00000000-0000-0000-0000-000000000000" then
+    subject.application.account.id = lower($Event['User'])
+endif
+
+if $Event['UserName'] != "" then
+    subject.application.account.name = lower($Event['UserName'])
+endif
+
+object.name = $Event['ApplicationName']
+
+if lower($Event['Computer']) != "" then
+    src.hostname = lower($Event['Computer'])
+endif
+
+if $Event['ServerName'] == null or $Event['ServerName'] == "" or lower($Event['ServerName']) == lower($Event['Computer']) then
+    logon_auth_method = "local"
+    
+    dst.hostname = lower($Event['Computer'])  # to have at last any info
+else
+    logon_auth_method = "remote"
+    
+    dst.hostname = lower($Event['ServerName'])
+endif
+
+datafield3 = $Event['ApplicationPresentation']  # event info
+
+time = $Event['Date']
+msgid = $Event['Event']
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.id = $Event['v8ibase']
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_syslog_registration_log_Authentication"

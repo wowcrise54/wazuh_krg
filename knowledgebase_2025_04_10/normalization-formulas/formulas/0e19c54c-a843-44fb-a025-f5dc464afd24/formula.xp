@@ -1,0 +1,71 @@
+# <134>2023-12-04T12:44:10.787Z HOME-PC 1C-SIEM-converter: CEF:0|1С_Positive|1CV8C||_$Data$_.DeletePredefinedData|3|625619389| cs1={"Event":{"Data":{"PredefinedData":{"Ссылка":"68:80b7000c2946377c11ee8dc068ffcbf6","ИмяПредопределенныхДанных":"Тест"}},"DataPresentation":"","Level":"Информация","Date":"2023-11-28T10:50:27","ApplicationName":"1CV8C","ApplicationPresentation":" Данные.Удаление предопределенных данных","Event":"_$Data$_.DeletePredefinedData","EventPresentation":null,"User":"7c193498-a8c6-4a0b-bd3e-e9fb77225cad","UserName":"Администратор (ОрловАВ)","Computer":"load01","Metadata":"Справочник.Бригады","Comment":"","TransactionStatus":"U","TransactionID":"28.11.2023 10:50:27 (625619389)","Connection":26389,"Session":3,"ServerName":"load01","Port":1590,"SyncPort":0}} cs1Label=JsonData
+
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} 
+        1C-SIEM-converter: CEF:0|{UNTIL("|")}{subject.application.name=WORD}||_$Data$_.DeletePredefinedData|{NUMBER}|
+        {NUMBER}|  cs1={$json=UNTIL(" cs1Label=JsonData")}'
+       
+subject = "account"
+action = "remove"
+object = "db_object"
+status = "success"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+ 
+subject.application.account.session_id = $Event['Session']
+subject.application.account.id = lower($Event['User'])
+
+if $Event['UserName'] != "" then
+    subject.application.account.name = lower($Event['UserName'])
+endif
+
+object.name = $Event['Data']['PredefinedData']['ИмяПредопределенныхДанных']
+object.id = $Event['Data']['PredefinedData']['Ссылка']
+
+if $Event['Metadata'] != "" then
+    object.property = $Event['Metadata']
+endif
+
+if $Event['DataPresentation'] != "" then
+    object.value = $Event['DataPresentation']
+endif
+
+object.new_value = $Event['Data']['PredefinedData']['НовоеИмяПредопределенныхДанных']
+
+if $Event['Computer'] != "" then
+    src.hostname = lower($Event['Computer'])
+endif
+
+# Construction to cut the TransactionID from the parentheses: 18.04.2016 10:07:08 (10798)
+$transaction_id = string($Event['TransactionID'])
+$id_start = find_substr ($transaction_id,"(")
+
+if $Event['ServerName'] == null or $Event['ServerName'] == "" or lower($Event['ServerName']) == lower($Event['Computer']) then
+    logon_auth_method = "local"
+    
+    dst.hostname = lower($Event['Computer'])  # to have at least any info
+else
+    logon_auth_method = "remote"
+    
+    dst.hostname = lower($Event['ServerName'])
+endif
+dst.port = $Event['Port']
+
+datafield2 = substr($transaction_id, $id_start + 1, length($transaction_id) - $id_start - 2)  # transaction id
+datafield3 = $Event['ApplicationPresentation']  # event info
+
+reason = $Event['EventPresentation'] 
+
+time = $Event['Date']
+msgid = $Event['Event']
+importance = "info"
+
+event_src.id = $Event['v8ibase']
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_syslog_registration_log_DeletePredefinedData"

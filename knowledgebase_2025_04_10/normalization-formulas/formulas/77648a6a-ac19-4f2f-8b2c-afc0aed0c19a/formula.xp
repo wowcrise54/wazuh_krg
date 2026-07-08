@@ -1,0 +1,53 @@
+EVENTLOG = 'Channel = "Netwrix Auditor"'
+
+COND = $EventID["text"] == "2011" or $EventID["text"] == "2012" or $EventID["text"] == "2013" or
+       $EventID["text"] == "2001" or $EventID["text"] == "2002" or $EventID["text"] == "2007"
+
+object = "task"
+
+if $EventID["text"] == "2011" then
+    action = "stop"
+    status = "success"
+    importance = "info"
+elif ($EventID["text"] == "2012") or ($EventID["text"] == "2013") then
+    action = "stop"
+    status = "failure"
+    importance = "low"
+elif ($EventID["text"] == "2001") or ($EventID["text"] == "2002") then
+    action = "terminate"
+    status = "success"
+    importance = "low"
+elif $EventID["text"] == "2007" then
+    action = "disable"
+    status = "success"
+    importance = "low"
+endif
+
+datafield1 = $Data[0]   # monitoring plan name
+
+if find_substr($Data[2], ' For details') != null then
+    reason = strip(substr($Data[2], 0, find_substr($Data[2], ' For details')),"",".")
+elif find_substr($Data[2], '\r\nContact sales') != null then
+    reason = strip(substr($Data[2], 0, find_substr($Data[2], '\r\nContact sales')),"",".")
+else
+    reason = strip(($Data[2]),"",".")
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($Provider["Name"])
+event_src.category = "Other"
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_Data_collection_actions"

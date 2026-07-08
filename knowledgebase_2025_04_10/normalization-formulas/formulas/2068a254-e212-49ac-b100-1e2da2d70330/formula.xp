@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        lxd[{NUMBER}]: lvl={WORD} msg="{object.name = "LXD"} {object.version=STRING} is starting in normal mode"
+        path={object.process.fullpath=STRING+} t={time=REST}'
+
+action = "start"
+object = "service"
+status = "success"
+
+$kv_path = csv(object.process.fullpath, "/", "")
+object.process.name = $kv_path[length($kv_path) - 1]
+if strip(object.process.fullpath, "", object.process.name) != '' then
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+endif
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "lxd"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_LXD_syslog_lxd_start"

@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {$time_1=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?}
+        php{"["?}{object.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+        {$time_2=DATETIME?} {"host"?} CEF:0|Passwork|On premise|{NUMBER}|{msgid="usr-auth"}||{NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+subject.account.id = $kv['suid']
+subject.account.name = $kv['suser']
+
+src.ip = $kv['passworkIp']
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+time = coalesce(datetime($time_2),datetime($time_1))
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management" 
+category.low = "Communication"
+
+event_src.title = "passwork"
+event_src.vendor = "passwork"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Passwork_Passwork_syslog_login_event"

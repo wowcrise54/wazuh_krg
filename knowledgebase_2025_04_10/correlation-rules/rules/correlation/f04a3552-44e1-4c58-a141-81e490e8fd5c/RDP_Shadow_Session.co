@@ -1,0 +1,130 @@
+event Start_Process:
+    key:
+        event_src.host
+    filter { 
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows("rdpsaproxy.exe")
+        and lower(object.process.parent.name) == "svchost.exe"
+}
+    
+event Start_Session:
+    key:
+        event_src.host
+    filter { 
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "20503"   
+}
+    
+event Pipe_Connect:
+    key:
+        event_src.host
+    filter { 
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "5145"
+        and lower(object.storage.name) == "termsrv_api_service"
+        and filter::CheckWL_Windows_Shares("RDP_Shadow_Session", lower(join([src.ip, event_src.host, subject.account.name], "|")))
+}
+
+rule RDP_Shadow_Session: (Start_Process and Pipe_Connect and Start_Session?) timer 2m
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Start_Process {      
+        $object.account.session_id = subject.account.session_id
+        $object.account.name = subject.account.name # УЗ за кем наблюдают
+        $object.account.domain = subject.account.domain
+        $object.account.id = subject.account.id
+ 
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+ 
+    on Start_Session {         
+        $correlation_type = "incident"
+        $importance = "high"
+    }
+    
+    on Pipe_Connect {      
+        $subject.account.name = subject.account.name # УЗ кто наблюдает
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+      
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+            
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        
+        $alert.key = lower(join([src.ip, event_src.host, subject.account.name], "|"))
+        $labels = $labels + "|CheckWL_Windows_Shares"
+    }
+
+emit {
+    $alert.context = "User: " + $subject.account.name + " watching user: " + $object.account.name
+    
+    if $correlation_type == null then
+        $correlation_type = "event"
+        $importance = "low"
+    endif
+    
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Screen Capture"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

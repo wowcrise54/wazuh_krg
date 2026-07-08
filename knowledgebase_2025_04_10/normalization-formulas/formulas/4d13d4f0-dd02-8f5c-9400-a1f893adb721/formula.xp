@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {$dt=STRING} INFO 
+        [{UNTIL("]")} [{$req_id=UNTIL("]")} upgrade.pak.HistoryService:{NUMBER} - 
+        {$act="Starting"|$act="Completed"} operation {$operation=STRING} for pakID {object.id=REST}'
+
+action = switch $act
+    case "Starting" "start"
+    case "Completed" "stop"
+endswitch
+object = "update"
+status = "success"
+
+object.type = "PAK"
+object.property = "operation"
+object.value = $operation
+
+if $req_id != '' then
+    datafield1 = $req_id    # Request id
+endif
+
+time = datetime(replace($dt, ".", ","))
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_pak_operation"

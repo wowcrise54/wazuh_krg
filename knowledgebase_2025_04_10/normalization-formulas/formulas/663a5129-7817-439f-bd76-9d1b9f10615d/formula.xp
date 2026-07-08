@@ -1,0 +1,38 @@
+TABULAR = '{time=date_time},
+           {datafield1=connector_id},
+           {object.id=session_id},
+           local_endpoint,
+           remote_endpoint,
+           {msgid=event_type}'
+
+COND = $event_type == "client_connected"
+
+action = "start"
+object = "session"
+status = "success"
+
+protocol = "SMTP"
+
+submessage("TEXT", "SPLIT1", $remote_endpoint)
+submessage("TEXT", "SPLIT2", $local_endpoint)
+
+subformula "SPLIT1"
+    # Извлечение src.ip и src.port из $remote_endpoint
+    TEXT = '{src.ip=IPV4|src.ip=IPV6}{"%"NUMBER?}:{src.port=NUMBER}'
+endsubformula
+
+subformula "SPLIT2"
+    # Извлечение dst.ip и dst.port из $local_endpoint
+    TEXT = '{dst.ip=IPV4|dst.ip=IPV6}{"%"NUMBER?}:{dst.port=NUMBER}'
+endsubformula
+
+# datafield1 - id соединителей получения
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "exchange"
+event_src.ip = dst.ip
+event_src.category = "Mail server"
+
+id = "PT_Microsoft_Exchange_customeventcollector_smtp_receive_client_connected"

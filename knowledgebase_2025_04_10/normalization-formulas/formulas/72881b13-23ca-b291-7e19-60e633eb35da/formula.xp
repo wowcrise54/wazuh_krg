@@ -1,0 +1,37 @@
+TEXT = '{time=DATETIME} {$Computer=HOSTNAME} CEF:{NUMBER}|SFERA-IB|IdSatNet|{UNTIL("|")}{NUMBER}:{msgid="0012"}:
+        {NUMBER}|{"Signal level change"}|{NUMBER}|{$kv=KEYVALUE(" ", "=")}'
+
+subject = "application"
+action = "info"
+object = "alert"
+status = "success"
+
+datafield5 = $kv['Lock']              # Текущий уровень сигнала VSAT
+datafield6 = $kv['C_N']               # Текущее значение соотношения сигнал/шум сигнала VSAT
+datafield7 = $kv['Mid_signal_level']  # Cреднее значение уровня сигнала VSAT
+datafield8 = $kv['Mid_C_N']           # Cреднее значение соотношения сигнал/шум сигнала VSAT
+datafield9 = $kv['sat']               # Несущая частота сигнала VSAT и наименование космического аппарата связи
+datafield10 = $kv['Event_sig_noise']  # Описание и значение, на сколько уменьшилось или увеличилось  отношения сигнал/шум сигнала VSAT относительно среднего значения
+datafield11 = $kv['Multiplex']        # Наименование сети VSAT
+datafield20 = $kv['Message']          # Информационное сообщение
+
+importance = switch $kv['Level_Event']
+    case "Low" "info"
+    case "Medium" "low"
+    case "High" "medium"
+    case "Very_High" "high"
+endswitch
+
+event_src.ip = $kv['IdSatNet_IP']
+event_src.title = "idsatnet"
+event_src.vendor = "sfera_ib"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network monitoring system"
+
+id = "PT_SFERA_IB_IdSatNet_syslog_0012_Signal_level_change"

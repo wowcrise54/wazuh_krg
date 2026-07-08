@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"multiscanner"|"sandbox"} - {object.type=WORD}.{$id="finish"} - {$json_data=REST}'
+
+action = "stop"
+object = "scan"
+status = "success"
+subject = "application"
+
+# Parsing JSON submessage from PT Multiscanner
+submessage('JSON', 'multiscanner', $json_data)
+subformula 'multiscanner'
+    JSON = 'scan_id'
+
+    object.state = lower($action)
+    if object.state == null then
+        object.state = lower($status)
+    endif
+
+    if $dst_file_info['url'] != "" then
+        datafield2 = $dst_file_info['url']  # путь до перемещенного файла
+    endif
+
+    chain_id = $scan_id
+
+    time = epoch_to_datetime(number($created))
+    msgid = object.type + '.' + $id
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multiscanner"
+event_src.category = "Anti-virus"
+
+id = "PT_Positive_Technologies_Multiscanner_syslog_entrypoint_finish"

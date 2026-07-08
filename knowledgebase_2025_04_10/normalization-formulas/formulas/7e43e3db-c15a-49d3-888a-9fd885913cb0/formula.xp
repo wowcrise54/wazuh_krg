@@ -1,0 +1,24 @@
+TABULAR =  "id,
+            account_name,
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name},
+            {object.type=object_type}
+            "
+
+COND = $gr_name == "Очистка и контроль целостности журнала событий"
+       and $ev_desc == "Очистка журнала"
+
+action = "clean"
+object = "log"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_log_clean"

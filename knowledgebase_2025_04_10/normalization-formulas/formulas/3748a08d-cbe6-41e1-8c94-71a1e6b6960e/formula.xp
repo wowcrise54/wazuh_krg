@@ -1,0 +1,25 @@
+!TEXT = '{$maybe_time=STRING*} dhcp,{STRING} {STRING?} {object.value=WORDDASH+} {$act="de"?}assigned
+        {assigned_src_ip=IPV4} {"to"|"from"} {src.mac=MACADDR}'
+
+if $act == null then
+    action = "assign"
+else
+    action = "unassign"
+endif
+
+object = "ip_address"
+status = "success"
+
+object.property = "address pool"
+
+protocol = "DHCPv4"
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "mikrotik"
+event_src.title = "routeros"
+event_src.category = "Network device"
+
+id = "PT_MikroTik_RouterOS_syslog_dhcp_lease_release"

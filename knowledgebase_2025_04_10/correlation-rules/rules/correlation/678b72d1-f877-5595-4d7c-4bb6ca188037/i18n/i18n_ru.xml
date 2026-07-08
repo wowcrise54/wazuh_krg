@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Клонирование, создание мгновенных снимков (snapshot) и резервных копий дисков важных виртуальных машин в облачном сервисе VK Cloud.\nКопирование важных объектов позволяет злоумышленникам получать доступ к хранящимся на них данным, создавать свои виртуальные машины за пределами видимости систем безопасности и скрывать следы своих действий. Полученные данные злоумышленники могут использовать для дальнейшего развития атаки</Description>
+  <EventDescriptions>
+    <EventDescription id="14bd8d71-8d86-f1e4-4634-9191f737dc2d">Пользователь сделал резервную копию диска, подключенного к критически важной виртуальной машине, на узле {event_src.host}</EventDescription>
+    <EventDescription id="2a18f743-717b-cef3-1f3d-359ed6b32af9">Пользователь {subject.account.name} сделал мгновенный снимок диска, подключенного к критически важной виртуальной машине, на узле {event_src.host}</EventDescription>
+    <EventDescription id="38e28587-c261-6b97-83a6-a02a0cdab20c">Пользователь {subject.account.name} сделал копию диска, подключенного к критически важной виртуальной машине, путем клонирования на узле {event_src.host}</EventDescription>
+    <EventDescription id="ecefa2f7-7049-24a6-a9ac-dabe68ad8117">Пользователь {subject.account.name} сделал копию диска, подключенного к критически важной виртуальной машине, с помощью мгновенного снимка на узле {event_src.host}</EventDescription>
+    <EventDescription id="f2250327-0100-c9d0-cfe7-dc2c8b481050">Пользователь {subject.account.name} сделал резервную копию диска, подключенного к критически важной виртуальной машине, на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

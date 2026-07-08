@@ -1,0 +1,38 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}{$message=REST}"
+
+COND = find_substr($message,"process_out_of_ram") != null
+
+action = "terminate"
+object = "process"
+status = "success"
+
+subformula 'MSG'
+    JSON = ''
+endsubformula
+
+submessage("JSON", "MSG", $message)
+
+object.account.id = $MSG["astra-oom"]["uid"]
+
+object.process.name = $MSG["astra-oom"]["exe"]
+object.process.id = $MSG["astra-oom"]["pid"]
+    
+time = epoch_to_datetime(number($MSG["astra-oom"]["unixtime"]))
+msgid = $MSG["astra-oom"]["message_id"]
+
+importance = "low"
+
+event_src.vendor = "npo_rusbiteh"
+$Computer = $HOST
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "astra_linux"
+event_src.subsys = $FACILITY
+event_src.category = "Other"
+
+id = "PT_NPO_Rusbiteh_Astra_Linux_parsec_syslog_process_out_of_ram"

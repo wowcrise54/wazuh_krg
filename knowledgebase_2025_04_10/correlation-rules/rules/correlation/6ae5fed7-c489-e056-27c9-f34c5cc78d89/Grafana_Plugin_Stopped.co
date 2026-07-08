@@ -1,0 +1,57 @@
+event Plugin_Stopped:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "grafana"
+        and action == "stop"
+        and object == "module"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("Grafana_Plugin_Stopped", lower(join([event_src.host, object.name], "|")))
+    }
+
+rule Grafana_Plugin_Stopped: Plugin_Stopped
+
+    init {
+        $labels = "CheckWL_Specific_Only|w_auto"
+     }
+
+    on Plugin_Stopped {
+        $object.fullpath = object.fullpath
+        $object.name = object.name
+        $object.path = object.path
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, object.name], "|"))
+        $alert.context = "Plugin " + object.name + " stopped"
+    }
+
+emit {
+    $importance = "medium"
+
+    $subject = "account"
+    $action = "stop"
+    $object = "module"
+    $status = "success"
+
+    $correlation_type = "event"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Service Stop"
+    
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "ServiceMalfunction"
+    $incident.aggregation.timeout = 2h
+}

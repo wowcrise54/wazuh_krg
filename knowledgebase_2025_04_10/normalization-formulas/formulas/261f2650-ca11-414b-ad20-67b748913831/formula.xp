@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        Category: {NUMBER},{$tmp_subsys="RebootManager"},{"\\""?}Event Description: Symantec Endpoint Protection
+        {"requires a restart, requested by:"|"требует перезагрузки, запрошенной"} {subject.type=UNTIL("\\"")},Event time:
+        {time=DATETIME},{"\\""?}Group Name: {datafield10=UNTIL("\\"")|datafield10=REST}'
+
+subject = "application"
+action = "info"
+object = "resource"
+status = "success"
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+# datafield10 - Group name
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_SEP_requires_a_restart"

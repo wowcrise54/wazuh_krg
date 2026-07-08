@@ -1,0 +1,64 @@
+event Base64EncodedRequest:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "bind"
+        and object == "request"
+        and action == "receive"
+        and regex(object.value, "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$", 0) != null
+        and filter::CheckWL_Networking("BIND_Base64_Encoded_DNS_Request_Detection", lower(join([src.host, object.value], "|")))
+    }
+
+rule BIND_Base64_Encoded_DNS_Request_Detection: Base64EncodedRequest
+
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+    }
+
+    on Base64EncodedRequest {
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $datafield2 = datafield2 # The name of the resource, if it is encoded
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([src.host, object.value], "|"))
+        $alert.context = "Encoded resource: " + datafield2
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "receive"
+    $object = "request"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Application Layer Protocol: DNS"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,110 @@
+query GetAccountNameDomain($sid) from Known_Windows_Accounts {
+    column::id == $sid
+} qhandler {
+    $username = name
+    $domain_full = domain_full
+    $domain_netbios = domain_netbios
+    $storage = storage
+}
+
+query GetAccountSID($username, $domain) from Known_Windows_Accounts {
+        column::name == $username
+        and (
+            column::domain_full == $domain
+            or column::domain_netbios == $domain
+        )
+} qhandler {
+    $id = id
+    $domain_full = domain_full
+    $storage = storage
+}
+
+query GetDomainFullName($id) from Known_Windows_Domains {
+    column::id == $id
+}
+    qhandler {
+        $id = id
+        $fullname = fullname
+        $netbios = netbios
+    }
+
+event Any_Windows_event_with_object_user:
+    filter {
+        filter::NotFromCorrelator()
+        # all events with either object.account.id or object.account.name + object.account.domain
+        and filter::UserAccount_Windows(object.account.name, object.account.id)
+        and (
+            (
+                object.account.id != null
+                and find_substr(object.account.id, "synthetic:") != 0  # префикса нет или он не с нулевого символа -> честный ID
+                and object.account.name == null
+            )
+            or
+            (
+                object.account.name != null
+                and object.account.domain != null
+                and (
+                    object.account.id == null
+                    or find_substr(object.account.id, "synthetic:") == 0  # префикс есть -> синтетический ID
+                )
+            )
+        )
+    }
+    
+enrichment Domain_and_sid_mapping_object_user
+    enrich Any_Windows_event_with_object_user:
+        enrich_fields {
+            # Account is known by SID
+            if object.account.name == null then
+                if subject.account.id != null and find_substr(subject.account.id, "synthetic:") != 0 and subject.account.name != null and subject.account.domain != null and object.account.id == subject.account.id then
+                    object.account.name = subject.account.name
+                    object.account.domain = subject.account.domain
+                    object.account.provider = subject.account.provider
+                else
+                    $object_data = exec_query("GetAccountNameDomain", [lower(object.account.id)])
+                    if $object_data["$username"] != null then
+                        object.account.provider = $object_data["$storage"]
+                        object.account.name = $object_data["$username"]
+                        if $object_data["$storage"] == "local" then
+                            object.account.domain = event_src.hostname
+                        else
+                            object.account.domain = coalesce($object_data["$domain_full"], $object_data["$domain_netbios"])
+                        endif
+                    endif
+                endif
+            else
+                if subject.account.id != null and find_substr(subject.account.id, "synthetic:") != 0 and subject.account.name != null and subject.account.domain != null and object.account.name == subject.account.name and object.account.domain == subject.account.domain then
+                    object.account.id = subject.account.id
+                    object.account.provider = subject.account.provider
+                else
+                    $object_data = exec_query("GetAccountSID", [lower(object.account.name), lower(object.account.domain)])
+                    if $object_data["$id"] != null then
+                        object.account.provider = $object_data["$storage"]
+                        if $object_data["$domain_full"] != null and $object_data["$domain_full"] != object.account.domain then object.account.domain = $object_data["$domain_full"] endif
+                        $id = $object_data["$id"]
+                        if find_substr($id, "s-1-") == 0 then
+                            $id = upper($id)
+                        endif
+                        object.account.id = $id
+                    endif
+                endif
+            endif
+            
+            # Try to replace NETBIOS domain with the full domain name
+            # Attention! Only 'storage == domain' account data are stored in Known_Windows_Domains
+            
+            if ($object_data["$storage"] == "domain" or $object_data == null) and find_substr(object.account.id, "S-1-5-21-") == 0 then
+                $id_wout_prefix = strip(object.account.id, "S-1-5-21-", "")
+                $first_subauthor = substr($id_wout_prefix, 0, find_substr($id_wout_prefix, "-") + 1)
+                $id_wout_prefix = strip($id_wout_prefix, $first_subauthor, "")
+                $second_subauthor = substr($id_wout_prefix, 0, find_substr($id_wout_prefix, "-") + 1)
+                $id_wout_prefix = strip($id_wout_prefix, $second_subauthor, "")
+                $third_subauthor = substr($id_wout_prefix, 0, find_substr($id_wout_prefix, "-"))
+                $domain_id =  $first_subauthor + $second_subauthor + $third_subauthor
+                $domain_info = exec_query("GetDomainFullName", [$domain_id])
+                if $domain_info["$id"] != null then
+                    object.account.provider = "domain"
+                    object.account.domain = coalesce($domain_info["$fullname"], $domain_info["$netbios"])
+                endif
+            endif
+        }

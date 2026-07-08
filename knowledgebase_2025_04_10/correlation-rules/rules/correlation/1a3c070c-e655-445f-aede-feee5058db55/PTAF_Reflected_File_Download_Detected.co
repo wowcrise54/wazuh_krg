@@ -1,0 +1,164 @@
+query Check_If_Subnet_Is_Specific($ip) from Specific_Local_Networks {
+    in_subnet($ip, local_network)
+}
+
+event PTAF_Event:
+    key:
+        src.asset, object.name
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            not filter::External_Address(src.ip)
+            or exec_query("Check_If_Subnet_Is_Specific", [src.ip])
+        )
+        and event_src.title == "application_firewall"
+        and event_src.vendor == "positive_technologies"
+        and action != "login"
+        and match(lower(subject.name), "*reflected file download*")
+        and src.asset != null
+        and object.name != null
+    }
+    
+event File_Created:
+    key:
+        event_src.asset, object.name
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::FileCreate_Windows()
+            or filter::FileCreate_Linux()
+        )
+        and event_src.asset != null
+        and regex(lower(object.name), "\.(htaccess|htpasswd|htgroup|www_acl|acl|asa|conf|ini|bat|cmd|ps1|wsf|sh|wsh|hta|vbs|vbe|shell|php|xml|jpg|png|gif|jpeg|cfg)", 0) != null
+        and filter::CheckWL_File_Creation("PTAF_Reflected_File_Download_Detected", lower(join([subject.process.name, object.fullpath], "|")))
+    }
+    
+rule PTAF_Reflected_File_Download_Detected: (PTAF_Event and File_Created) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_File_Creation"
+    }
+    
+    on PTAF_Event {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+
+        $subject.type = subject.type
+        $subject.name = subject.name
+        $subject.id = subject.id
+        $subject.group = subject.group
+        $subject.state = subject.state
+
+        $object.process.name = object.process.name
+        $object.process.meta = object.process.meta
+
+        $object.domain = object.domain
+        $object.type = object.type
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.state = object.state
+        $object.vendor = object.vendor
+
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+
+        $src.ip = src.ip
+        $src.host = src.host
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.port = src.port
+        $src.geo.city = src.geo.city
+        $src.geo.country = src.geo.country
+
+        $assigned_dst_port = assigned_dst_port
+
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.host = dst.host
+        $dst.asset = dst.asset
+
+        $protocol.layer7 = protocol.layer7
+
+        $direction = direction
+
+        $duration = duration
+
+        $reason = reason
+
+        $datafield2 = datafield2    # Адрес предыдущей страницы
+        $datafield3 = datafield3    # ID политики
+        $datafield4 = datafield4    # тип защищаемого приложения
+        $datafield5 = datafield5    # Все заголовки пакета
+        $datafield7 = datafield7    # Имя валидатора, с помощью которого найдено значение
+        $datafield8 = datafield8    # Паттерн обнаруженной SQL-инъекции
+        $datafield9 = datafield9    # Название сработавшей переменной
+        $datafield10 = datafield10  # Имя параметра для составной переменной
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+    
+    on File_Created {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.chain = subject.process.chain
+        
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.name = object.name
+        
+        $dst.fqdn = event_src.fqdn
+        $dst.host = event_src.host
+        $dst.ip = event_src.ip
+        $dst.asset = event_src.asset
+        
+        $alert.context = event_src.host + " | " + object.fullpath
+        $alert.key = lower(join([subject.process.name, object.fullpath], "|"))
+    }
+    
+emit {
+    $correlation_type = "incident"
+    
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Drive-by Compromise"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

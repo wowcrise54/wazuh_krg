@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER":"?} {DATETIME} {STRING} NGIPS: {"["NUMBER":"NUMBER":"NUMBER"]"}
+        {$signature = STRING*} [Impact: {$imp = STRING+} From {$sensor = STRING} at {WORD}
+        {$mm = WORD} {$dd = WORD} {$hour_min_sec = STRING} {$yyyy = WORD} {$tz = WORD}
+        [Classification: {"(null)"|object.type = WORDDASH+}] [Priority: {NUMBER}] {"{"$proto = WORDDASH"}"}
+        {src.ip = IPV4 | src.ip = IPV6} {":"src.port = NUMBER?} ({UNTIL(")->")}
+        {dst.ip = IPV4 | dst.ip = IPV6} {":"dst.port = NUMBER?} ( {REST}'
+
+action = "detect"
+object = "alert"
+status = "success"
+
+if object.type == null then
+    object.type = "Not classified"
+endif
+
+object.name = strip($signature,'"','"')
+
+protocol = upper($proto)
+
+time = datetime ($mm + " " + $dd + " " + $yyyy + " " + $hour_min_sec + " " + $tz)
+
+importance = switch strip($imp,"","]")
+    case "Potentially Vulnerable" "low"
+    case "Vulnerable" "high"
+endswitch
+
+if importance == null then
+    importance = "info"
+endif
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Potential Attack"
+
+event_src.vendor = "cisco"
+event_src.title = "ngips"
+event_src.hostname = strip($sensor, '"','"')
+event_src.category = "IDS/IPS"
+
+id = "PT_Cisco_ASA_NGIPS_syslog_ips_event"

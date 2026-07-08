@@ -1,0 +1,70 @@
+TABULAR =  "recordid,
+            {datafield3 = module_name},
+            severity,
+            event_id,
+            {time = time},
+            {datafield1 = site_code},
+            hostname,
+            {datafield2 = component},
+            params
+            "
+
+COND = $event_id == 30058
+
+$tmp_list = csv($params, ',', '"')
+
+subject = "account"
+
+$tmp = find_substr($tmp_list[2], "\\")
+if $tmp != null then
+    subject.name = lower(strip(substr($tmp_list[2], $tmp, length($tmp_list[2])), "\\", ""))
+    subject.domain = lower(substr($tmp_list[2], 0, $tmp))
+else
+    subject.name = lower($tmp_list[2])
+endif
+
+object = "account"
+
+$tmp = find_substr($tmp_list[1], "\\")
+if $tmp != null then
+    object.name = lower(strip(substr($tmp_list[1], $tmp, length($tmp_list[1])), "\\", ""))
+    object.domain = lower(substr($tmp_list[1], 0, $tmp))
+else
+    object.name = lower($tmp_list[1])
+endif
+
+action = "modify"
+status = "success"
+
+msgid = string($event_id)
+if $tmp_list[0] == "1" then
+reason = "Modify security rights for Collection"
+elif  $tmp_list[0] == "2" then
+reason = "Modify security rights for Package"
+elif  $tmp_list[0] == "3" then
+reason = "Modify security rights for Advertisement"
+elif  $tmp_list[0] == "4" then
+reason = "Modify security rights for Status Messages"
+elif  $tmp_list[0] == "6" then
+reason = "Modify security rights for Site"
+elif  $tmp_list[0] == "7" then
+reason = "Modify security rights for Query"
+elif  $tmp_list[0] == "8" then
+reason = "Modify security rights for Report"
+elif  $tmp_list[0] == "9" then
+reason = "Modify security rights for Metering Rule"
+elif  $tmp_list[0] == "10" then
+reason = "Modify security rights for Software Update"
+else
+reason = "Modify security rights for Other Object"
+endif
+
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "info"
+
+id = "PT_Microsoft_SCCM_odbc_30058_modify_security_rights"

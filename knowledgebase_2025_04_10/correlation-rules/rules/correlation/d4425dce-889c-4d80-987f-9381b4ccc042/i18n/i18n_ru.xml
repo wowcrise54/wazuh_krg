@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Поиск пользователей, групп и компьютеров, имеющих доступ к Microsoft LAPS (Local Administrator Password Solution). LAPS автоматически управляет паролем учетной записи локального администратора и создает резервную копию пароля на устройствах, подключенных к службам Active Directory</Description>
+  <EventDescriptions>
+    <EventDescription id="3e96de1d-806b-99b5-bc61-686fc16eb073">Пользователь {subject.account.name} отправил LDAP-запрос атрибута "ms-Mcs-AdmPwd", содержащего пароль локального администратора в открытом виде, на узле {event_src.host}</EventDescription>
+    <EventDescription id="8fad6528-7c3d-885d-6f8a-82e0d17abdae">Создана библиотека admwpd.dll для работы с решением Microsoft LAPS на узле {event_src.host}</EventDescription>
+    <EventDescription id="c97f827a-8af3-8fb8-4cd6-4d3fe0255143">Попытка найти пользователей и группы Active Directory с привилегиями Microsoft LAPS, а также компьютеры, являющиеся членами домена, на которых используется LAPS, на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

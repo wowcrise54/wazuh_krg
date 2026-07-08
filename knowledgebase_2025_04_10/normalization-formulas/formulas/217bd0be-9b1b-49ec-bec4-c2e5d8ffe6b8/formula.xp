@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+MID {object.value=NUMBER} matched all recipients for per-recipient policy {datafield1=STRING+} in the outbound table'
+
+action = "execute"
+object = "check"
+status = "success"
+
+object.property = "email id"
+
+# datafield1 - Название политики
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_message_matched_policy_in_outbound_table"

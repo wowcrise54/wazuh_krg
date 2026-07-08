@@ -1,0 +1,122 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} - - - 
+        [{time=DATETIME}] "{$request_raw=UNTIL("\\"")} {$status_code=NUMBER} 
+        {$maybe_bytes="-"|$maybe_bytes=NUMBER} "{$user_agent=UNTIL("\\"")}'
+
+action = "access"
+object = "resource"
+
+# HTTP access success codes
+$access_success = [100, 101, 200, 201, 202, 203, 204, 206, 302, 304]
+
+# HTTP access failure codes
+$access_failure = [301, 305, 307, 308, 400, 401, 403, 404,
+                   405, 406, 407, 409, 413, 415, 418, 423, 
+                   429, 431, 495, 496, 497, 499, 500, 501,
+                   502, 503, 504, 505, 507, 508]
+
+if in_list($access_success, $status_code) then
+    status = "success"
+elif in_list($access_failure, $status_code) then
+    status = "failure"
+else
+    # Stopping formula operation if unknown HTTP code
+    drop
+endif
+
+$req_raws = csv($request_raw, " ", "")
+$object_value_raw = $req_raws[0]
+$object_path_raw = $req_raws[1]
+$protocol_raw = $req_raws[2]
+
+if $user_agent != '-' then
+    object.process.meta = strip(strip($user_agent, '"', '"'), '', '\" \"-')
+endif
+
+object.type = "web resourse"
+
+if $object_value_raw != "-" then
+    object.property = "method"
+    object.value = $object_value_raw
+endif
+
+if $object_path_raw != "-" then
+    $proc_name_path = csv($object_path_raw, '/', '*')
+    object.fullpath = $object_path_raw
+    object.name = $proc_name_path[length($proc_name_path) - 1]
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+object.state = $status_code
+
+if dst.ip == null then
+    dst.ip = coalesce(recv_ipv4, recv_ipv6)
+endif
+
+$protocol_raw = strip($protocol_raw, '', '"')
+if $protocol_raw != "" then
+    protocol.layer7 = $protocol_raw
+endif
+
+if $maybe_bytes != "-" then
+    count.bytes = $maybe_bytes
+endif
+
+reason = switch $status_code
+    case 101 "Switching Protocols"
+    case 100 "Continue"
+    case 200 "OK"
+    case 201 "Created"
+    case 202 "Accepted"
+    case 203 "Non-Authoritative Information"
+    case 204 "No Content"
+    case 206 "Partial Content"
+    case 301 "Moved Permanently"
+    case 302 "Found"
+    case 304 "Not Modified"
+    case 305 "Use Proxy"
+    case 307 "Temporary Redirect"
+    case 308 "Permanent Redirect"
+    case 400 "Bad Request"
+    case 401 "Unauthorized"
+    case 403 "Forbidden"
+    case 404 "Not Found"
+    case 405 "Method Not Allowed"
+    case 406 "Not Acceptable"
+    case 407 "Proxy Authentication Required"
+    case 409 "Conflict"
+    case 413 "Payload Too Large"
+    case 415 "Unsupported Media Type"
+    case 418 "I'm a teapot"
+    case 423 "Locked"
+    case 429 "Too Many Requests"
+    case 431 "Request Header Fields Too Large"
+    case 495 "SSL Certificate Error (nginx specific)"
+    case 496 "SSL Certificate Required (nginx specific)"
+    case 497 "HTTP Request Sent to HTTPS Port (nginx specific)"
+    case 499 "Client Closed Request"
+    case 500 "Internal Server Error"
+    case 501 "Not Implemented"
+    case 502 "Bad Gateway"
+    case 503 "Service Unavailable"
+    case 504 "Gateway Timeout"
+    case 505 "HTTP Version Not Supported"
+    case 507 "Insufficient Storage"
+    case 508 "Loop Detected"
+endswitch
+
+# HTTP codes of low importance
+$importance_low = [400, 401, 403, 407, 405, 413, 415, 418,
+                   429, 495, 500, 501, 502, 503, 504, 507, 508]
+
+if in_list($importance_low, $status_code) then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_access_log"

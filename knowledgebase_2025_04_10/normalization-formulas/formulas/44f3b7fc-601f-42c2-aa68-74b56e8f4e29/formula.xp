@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}{"vmkernel:"?} cpu{NUMBER}:{NUMBER}{"opID="WORD?})NetPortset: {NUMBER}: {$switch_act="Activating portset"} #{NUMBER} as {$switch_name=UNTIL(" (")}{UNTIL(")")} with {NUMBER} ports, index mask is {WORD}{"status Success"?}'
+
+action = "create"
+object = "resource"
+status = "success"
+
+object.type = "vswitch"
+object.name = $switch_name
+
+reason = $switch_act
+
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "vmkernel"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_6_0_syslog_Adding_virtual_switch"

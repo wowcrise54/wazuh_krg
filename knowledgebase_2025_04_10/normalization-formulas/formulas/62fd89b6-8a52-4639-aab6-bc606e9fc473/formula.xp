@@ -1,0 +1,28 @@
+TABULAR =  "id,
+            {subject.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name},
+            {object.type=object_type}
+            "
+
+COND = $gr_name == "Управление группами СУ"
+       and $ev_desc == "Удаление Группы узлов"
+       and $status == "Успешно"
+
+subject = "account"
+action = "remove"
+object = "resource"
+status = "success"
+
+object.id = $source_identifier
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_remove_host_group"

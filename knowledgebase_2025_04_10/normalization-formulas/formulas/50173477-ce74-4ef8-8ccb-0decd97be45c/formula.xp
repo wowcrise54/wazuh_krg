@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?}{$time_raw=DATETIME?} {"Message forwarded from"?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?} {object.process.name="audispd"}{"["?}{object.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+{"audispd"|"audit dispatcher"} initialized with q_depth={$q_depth=NUMBER} and {$plugins=NUMBER} active plugins'
+
+action = "start"
+object = "service"
+status = "success"
+
+object.state = "initialized"
+object.name = "audit dispatcher"
+object.property = "q_depth | active_plugins"
+object.value = string($q_depth) + " | " + string($plugins)
+
+time = coalesce($time_raw, recv_time)
+importance = "info"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_audispd_syslog_disp_init"

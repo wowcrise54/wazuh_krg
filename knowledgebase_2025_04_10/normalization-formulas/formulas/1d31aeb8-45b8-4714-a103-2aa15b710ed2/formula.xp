@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+    auditor{"["datafield1=NUMBER"]"}: {$msgid_raw_1="4205"}{$msgid_raw_2="Connection_rejected"}, 
+    Src: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}, Src Port: {src.port=NUMBER","}
+    {"Dst:"dst.ip=IPV4","?}{"Dst:"dst.ip=IPV6","?}{"Dst:"dst.hostname=HOSTNAME","?}{"Dst:"dst.hostname=UNTIL(",")?}
+    {"Dst Port:"dst.port=NUMBER","?}{"Username:"object.account.name=UNTIL(",")?} 
+    Session-Id: {object.account.session_id=NUMBER}, Channel Id: {NUMBER}, "Policy rule lookup failed", 
+    Rule: {event_src.rule=WORDDASH+}, "{$reason_raw=UNTIL("\\", Syslog")} server: "{datafield2=IPV4}:{datafield3=NUMBER}"'
+
+action = "start"
+object = "session"
+status = "failure"
+
+# datafield1 - PID
+# datafield2 - Syslog server IP
+# datafield3 - Syslog server Port
+
+reason = strip(strip(replace($reason_raw, " /", ". /"), "", ": "), "", ".")
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+importance = "low"
+
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "safeinspect"
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_4_3_syslog_4205_connection_rejected"

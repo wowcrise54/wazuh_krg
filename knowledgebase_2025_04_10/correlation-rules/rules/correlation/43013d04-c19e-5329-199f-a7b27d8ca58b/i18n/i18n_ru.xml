@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Эксплуатация уязвимости CVE-2024-24919, которая позволяет злоумышленникам читать любые файлы на устройствах межсетевого экранирования Check Point без авторизации. Уязвимость содержится в продуктах Check Point с включенными программными блейдами IPSec VPN, Remote Access VPN и Mobile Access</Description>
+  <EventDescriptions>
+    <EventDescription id="03d018c8-5582-4575-d471-64b249fa9051">Попытка эксплуатации с узла {src.host} уязвимости CVE-2024-24919, позволяющей читать любые файлы на устройстве Check Point {event_src.host}. Злоумышленник попытался прочитать файл "{datafield4}"</EventDescription>
+    <EventDescription id="89fdaf3d-4d2f-ef68-93f5-1e645987c7c4">Эксплуатация уязвимости CVE-2024-24919, позволяющей читать любые файлы на устройстве Check Point {event_src.host}. Злоумышленник прочитал файл "{datafield4}"</EventDescription>
+  </EventDescriptions>
+</Localization>

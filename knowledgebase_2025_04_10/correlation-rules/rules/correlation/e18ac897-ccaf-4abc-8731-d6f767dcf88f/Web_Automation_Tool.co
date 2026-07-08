@@ -1,0 +1,204 @@
+event Web_Server_Event:
+    key:
+        event_src.host, src.host, object.value
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.category == "Web server"
+        and action == "access"
+        and in_list(["file_object", "resource"], object)
+        and regex(lower(coalesce(object.process.meta, datafield1)), "apachebench|bidswitchbot|casper|curl|fasthttp|go-http-client|httpunit|java|node-fetch|pce-http|python-httplib2|python-requests|python-urllib|scrapy|winhttp.winhttprequest.5|zoominfobot", 0) != null
+        and filter::CheckWL_Web_Access("Web_Automation_Tool", lower(join([coalesce(dst.host, event_src.host), src.host, coalesce(object.process.meta, datafield1)], "|")))
+    }
+    
+event Start_Process:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::ProcessStart_Windows_any()
+            or
+            filter::ProcessStart_Linux()
+            )
+        and (
+            (
+                lower(object.process.name) == "curl.exe" 
+                and match(lower(object.process.path), "*windows\\system32\\*")
+            )
+            or 
+            regex(lower(object.process.name), "apachebench|bidswitchbot|casper|fasthttp|go-http-client|httpunit|pce-http|zoominfobot", 0) != null
+        )
+        and filter::CheckWL_Process_Creation("Web_Automation_Tool", lower(join([subject.account.name, object.process.name, object.process.cmdline], "|")))
+    }
+    
+rule Web_Automation_Tool: (Web_Server_Event+ timer 5m) or Start_Process
+
+    init {
+        $labels = "w_auto"
+        $count.subevents = 0
+    }
+    
+    on Web_Server_Event {
+        if $count.subevents == 0 then
+            $subject = subject
+            $action = action  # access
+            $object = object  # file_object, resource
+            $status = status  # success, failure
+            
+            $subject.account.id = subject.account.id
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.name = subject.account.name
+            $subject.account.session_id = subject.account.session_id
+
+            $object.process.meta = object.process.meta
+            
+            $object.name = object.name
+            $object.domain = object.domain
+            $object.type = object.type
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.value = object.value
+            $object.state = object.state
+            $object.vendor = object.vendor
+            
+            $logon_service = logon_service
+            $logon_auth_method = logon_auth_method
+
+            $src.ip = src.ip
+            $src.host = src.host
+            $src.hostname = src.hostname
+            $src.asset = src.asset
+            $src.port = src.port
+            $src.geo.city = src.geo.city
+            $src.geo.country = src.geo.country
+
+            $assigned_dst_port = assigned_dst_port
+
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.host = dst.host
+            $dst.asset = dst.asset
+
+            $protocol.layer7 = protocol.layer7
+            
+            $datafield1 = datafield1
+            $datafield2 = datafield2  # Адрес предыдущей страницы
+            $datafield3 = datafield3  # Подстатус http кода
+            $datafield4 = datafield4  # xff
+            $datafield5 = datafield5  # первое значение из xff
+            $datafield6 = datafield6  # cookie
+            $datafield7 = datafield7  # имя пользователя или SID
+            $datafield8 = datafield8  # домен пользователя        
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $reason = "web_server"
+            
+            $alert.regex_match = regex(lower(coalesce(object.process.meta, datafield1)), "apachebench|bidswitchbot|casper|curl|fasthttp|go-http-client|httpunit|java|node-fetch|pce-http|python-httplib2|python-requests|python-urllib|scrapy|winhttp.winhttprequest.5|zoominfobot", 0)
+            $alert.key = lower(join([coalesce(dst.host, event_src.host), src.host, coalesce(object.process.meta, datafield1)], "|"))
+            $labels = $labels + "|CheckWL_Web_Access"
+        else
+            $datafield1 = join([$datafield1, object.name], "|")  # Собираем объекты, к которым выполнялись обращения методом в object.value
+        endif
+        $count.subevents = $count.subevents + 1 
+    }
+
+    on Start_Process {
+        $subject = subject  # account
+        $action = action    # start
+        $object = object    # process
+        $status = status    # success
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([subject.account.name, object.process.name, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "curl|apachebench|bidswitchbot|casper|fasthttp|go-http-client|httpunit|pce-http|zoominfobot", 0)
+        $alert.context = lower(join([object.process.parent.name, object.process.name, $alert.regex_match], "|"))
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    if $reason == "web_server" and $count.subevents > 25 then
+        $importance = "info"
+    else
+        $importance = "low"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Automated Collection"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    if $importance == "info" then
+        $incident.severity = "low"
+    else
+        $incident.severity = $importance
+    endif
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

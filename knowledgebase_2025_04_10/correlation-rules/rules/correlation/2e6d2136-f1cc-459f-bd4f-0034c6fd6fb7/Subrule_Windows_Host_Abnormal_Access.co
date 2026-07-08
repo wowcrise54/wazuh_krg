@@ -1,0 +1,360 @@
+query IsLoginOnRiskAsset($os_type, $host, $asset_id) from List_Servers {
+    os_type == $os_type
+    and (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            host == $host
+            and host != null
+        )
+        or (
+            asset_id == $asset_id
+            and asset_id != null
+        )
+    )
+}
+
+query GetRiskAsset($asset_access, $asset_id) from AssetGrid_Servers {
+    os_type == $asset_access
+    and (
+            asset_id == $asset_id
+            and asset_id != null
+    )
+}
+
+# Проверяем, если ли вообще в профиле такой пользователь
+query CheckUsername($title, $username, $dst_host, $dst_ip) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and (
+        dst_host == $dst_host
+        or dst_ip == $dst_ip
+    )
+}
+
+# Проверяем, использовал ли пользователь раньше этот адрес
+query CheckHost($title, $username, $src_host, $dst_host, $dst_ip) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_host == $src_host
+    and (
+        dst_host == $dst_host
+        or dst_ip == $dst_ip
+    )
+}
+
+# Проверяем, не изменился ли logon_type
+query CheckLogonType($title, $username, $dst_host, $dst_ip, $additional_data) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and (
+        dst_host == $dst_host
+        or dst_ip == $dst_ip
+    )
+    and additional_data == $additional_data # logon_type
+}
+
+# Проверяем, не изменился ли сетевой ресурс, к которому пользователь получает доступ
+query CheckShare($title, $username, $dst_host, $dst_ip, $dst_path, $additional_data) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and (
+        dst_host == $dst_host
+        or dst_ip == $dst_ip
+    )
+    and dst_path == $dst_path # Сетевой ресурс
+    and additional_data == $additional_data # ipc или network_share
+}
+
+query CheckProfilePC($access_type, $login, $src_ip, $src_host, $dst_host, $dst_path, $additional_data) from Risk_User_Logon_Correlation_Profile {
+    access_type == $access_type
+    and login == $login
+    and (
+        src_host == $src_host 
+        or src_ip == $src_ip
+    )
+    and dst_host == $dst_host
+    and (
+        dst_path == $dst_path 
+        or dst_path == null
+    )
+    and additional_data == $additional_data
+}
+    
+event Login_Host:
+    key:
+        event_src.host, subject.account.name, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and filter::LoginAttempt_Windows_Endpoint()
+        and status == "success"
+        and in_list([2, 3, 7, 10, 12], logon_type)
+        and not filter::ComputerAccount_Windows(subject.account.name)
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and dst.host != null
+        and src.host != null
+        and not (
+            lower(src.host) == lower(dst.host)
+            or lower(src.host) == lower(dst.hostname)
+        )
+
+        # Исключение logon_type = 3 на контроллерах домена и на почтовых серверах
+        and not (
+            (
+                regex(lower(select_query_first("GetRiskAsset", [event_src.title, event_src.asset], "roles")), "\\b(domain\s+controller|mail\s+server)\\b", 0) != null
+                or regex(lower(select_query_first("IsLoginOnRiskAsset", [event_src.title, lower(event_src.fqdn), event_src.asset], "roles")), "\\b(domain\s+controller|mail\s+server)\\b", 0) != null
+            )
+            and logon_type == 3
+        )
+        
+        # Узел относится к рисковым активам.
+        and (
+            exec_query("IsLoginOnRiskAsset", [event_src.title, lower(event_src.host), event_src.asset])
+            or exec_query("GetRiskAsset", [event_src.title, event_src.asset])
+        )
+        # Проверка профиля
+        and not filter::Check_Profile(
+            event_src.title, # access_type
+            lower(subject.account.name), # login
+            string(src.ip), # src_ip
+            lower(src.host), # src_host
+            lower(coalesce(event_src.host, dst.host)), # dst_host
+            null, # dst_path
+            lower(datafield6) # additional_data
+        )
+        and filter::CheckWL_Profiling("Subrule_Windows_Host_Abnormal_Access", lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|")))
+    }
+
+event Access_To_Share:
+    key:
+        event_src.host, subject.account.name, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        #and in_list(["5145","4663"],msgid) 
+        #and msgid == "5145"
+        and msgid == "4663"
+        and status == "success"
+        and subject.account.name != null
+        and not filter::ComputerAccount_Windows(subject.account.name)
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and not filter::Loopback_Address(string(src.ip))
+
+        # Исключение контроллеров домена и почтовых серверов
+        and regex(lower(select_query_first("GetRiskAsset", [event_src.title, event_src.asset], "roles")), "\\b(domain\s+controller|mail\s+server)\\b", 0) == null
+        and regex(lower(select_query_first("IsLoginOnRiskAsset", [event_src.title, lower(event_src.host), event_src.asset], "roles")), "\\b(domain\s+controller|mail\s+server)\\b", 0) == null
+
+        # Узел относится к рисковым активам.
+        and (
+            exec_query("IsLoginOnRiskAsset", [event_src.title, lower(event_src.host), event_src.asset])
+            # Сработки только на те роли на которые у нас есть верхнеуровневые правила
+            or regex(lower(select_query_first("GetRiskAsset", [event_src.title, event_src.asset], "roles")), "\\b(developer|(antivirus|critical)\s+server|erp|1c\s+user|build\s+agent|version\s+control\s+system)\\b", 0) != null
+        )
+        
+        # Проверка профиля
+        # and (   
+        #    (
+        #        lower(object.path) == "\\ipc$\\"
+        #        and not exec_query("CheckProfilePC", [event_src.title, lower(subject.account.name), src.ip, lower(src.host), lower(coalesce(event_src.host,
+        #dst.host)), lower(object.storage.name), "ipc"])
+        #    )
+        #    or (
+        #        lower(object.path) != "\\ipc$\\"
+        #        and not exec_query("CheckProfilePC", [event_src.title, lower(subject.account.name), src.ip, lower(src.host), lower(coalesce(event_src.host,
+        #dst.host)), lower(object.storage.path), "network_share"])
+        #    )  
+        #)
+        
+        and filter::CheckWL_Profiling("Subrule_Windows_Host_Abnormal_Access", lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|")))
+    }
+
+rule Subrule_Windows_Host_Abnormal_Access: Login_Host or Access_To_Share
+
+    init {
+        $labels = "CheckWL_Profiling"
+    }
+
+    on Login_Host {
+        $action = action
+        $status = status
+        
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+        
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $datafield6 = datafield6
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    
+        $logon_type = logon_type
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+
+        $additional_data = lower(datafield6)
+        
+        # interactive: logon_type 2
+        # network: logon_type 3
+        # unlock: logon_type 7
+        # remoteinteractive: logon_type 10
+        # cachedremoteinteractive: logon_type 12
+        
+        if not exec_query("CheckProfilePC", [$event_src.title, lower($subject.account.name), string($src.ip), lower($src.host), lower(coalesce($event_src.host,
+        $dst.host)), null, lower($datafield6)]) then
+            # Проверка, есть ли для пользователя собранный профиль
+            if not exec_query("CheckUsername", [$event_src.title, lower($subject.account.name), lower(coalesce($event_src.host, $dst.host)), string($dst.ip)]) then
+                $reason = "no_user"
+            # Проверка, не новый ли адрес
+            elif not exec_query("CheckHost", [$event_src.title, lower($subject.account.name), lower($src.host), lower(coalesce($event_src.host, $dst.host)), string($dst.ip)]) then
+                $reason = "new_address"
+            # Проверка, был ли использован новый тип входа
+            elif not exec_query("CheckLogonType", [$event_src.title, lower($subject.account.name), lower(coalesce($event_src.host, $dst.host)), string($dst.ip), $additional_data]) then 
+                $reason = "new_logon_type"
+            endif
+        endif
+    }
+
+    on Access_To_Share {
+        $action = action
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+        
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $datafield6 = datafield6
+        $datafield9 = datafield9
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        if lower(object.path) == "\\ipc$\\" then
+            $dst_path = lower(object.storage.name)
+            $additional_data = "ipc"
+        else
+            $dst_path = lower(object.storage.path)
+            $additional_data = "network_share"
+        endif
+
+        if (
+            (
+                lower(object.path) == "\\ipc$\\" 
+                and not exec_query("CheckProfilePC", [event_src.title, lower(subject.account.name), src.ip, lower(src.host), lower(coalesce(event_src.host, dst.host)), lower(object.storage.name), "ipc"])
+            ) 
+            or 
+            (
+                lower(object.path) != "\\ipc$\\" 
+                and not exec_query("CheckProfilePC", [event_src.title, lower(subject.account.name), src.ip, lower(src.host), lower(coalesce(event_src.host, dst.host)), lower(object.storage.path), "network_share"])
+            )
+            ) then
+            # Проверка, есть ли для пользователя собранный профиль
+            if not exec_query("CheckUsername", [$event_src.title, lower($subject.account.name), lower(coalesce($event_src.host, $dst.host)), string($dst.ip)]) then
+                $reason = "no_user"
+            # Проверка, не новый ли адрес
+            elif not exec_query("CheckHost", [$event_src.title, lower($subject.account.name), lower($src.host), lower(coalesce($event_src.host, $dst.host)), string($dst.ip)]) then
+                $reason = "new_address"
+            # Проверка, было ли выполнено обращение к новому сетевому ресурсу
+            elif not exec_query("CheckShare", [$event_src.title, lower($subject.account.name), lower(coalesce($event_src.host, $dst.host)), string($dst.ip), $dst_path, $additional_data]) then 
+                $reason = switch $additional_data
+                    case "ipc" "new_ipc_share"
+                    case "network_share" "new_network_share"
+                endswitch
+            endif
+        endif
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $object = "host"
+
+    $importance = "info"
+
+    $alert.key = lower(join([$src.host, $subject.account.name, $event_src.host, $event_src.title], "|"))
+
+    $host_role = coalesce(
+        select_query_first("IsLoginOnRiskAsset", [$event_src.title, lower($event_src.host), $event_src.asset], "roles"),
+        select_query_first("GetRiskAsset", [$event_src.title, $event_src.asset], "roles")
+    )
+
+    $alert.context = join([$action, $host_role], " | ")
+
+    # Роль сервера
+    $datafield1 = $host_role
+
+    $category.generic = "Anomaly"
+    $category.high = "Lateral Movement"
+
+    if $logon_type == 3 or in_list(["ipc", "network_share"], $additional_data) then
+        $category.low = "Remote Services: SMB/Windows Admin Shares"
+    elif in_list([7, 10, 12], $logon_type) then
+        $category.low = "Remote Services: Remote Desktop Protocol"
+    else 
+        $category.low = "Remote Services"
+    endif
+}

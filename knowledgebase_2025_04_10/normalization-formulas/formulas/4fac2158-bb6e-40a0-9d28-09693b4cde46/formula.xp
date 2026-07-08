@@ -1,0 +1,106 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} confluence_audit: {$json=REST}"
+COND = (
+    find_substr($json, '"actionI18nKey":"audit.logging.summary.directory.added"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.directory.updated') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.directory.deleted') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = switch $author["type"]
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = switch strip($auditType["actionI18nKey"], "audit.logging.summary.directory.", "")
+    case "added" "create"
+    case "updated" "modify"
+    case "deleted" "remove"
+endswitch
+
+object = "ds_object"
+status = "success"
+
+if $author["type"] == "user" then
+    subject.account.fullname = $author["name"]
+    subject.account.id = $author["id"]
+endif
+
+$cv_0 = $changedValues[0]
+$cv_1 = $changedValues[1]
+$cv_2 = $changedValues[2]
+$cv_3 = $changedValues[3]
+
+if $cv_0["i18nKey"] == "ID" then $dir_id = $cv_0 endif
+
+object.type = "users_directory"
+object.name = $affectedObjects[0]["name"]
+object.id = coalesce($dir_id["from"], $dir_id["to"])
+
+$property = ""
+$value = ""
+$new_value = ""
+
+if $cv_0 != null then
+    $property = $property + $cv_0["key"]
+    $value = $value + $cv_0["from"]
+    $new_value = $new_value + $cv_0["to"]
+endif
+if $cv_1 != null then
+    $property = $property + " | " + $cv_1["key"]
+    $value = $value + " | " + $cv_1["from"]
+    $new_value = $new_value + " | " + $cv_1["to"]
+endif
+if $cv_2 != null then
+    $property = $property + " | " + $cv_2["key"]
+    $value = $value + " | " + $cv_2["from"]
+    $new_value = $new_value + " | " + $cv_2["to"]
+endif
+if $cv_3 != null then
+    $property = $property + " | " + $cv_3["key"]
+    $value = $value + " | " + $cv_3["from"]
+    $new_value = $new_value + " | " + $cv_3["to"]
+endif
+
+$property = $property + " | Allowed operations"
+    
+if find_substr($json, '":"CREATE_GROUP"') == null then
+    $operation = "Read Only"
+elif find_substr($json, '":"CREATE_USER"') == null then
+    $operation = "Read Only, with Local Groups"
+elif find_substr($json, '":"CREATE_USER"') != null then
+    $operation = "Read/Write"
+else
+    $operation = "<Unknown>"
+endif
+
+object.property = if $property != "" then $property else null endif
+if replace($value, "", " | ") != "" then
+    object.value = if $value != "" then $value + " | " + $operation else null endif
+endif
+if replace($new_value, "", " | ") != "" then
+    object.new_value = if $new_value != "" then $new_value + " | " + $operation else null endif
+endif
+    
+src.ip = $source
+
+msgid = $auditType["actionI18nKey"]
+time = epoch_to_datetime($timestamp["epochSecond"])
+importance = "info"
+
+event_src.vendor = "atlassian"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_syslog_Audit_User_Directory_Management"

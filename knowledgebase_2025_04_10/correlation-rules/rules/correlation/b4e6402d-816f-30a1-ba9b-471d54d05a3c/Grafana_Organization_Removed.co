@@ -1,0 +1,67 @@
+event Organization_Removed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "grafana"
+        and action == "remove"
+        and object == "resource"
+        and object.type == "organization" 
+        and status == "success"
+        and filter::CheckWL_Specific_Only("Grafana_Organization_Removed", lower(join([event_src.host, subject.account.name], "|")))
+    }
+
+rule Grafana_Organization_Removed: Organization_Removed
+    
+    init {
+        $labels = "CheckWL_Specific_Only|w_auto"
+     }
+
+    on Organization_Removed {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        
+        $object.fullpath = object.fullpath
+        $object.id = object.id
+        $object.path = object.path
+        $object.type = object.type
+        $object.query = object.query
+        
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, subject.account.name], "|"))
+        $alert.context = "Organization with ID " + object.id + " removed"
+    }
+
+emit {
+    $importance = "medium"
+
+    $subject = "account"
+    $action = "remove"
+    $object = "resource"
+    $status = "success"
+
+    $correlation_type = "event"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Destruction"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataDeletion"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,8 @@
+filter Loopback_Address(string $ip) {
+    (
+        (maybe_ipv4($ip) != null
+        and in_subnet($ip, "127.0.0.0/8"))
+        or
+        in_list([null, "::1", "0:0:0:0:0:0:0:1", "::", "-"], $ip)
+    )
+}

@@ -1,0 +1,34 @@
+TEXT = '{datafield1=UNTIL("-")}{NUMBER},CALL,{NUMBER},{$kv=KEYVALUE(",","=","\'")}'
+
+COND = in_list(["rphost", "rmngr", "ragent"], $kv["process"])
+        and $kv["MName"] == "lockConfig"
+        and $kv["t:applicationName"] == "Designer"
+        and $kv["Usr"] == null
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subject.application.account.session_id = $kv["SessionID"]
+subject.process.name = $kv["t:applicationName"]
+
+object.name = $kv["p:processName"]
+
+src.hostname = $kv["t:computerName"]
+
+# datafield1 - время регистрации события
+
+time = recv_time
+
+importance = "high"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_filemonitor_tech_log_connection_to_designer_blocked"

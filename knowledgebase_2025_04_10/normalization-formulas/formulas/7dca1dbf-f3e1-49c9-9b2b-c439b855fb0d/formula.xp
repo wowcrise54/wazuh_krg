@@ -1,0 +1,22 @@
+!TEXT = '{msgid="11016"}, {$mm=WORD}/{$dd=WORD}/{$yy=WORD}, {$csv=CSV}'
+
+action = "modify"
+object = "configuration"
+status = "success"
+
+object.property = "ip-address"
+object.value = $csv[2]
+
+reason = "Lease deleted"
+
+# Full year notation (FIXME before 2100):
+$yyyy = "20" + $yy
+# Gluing the date and time (from csv) to ISO8601:
+time = datetime($yyyy + "-" + $mm + "-" + $dd + "T" + $csv[0])
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "DHCP server"
+
+id = "PT_Microsoft_Windows_filemonitor_11016_Client_deleted"

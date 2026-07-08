@@ -1,0 +1,32 @@
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_FDE_Client_status"
+
+TABULAR = 'client_name, client_version, description, event_type, fde_details, orig, os_name, os_version, product, product_family, src, src_machine_name, src_user_name, time'
+
+COND = ($product_family == "Endpoint" and $product == "FDE" and $event_type == "Status" and $description == "System update Client status.")
+
+object = "system"
+object.value = $os_name
+object.version = $os_version
+object.state = $fde_details
+
+src.ip = $src
+src.hostname = $src_machine_name
+
+action = "info"
+status = "success"
+
+subject = "account"
+subject.name = $src_user_name
+
+msgid = $event_type
+
+time = $time
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.ip = $src
+event_src.hostname = $src_machine_name
+event_src.subsys = lower($product)
+event_src.category = "Host security"

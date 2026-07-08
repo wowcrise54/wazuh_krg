@@ -1,0 +1,23 @@
+TEXT = "{'<'NUMBER'>'?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        SFIMS %{msgid='NGIPS-4-430001'}: {$kv=KEYVALUE(',', ':', '\"')}"
+
+action = "detect"
+object = "session"
+status = "success"
+
+src.ip = $kv["SrcIP"]
+src.port = $kv["SrcPort"]
+dst.ip = $kv["DstIP"]
+dst.port = $kv["DstPort"]
+protocol = upper($kv["Protocol"])
+
+datafield1 = $kv["Classification"]         # Classification
+datafield2 = $kv["ApplicationProtocol"]    # Application protocol
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "asa_firepower"
+event_src.category = "IDS/IPS"
+
+id = "PT_Cisco_ASA_Firepower_syslog_430001_Intrusion_event"

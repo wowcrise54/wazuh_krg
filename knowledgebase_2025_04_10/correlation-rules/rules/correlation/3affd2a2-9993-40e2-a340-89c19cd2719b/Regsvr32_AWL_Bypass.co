@@ -1,0 +1,207 @@
+event Start_Regsvr32:
+    key:
+        event_src.host, object.account.name, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("regsvr32.exe", "(?:\/|-)i:(?:https?|ftp|\S+).*\\b.*?scrobj(?:\.dll)?\\b|\.(?:ocx|sct)\\b|(?:(?:(?:\/|-)(?:s|n|u).*\\b(?:\S+\.dll)\\b)|(?:(?:\/|-)(i:(?:https?|ftp|\S+))))")
+        and filter::CheckWL_Process_Creation("Regsvr32_AWL_Bypass", lower(object.process.cmdline))
+    }
+
+event Connect_From_Regsvr32:
+    key:
+        event_src.host, object.account.name, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                msgid == "3"
+                and event_src.title == "sysmon"
+            )
+            or (
+                msgid == "5156"
+                and event_src.title == "windows"
+            )
+        )
+        and src.ip != dst.ip
+        and direction == "egress"
+        and protocol == "tcp"
+        and (
+            match(lower(object.process.fullpath), "?:\\windows\\system32\\regsvr32.exe")
+            or match(lower(object.process.fullpath), "?:\\windows\\syswow64\\regsvr32.exe")
+        )
+        and not filter::Loopback_Address(dst.ip)
+    }
+
+event Start_Process:
+    key:
+        event_src.host, object.account.name, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            match(lower(object.process.parent.fullpath), "?:\\windows\\system32\\regsvr32.exe")
+            or match(lower(object.process.parent.fullpath), "?:\\windows\\syswow64\\regsvr32.exe")
+        )
+    }
+
+rule Regsvr32_AWL_Bypass: (Start_Regsvr32 -> (Connect_From_Regsvr32? and Start_Process?)) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Start_Regsvr32 {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        
+        if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+            $reason = "Service execution"
+        elif $object.process.parent.name == "scheduler.exe" then
+            $reason = "Task execution"
+        else
+            $reason = "User execution"
+        endif
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "(\/|-)i:(http(s)?|ftp|\S+).*\\b.*?scrobj(\.dll)?\\b|\.(ocx|sct)\\b|(((\/|-)(s|n|u).*\\b(\S+\.dll)\\b)|((\/|-)(i:(http(s)?|ftp|\S+))))", 0)
+        $alert.context = $alert.regex_match
+    }
+
+    on Connect_From_Regsvr32 {
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+    }
+
+    on Start_Process {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+    }
+
+emit {
+    if regex($object.process.cmdline, "(\/|-)i:(http(s)?|ftp)|(\S+\\b.*?scrobj(\.dll)?\\b)", 0) != null then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $C2_host = regex(lower($object.process.cmdline),"(http(s)?://|ftp://|\\\\\\\\)(.*?)/", 3)
+    if $C2_host != null then
+        $port_raw = regex($C2_host,":(\d+)$", 1)
+        $dst.port = strip($port_raw, ":", "")
+        $dst.host = strip($C2_host, "", ":" + $port_raw)
+        
+        if maybe_ipv4($dst.host) != null or maybe_ipv6($dst.host) != null then
+            $dst.ip = $dst.host
+        else
+            $maybe_dot_pos = find_substr($dst.host, '.')
+            if $maybe_dot_pos != null then
+                $dst.fqdn = $dst.host
+                $dst.hostname = substr($dst.host, 0, $maybe_dot_pos)
+            else
+                $dst.hostname = $dst.host
+            endif
+        endif
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "System Binary Proxy Execution: Regsvr32"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

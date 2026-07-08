@@ -1,0 +1,32 @@
+TEXT = '{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        PID=[{NUMBER}] TID=[{NUMBER}] Method: RegisterDomain {$kv=KEYVALUE(" ", ":")}'
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "ongoing"
+
+subject.name = $kv["User"]
+subject.privileges = $kv["Role"]
+object.property = $kv["Domain"]
+object.value = $kv["Name"]
+
+datafield1 = $kv["FQDN"]
+datafield2 = $kv["IPs"]
+
+reason = "register domain"
+
+importance = "info"
+
+event_src.vendor = "netapp"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "snapcenter"
+event_src.category = "Backup server"
+
+id = "PT_NetApp_SnapCenter_filemonitor_Register_Domain"

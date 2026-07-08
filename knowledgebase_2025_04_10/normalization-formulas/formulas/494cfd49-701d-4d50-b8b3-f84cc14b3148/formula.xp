@@ -1,0 +1,46 @@
+TEXT = "{'<'NUMBER'>'}{NUMBER}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}
+        {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}{':'?}
+        mgd {NUMBER?} {'UI_CFG_AUDIT_SET'}[junos@2636.{STRING} {$kv=UNTIL('] User')} {REST}"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$kv = keyvalue($kv, " ", "=", "\"")
+subject.name = $kv["username"]
+object.value = strip($kv["pathname"], "[", "\\]")
+
+if find_substr ($kv["pathname"], "[system login user") !=null then
+    submessage ("TEXT", "parse_objectvalue", $kv["pathname"])
+endif
+
+datafield2 = $kv["value"]
+
+subformula "parse_objectvalue"
+  !TEXT = "{$csv=CSV(' ', '\"')}"
+  datafield1 = $csv[3]
+endsubformula
+
+if find_substr($kv["pathname"], "[system login user") != null and find_substr($kv["pathname"], "class\]")!= null then
+    reason = "change user class"
+elif find_substr($kv["pathname"], "[system login user") != null then
+    reason = "change user attributes"
+elif find_substr($kv["pathname"], "[system root-authentication\]") != null then
+    reason = "change root authentication"
+endif
+
+if reason == null then
+    reason = "set configuration value"
+endif
+
+importance = "info"
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_ui_cfg_audit_set_structured"

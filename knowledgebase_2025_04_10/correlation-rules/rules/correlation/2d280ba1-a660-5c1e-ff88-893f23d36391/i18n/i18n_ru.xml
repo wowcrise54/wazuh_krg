@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Попытка использовать технику CoercedPotato. Повышение привилегий с помощью техники CoercedPotato позволяет злоумышленникам с привилегией ImpersonatePrivilege повысить свои права до пользователя System. После этого злоумышленники могут извлечь из скомпрометированного узла учетные данные локальных пользователей, а в некоторых случаях и других пользователей, получавших доступ к данному узлу. Использование этих данных позволит злоумышленникам осуществить перемещение внутри периметра (lateral movement) на другие узлы инфраструктуры</Description>
+  <EventDescriptions>
+    <EventDescription id="0de8fbdd-b3af-ec28-c1ef-b60fe962cf60">Пользователь {subject.account.name} использовал технику CoercedPotato (исполняемый файл {object.process.parent.name}), чтобы запустить процесс {object.process.name} с системными привилегиями на узле {event_src.host}</EventDescription>
+    <EventDescription id="ce4f8d43-5b4e-f642-d90e-addbe8e7aca4">Пользователю {subject.account.name} не удалось использовать технику CoercedPotato (исполняемый файл {subject.process.name}), чтобы запустить процесс с системными привилегиями на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

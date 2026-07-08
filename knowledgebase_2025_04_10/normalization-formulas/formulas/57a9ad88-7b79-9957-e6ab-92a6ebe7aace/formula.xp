@@ -1,0 +1,53 @@
+# INFO  [Native-Transport-Requests-1] 2023-11-23 23:05:29.301 FileAuditLogger.java:51 - user:dba|host:localhost/127.0.0.1:7430|source:/127.0.0.1|port:35238|timestamp:1700769929148|type:ALTER_TYPE|category:DDL|ks:auditlogkeyspace|scope:cycling|operation:ALTER TYPE auditlogkeyspace.cycling RENAME middle to middlename;
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type']=='ALTER_TYPE')
+
+subject = "account"
+action = "modify"
+object = "db_object"
+status = "success"
+
+subformula "parse_type_name"
+    TEXT = 'alter type {"if exists"?} {$temp=UNTIL(".")?}{object.name=WORD}{REST}'
+endsubformula
+
+subformula "parse_type_path"
+    TEXT = 'alter type {"if exists"?} {object.path=UNTIL(".")?}{REST}'
+endsubformula
+
+if $kv['scope'] != null then  
+    object.name = $kv['scope']
+else
+    submessage('TEXT', 'parse_type_name', lower($kv['operation']))
+endif 
+
+if $kv['ks'] != null then  
+    object.path = $kv['ks']
+    object.fullpath = object.path + "." + object.name
+else
+    submessage('TEXT', 'parse_type_path', lower($kv['operation']))
+    object.fullpath = object.path + "." + object.name
+endif 
+
+object.property = "type"
+object.query = $kv['operation']
+
+datafield1 = $kv['category'] # Категория CQL-запроса
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Alter_type"

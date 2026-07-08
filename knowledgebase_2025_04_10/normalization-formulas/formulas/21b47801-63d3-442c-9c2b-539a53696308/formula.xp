@@ -1,0 +1,54 @@
+TABULAR = 'product,
+           orig,
+           Machine,
+           time,
+           client_ip,
+           Administrator'
+
+COND = $Operation == 'Log In'
+       or $Operation == 'Log Out'
+
+subject = "account"
+object = "system"
+
+switch $Operation
+    case 'Log In'
+        action = 'login'
+        if $Audit_Status == 'Failure'
+            then status = 'failure'
+            else status = 'success'
+        endif
+    case 'Log Out'
+        action = 'logout'
+        status = 'success'
+endswitch
+
+subject.account.name = $Administrator
+
+object.name = $product
+
+if maybe_ipv4($Machine) == null and maybe_ipv6($Machine) == null then
+    src.hostname = $Machine
+endif
+
+src.ip = $client_ip
+
+logon_auth_method = "remote"
+
+reason = $Additional_Info
+
+datafield4 = $origin_sic_name  # полное доменное имя
+
+time = $time
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Common_Login_logout"

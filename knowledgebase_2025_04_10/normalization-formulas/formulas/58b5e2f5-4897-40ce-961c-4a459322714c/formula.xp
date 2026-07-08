@@ -1,0 +1,56 @@
+# Datafields usage for the Oracle events
+#     datafield1  os_username
+#     datafield3  grantee
+#     datafield4  mix (db_obj_privilege, db_admin_option)
+#     datafield5  tuple (session_id, entry_id)
+
+
+TABULAR = "{msgid = action_name},
+           {time = event_date},
+           session_id,
+           entry_id,
+           {datafield1 = os_username},
+           {subject.account.id = db_username},
+           {src.hostname = userhost},
+           return_code
+           "
+
+COND = ($action_name == "GRANT OBJECT") or ($action_name == "GRANT" and ($owner != null and $obj_name !=null))
+
+subject = "account"
+action = "grant"
+object = "db_object"
+
+if number($return_code) == 0 then
+    status = "success"
+else
+    status = "failure"
+    reason = $return_code
+endif
+
+subject.privileges = $priv_used
+object.name = $obj_name
+
+if $owner != null then
+    object.property = "schema"
+    object.value = $owner
+endif
+
+datafield3 = $grantee
+
+# <obj_privilege=...><admin_option=...>
+# WARN: That is XML-like but the W3C specs are defied here
+if $obj_privilege != null then datafield4 = datafield4 + '<obj_privilege=' + $obj_privilege + '>' endif
+if $admin_option != null then datafield4 = datafield4 + '<admin_option=' + $admin_option + '>' endif
+
+datafield5 = string($session_id) + ':' + string($entry_id)
+object.query = $sql_text
+
+importance = "info"
+
+event_src.vendor = "oracle"
+event_src.title = "oracle_database"
+event_src.subsys = "audit trail"
+event_src.category = "Database server"
+
+id = "PT_Oracle_Oracle_Database_odbc_Grant_object"

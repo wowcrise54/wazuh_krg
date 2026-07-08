@@ -1,0 +1,117 @@
+#запрос в ТС c белыми списками для исключения сработок
+query CheckIfWhitelisted($rule, $value, $tag) from Common_whitelist_for_labeling {
+    (rule == $rule or rule == "*")
+    and specific_value == $value
+    and tag == $tag
+}
+  
+query GetLogonInfo($host, $session_id) from Unix_Logon_Sessions {
+    dst_host == $host
+    and session_id == $session_id
+}
+    qhandler {
+        $src_ip = src_ip
+        $src_host = src_host
+        $src_asset = src_asset
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+    }
+
+query CheckVPN($assigned_ip) from Active_External_Sessions {
+    assigned_ip == $assigned_ip
+    and assigned_ip != null
+}
+    qhandler {
+        $user = username
+        $domain = user_domain
+        $id = user_id
+        $external_ip = external_ip
+        $external_host = external_host
+    }
+
+query CheckSubnet($ip) from Specific_Local_Networks {
+    in_subnet($ip, local_network)
+}
+
+event Correlation:
+    filter {
+        correlation_name != null
+        and filter::OperatingSystem_UNIXLike()
+        and subject.account.session_id != null
+        and subject.account.session_id != "4294967295"      # unset
+        and src.ip == null
+    }
+    
+enrichment Unix_Logon_Info_Addition
+
+    enrich Correlation:
+        enrich_fields {   
+            $logon_result = exec_query("GetLogonInfo", [lower(event_src.host), subject.account.session_id])
+                    
+            if $logon_result != null then 
+                    
+                # Проставляем src.ip
+                if $logon_result["$src_ip"] != null then
+                    src.ip = $logon_result["$src_ip"]
+                    src.asset = $logon_result["$src_asset"] # Проставляем исходный актив
+                    src.geo.org = select_query_first("CheckSubnet", [src.ip], "description") # Приносим описание подсети для адреса входа
+                    labels = labels + "|src_ip_enriched" # Метка для валидации проставления src.ip
+                      
+                    # Проставлем src.host
+                    if src.host == null and $logon_result["$src_host"] != null then
+                        src.host = $logon_result["$src_host"]
+                        labels = labels + "|src_host_enriched" # Метка для валидации проставления src.host
+                    endif              
+                endif
+
+                # Добавляем сервис и метод входа
+                logon_service = $logon_result["$logon_service"]
+                logon_auth_method = $logon_result["$logon_auth_method"]
+
+                if find_substr(labels, "src_ip_enriched") != null then
+
+                    $data = exec_query("CheckVPN",[src.ip])
+                    if subject.application.account.name == null then 
+                        subject.application.account.name = $data["$user"]
+                        subject.application.account.domain = $data["$domain"]
+                        subject.application.account.id = $data["$id"]
+                    endif
+
+                    external_src.ip  = $data["$external_ip"]
+
+                    if $data["$external_host"] != $data["$external_ip"] then
+                        external_src.host  = $data["$external_host"]
+                    endif
+
+                    if external_src.ip != null and subject.application.account.name != null then
+                        labels = labels + "|vpn_session_enriched" # Метка для валидации проставления src.ip при VPN коннекте
+                    endif
+                endif        
+            endif
+
+            # Проверяем наличие записей в белых списках
+            if subject.account.name != null 
+            and src.ip != null
+            and exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + src.ip), "subj_acc|ip"]) then
+                drop
+            endif
+
+            if object.account.name != null 
+            and src.ip != null
+            and exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + src.ip), "obj_acc|ip"]) then
+                drop
+            endif
+            
+            if subject.account.id != null 
+            and src.ip != null
+            and exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.id + "|" + src.ip), "subj_acc_id|ip"]) then
+                drop
+            endif
+
+            if object.account.id != null 
+            and src.ip != null
+            and exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.id + "|" + src.ip), "obj_acc_id|ip"]) then
+                drop
+            endif
+    }
+   

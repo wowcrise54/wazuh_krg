@@ -1,0 +1,206 @@
+event Powershell_Pipeline_Execute:
+    key:
+        event_src.host, object.account.id, object.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            regex(lower(object.process.cmdline), "invoke-adpeas", 0) != null
+            or regex(lower(object.process.cmdline), "^invoke-\S+\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0) != null
+            or regex(lower(object.process.cmdline), "^invoke-\S+(\s+-(domain|server)\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?){2}", 0) != null
+            or regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0) != null
+            or regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?(\s+-(username|password)\s+(\'|\")?\S+(\'|\")?){2}", 0) != null
+            or regex(lower(object.process.cmdline), "get-adpeas(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0) != null
+        )
+        and filter::CheckWL_Powershell("AdPEAS_Usage", regex(lower(object.process.cmdline), "(invoke|get)-.{0,100}", 0))
+    }
+
+event Powershell_Command_Execute:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            regex(lower(object.process.cmdline), "invoke-adpeas", 0) != null
+            or regex(lower(object.process.cmdline), "^invoke-\S+\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0) != null
+            or regex(lower(object.process.cmdline), "^invoke-\S+(\s+-(domain|server)\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?){2}", 0) != null
+            or regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0) != null
+            or regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?(\s+-(username|password)\s+(\'|\")?\S+(\'|\")?){2}", 0) != null
+            or regex(lower(object.process.cmdline), "(get|invoke)-adpeas(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0) != null
+        )
+        and filter::CheckWL_Powershell("AdPEAS_Usage", regex(lower(object.process.cmdline), "(invoke|get)-.{0,100}", 0))
+    }
+
+rule AdPEAS_Usage: Powershell_Command_Execute or Powershell_Pipeline_Execute+ with different object.process.cmdline timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+        $first_event = true
+        $count.subevents = 0
+    }
+
+    on Powershell_Pipeline_Execute {
+        if $first_event then
+            $first_event = false
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.process.cmdline = object.process.cmdline
+            $object.process.name = object.process.name
+
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $datafield8 = datafield8  # версия модуля
+            $datafield9 = datafield9 # Командлайн без приведения к нижнему регистру
+
+            $chain_id = chain_id
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.key = regex(lower(object.process.cmdline), "(invoke|get)-.{0,100}", 0)
+            $alert.regex_match = coalesce(regex(lower(object.process.cmdline), "^invoke-\S+\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+                regex(lower(object.process.cmdline), "^invoke-\S+(\s+-(domain|server)\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?){2}", 0),
+                regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+                regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?(\s+-(username|password)\s+(\'|\")?\S+(\'|\")?){2}", 0),
+                regex(lower(object.process.cmdline), "(get|invoke)-adpeas(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+                regex(lower(object.process.cmdline), "invoke-adpeas", 0)
+            )
+            $alert.context = join([object.account.name, object.name], "|")
+
+            $count.subevents = $count.subevents + 1
+        else
+            $regex_match = coalesce(regex(lower(object.process.cmdline), "^invoke-\S+\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+                regex(lower(object.process.cmdline), "^invoke-\S+(\s+-(domain|server)\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?){2}", 0),
+                regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+                regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?(\s+-(username|password)\s+(\'|\")?\S+(\'|\")?){2}", 0),
+                regex(lower(object.process.cmdline), "(get|invoke)-adpeas(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+                regex(lower(object.process.cmdline), "invoke-adpeas", 0)
+            )
+            if find_substr($alert.regex_match, $regex_match) == null then
+                $alert.regex_match = join([$alert.regex_match, $regex_match], "|")
+            endif
+
+            $count.subevents = $count.subevents + 1
+        endif
+    }
+
+    on Powershell_Command_Execute {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.id = object.process.id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = regex(lower(object.process.cmdline), "(invoke|get)-.{0,100}", 0)
+        $alert.regex_match = coalesce(regex(lower(object.process.cmdline), "^invoke-\S+\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+            regex(lower(object.process.cmdline), "^invoke-\S+(\s+-(domain|server)\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?){2}", 0),
+            regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?\s+-module\s+(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+            regex(lower(object.process.cmdline), "^invoke-\S+\s+-domain\s+(\'|\")?([a-z0-9-]{1,63}\.)+[a-z]{2,6}(\'|\")?(\s+-(username|password)\s+(\'|\")?\S+(\'|\")?){2}", 0),
+            regex(lower(object.process.cmdline), "(get|invoke)-adpeas(domain|rights|gpo|adcs|creds|delegation|accounts|computer|bloodhound)", 0),
+            regex(lower(object.process.cmdline), "invoke-adpeas", 0)
+        )
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $category.generic = "Attack"
+
+    if regex($alert.regex_match, "adpeasgpo|-module\s+gpo", 0) != null then
+        $category.high = "Discovery"
+        $category.low = "Group Policy Discovery"
+        $importance = "low"
+    elif regex($alert.regex_match, "adpeas(accounts|bloodhound)|-module\s+(accounts|bloodhound)", 0) != null then
+        $category.high = "Discovery"
+        $category.low = "Account Discovery: Domain Account"
+        $importance = "low"
+    elif regex($alert.regex_match, "adpeascreds|-module\s+creds", 0) != null then
+        $category.high = "Credential Access"
+        $category.low = "OS Credential Dumping"
+        $importance = "medium"
+    elif regex($alert.regex_match, "adpeasadcs|-module\s+adcs", 0) != null then
+        $category.high = "Discovery"
+        $category.low = "Network Service Discovery"
+        $importance = "low"
+    elif regex($alert.regex_match, "adpeascomputer|-module\s+computer", 0) != null then
+        $category.high = "Discovery"
+        $category.low = "System Information Discovery"
+        $importance = "low"
+    elif regex($alert.regex_match, "adpeas(domain|delegation)|-module\s+(domain|delegation)", 0) != null then
+        $category.high = "Discovery"
+        $category.low = "Domain Trust Discovery"
+        $importance = "low"
+    elif regex($alert.regex_match, "adpeasrights|-module\s+rights", 0) != null then
+        $category.high = "Discovery"
+        $category.low = "Permission Groups Discovery: Domain Groups"
+        $importance = "low"
+    endif
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

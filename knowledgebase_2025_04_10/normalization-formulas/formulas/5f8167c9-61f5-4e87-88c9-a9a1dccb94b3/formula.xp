@@ -1,0 +1,75 @@
+# {"class":"vim.event.EventEx","key":"654282302","chainId":"654282300","createdTime":"2022-02-08 10:04:44.710000+00:00","userName":"DOMAIN\\ekolomietsadm","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"DCenter","datacenter":"vim.Datacenter:datacenter-2"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"esx-051.vi.domain.ru","computeResource":"vim.ComputeResource:domain-s6569"},"host":{"class":"vim.event.HostEventArgument","name":"esx-051.vi.domain.ru","host":"vim.HostSystem:host-6571"},"vm":{"class":"vim.event.VmEventArgument","name":"template_Debian_9_x64","vm":"vim.VirtualMachine:vm-13194"},"fullFormattedMessage":"Template template_Debian_9_x64 converted to VM on esx-051.vi.domain.ru in DCenter","eventTypeId":"com.vmware.vc.vm.TemplateConvertedToVmEvent","severity":"","message":"","arguments":{},"objectId":"vm-13194","objectName":"template_Debian_9_x64"}
+
+JSON = ''
+COND = in_list([
+           "TemplateConvertedToVmEvent",
+           "VmConvertedToTemplateEvent"
+       ], strip($eventTypeId, "com.vmware.vc.vm.", ""))
+ 
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+action = "create"
+
+object = switch $eventTypeId
+    case "com.vmware.vc.vm.TemplateConvertedToVmEvent" "virtual_machine"
+    case "com.vmware.vc.vm.VmConvertedToTemplateEvent" "resource"
+endswitch
+
+status = "success"  
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+if $eventTypeId == "com.vmware.vc.vm.VmConvertedToTemplateEvent" then
+    object.type = "vm_template"
+endif
+
+object.name = $vm["name"]
+object.id = strip($vm["vm"], "vim.VirtualMachine:", "")
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+ 
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = coalesce(if $objectName == "" then null else $objectName endif, $entity["name"])  # Entity Name
+datafield5 = $vm["name"]  # Virtual Machine Name
+datafield6 = $host["name"]  # Host Name
+datafield7 = $parent["name"]  # Parent Entity Name
+datafield10 = if $objectId == "" then null else $objectId endif  # Internal Entity ID
+ 
+chain_id = $chainId
+ 
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "low"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_Convert_VM_Template"

@@ -1,0 +1,295 @@
+query isUserAssignedAddress($ip) from Active_External_Sessions {
+    assigned_ip == $ip
+}
+
+query isUserAddress($username, $ip) from Active_External_Sessions {
+    username == $username 
+    and assigned_ip == $ip
+}
+
+query GetAllData($ip) from Active_External_Sessions {
+    assigned_ip == $ip 
+}
+
+query GetData($ip) from Active_External_Sessions {
+    assigned_ip == $ip 
+}
+    qhandler {
+        $username = username
+        $external_host = external_host
+        $provider = provider
+        $country = country
+    }
+
+# Проверяем режим сбора профиля и работы правила
+query AutoProfile($rule) from Auto_Profile {
+    rule == $rule
+}
+
+# Проверяем наличие пользователя в профиле
+query CheckUsername($title, $username) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+}
+
+# Фиксировался ли ранее данный пользователь с этой сессионной УЗ
+query CheckSessionUsername($title, $username, $session_username) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and additional_data == $session_username
+}
+
+# Авторизовался ли ранее данный пользователь на этом узле
+query CheckDstHost($title, $username, $dst_host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and dst_host == $dst_host
+}
+
+# Не менялось ли название src.host у пользователя
+query CheckSrcHostName($title, $username, $src_host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_host == $src_host
+}
+
+# Проверяем время последнего изменения профиля в таблице
+query CheckProfile($title, $username, $src_ip, $src_host, $dst_host, $additional)
+from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_ip == $src_ip
+    and src_host == $src_host
+    and dst_host == $dst_host
+    and additional_data == $additional
+}
+
+event Suspicious_Login:
+    key:
+        event_src.host, subject.account.name, src.ip
+    filter {
+        (
+            filter::NotFromCorrelator()
+            and (
+                    action == "login"
+                or (
+                    action == "access"
+                    and event_src.title == "iam"
+                )
+            )
+            or correlation_name == "Subrule_Teampass_Login_Successful"
+        )
+
+        and status == "success"
+        and exec_query("isUserAssignedAddress", [src.ip])
+        and not exec_query("isUserAddress", [lower(subject.account.name), src.ip])
+
+        # Точечные исключения
+        and not match(subject.account.name, "*$")
+        and not in_list([null, "anonymous logon", "anonymous", "git"], lower(subject.account.name))
+        and not (event_src.title == "artifactory" and subject.account.name == "service_account")
+        and not (event_src.title == "application_firewall" and event_src.vendor == "positive_technologies")
+        and not filter::Loopback_Address(src.ip)
+        # Сверка с профилем
+        and not filter::Check_Profile(
+            "session|" + lower(event_src.title), # access_type
+            lower(subject.account.name), # login
+            string(src.ip), # src_ip
+            lower(src.host), # src_host
+            lower(event_src.host), # dst_host
+            null, # dst_path
+            select_query_first("GetAllData", [src.ip], "username") # additional_data
+        )
+        and filter::CheckWL_Profiling("VPN_User_Abnormal_Access", lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|")))
+    }
+
+rule VPN_User_Abnormal_Access: (Suspicious_Login)+ timer 1s
+
+    init {
+        # Табличный список для включения и отключения механизма автоматического сбора профилей:
+        # 0 - Профиль собран, обогащение отключено, правило обращается напрямую в профиль;
+        # 1 - Правило работает по собранному профилю, но профиль продолжает собираться;
+        # 2 - Профиль на стадии сбора, корреляция не срабатывает
+        
+        # Если в табличке нет правила, то считаем, что правило работает в режиме автопрофилирования
+        $auto_profile = coalesce(select_query_first("AutoProfile", ["VPN_User_Abnormal_Access"], "auto_profiling"), 1)
+        $insert_into_cond = false
+        $ttl_tl = 7862400 
+        $labels = "CheckWL_Profiling"
+    }
+         
+    on Suspicious_Login {
+        $result = exec_query("GetData", [src.ip])
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        
+        # Teampass & PT IAM
+        $object.name = object.name
+        $object.id = object.id
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.state = object.state
+
+        $object.process.meta = object.process.meta
+        $object.process.id = object.process.id
+
+        $protocol.layer7 = protocol.layer7
+        
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+        $src.geo.country = $result["$country"]
+        $src.geo.org = $result["$provider"]
+        
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $assigned_src_ip = assigned_src_ip
+        
+        $logon_auth_method = logon_auth_method
+        $logon_service = logon_service
+        $logon_type = logon_type
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        $event_src.fqdn = event_src.fqdn
+        
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+        $datafield6 = datafield6
+        $datafield7 = datafield7
+        $datafield8 = datafield8
+        $datafield9 = datafield9
+        $datafield10 = datafield10
+
+        $datafield11 = $result["$username"]
+        $datafield12 = "session|" + lower(event_src.title)
+
+        $datafield13 = datafield13
+        $datafield14 = datafield14
+        $datafield15 = datafield15
+        $datafield16 = datafield16
+        $datafield17 = datafield17
+        $datafield18 = datafield18
+        $datafield19 = datafield19
+        $datafield20 = datafield20
+
+        if not exec_query("CheckProfile", [$datafield12, lower($subject.account.name),
+        string($src.ip), lower($src.host), $event_src.host, $result["$username"]]) then  
+            ## Проверяем отличие от профиля ##
+            # Наличие пользователя в профиле
+            if not exec_query("CheckUsername", [$datafield12, lower(subject.account.name)]) then
+                $reason = "new subject.account.name"
+                $importance = "high"
+                $alert.context = "New user " + lower(subject.account.name) + " in profile"
+                $insert_into_cond = true
+
+            # Фиксировался ли ранее данный пользователь с этой сессионной УЗ
+            elif not exec_query("CheckSessionUsername", [$datafield12, lower(subject.account.name), $result["$username"]]) then
+                $reason = "new session_username"
+                $importance = "medium"
+                $alert.context = "New session_username " + $result["$username"] + " for user " + lower(subject.account.name) + " in profile"
+                $insert_into_cond = true
+
+            # Авторизовался ли ранее данный пользователь на этом узле
+            elif not exec_query("CheckDstHost", [$datafield12, lower(subject.account.name), lower(event_src.host)]) then
+                $reason = "new dst_host"
+                $importance = "low"
+                $alert.context = "New dst_host " + lower(event_src.host) + " for user " + lower(subject.account.name) + " in profile"
+                $insert_into_cond = true
+
+            # Не менялось ли название src.host у Windows пользователя
+            elif event_src.title == "windows" and not exec_query("CheckSrcHostName", [$datafield12, lower(subject.account.name), lower(src.host)]) then
+                $reason = "new src.host"
+                $importance = "medium"
+                $correlation_type = "incident"
+                $alert.context = "New src.host " + lower(src.host) + " for user " + lower(subject.account.name) + " in profile"
+                $insert_into_cond = true
+
+            # Не менялось ли название src.host у ещё у кого
+            elif not exec_query("CheckSrcHostName", [$datafield12, lower(subject.account.name), lower(src.host)]) then
+                $importance = "info"
+                $detect = "drop" 
+                $insert_into_cond = true
+
+            else
+                $importance = "info"
+                $detect = "drop" 
+            endif 
+        else
+            $last_changed = select_query_first("CheckProfile", [$datafield12, lower($subject.account.name),
+            string($src.ip), lower($src.host), $event_src.host, $result["$username"]],
+            "_last_changed")
+            if bool($last_changed) then         
+                if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then          
+                    $insert_into_cond = true
+                endif
+            endif
+            $importance = "info"
+            $detect = "drop"
+        endif 
+
+        # Если правило работает в режиме сбора профиля, то emit не нужен
+        if $auto_profile == 2 then
+            $importance = "info"
+            $detect = "drop"
+        endif 
+
+        $alert.key = lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|"))
+    }
+
+    insert_into Risk_User_Logon_Correlation_Profile if ($auto_profile !=0 and $insert_into_cond == true) {        
+        access_type = $datafield12
+        login = lower($subject.account.name)
+        src_ip = string($src.ip)
+        src_host = lower($src.host)
+        dst_host = lower($event_src.host)
+        additional_data = $result["$username"]
+    }
+
+emit {
+    $correlation_type = coalesce($correlation_type, "event")
+
+    $category.generic = "Anomaly"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $subject.account.id], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

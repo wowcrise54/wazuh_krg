@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?}{time=DATETIME}
+        {STRING?} {$severity=WORD }: update - {object.name=WORDDASH} 
+        - Watchdog restarting {WORDDASH}:{object.state="no update"}since{duration=NUMBER}{REST}'
+
+action = "info"
+object = "update"
+status = "success"
+
+if $severity == "Critical" then
+    importance = "high"
+else  
+    importance = "medium" 
+endif
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_Anti_spam_update"

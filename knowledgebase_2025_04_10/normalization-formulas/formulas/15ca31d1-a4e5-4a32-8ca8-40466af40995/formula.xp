@@ -1,0 +1,49 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {UNTIL(" traffic - - ")}CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}
+        |traffic|unknown|{WORDDASH}|rt={$time_raw=NUMBER} deviceExternalId={event_src.id=STRING+}
+        suser={STRING} {$kv=KEYVALUE(" ","=")}'
+
+subject = "rule"
+
+if $kv["act"] == "alert" then
+    action = "detect"
+    category.low = "State"
+else
+    action = "deny"
+    category.low = "Control"
+endif
+
+object = "connection"
+status = "success"
+
+subject.id = $kv["cs1"]
+
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+
+if $kv["sourceTranslatedAddress"] != "0.0.0.0" then assigned_src_ip = $kv["sourceTranslatedAddress"] endif
+if $kv["sourceTranslatedPort"] != "0" then assigned_src_port = $kv["sourceTranslatedPort"] endif
+if $kv["destinationTranslatedAddress"] != "0.0.0.0" then assigned_dst_ip = $kv["destinationTranslatedAddress"] endif
+if $kv["destinationTranslatedPort"] != "0" then assigned_dst_port = $kv["destinationTranslatedPort"] endif
+
+protocol = $kv["proto"]
+
+time = epoch_ms_to_datetime($time_raw)
+importance = "medium"
+
+category.generic = "Connection"
+category.high = "Information Security"
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_traffic_unknown"

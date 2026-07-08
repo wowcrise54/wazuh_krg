@@ -1,0 +1,97 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VDS_SET_NONOPERATIONAL",  # 517
+           "VDS_SET_NONOPERATIONAL_FAILED",  # 518
+           "VDS_SET_NONOPERATIONAL_NETWORK",  # 519
+           "VDS_SET_NONOPERATIONAL_IFACE_DOWN",  # 603
+           "VDS_SET_NONOPERATIONAL_DOMAIN",  # 522
+           "VDS_SET_NONOPERATIONAL_DOMAIN_FAILED",  # 523
+           "VDS_ALREADY_IN_REQUESTED_STATUS"  # 493
+       ], $event_class)
+
+action = "modify"
+object = "resource"
+if in_list([
+    "VDS_SET_NONOPERATIONAL_FAILED", "VDS_SET_NONOPERATIONAL_DOMAIN_FAILED",
+    "VDS_ALREADY_IN_REQUESTED_STATUS"
+    ], $event_class) then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subformula "parse_body"
+    # VDS_SET_NONOPERATIONAL
+    TEXT = "Host {$vds_name=STRING+} moved to {object.new_value='Non-Operational'} state."
+endsubformula
+
+subformula "parse_body"
+    # VDS_SET_NONOPERATIONAL_FAILED
+    TEXT = "Failed to move Host {$vds_name=STRING+} to {object.new_value='Non-Operational'} state."
+endsubformula
+
+subformula "parse_body"
+    # VDS_SET_NONOPERATIONAL_NETWORK
+    TEXT = "Host {$vds_name=STRING+} does not comply with the cluster {$cluster_name=STRING+} networks, the following networks are missing on host: {$networks=REST}"
+    
+    $networks = strip($networks, "'", "'")
+    object.new_value = "Non-Operational"
+endsubformula
+
+subformula "parse_body"
+    # VDS_SET_NONOPERATIONAL_IFACE_DOWN
+    TEXT = "Host {$vds_name=STRING+} moved to {object.new_value='Non-Operational'} state because interfaces which are down are needed by required networks in the current cluster: {$nics_with_networks=REST}"
+    
+    $nics_with_networks = strip($nics_with_networks, "'", "'.")
+endsubformula
+
+subformula "parse_body"
+    # VDS_SET_NONOPERATIONAL_DOMAIN
+    # VDS_SET_NONOPERATIONAL_DOMAIN_FAILED
+    TEXT = "Host {$vds_name=STRING+} cannot access the Storage Domain(s) {$storage_domain_names=STRING+} attached to the Data Center {$storage_pool_name=STRING+} {'Setting'|'Failed to set'} Host state to {object.new_value='Non-Operational'}."
+endsubformula
+
+subformula "parse_body"
+    # VDS_ALREADY_IN_REQUESTED_STATUS
+    TEXT = "Host {$vds_name=STRING+} is already {$agent_status_operation=REST}"
+    
+    $vds_list = csv($agent_status_operation, ", Power Management ", "'")
+    $agent_status = $vds_list[0]
+    $operation = strip($vds_list[1], "", " operation skipped.")
+    
+    object.state = $agent_status
+    object.value = $agent_status
+    object.new_value = $agent_status
+    object.query = $operation
+    
+    reason = "Already in requested status"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+object.type = "vds"
+object.name = $vds_name
+object.property = "status"
+
+datafield1 = strip($storage_pool_name, "", ".")  # Data Center Name
+datafield2 = $storage_domain_names  # Storage Domain Name(s)
+datafield3 = $cluster_name  # Cluster name
+datafield6 = $vds_name  # VDS (Host) Name
+datafield8 = $networks  # Network Name(s)
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_VDS_Status"

@@ -1,0 +1,91 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} production_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"method":"GET"') != null
+    and find_substr($json, '"controller":"Projects::RepositoriesController"') != null
+    and find_substr($json, '"action":"archive"') != null
+)
+
+subject = "account"
+action = "download"
+object = "file_object"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+object.type = "dir"
+
+$s_path = find_substr($json, '{"key":"path","value":"')
+$e_path = find_substr(substr($json, $s_path, length($json)), '"}')
+$params_path = substr($json, $s_path + 23, $e_path - 23)
+$params_path = if length($params_path) != 0 then $params_path else null endif
+
+if $params_path == null then
+    object.name = "<Root>"
+    object.fullpath = "/"
+else
+    $dir_list = csv($params_path, "/", "'")
+    $dir_name = $dir_list[length($dir_list)-1]
+    $dir_path = strip($params_path, "", $dir_name)
+    
+    object.name = $dir_name
+    object.path = "/" + $dir_path
+    object.fullpath = "/" + $params_path
+endif
+
+$s_id = find_substr($json, '{"key":"id","value":"')
+$e_id = find_substr(substr($json, $s_id, length($json)), '"}')
+$id = substr($json, $s_id + 21, $e_id - 21)
+$id = if length($id) != 0 then $id else null endif
+
+$id_list = csv($id, "/", "'")
+$id_archive = $id_list[length($id_list)-1]
+$ref_name = strip($id, "", "/" + $id_archive)
+
+src.ip = $remote_ip
+
+$s_project_id = find_substr($json, '{"key":"project_id","value":"')
+$e_project_id = find_substr(substr($json, $s_project_id, length($json)), '"}')
+$project_id = substr($json, $s_project_id + 29, $e_project_id - 29)
+datafield1 = if length($project_id) != 0 then $project_id else null endif  # Project Slug
+
+$s_namespace_id = find_substr($json, '{"key":"namespace_id","value":"')
+$e_namespace_id = find_substr(substr($json, $s_namespace_id, length($json)), '"}')
+$namespace_id = substr($json, $s_namespace_id + 31, $e_namespace_id - 31)
+datafield2 = if length($namespace_id) != 0 then $namespace_id else null endif  # Namespace Fullpath
+
+datafield6 = $ref_name + object.fullpath  # File Object Full Path
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "production"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Production_Download_Archive"

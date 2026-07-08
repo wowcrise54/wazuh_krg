@@ -1,0 +1,43 @@
+query GetDomainFullName($id) from Known_Windows_Domains {
+    column::id == $id
+}
+    qhandler {
+        $id = id
+        $fullname = fullname
+        $netbios = netbios
+    }
+
+event Any_Windows_event_with_full_subject_account_info:
+    filter {
+        filter::NotFromCorrelator()
+        # all events with either object.account.id or object.account.name + object.account.domain
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and subject.account.provider == null
+        and not (
+            filter::LoginAttempt_Windows_Endpoint()
+            and status == "success"
+        )
+        and subject.account.domain != null
+        and subject.account.name != null
+        and subject.account.id != null
+        and find_substr(subject.account.id, "S-1-5-21-") == 0
+    }
+    
+enrichment Domain_mapping_subject_user
+    enrich Any_Windows_event_with_full_subject_account_info:
+        enrich_fields {
+            $id_wout_prefix = strip(subject.account.id, "S-1-5-21-", "")
+            $first_subauthor = substr($id_wout_prefix, 0, find_substr($id_wout_prefix, "-") + 1)
+            $id_wout_prefix = strip($id_wout_prefix, $first_subauthor, "")
+            $second_subauthor = substr($id_wout_prefix, 0, find_substr($id_wout_prefix, "-") + 1)
+            $id_wout_prefix = strip($id_wout_prefix, $second_subauthor, "")
+            $third_subauthor = substr($id_wout_prefix, 0, find_substr($id_wout_prefix, "-"))
+            $domain_id =  $first_subauthor + $second_subauthor + $third_subauthor
+            
+            $domain_info = exec_query("GetDomainFullName", [$domain_id])
+            
+            if $domain_info["$id"] != null then
+                subject.account.provider = "domain"
+                subject.account.domain = coalesce($domain_info["$fullname"], $domain_info["$netbios"])
+            endif
+        }

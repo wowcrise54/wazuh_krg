@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys="netauto_discovery"}[{NUMBER}]: {STRING} {NUMBER}
+        {STRING} {dst.ip=IPV4|dst.ip=IPV6} / {WORD} - {object.id=NUMBER}:
+        {object.name=STRING+} ver {object.version=STRING} {reason=REST}'
+
+action = "info"
+object = "device"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "infoblox"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ddi"
+event_src.category = "Network monitoring system"
+
+id = "PT_Infoblox_DDI_syslog_lldp_request_failed"

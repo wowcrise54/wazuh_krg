@@ -1,0 +1,63 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        [{time=DATETIME}] ["application-akka.actor.default-dispatcher-{NUMBER}"/{dst.ip=IPV4|dst.ip=IPV6} INFO] 
+        [com.vmware.loginsight.api.providers.AuditLogger] [{$kv_str=UNTIL("]")}{"]"?}'
+
+COND = find_substr($kv_str, "Updated role") != null
+       and find_substr($kv_str, "Updated definition") == null
+       or (
+            find_substr($kv_str, "Role") != null
+            and (find_substr($kv_str, "deleted") != null
+            or find_substr($kv_str, "created") != null)
+       )
+
+$kv_str = strip($kv_str, "[","]")
+$kv = keyvalue($kv_str,",",":") 
+
+subject = "account"
+
+if find_substr($kv_str, "created") != null then
+    action = "create"
+elif find_substr($kv_str, "deleted") != null then
+    action = "remove"
+elif find_substr($kv_str, "Updated role") != null then
+    action = "modify"
+endif
+
+object = "resource"
+status = "success"
+
+subformula "parse_action"
+    # Additional information about a role
+    TEXT = '{"Role"|"Updated role"} \'{$obj_name=UNTIL("\'")}{"."?} {$act=WORD} {"[RBAC Capabilities:"?}{$role_info=REST}'
+    
+    object.name = lower($obj_name)
+    if ($act == "created" or $act == "deleted") then
+        object.property = "role privileges"
+        object.value = lower(strip($role_info,"","]"))
+    elif $act == "Updated" then
+        object.property = "changed parameters"
+        object.value = $role_info
+    endif 
+endsubformula
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.domain = lower($kv["Domain"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "Default (built-in)" "local"
+    case "Active Directory" "domain"
+endswitch
+
+submessage('TEXT', 'parse_action', $kv["UserAction"])
+
+object.type = "role"
+
+logon_service = replace($kv["AuthSource"], "", " (built-in)")
+
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_role_manipulation"

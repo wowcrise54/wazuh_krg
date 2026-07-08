@@ -1,0 +1,42 @@
+# INFO  [Native-Transport-Requests-1] 2023-11-24 00:05:19.381 FileAuditLogger.java:51 - user:dba|host:localhost/127.0.0.1:7000|source:/127.0.0.1|port:35578|timestamp:1700773519290|type:CREATE_KEYSPACE|category:DDL|ks:materials|operation:CREATE KEYSPACE materials WITH replication = {'class': 'SimpleStrategy','replication_factor': 1};
+# INFO  [Native-Transport-Requests-1] 2024-01-29 13:21:37.574 FileAuditLogger.java:51 - user:anonymous|host:10.0.2.238:7000|source:/3.91.56.164|port:42406|timestamp:1706523696669|type:CREATE_KEYSPACE|category:DDL|ks:auditlogkeyspace|operation:CREATE KEYSPACE AuditLogKeyspace WITH replication = {'class': 'SimpleStrategy', 'replication_factor' : 1};
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type']=='CREATE_KEYSPACE')
+
+subject = "account"
+action = "create"
+object = "db_object"
+status = "success"
+
+subformula "parse_query"
+    TEXT = 'create keyspace {"if not exists"?} {object.name=WORD}{REST}'
+endsubformula
+
+if $kv['ks'] != null then  
+    object.name = $kv['ks']
+else
+    submessage('TEXT', 'parse_query', lower($kv['operation']))
+endif 
+
+object.property = "keyspace"
+object.query = $kv['operation']
+
+datafield1 = $kv['category'] # Категория CQL-запроса
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Create_keyspace" 

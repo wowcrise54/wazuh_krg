@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} pfsp: High interface usage alert #{datafield1=NUMBER}
+        for router {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME|} interface
+        {$tmp_interface=STRING} speed {$tmp_threshold_speed1=STRING} {$tmp_threshold_speed2=WORD}
+        threshold {datafield5=STRING} observed {$tmp_observed_speed1=STRING}
+        {$tmp_observed_speed2=WORD} pct {datafield4=STRING}'
+
+action = "alert"
+object = "interface"
+status = "success"
+
+# datafield1 - ID
+datafield2 = $tmp_observed_speed1 + " " + $tmp_observed_speed2    # observed/detected speed
+datafield3 = $tmp_threshold_speed1 + " " + $tmp_threshold_speed2  # threshold speed
+# datafield4 - observed/detected pct
+# datafield5 - threshold pct
+
+
+interface = strip($tmp_interface, "\"", "\"")
+
+reason = "The speed threshold on the interface is exceeded"
+importance = "high"
+
+event_src.title = "peakflow_sp"
+event_src.vendor = "arbor_networks"
+event_src.category = "Network security"
+
+id = "PT_Arbor_Networks_Peakflow_SP_syslog_interface_usage_alert"

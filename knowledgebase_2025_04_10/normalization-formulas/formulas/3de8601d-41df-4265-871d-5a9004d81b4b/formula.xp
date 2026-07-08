@@ -1,0 +1,35 @@
+TABULAR = '{time=time},
+           ip,
+           value,
+           ip_blocked,
+           datacenter,
+           domain,
+           clientid'
+
+COND = $product == "Wallarm"
+
+action = "detect"
+object = "attack"
+status = "success"
+
+object.type = $type
+if $block_status == "blocked" then
+    object.state = "denied"
+else
+    object.state = "passed"
+endif
+
+src.ip = $ip
+
+dst.ip = $domain
+
+reason = $value
+
+importance = "high"
+
+event_src.vendor = "wallarm"
+event_src.title = "wallarm"
+event_src.category = "Web security"
+event_src.hostname = dst.hostname
+
+id = "PT_Wallarm_Wallarm_customeventcollector_attack_detected"

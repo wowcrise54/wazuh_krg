@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to the 1C application server. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="0ad0f8a7-0939-bf72-d61a-de6d595a704b">User {subject.account.name} from host {src.host} used new logon type {logon_type} ({datafield6}) to log in to the 1C application server on host {event_src.host}. The logon type is missing from the collected profile.</EventDescription>
+    <EventDescription id="3583a2d9-bca7-523f-7478-87c6ccfbb455">User {subject.account.name} from host {src.host} logged in to the 1C application server and accessed new shared network resource "{object.storage.path}" on host {event_src.host}. The network resource is missing from the collected profile.</EventDescription>
+    <EventDescription id="78e65787-e4d6-bdc7-8739-388e92ee0f21">User {subject.account.name} from new host {src.host} logged in to the 1C application server on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="862769ec-6818-354d-604c-4c8b58680daf">User {subject.account.name} from host {src.host} logged in to the 1C application server and accessed a new object in shared network resource "{object.storage.name}" on host {event_src.host}. The object is missing from the collected profile.</EventDescription>
+    <EventDescription id="8dbe6fd5-7cee-ff49-d8b6-899c12004498">New user {subject.account.name} from host {src.host} logged in to the 1C application server on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

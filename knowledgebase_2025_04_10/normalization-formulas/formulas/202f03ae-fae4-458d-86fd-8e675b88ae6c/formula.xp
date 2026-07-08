@@ -1,0 +1,28 @@
+!TEXT='{"<"NUMBER">"} {NUMBER?} {DATETIME}
+       {IPV4|IPV6|$Computer=HOSTNAME} init - -
+       [ {STRING+?} timestamp="{time=DATETIME}" {STRING+?}
+       SourceModuleName="syslog_dbi_in_{event_src.ip=IPV4}" SourceModuleType="{WORD}"]
+       {object.process.name=WORDDASH} main process ended, respawning'
+
+action = "restart"
+object = "process"
+status = "success"
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kontinent"
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_syslog_Process_respawn"

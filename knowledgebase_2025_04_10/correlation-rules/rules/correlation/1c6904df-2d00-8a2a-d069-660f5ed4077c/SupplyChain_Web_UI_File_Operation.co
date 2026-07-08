@@ -1,0 +1,112 @@
+event Web_UI_File_Operation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and event_src.subsys == "production"  # Web UI
+        and in_list(["modify","create"], action)
+        and object == "file_object"
+        and status == "success"
+        and (
+             table::SupplyChain_Important_Branches {
+                (
+                 column::event_src_asset == event_src.asset
+                 or (
+                     column::event_src_asset == null
+                     and column::event_src_host == event_src.host
+                 )
+                )
+                and column::repository == join([datafield2, datafield1], "/")
+                and column::branch == datafield3
+             }
+             or table::SupplyChain_Important_Branches_Registry {
+                    (
+                     column::event_src_asset == event_src.asset
+                     or (
+                         column::event_src_asset == null
+                         and column::event_src_host == event_src.host
+                     )
+                    )
+                    and column::repository == join([datafield2, datafield1], "/")
+                    and regex_match(datafield3, column::branch)
+             }
+        )
+        and filter::CheckWL_Gitlab_Repositories("SupplyChain_Web_UI_File_Operation",
+                lower(join([subject.account.id, join([datafield2, datafield1], "/"), datafield3, event_src.host], "|"))
+        )
+    }
+
+rule SupplyChain_Web_UI_File_Operation: Web_UI_File_Operation
+
+    init {
+        $labels = "w_auto|CheckWL_Gitlab_Repositories"
+    }
+
+    on Web_UI_File_Operation {
+        $action = action
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = coalesce(subject.account.name, subject.account.fullname)
+
+        $subject.process.meta = subject.process.meta
+
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.name = object.name
+        $object.group = object.group
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $chain_id = chain_id
+
+        $datafield1 = datafield1  # Project Slug
+        $datafield2 = datafield2  # Namespace Fullpath
+        $datafield3 = datafield3  # Target Branch Name
+        $datafield4 = datafield4  # Commit Title
+
+        $alert.key = lower(join([subject.account.id, join([datafield2, datafield1], "/"), datafield3, event_src.host], "|"))
+        $alert.context = join(remove([coalesce(subject.account.name, subject.account.fullname), src.host, object.fullpath], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Supply Chain Compromise: Compromise Software Supply Chain"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $datafield1, $datafield2, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

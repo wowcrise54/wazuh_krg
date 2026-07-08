@@ -1,0 +1,33 @@
+TEXT = '{$Computer=HOSTNAME} {$t1 = STRING} {$t2 = STRING} {protocol = STRING} {src.ip = IPV4| src.ip = IPV6|"-"}{":"?}{src.port = NUMBER|"-"|}
+        {dst.ip = IPV4| dst.ip = IPV6|"-"}{":"?}{dst.port = NUMBER|"-"|} {IPV4|IPV6|HOSTNAME|"-"} {STRING+?} Terminate 0x{$er = WORD} {$csv=CSV("\\t", "\'")}'
+
+time = $t1+' '+$t2
+
+count.bytes_out = $csv[3]
+count.bytes_in = $csv[5]
+reason = '0x'+$er
+
+action = "terminate"
+object = "session"
+status = "success"
+
+event_src.vendor = "microsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+if $csv[21] != null then
+    event_src.title = "tmg"
+    id = "PT_Microsoft_TMG_filemonitor_firewall_act_Terminate"
+else
+    event_src.title = "isas"
+    id = "PT_Microsoft_ISAS_filemonitor_firewall_act_Terminate"
+endif
+
+event_src.category = "Proxy server"
+
+importance = "low"

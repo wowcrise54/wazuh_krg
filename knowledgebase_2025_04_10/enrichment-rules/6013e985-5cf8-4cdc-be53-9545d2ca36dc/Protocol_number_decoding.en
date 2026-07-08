@@ -1,0 +1,45 @@
+event Anything_with_protocol:
+    filter {
+        protocol != null
+    }
+
+event Anything_with_l7_protocol:
+    filter {
+        protocol.layer7 != null
+    }
+
+enrichment Protocol_number_decoding
+    enrich Anything_with_protocol:
+        enrich_fields {
+            if protocol == "" then
+                protocol = null
+            else
+                $protocol_raw = switch protocol
+                        case "1"   "icmp"     # Internet Control Message
+                        case "2"   "igmp"     # Internet Group Management
+                        case "6"   "tcp"      # Transmission Control
+                        case "17"  "udp"      # User Datagram
+                        case "47"  "gre"      # General Routing Encapsulation
+                        case "50"  "esp"      # Encap Security Payload for IPv6
+                        case "51"  "ah"       # Authentication Header for IPv6
+                        case "58"  "icmpv6"   # ICMP for IPv6
+                        case "88"  "eigrp"    # EIGRP
+                        case "89"  "ospf"     # OSPFIGP
+                        case "103" "pim"      # Protocol Independent Multicast
+                        case "112" "vrrp"     # Virtual Router Redundancy Protocol
+                        case "115" "l2tp"     # Layer Two Tunneling Protocol
+                        case "132" "sctp"     # Stream Control Transmission Protocol
+                        case "136" "udplite"  # UDP Lite
+                endswitch
+                protocol = coalesce($protocol_raw, lower(protocol))
+            endif
+        }
+
+    enrich Anything_with_l7_protocol:
+        enrich_fields {
+            if protocol.layer7 == "" then
+                protocol.layer7 = null
+            else
+                protocol.layer7 = lower(protocol.layer7)
+            endif
+        }

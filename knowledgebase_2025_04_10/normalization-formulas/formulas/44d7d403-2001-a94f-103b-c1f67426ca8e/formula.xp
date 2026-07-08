@@ -1,0 +1,63 @@
+JSON = 'source="nova"'
+
+COND = in_list(["keypair-create", "keypair-delete"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "keypair-create" "create"
+    case "keypair-delete" "remove"
+endswitch
+
+object = "virtual_key"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+if not in_list(["", null], $request_body["keypair"]["name"]) then
+    object.id = $request_body["keypair"]["name"]
+else
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[3]
+endif
+
+object.type = "keypair"
+
+datafield1 = $method  # Method
+datafield2 = $uri     # URL
+
+if $success == "no" then
+    $message_path = coalesce($response_body["itemNotFound"], $response_body["badRequest"],
+                             $response_body["computeFault"], $response_body["conflictingRequest"])
+
+    reason = coalesce($message_path["message"], $response_body["message"])
+endif
+
+time = $timestamp
+msgid = $action
+importance = "low"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Nova_Keypair_operations"

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon via Active Directory Federation Services (AD FS). Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="05bff38a-74c5-5a88-8ef9-b73a48a234a3">User {subject.account.name} from new host {src.host} received an AD FS security token on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="68b3bc82-2098-0e1e-4c8b-ada01ae9fb55">New user {subject.account.name} from host {src.host} received an AD FS security token on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="8e8d3dd2-e535-4d86-ebc1-b851621772ad">User {subject.account.name} from host {src.host} received an AD FS security token to access new resource {datafield7} on host {event_src.host}. The resource is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

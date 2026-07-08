@@ -1,0 +1,50 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {STRING?} events - - CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|events|admin_console|{WORDDASH}|
+        rt={$temp_time=NUMBER} deviceExternalId={event_src.id=STRING+} suser={subject.name=STRING} cat=settings
+        act={msgid="certificate_generated"|msgid="certificate_added"|msgid="certificate_updated"|
+        msgid="certificate_deleted"} src={src.ip=IPV4|src.ip=IPV6}  cs1Label=Attributes cs1={$rest=REST}'
+
+subject = "account"
+
+switch msgid
+    case "certificate_generated"
+        action = "create"
+        importance = "info"
+    case "certificate_added"
+        action = "install"
+        importance = "info"
+    case "certificate_updated"
+        action = "update"
+        importance = "info"
+    case "certificate_deleted"
+        action = "remove"
+        importance = "low"
+endswitch
+
+object = "certificate"
+status = "success"
+
+submessage("JSON", "SPLIT", $rest)
+
+subject.type = "administrator"
+
+subformula "SPLIT"
+    # Извлечение object.name и object.id из $rest
+    JSON = "certificate"
+    object.name = $certificate["name"]
+    object.id = $id
+endsubformula
+
+time = epoch_ms_to_datetime($temp_time)
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_certificate_action"

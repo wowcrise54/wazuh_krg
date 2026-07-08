@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME|} {"clamav-fresh"?} {":"?}
+        {WORD} {time=DATETIME} -> Database updated ({NUMBER} signatures) from {src.hostname=HOSTNAME} (IP: {src.ip=IPV4})'
+
+action = "update"
+object = "database"
+status = "success"
+
+importance = "info"
+
+event_src.title = "application_firewall"
+event_src.subsys = "clamav"
+event_src.vendor = "positive_technologies"
+event_src.category = "Application security"
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_DB_updated"

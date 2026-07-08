@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{time=DATETIME}{":"?} {WORD":"?}
+        %{msgid="IP_VFR-3-OVERLAP_FRAGMENTS"}: {$ifname=STRING} from the host {src.ip=IPV4} destined to {dst.ip=IPV4}'
+
+if ($origin_id_ip == "127.0.0.1" or $origin_id_ip == "0.0.0.0") then
+    $origin_id_ip = null
+endif
+
+if number($hostname) == null then
+    event_src.hostname = coalesce($hostname, $origin_id_hostname)
+    event_src.ip = coalesce($ip, $origin_id_ip)
+endif
+
+action = "detect"
+object = "alert"
+status = "success"
+
+interface = strip($ifname, "", ":")
+
+reason = "The router has encountered overlap fragments, that might indicate a hostile attack"
+
+importance = "medium"
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Network Attack"
+
+event_src.vendor = "cisco"
+event_src.title = "ios"
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_syslog_IP_VFR_OVERLAP_FRAGMENTS"

@@ -1,0 +1,206 @@
+# Запрос для получения имени пользователя, для которого изменили каталог автозагрузки
+query Get_User_Name_By_SID($id) from Known_Windows_Accounts {
+    id == $id
+}
+    qhandler {
+        $id = id
+        $name = name
+        $domain_full = domain_full
+    }
+
+event Registry_Autorun_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and (
+            # Ключи реестра «Run» и «RunOnce». Эти ключи позволяют программам запускаться каждый раз, когда пользователь входит в систему
+            match(lower(object.path), "*\\currentversion\\run\\")
+            or match(lower(object.path), "*\\currentversion\\runonce\\")
+            or match(lower(object.path), "*\\currentversion\\runonceex\\")  # Ключ не создается по умолчанию
+
+            # Ключи реестра «RunServices» и «RunServicesOnce». Эти ключи включают записи для служб, работающих в фоновом режиме, и управляют автоматическим запуском служб
+            or match(lower(object.path), "*\\currentversion\\runservices\\")
+            or match(lower(object.path), "*\\currentversion\\runservicesonce\\")
+
+            # Ключи реестра «Выполнить». Эти ключи управляют параметрами политики, которые используются для указания запускаемых программ
+            or match(lower(object.path), "*\\currentversion\\policies\\explorer\\run\\")
+
+            # Ключ реестра BootExecute
+            or (
+                match(lower(object.path), "*\\currentcontrolset\\control\\session manager\\")
+                and in_list(["bootexecute", "execute", "s0initialcommand", "setupexecute"], lower(object.name))
+            )
+        
+            # Ключи реестра «Shell Folders» и «User Shell Folders»
+            or match(lower(object.path), "*\\currentversion\\explorer\\user shell folders\\")
+            or match(lower(object.path), "*\\currentversion\\explorer\\shell folders\\")
+            
+            # Другие ключи
+            or match(lower(object.path), "*\\currentversion\\windows\\")  # Программы, перечисленные в этом разделе реестра запускаются при входе любого пользователя в систему
+            or match(lower(object.path), "*\\windows\\run\\")
+        )
+        and filter::CheckWL_Registry_Actions("Windows_Autorun_Modification", lower(join([subject.process.fullpath, object.new_value], "|")))
+    }
+
+event Filesystem_Autorun_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and regex(lower(object.path), "[a-z]:\\\\(users\\\\.*\\\\appdata\\\\roaming|programdata)\\\\microsoft\\\\windows\\\\start menu\\\\programs\\\\startup", 0) != null
+        and lower(object.name) != "desktop.ini"
+        and filter::CheckWL_File_Creation("Windows_Autorun_Modification", lower(join([subject.process.name, object.fullpath], "|")))
+    }
+
+rule Windows_Autorun_Modification: Registry_Autorun_Created or Filesystem_Autorun_Created
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Registry_Autorun_Created {
+        if subject.account.name != null then
+            $subject = "account"
+        else
+            $subject = "process"
+        endif
+        $object = object  # reg_object
+        $action = action  # modify
+        $status = status  # success
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        # Если изменили, пользовательский ключ реестра
+        if regex(object.fullpath, "(?i)(^\\\\registry\\\\(.*?)\\\\)", 2) == "user" and 
+        exec_query("Get_User_Name_By_SID", [regex(object.fullpath, "(?i)(^\\\\registry\\\\user\\\\(.*?)\\\\)", 2)]) != null then
+            $tmp_user = exec_query("Get_User_Name_By_SID", [regex(object.fullpath, "(?i)(^\\\\registry\\\\user\\\\(.*?)\\\\)", 2)])
+
+            $object.account.id = $tmp_user["$id"]
+            $object.account.name = $tmp_user["$name"]
+            $object.account.domain = $tmp_user["$domain_full"]
+        endif
+    
+        $object.name = object.name
+        $object.path = object.path
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+        $object.fullpath = object.fullpath
+        $object.type = "registry run"
+        
+        # Для использования в правиле корреляции Windows_Startup_Folder_Modification
+        if regex($object.fullpath, "(?i)(\\\\currentversion\\\\explorer\\\\(user\s)?shell folders\\\\startup$)", 0) != null then
+            if not match(lower($object.value), "*\\") then
+                $datafield1 = lower($object.value) + "\\"
+            else
+                $datafield1 = lower($object.value)
+            endif
+        endif
+        
+        $alert.key = lower(join([subject.process.fullpath, object.new_value], "|"))
+        $alert.regex_match = regex(object.path, "(?i)(\\\\currentversion\\\\(run|runonce|runonceex|runservices|runservicesonce|windows|policies\\\\explorer\\\\run|explorer\\\\(user\s)?shell folders)|\\\\currentcontrolset\\\\control\\\\session manager|\\\\windows\\\\run)", 0)
+        $alert.context = "app: " + object.name
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        if match(lower(object.fullpath), "*\\currentversion\\windows\\appinit_dlls")  then
+            $reason = "value for custom DLLs launched via AppInit changed"
+            $category.low = "Event Triggered Execution: AppInit DLLs"
+            $alert.context = lower(join(["User", subject.account.name, "modified registry", object.fullpath], " "))
+        elif (match(lower(object.fullpath), "*\\currentversion\\windows\\loadappinit_dlls") and object.new_value == "dword (0x00000001)") then
+            $reason = "loading of DLLs via AppInit was allowed"
+            $category.low = "Event Triggered Execution: AppInit DLLs"
+            $alert.context = lower(join(["User", subject.account.name, "modified registry", object.fullpath], " "))
+        else
+            $reason = "Registry Run Keys / Startup Folder"
+        endif
+        if $alert.context != null and $object.account.name != null then
+            $alert.context = join([$alert.context, "for user", lower($object.account.name)], " ")
+        elif $alert.context == null and $object.account.name != null then
+            $alert.context = lower(join(["User", subject.account.name, "modify registry for user", $object.account.name], " "))
+        endif
+
+        $labels = $labels + "|CheckWL_Registry_Actions"
+    }
+
+    on Filesystem_Autorun_Created {
+        $subject = subject  # process
+        $object = object  # file_object
+        $action = action  # create
+        $status = status  # success
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+        $object.type = "startup folder"
+
+        $alert.key = lower(join([subject.process.name, object.fullpath], "|"))
+        $alert.context = join([subject.process.name, object.fullpath], " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $labels = $labels + "|CheckWL_File_Creation"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+
+    if $category.low == null then
+        $category.low = "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SecurityBackdoorDetection"
+    $incident.aggregation.timeout = 2h
+}

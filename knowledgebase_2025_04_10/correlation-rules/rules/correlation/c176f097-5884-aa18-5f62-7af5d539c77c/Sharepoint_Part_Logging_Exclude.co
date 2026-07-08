@@ -1,0 +1,66 @@
+event Logs_Exclude:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sharepoint"
+        and action == "disable"
+        and object == "logging"
+        and filter::CheckWL_Specific_Only("Sharepoint_Part_Logging_Exclude", lower(join([event_src.host, subject.account.name, object.type], "|")))
+    }
+
+rule Sharepoint_Part_Logging_Exclude: Logs_Exclude
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Logs_Exclude {
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+
+        $object.type = object.type
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $datafield1 = datafield1
+
+        $alert.key = lower(join([event_src.host, subject.account.name, object.type], "|"))
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit { 
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "disable"
+    $object = "logging"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Indicator Blocking"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "DOSAttack"
+    $incident.aggregation.timeout = 2h
+}

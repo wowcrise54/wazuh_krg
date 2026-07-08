@@ -1,0 +1,81 @@
+TEXT = "{$timedata=STRING+}{$timestamp=STRING} [INF] {chain_id=STRING?} 
+        User '{$tempuser=UNTIL('\\'')} {object.type='credential'} {$object_type='and status'?} 
+        verified successfully {'at'|'in'} {$domain=STRING} {'ext_ip='?}{$json=STRING*}"
+
+subject = "application"
+action = "validate"
+object = "request"
+status = "success"
+
+subformula "parse_json"
+    JSON = '' 
+    
+    if $['CallingStationId'] != "" then
+        if ipv4($['CallingStationId']) != null then
+            external_src.ip = ipv4($['CallingStationId'])
+        else
+            external_src.fqdn = lower($['CallingStationId'])
+        endif
+    endif
+endsubformula
+
+if find_substr($tempuser, '@') != null then
+    $temp_csv = csv(lower($tempuser), "@", "`")
+    object.account.name = $temp_csv[0]
+    object.account.domain = $temp_csv[1]
+elif find_substr($tempuser, '\\') != null then
+    $temp_csv2 = csv(lower($tempuser), "\\", "`")
+    object.account.name = $temp_csv2[1]
+    object.account.domain = $temp_csv2[0]
+else
+    object.account.name = lower($tempuser)
+endif
+
+object.account.id = "synthetic:" + $tempuser
+
+if $object_type != null then
+    object.type = join([object.type, $object_type], ' ')
+endif
+
+if find_substr($domain, ":") != null then
+    $tempip = csv($domain, ":", "")
+    dst.ip = ipv4($tempip[0])
+    dst.port = $tempip[1]
+else
+    dst.hostname = $domain # Might be different domain here
+endif
+
+if find_substr($domain, 'DC=') != null then
+    $cut_quotas = strip($domain, "'", "'") 
+    $csv_cn = csv($cut_quotas, "DC=", "")
+    object.account.domain = strip($csv_cn[1], "", ",")  + "." + $csv_cn[2]
+    if $csv_cn[3] != null then
+        object.account.domain = strip($csv_cn[1], "", ",") + "." + strip($csv_cn[2], "", ",")  + "." + $csv_cn[3]
+    endif
+    object.account.id = "synthetic:" + object.account.domain + "\\" + object.account.name
+    dst.hostname = null
+endif
+
+$json = strip($json,"'","'")
+if find_substr($json, "CallingStationId") != null then
+    submessage("JSON", "parse_json", $json)
+else
+    if $json != "" and $json != "null" then
+        if ipv4($json) != null or ipv6($json) != null then
+            external_src.ip = $json
+        else
+            external_src.fqdn = lower($json)
+        endif
+    endif 
+endif
+
+reason = "credential and status verified successfully"
+
+time = datetime($timedata + $timestamp)
+importance = "info"
+
+event_src.vendor = "multifactor"
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_filemonitor_Credential_Verified"

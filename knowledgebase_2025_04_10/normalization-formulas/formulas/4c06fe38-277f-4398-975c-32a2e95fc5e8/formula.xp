@@ -1,0 +1,61 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}
+        {WORDDASH}{"["?}{NUMBER?}{"]"?}: {":"NUMBER"["NUMBER"]:"?} pam_unix({logon_service=WORDDASH}:session): 
+        session opened for user {$usern_1=WORD}{"@"?}{$userd_1=HOSTNAME?} by 
+        {$usern_2=WORD?}{"@"?}{$userd_2=HOSTNAME?}(uid={NUMBER})'
+
+subject = "account"
+
+if find_substr(logon_service, "su") != null then
+    action = "elevate"
+    object = "account"
+    
+    subject.account.name = $usern_2
+    subject.account.domain = $userd_2
+    
+    object.account.name = $usern_1
+    object.account.domain = $userd_1
+    
+    src.ip = event_src.ip
+    src.hostname = event_src.hostname
+    
+    category.generic = "Account"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"    
+else
+    action = "login"
+    object = "system"
+    
+    subject.account.name = $usern_1
+    subject.account.domain = $userd_1
+    
+    category.generic = "Operating System"
+    category.high = "Access Management"
+    category.low = "Communication"
+endif
+
+status = "success"
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+logon_auth_method = switch logon_service
+    case "su-l" "local"
+    case "su" "local"
+    case "sudo" "local"
+    case "sudo-i" "local"
+    case "login" "local"
+    case "remote" "remote"
+    case "lightdm" "local" 
+    case "lightdm-greeter" "local" 
+    case "sshd" "remote"
+    case "rlogin" "remote"
+    case "rexec" "remote"
+endswitch
+
+importance = "info"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_common_syslog_pam_unix_session_opened"

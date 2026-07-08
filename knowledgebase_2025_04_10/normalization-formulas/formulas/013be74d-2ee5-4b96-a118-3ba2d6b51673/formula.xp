@@ -1,0 +1,15 @@
+TEXT = '{time=DATETIME}{STRING} CEF:0|Lastline|Enterprise|{NUMBER}.{NUMBER}|dns-resolution|{reason=WORD+}|{NUMBER}|{STRING}
+        cat={object.type=STRING} {UNTIL(" cs2=")}{object.value=STRING} {UNTIL(" cs3=")}{object.name=STRING}{UNTIL("dpt=")}
+        {dst.port=NUMBER} dst={dst.ip=IPV4} {UNTIL(" proto=")}{protocol=WORDDASH} smac={src.mac=MACADDR} src={src.ip=IPV4} {REST}'
+
+action = "detect"
+object = "alert"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "lastline"
+event_src.title = "lastline_enterprise"
+event_src.category = "Honeypot"
+
+id = "PT_Lastline_Lastline_Enterprise_syslog_dns_resolution"

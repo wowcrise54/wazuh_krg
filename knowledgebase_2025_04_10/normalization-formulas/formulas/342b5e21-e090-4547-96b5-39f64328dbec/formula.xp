@@ -1,0 +1,22 @@
+TEXT = '{time=DATETIME} INFO {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        PID=[{NUMBER}] TID=[{NUMBER}] Job {object.id=STRING} completed
+        with {datafield1=WORDDASH} status, {object.state="removing from the queue"}'
+
+action = "execute"
+object = "task"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "netapp"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "snapcenter"
+event_src.category = "Backup server"
+
+id = "PT_NetApp_SnapCenter_filemonitor_Job_Completed"

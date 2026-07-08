@@ -1,0 +1,57 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        lxd[{NUMBER}]: {"action="WORD?} {"creation date="STRING?} ephemeral={WORD} lvl={WORD}
+        msg="{$msg=STRING+} name={$obname=STRING} {"source container=" $snap=STRING?} {"stateful="WORD?} t={time=DATETIME}{REST}'
+
+$message = strip($msg, '', '"')
+
+switch $message
+case "Created container"
+        if find_substr($obname, '/') != null then
+            action = "backup"
+        else
+            action = "create"
+        endif
+case "Deleted container"
+        action = "remove"
+case "Froze container"
+        action = "stop"
+        reason = "suspend"
+case "Unfroze container"
+        action = "start"
+        reason = "unsuspend"
+case "Started container"
+        action = "start"
+case "Shut down container"
+        action = "stop"
+case "Restored container"
+        action = "restore"
+        object.property = "snapshot name"
+        object.value = substr($snap, find_substr($snap, '/') + 1, length($snap) - find_substr($snap, '/') - 1)
+endswitch
+object = "virtual_machine"
+status = "success"
+
+object.type = "container"
+
+if find_substr($obname, '/') != null then
+    object.name = substr($obname, 0, find_substr($obname, '/'))
+    object.property = "snapshot name"
+    object.value = substr($obname, find_substr($obname, '/') + 1, length($obname) - find_substr($obname, '/') - 1)
+else
+    object.name = $obname
+endif
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "lxd"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_LXD_syslog_container_actions"

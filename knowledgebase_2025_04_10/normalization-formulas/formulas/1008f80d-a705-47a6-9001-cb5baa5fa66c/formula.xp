@@ -1,0 +1,60 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {$subsys=WORDDASH} - - -{STRING?}
+        IPS: {$ips_action=UNTIL(",")} severity: {$severity=UNTIL(",")} Rule ID: {subject.id=STRING}
+        {subject.name=UNTIL(", proto:")}{protocol=UNTIL(",")} ip{"/port"?}:{src.ip=IPV4|src.ip=IPV6}{":"src.port=NUMBER?}
+        {"("?}{$src_data=UNTIL(") ->")|"->"} {dst.ip=IPV4|dst.ip=IPV6}{":"dst.port=NUMBER?} {"("?}{dst.hostname=UNTIL(")")?}'
+
+COND = in_list(["Alert", "Packet drop"], $ips_action)
+
+subject = "rule"
+
+if $ips_action == "Alert" then
+    action = "detect"
+
+    category.low = "State"
+elif $ips_action == "Packet drop" then
+    action = "deny"
+
+    category.low = "Control"
+endif
+
+object = "connection"
+status = "success"
+
+if $src_data != null then
+    if find_substr($src_data, ", user:") != null then
+        $csv_src_data = csv($src_data, ", user:", "")
+        object.account.name = $csv_src_data[1]
+
+        src.hostname = $csv_src_data[0]
+    elif find_substr($src_data, "user:") == 0 then
+        object.account.name = strip($src_data, "user:", "")
+    else
+        src.hostname = $src_data
+    endif
+endif
+
+datafield2 = $ips_action  # IPS Action
+
+importance = switch $severity
+    case "Low" "info"
+    case "Medium" "low"
+    case "High" "medium"
+    case "Blacklist" "medium"
+endswitch
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+
+event_src.vendor = "kerio_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kerio_control"
+event_src.subsys = lower($subsys) 
+event_src.category = "IDS/IPS"
+
+id = "PT_Kerio_Technologies_Kerio_Control_syslog_intrusion_detected"

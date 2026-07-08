@@ -1,0 +1,84 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "POLICY_CREATE - Creating policy succeeded") != null
+       or find_substr($kv["Category"], "POLICY_UPDATE - Updating policy succeeded") != null
+       or find_substr($kv["Category"], "POLICY_APPLY_TO_GROUPS - Applying to groups policy succeeded") != null
+       or find_substr($kv["Category"], "POLICY_SET_DEFAULT - Setting default policy succeeded") != null
+       or find_substr($kv["Category"], "POLICY_DELETE - Deleting policy succeeded") != null
+       or find_substr($kv["Category"], "POLICY_IMPORT - Importing policy succeeded") != null
+
+subject = "account"
+object = "policy"
+status = "success"
+
+subformula "parse_category"
+    TEXT = 'POLICY_{$act="CREATE"|$act="UPDATE"|$act="APPLY_TO_GROUPS"|$act="SET_DEFAULT"|$act="DELETE"|$act="IMPORT"} - 
+           {"Creating"|"Updating"|"Applying to groups"|"Setting default"|"Deleting"|"Importing"} policy succeeded.
+           {"ID"|"ID(s)"}: {$ids=REST}'
+
+    action = switch $act
+        case "CREATE" "create"
+        case "UPDATE" "modify"
+        case "APPLY_TO_GROUPS" "apply"
+        case "SET_DEFAULT" "apply"
+        case "IMPORT" "upload"
+        case "DELETE" "remove"
+    endswitch
+    
+    $ids = strip(strip($ids, '"', '"'), '[', ']')
+    
+    if (action == "remove" or action == "upload")
+        and not in_list($bad_values, $ids) then
+        datafield1 = $ids   # Removed or imported ids
+    elif not in_list($bad_values, $ids) then
+        object.id = $ids
+    endif
+    
+    if action == "apply" then
+        object.property = "apply to"
+        object.value = switch $act
+            case "APPLY_TO_GROUPS" "groups"
+            case "SET_DEFAULT" "default"
+        endswitch
+    endif
+endsubformula
+
+$bad_values = [null, 'n/a', 'null', '']
+submessage("TEXT", "parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+$name = strip(strip($kv["Name"], '"', '".'), '', '.')
+if not in_list($bad_values, $name) then
+    object.name = lower($name)
+endif
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+$names = strip(strip($kv["Name(s)"], '"', '".'), '[', '].')
+if not in_list($bad_values, $names) then
+    datafield2 = $names     # Policy names
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "POLICY_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_policy_manipulation"

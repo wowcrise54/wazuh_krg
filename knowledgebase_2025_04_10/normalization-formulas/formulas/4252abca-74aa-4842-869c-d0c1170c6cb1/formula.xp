@@ -1,0 +1,69 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$Computer=STRING} {event_src.subsys="sshproxy"}
+        {"["subject.process.id=NUMBER"]"?}: [SSH Session] {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["type"] == "SESSION_DISCONNECTION"
+
+subject = "account"
+action = "close"
+object = "session"
+status = "success"
+
+if find_substr($kv["account"], "\\") != null then
+    $temp_acc_1 = csv($kv["account"], "\\", "")
+    subject.account.name = $temp_acc_1[length($temp_acc_1) - 1]
+    subject.account.domain = $temp_acc_1[0]
+elif find_substr($kv["account"], "@") != null then
+    $temp_acc_2 = csv($kv["account"], "@", "")
+    subject.account.name = $temp_acc_2[0]
+    subject.account.domain = $temp_acc_2[1]
+else
+    subject.account.name = $kv["account"]
+endif
+
+subject.account.session_id = $kv["session_id"]
+
+src.ip = $kv["client_ip"]
+dst.ip = $kv["target_ip"]
+protocol.layer7 = "ssh"
+
+duration = duration($kv["duration"])
+
+logon_service = $kv["service"]
+
+if $kv["client_ip"] == $kv["target_ip"] then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+# datafield3 - имя пользователя WAB
+# datafield4 - домен пользователя WAB
+if find_substr($kv["user"], "\\") != null then
+    $temp_acc_3 = csv($kv["user"], "\\", "")
+    datafield3 = $temp_acc_3[length($temp_acc_3) - 1]
+    datafield4 = $temp_acc_3[0]
+elif find_substr($kv["user"], "@") != null then
+    $temp_acc_4 = csv($kv["user"], "@", "")
+    datafield3 = $temp_acc_4[0]
+    datafield4 = $temp_acc_4[1]
+else
+    datafield3 = $kv["user"]
+endif
+
+datafield5 = $kv["device"]   # Наименование устройства в WAB
+
+msgid = $kv["type"]
+importance = "info"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_syslog_close_ssh_session"

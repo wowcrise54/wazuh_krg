@@ -1,0 +1,58 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {'('?}nginx{')'?}{'['NUMBER']'?}:
+        {time=DATETIME}
+        [{WORD}]
+        {NUMBER'#'NUMBER?}: {STRING?}
+        recv() {'to'?} {STRING?} failed {$reason_raw=STRING+} while sending response to client,
+        client: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME},
+        {$kv=KEYVALUE(',',':', '\"')}"
+
+action = "open"
+object = "connection"
+status = "failure"
+
+submessage("TEXT", "dst_address", $kv['server'])
+
+object.type = "response"
+if $kv['request'] != null then
+    object.property = "request"
+    object.value = $kv['request']
+endif
+
+# parse dst address
+subformula "dst_address"
+    TEXT = '{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME|"_"}{":"dst.port=NUMBER?}'
+endsubformula
+
+if dst.hostname == null then 
+    dst.hostname = $Computer
+elif dst.ip == null then
+    dst.ip = event_src.ip
+endif
+
+# referer
+datafield1 = $kv['referrer']
+
+# upstream
+datafield2 = $kv['upstream']
+
+reason = strip($reason_raw, "(", ")")
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nginx"
+event_src.category = "Web server"
+
+id = "PT_Opensource_Nginx_syslog_recv_failed_while_sending_response"

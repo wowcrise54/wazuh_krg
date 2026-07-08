@@ -1,0 +1,101 @@
+TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|},
+        header,{NUMBER},{NUMBER},{datafield1="cron-invoke"},{WORDDASH?},{WORD}
+        {time=DATETIME} {NUMBER}, + {duration=NUMBER} msec,subject,
+        {subject.name=WORDDASH},{datafield3=WORDDASH},{datafield4=WORDDASH},
+        {WORDDASH},{WORDDASH},{NUMBER},{datafield2=NUMBER}, {$csv=CSV}'
+
+COND = ($csv[2] == "crontab-job" or $csv[2] == "at-job")
+
+subject = "account"
+action = "execute"
+if $csv[2] == "crontab-job" then
+    object = "command"
+    object.value=$csv[4]
+else
+    object = "task"
+    object.name = $csv[4]
+endif
+$stat = $csv[6]
+if $stat == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+submessage("TEXT","client",$csv[0])  # хост клиента
+
+object.type = $csv[2]
+
+# datafield1 - тип события (в данном случае всегда "cron-invoke")
+# datafield2 - id сессии
+# datafield3 - от чьего имени выполняется команда (username)
+# datafield4 - от чьего имени выполняется команда (group)
+
+subformula "client"
+    TEXT = "{WORD} {WORD} {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}"
+endsubformula
+
+if object.type == "crontab-job" then
+    if find_substr(object.value, "/etc/user_attr.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/security/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/init.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/pam.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/inet/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/rc0.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/rc1.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/rc2.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/rc3.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/rc4.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/rc5.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/rcS.d/") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/passwd") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/shadow") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/group") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/user_attr") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/resolv.conf") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/inittab") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/pam.conf") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/sudoers") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/ssh/sshd_config") != null then
+        importance = "high"
+    elif find_substr(object.value, "/etc/inetd.conf") != null then
+        importance = "high"
+    else
+        importance = "info"
+    endif
+else
+    importance = "info"
+endif
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_execute_cron_task_csv"

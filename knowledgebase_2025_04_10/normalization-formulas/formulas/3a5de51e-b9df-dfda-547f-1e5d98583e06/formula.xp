@@ -1,0 +1,59 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?} {$mh=UNTIL(",")}{$ms=STRING}
+ {"-"?} {WORD} {"-"?} [{HOSTNAME}] {"-"?} {"("?}{HOSTNAME}{")"?} {"-"?} {$data=REST}'
+
+COND = find_substr($data, "type=SEND_VERIFY_EMAIL_ERROR") != null
+       or find_substr($data, "type=SEND_VERIFY_EMAIL") != null
+
+$kv = keyvalue(strip($data, "", " -"), ", ", "=", "")
+
+subject = "account"
+action = "send"
+object = "message"
+if $kv["type"] == "SEND_VERIFY_EMAIL" then
+    status = "success"
+elif $kv["type"] == "SEND_VERIFY_EMAIL_ERROR" then
+    status = "failure"
+endif
+
+if find_substr($kv["username"], "@") != null then
+    subject.account.name = csv($kv["username"], "@", "")[0]
+    subject.account.domain = csv($kv["username"], "@", "")[1]
+else
+    subject.account.name = $kv["username"]
+endif
+subject.account.id = $kv["userId"]
+subject.account.session_id = $kv["code_id"]
+subject.account.contact = $kv["email"]
+subject.application.name = $kv["clientId"]
+
+if in_list(["127.0.0.1", "::1"], $kv["ipAddress"]) then
+    logon_auth_method = "local"
+    src.ip = event_src.ip
+    src.hostname = $Computer
+else
+    logon_auth_method = "remote"
+    src.ip = $kv["ipAddress"]
+endif
+
+datafield1 = $kv["redirect_uri"] # URI, на которую будет перенаправлен субъект после успешного действия
+datafield2 = $kv["auth_method"]  # Метод аутентификации
+datafield3 = $kv["realmId"]      # ID Realm'a
+
+reason = $kv["error"]
+
+time = string($mh) + '.' + string($ms)
+msgid = $kv["type"]
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "keycloak"
+event_src.category = "AAA"
+
+id = "PT_Opensource_Keycloak_syslog_EMAIL_VERIFY_SEND"

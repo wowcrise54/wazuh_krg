@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} %%10CFGMAN/{NUMBER}/{msgid="CFGMAN_CFGCHANGED"}(l): {"-DevIP="?}{event_src.ip=IPV4|event_src.ip=IPV6|}-EventIndex={NUMBER}-CommandSource={$tmp_cmd_src=NUMBER}-ConfigSource={NUMBER}-ConfigDestination={$tmp_cfg_dst=NUMBER}; Configuration is changed.'
+
+subject = "system"
+action = "info"
+object = "configuration"
+status = "success"
+
+subject.type = switch $tmp_cmd_src
+ case 1 "CLI"
+ case 2 "MIB"
+ case 3 "Other"
+endswitch
+
+object.state = switch $tmp_cfg_dst
+ case 1 "Configuration file was deleted or renamed"
+ case 2 "The running configuration was saved"
+ case 3 "Configuration file was copied"
+ case 4 "The running configuration was saved as the next-startup configuration file"
+ case 5 "The running configuration was saved to a local file"
+ case 6 "A remote file was transferred to the device through FTP and was loaded as the running configuration or saved as the next-startup configuration file"
+ case 7 "The configuration was deleted or became ineffective because of a card hot-swapping operation"
+endswitch
+
+importance = "low"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "comware_software"
+event_src.category = "Network device"
+
+id = "PT_Hewlett_Packard_Enterprise_Comware_Software_syslog_cfgman_cfgchanged"

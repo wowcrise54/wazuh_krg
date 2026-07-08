@@ -1,0 +1,37 @@
+EVENTLOG = 'EventID="20322"'
+COND = $Channel=="DhcpAdminEvents"
+       and $Provider["Name"]=="Microsoft-Windows-DHCP-Server"
+
+action = "info"
+object = "service"
+status = "failure"
+
+datafield1 = strip(strip($Data["IP_Name"],"[","]"), "[", "]")
+datafield2 = $Data["Errorvalue"]
+datafield3 = $Data["FQDNName"]
+
+if $Data["Errorvalue"] == "9005" then
+    reason = "DNS Operation refused"
+elif $Data["Errorvalue"] == "10054" then
+    reason = "An existing connection was forcibly closed by the remote host"
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "DHCP server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_20322_DNS_FQDNname_registration_failed"

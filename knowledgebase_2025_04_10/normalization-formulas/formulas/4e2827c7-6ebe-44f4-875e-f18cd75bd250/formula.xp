@@ -1,0 +1,31 @@
+!JSON = 'TargetInstance.CreationClassName="Win32_LogicalDisk"'
+!COND = (
+    $TargetInstance["FreeSpace"] != null
+    and $TargetInstance["DriveType"] == 3
+)
+
+action = "info"
+object = "resource"
+status = "success"
+
+$T = $TargetInstance
+
+object.type = "storage"
+object.name = $T["DeviceID"]
+object.property = "load_percentage"
+object.num_value = div(($T["Size"] - $T["FreeSpace"])*100, $T["Size"])
+
+numfield1 = $T["Size"]                                     # kbytes
+numfield2 = $T["Size"] - $T["FreeSpace"]                   # kbytes
+
+time = win_ticks_to_datetime($TIME_CREATED)
+msgid = "Storage_free_space"
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Network monitoring system"
+event_src.ip = recv_ipv4
+event_src.hostname = $T["SystemName"]
+
+id = "PT_Monitoring_Microsoft_Windows_wmi_Win32_Harddisk_Info"

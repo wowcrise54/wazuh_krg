@@ -1,0 +1,42 @@
+TEXT = '{datafield1=UNTIL("-")}{NUMBER},DBMSSQL,{NUMBER},{$kv=KEYVALUE(",","=","\\"")}'
+
+COND = in_list(["rphost", "rmngr", "ragent"], $kv["process"])
+        and find_substr($kv["Sql"], "UPDATE") != null
+        and $kv["t:applicationName"] == "Designer"
+        and $kv["Usr"] != null
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.application.account.name = lower($kv["Usr"])
+subject.application.account.id = subject.application.account.name
+
+$params = substr($kv["Sql"], find_substr($kv["Sql"], "p_0"), length($kv["Sql"]))
+$param_kv = keyvalue($params, "\n", ": ", "'")
+object.application.account.name = lower($param_kv["p_0"])
+
+if $param_kv["p_8"] == "TRUE" then
+    object.application.account.privileges = "administrator"
+else
+    object.application.account.privileges = "user"
+endif
+
+# datafield1 - время регистрации события
+datafield2 = $kv["p:processName"]   # информационная база
+
+time = recv_time
+
+importance = "high"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.hostname = $kv["t:computerName"]
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_filemonitor_tech_log_modify_user"

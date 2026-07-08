@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{event_src.hostname = UNTIL(" ")}clish[{UNTIL("]")}:
+        User {subject.account.name = UNTIL(" ")} {"logged" | "running"} {UNTIL("with")}
+        {subject.account.privileges = UNTIL(" ")} permission {REST}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+object.name = "clish"
+
+time = recv_time
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_Common_Clish_login"

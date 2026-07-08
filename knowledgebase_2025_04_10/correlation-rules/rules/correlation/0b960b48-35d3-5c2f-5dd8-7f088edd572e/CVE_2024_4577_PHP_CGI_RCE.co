@@ -1,0 +1,175 @@
+event Suspicious_Request_To_Web_Server:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and lower(event_src.category) == "web server"
+        and action == "access"
+        and regex(lower(object.fullpath), "%ad", 0) != null # Именно этот символ позволяет воспользоваться уязвимостью (%AD)
+        # Один из параметров может быть с "-" вместо "%AD", но какой - заранее не известно
+        and regex(lower(object.fullpath), "((%ad)|-)d(\+|\s)+allow_url_include((%3d)|=)1", 0) != null
+        and regex(lower(object.fullpath), "((%ad)|-)d(\+|\s)+auto_prepend_file((%3d)|=)php((://)|(%3a%2f%2f))input", 0) != null
+        and (
+            number(object.state) >= 200 
+            and number(object.state) < 300
+        )
+        and filter::CheckWL_Specific_Only("CVE_2024_4577_PHP_CGI_RCE", lower(join([event_src.host, src.host], "|")))
+    }
+
+event Suspicious_Child_From_Webserver:
+    key: 
+        event_src.host
+    filter {
+        correlation_name == "Suspicious_Child_From_Webserver_Process"
+        and lower(object.process.name) == "php-cgi.exe"
+        and regex(lower(object.process.cmdline), "\s(-|\S{0,6})d\s+allow_url_include=1", 0) != null # ­U+00AD или - перед d
+        and regex(lower(object.process.cmdline), "\s(-|\S{0,6})d\s+auto_prepend_file=php://input", 0) != null # ­U+00AD или - перед d
+        and filter::CheckWL_Process_Creation("CVE_2024_4577_PHP_CGI_RCE", lower(join([event_src.host, object.account.id, object.process.parent.name, object.process.cmdline], "|")))
+    }
+
+rule CVE_2024_4577_PHP_CGI_RCE: Suspicious_Request_To_Web_Server or Suspicious_Child_From_Webserver
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Suspicious_Request_To_Web_Server {
+        $subject = "account"
+        $action = action
+        $object = "application"
+        $status = status
+        
+        $object.process.meta = object.process.meta
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.state = object.state
+
+        $datafield9 = datafield9 # Запрос в исходном регистре
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $protocol = protocol
+        $protocol.layer7 = protocol.layer7
+
+        $reason = reason
+
+        $alert.key = lower(join([event_src.host, src.host], "|"))
+        $alert.regex_match = join(
+            [
+                regex(object.fullpath, "%(a|A)(d|D)", 0), # soft hyphen (0xAD)
+                regex(lower(object.fullpath), "allow_url_include((%3d)|=)1", 0),
+                regex(lower(object.fullpath), "auto_prepend_file((%3d)|=)php((://)|(%3a%2f%2f))input", 0)
+            ], " | ")
+        $alert.context = $object.fullpath
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Suspicious_Child_From_Webserver {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+        
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield18 = datafield18  # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, object.account.id, object.process.parent.name, object.process.cmdline], "|"))
+        $alert.regex_match = join(
+            [
+                regex(lower(object.process.cmdline), "allow_url_include=1", 0),
+                regex(lower(object.process.cmdline), "auto_prepend_file=php://input", 0)
+            ], " | ")
+        $alert.context = alert.context
+
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $importance = "high"
+
+    $detect = "CVE-2024-4577"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Exploit Public-Facing Application" # T1190
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

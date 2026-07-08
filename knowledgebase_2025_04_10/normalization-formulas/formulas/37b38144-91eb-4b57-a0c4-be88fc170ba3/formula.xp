@@ -1,0 +1,68 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} confluence_audit: {$json=REST}"
+COND = (
+    find_substr($json, '"actionI18nKey":"audit.logging.summary.group.created"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.group.deleted"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.group.membership.added"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.group.membership.removed"') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = switch $author["type"]
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = switch strip($auditType["actionI18nKey"], "audit.logging.summary.group.", "")
+    case "created" "create"
+    case "deleted" "remove"
+    case "membership.added" "modify"
+    case "membership.removed" "modify"
+endswitch
+
+object = "user_group"
+status = "success"
+
+if $author["type"] == "user" then
+    subject.account.fullname = $author["name"]
+    subject.account.id = $author["id"]
+endif
+
+object.name = $affectedObjects[0]["name"]
+object.id = $affectedObjects[0]["id"]
+
+switch strip($auditType["actionI18nKey"], "audit.logging.summary.group.membership.", "")
+    case "added"
+        object.property = "added_user"
+        object.new_value = $affectedObjects[1]["name"]
+    case "removed"
+        object.property = "removed_user"
+        object.value = $affectedObjects[1]["name"]
+endswitch
+
+src.ip = $source
+
+msgid = $auditType["actionI18nKey"]
+time = epoch_to_datetime($timestamp["epochSecond"])
+importance = "info"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "atlassian"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_syslog_Audit_Group_Management"

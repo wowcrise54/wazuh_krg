@@ -1,0 +1,30 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{event_src.hostname=HOSTNAME}{STRING}%SSH-LOGIN_{"OK"|"FAIL"}-5:
+        Sshd({interface=WORD}) is entered by client 
+        ({subject.account.name=WORD}:{src.ip=IPV4|src.ip=IPV6}){$res=UNTIL(".")}'
+
+COND = $res == "OK" or $res == "FAIL"
+
+subject = "account"
+action = "login"
+object = "system"
+
+switch $res
+    case "OK" status = "success"
+    case "FAIL" status = "failure"
+endswitch
+
+protocol = "ssh"
+
+logon_auth_method = "remote"
+
+importance = "low"
+
+category.high = "Access Management"
+category.generic = "Application"
+category.low = "Communication"
+
+event_src.vendor = "yarus_networks"
+event_src.title = "yn"
+event_src.category = "Network device"
+
+id = "PT_Yarus_Networks_YN_syslog_ssh_login"

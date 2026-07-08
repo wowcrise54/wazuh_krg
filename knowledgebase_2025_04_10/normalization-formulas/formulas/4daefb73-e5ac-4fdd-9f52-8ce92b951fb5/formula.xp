@@ -1,0 +1,31 @@
+TABULAR = "{chain_id=audit_id}, action_int, resource_type_int, unix_time"
+COND = $action_int == 4
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+subject.account.name = $user_alias
+subject.account.id = $user_id
+subject.account.privileges = switch $user_role_type
+    case 1 "User"
+    case 2 "Admin"
+    case 3 "Super admin"
+endswitch
+
+src.ip = $ip
+
+time = epoch_to_datetime($unix_time)
+msgid = "ACTION_LOGOUT"
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "zabbix"
+event_src.title = "zabbix"
+event_src.category = "Network monitoring system"
+
+id = "PT_Zabbix_Zabbix_odbc_Logout"

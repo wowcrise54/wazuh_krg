@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Обращение к памяти процесса LSASS. Получив доступ к памяти процесса LSASS после подключения соответствующей утилиты (например, Mimikatz) к RPC-серверу, злоумышленники могут сохранить эту память в отдельный файл для извлечения из него в дальнейшем паролей и NTLM-хешей</Description>
+  <EventDescriptions>
+    <EventDescription id="aca7c146-338f-4af3-9505-3965215f58b7">Утилита {subject.process.name} подключена к RPC-серверу с узла {src.host} и получен доступ к памяти процесса LSASS на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

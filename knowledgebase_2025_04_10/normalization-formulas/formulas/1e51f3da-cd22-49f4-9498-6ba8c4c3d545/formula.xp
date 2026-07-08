@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="USER_Login"} {WORDDASH} FAIL_AUTH sshd user: {subject.account.name=WORDDASH} {REST}'
+
+subject = "account"
+object = "system"
+action = "login"
+status = "failure"
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+logon_auth_method = "remote"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_ssh_user_login_fail"

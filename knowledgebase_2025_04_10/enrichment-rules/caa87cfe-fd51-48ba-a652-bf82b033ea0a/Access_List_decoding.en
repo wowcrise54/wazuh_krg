@@ -1,0 +1,88 @@
+event Anything_with_subject_account_privileges:
+    filter {
+        event_src.title == "windows"
+        and (
+            (
+                subject.account.privileges != null
+                and find_substr(subject.account.privileges, "%%") == 0
+            ) 
+            or object.property == "AccessList"
+        )
+        and in_list(["4663", "5140", "5145", "567", "560"], msgid)
+    }
+
+enrichment Access_List_decoding
+    enrich Anything_with_subject_account_privileges:
+        enrich_fields {
+            if subject.account.privileges != null and find_substr(subject.account.privileges, "%%") == 0 then
+                $AccessList = subject.account.privileges
+            else
+                $AccessList = object.value
+            endif
+            
+            $decode_list = []
+            if find_substr($AccessList, "%%1537") != null then
+                $decode_list = append($decode_list, "The right to delete the object")
+            endif
+            if find_substr($AccessList, "%%1538") != null then
+                $decode_list = append($decode_list, "The right to read the information in the object's security descriptor, not including SACL")
+            endif
+            if find_substr($AccessList, "%%1539") != null then
+                $decode_list = append($decode_list, "The right to modify DACL")
+            endif
+            if find_substr($AccessList, "%%1540") != null then
+                $decode_list = append($decode_list, "The right to change the owner in the object's security descriptor")
+            endif
+            if find_substr($AccessList, "%%1541") != null then
+                $decode_list = append($decode_list, "The right to use the object for synchronization")
+            endif
+            if find_substr($AccessList, "%%1542") != null then
+                $decode_list = append($decode_list, "The ACCESS_SYS_SEC access right controls the ability to get or set the SACL in an object's security descriptor")
+            endif
+            if find_substr($AccessList, "%%4416") != null then
+                $decode_list = append($decode_list, "ReadData (or ListDirectory)")
+            endif
+            if find_substr($AccessList, "%%4417") != null then
+                $decode_list = append($decode_list, "WriteData (or AddFile)")
+            endif
+            if find_substr($AccessList, "%%4418") != null then
+                $decode_list = append($decode_list, "AppendData (or AddSubdirectory or CreatePipeInstance)")
+            endif
+            if find_substr($AccessList, "%%4419") != null then
+                $decode_list = append($decode_list, "The right to read extended file attributes")
+            endif
+            if find_substr($AccessList, "%%4420") != null then
+                $decode_list = append($decode_list, "The right to write extended file attributes")
+            endif
+            if find_substr($AccessList, "%%4421") != null then
+                $decode_list = append($decode_list, "Execute (or Traverse)")
+            endif
+            if find_substr($AccessList, "%%4422") != null then
+                $decode_list = append($decode_list, "The right to delete all files")
+            endif
+            if find_substr($AccessList, "%%4423") != null then
+                $decode_list = append($decode_list, "The right to read file attributes")
+            endif
+            if find_substr($AccessList, "%%4424") != null then
+                $decode_list = append($decode_list, "The right to write file attributes")
+            endif
+            if find_substr($AccessList, "%%4432") != null then
+                $decode_list = append($decode_list, "Query key value")
+            endif
+            if find_substr($AccessList, "%%4433") != null then
+                $decode_list = append($decode_list, "Set key value")
+            endif
+            if find_substr($AccessList, "%%4434") != null then
+                $decode_list = append($decode_list, "Create sub-key")
+            endif
+            if find_substr($AccessList, "%%4435") != null then
+                $decode_list = append($decode_list, "Enumerate sub-keys")
+            endif
+            if find_substr($AccessList, "%%4436") != null then
+                $decode_list = append($decode_list, "Notify about changes to keys")
+            endif
+            if find_substr($AccessList, "%%4437") != null then
+                $decode_list = append($decode_list, "Create Link")
+            endif
+            datafield9 = join($decode_list, "; ")  # Расшифровка поля $AccessList
+        }

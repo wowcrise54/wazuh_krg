@@ -1,0 +1,35 @@
+JSON = ""
+
+COND = $ENTITY_TYPE == "VisibilityArea" 
+        and in_list(["create", "delete", "update"], $OPERATION)
+
+subject = "account"
+action = switch $OPERATION
+    case "create" "create"
+    case "delete" "remove"
+    case "update" "modify"
+endswitch
+object = "resource"
+status = "success"
+
+subject.account.id = $user_or_token['USER_ID']
+subject.account.name = $user_or_token['USERNAME']
+subject.account.fullname = $user_or_token['DISPLAY_NAME']
+subject.account.contact = $user_or_token['EMAIL']
+
+object.type = "visibility area"
+object.name = $ENTITY_DISPLAY_NAME
+object.id = $ENTITY_ID
+
+datafield1 = $user_or_token['DISPLAY_NAME']  # отображаемое имя пользователя-субъекта
+datafield2 = $user_or_token['EMAIL']         # почтовый адрес пользователя-субъекта
+
+time = $CHANGE_DATE + $user_or_token['TIMEZONE']
+importance = "low"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_Visibility_area_create_remove_modify"

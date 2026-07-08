@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {STRING?} {WORD}/{WORD}/{WORD}/{WORD}: {time=DATETIME}{":"?}
+        {WORDDASH?}{"[" NUMBER "]" ?}{":"?} %{msgid="IP-STANDBY-4-WARN_BADAUTH"} :
+        Bad authentication from {src.ip=IPV4|src.ip=IPV6}, group {subject.group=NUMBER}, remote state {REST}'
+
+subject = "system"
+action = "validate"
+object = "message"
+status = "failure"
+
+subject.type = "Redundancy protocol"
+
+object.type = "FHRP"
+
+protocol = "hsrp"
+
+reason = "Authentication type or key mismatch"
+
+importance = "medium"
+
+event_src.vendor = "cisco"
+event_src.title = "ios_xr"
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_XR_syslog_HSRP_WRONG_AUTH"

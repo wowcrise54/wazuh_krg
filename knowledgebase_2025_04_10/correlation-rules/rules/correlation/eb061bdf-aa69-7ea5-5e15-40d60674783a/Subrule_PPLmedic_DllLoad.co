@@ -1,0 +1,124 @@
+event WaaSMedicPayload_Created:
+    key:
+        event_src.host, subject.account.id, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and lower(object.name) == "waasmedicpayload.dll"
+    }
+
+event WaaSMedicPayload_Registry_Add:
+    key:
+        event_src.host, subject.account.id, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+             (
+                 in_list(["12", "13", "14"], msgid)
+                 and event_src.title == "sysmon"
+             )
+             or (
+                 msgid == "4657"
+                 and event_src.title == "windows"
+             )
+        )
+        and lower(object.value) == "waasmedicpayload.dll"
+        and regex(lower(object.path), ".*classes\\\\.*?\\\\((?:inprocserver|localserver)(?:32)?|scriptleturl)\\\\", 0) != null
+        and filter::CheckWL_Registry_Actions("Subrule_PPLmedic_DllLoad", lower(join([subject.process.fullpath, object.value], "|")))
+    }
+
+event Subrule_PPLmedic_WerFaultSecure:
+    key:
+        event_src.host, object.account.id, object.process.parent.name, object.process.parent.id
+    filter {
+        correlation_name == "Subrule_PPLmedic_WerFaultSecure"
+    }
+
+rule Subrule_PPLmedic_DllLoad: (WaaSMedicPayload_Created
+                                and WaaSMedicPayload_Registry_Add
+                                and Subrule_PPLmedic_WerFaultSecure?) timer 1m
+
+    init {
+        $labels = "CheckWL_Registry_Actions"
+    }
+
+    on WaaSMedicPayload_Registry_Add {
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+        
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([subject.process.fullpath, object.value], "|"))
+    }
+
+    on Subrule_PPLmedic_WerFaultSecure {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    
+    $action = "create"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+}

@@ -1,0 +1,107 @@
+event Service_Control_Start:
+    key:
+        event_src.host
+    filter {
+        filter::MSSQL_Query("EX", "X")
+        and datafield6 != null
+        and match(lower(object.query), "*xp_servicecontrol*start*")
+        and filter::CheckWL_Database_Actions("MSSQL_Windows_Service_Control", lower(datafield6))
+    }
+
+event Service_Control_Stop:
+    key:
+        event_src.host
+    filter {
+        filter::MSSQL_Query("EX", "X")
+        and datafield6 != null
+        and match(lower(object.query), "*xp_servicecontrol*stop*")
+        and filter::CheckWL_Database_Actions("MSSQL_Windows_Service_Control", lower(datafield6))
+    }
+
+rule MSSQL_Windows_Service_Control: (Service_Control_Start or Service_Control_Stop)
+    
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Service_Control_Start {
+        $action = "start"
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.name = datafield6
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower(datafield6)
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+    on Service_Control_Stop {
+        $action = "stop"
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.name = datafield6
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower(datafield6)
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $object = "service"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    
+    if $action == "start"  then
+        $category.high = "Execution"
+        $category.low = "System Services: Service Execution" 
+    else
+        $category.high = "Impact"
+        $category.low = "Service Stop" 
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

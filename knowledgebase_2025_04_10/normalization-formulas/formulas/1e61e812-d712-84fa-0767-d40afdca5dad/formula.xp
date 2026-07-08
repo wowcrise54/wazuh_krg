@@ -1,0 +1,41 @@
+TEXT = "<{NUMBER?}>{time=DATETIME} {$Computer=STRING} 
+        multifactor-{event_src.subsys=WORD}[{NUMBER}]: [{STRING} DBG] Sent invalid 
+        credential response for user '{$tempuser=UNTIL('\\'')} to {dst.ip=IPV4}:{dst.port=NUMBER}"
+
+subject = "application"
+action = "send"
+object = "request"
+status = "success"
+
+if find_substr($tempuser, '@') != null then
+    $temp_csv = csv(lower($tempuser), "@", "`")
+    object.account.name = $temp_csv[0]
+    object.account.domain = $temp_csv[1]
+elif find_substr($tempuser, '\\') != null then
+    $temp_csv2 = csv(lower($tempuser), "\\", "`")
+    object.account.name = $temp_csv2[1]
+    object.account.domain = $temp_csv2[0]
+else 
+    object.account.name = lower($tempuser)
+endif 
+
+object.account.id = "synthetic:" + $tempuser
+
+object.type = "response"
+
+reason = "invalid credential response"
+
+importance = "low"
+
+event_src.vendor = "multifactor"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_syslog_Access_response_invalid_credential"

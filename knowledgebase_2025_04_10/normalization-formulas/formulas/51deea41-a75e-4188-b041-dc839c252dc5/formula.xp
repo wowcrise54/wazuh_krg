@@ -1,0 +1,55 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Контроль сетевого взаимодействия"
+       and $event_type == "Аудит успеха"
+       and $event_id == 133120
+
+subject = "account"
+action = "send"
+object = "message"
+status = "success"
+
+subject.account.id = $user_id
+subject.account.name = $user_name
+subject.account.domain = $user_domain
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение $kv из $event_message
+    TEXT = "Приём/передача датаграмм {$kv=REST}"
+
+    $kv = keyvalue($kv, "\n\r\n\r", ":")
+
+    $tmp_name = csv($kv["Объект"], ":", "")
+    if maybe_ipv4($tmp_name[0]) != null or maybe_ipv6($tmp_name[0]) != null then
+        dst.ip = $tmp_name[0]
+    endif
+    dst.port = $tmp_name[1]
+
+    $tmp_app = csv($kv["Приложение"], "/", "")
+    subject.process.name = $tmp_app[length($tmp_app) - 1]                           # Имя родительского процесса
+    subject.process.path = strip($kv["Приложение"], "", subject.process.name)       # Путь к родительскому процессу
+    subject.process.fullpath = subject.process.path + subject.process.name
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+$dot_pos = find_substr($station, '.')
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_133120_send_packet"

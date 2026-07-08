@@ -1,0 +1,63 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME} {$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}
+        {":"?}{$tmp_subsys=WORDDASH}{":"} RT_FLOW_SESSION_CLOSE{":"} session closed {WORD?} {WORD?}{":"}
+        {src.ip=IPV4|src.ip=IPV6}{"/"}{src.port=NUMBER}->{dst.ip=IPV4|dst.ip=IPV6}{"/"}{dst.port=NUMBER} {WORDDASH}
+        {$assignedsip=IPV4|$assignedsip=IPV6} {"/"}{$assignedsport=NUMBER}->
+        {$assigneddip=IPV4|$assigneddip=IPV6} {"/"}{$assigneddport=NUMBER}
+        source-nat-rule {WORDDASH} {protocol=NUMBER} {WORDDASH} {datafield1=WORDDASH} {datafield3=WORDDASH} {NUMBER?}
+        {STRING?} {STRING?} {NUMBER?} {STRING?} {STRING?} {$un_role=STRING?} {interface=STRING?} {STRING?}'
+
+action = "remove"
+object = "conntrack"
+status = "success"
+
+submessage ("TEXT", "user_name", $un_role)
+
+subformula "user_name"
+  !TEXT = '{$csv=CSV("(", "\'")}'
+  if $csv[0] != "N/A" then
+      object.account.name = $csv[0]
+  endif
+endsubformula
+
+if $assignedsip != src.ip then
+    assigned_src_ip = $assignedsip
+endif
+
+if $assigneddip != dst.ip then
+    assigned_dst_ip = $assigneddip
+endif
+
+if $assignedsport != src.port then
+    assigned_src_port = $assignedsport
+endif
+
+if $assigneddport != dst.port then
+    assigned_dst_port = $assigneddport
+endif
+
+if assigned_src_ip != null 
+   or assigned_src_port != null 
+   or assigned_dst_ip != null 
+   or assigned_dst_port != null then
+    object.type = "nat"
+else
+    object.type = "stateful"
+endif
+
+# datafield1 - ingress zone
+# datafield3 - egress zone
+
+importance = "info"
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Firewall"
+
+id = "PT_Juniper_Junos_syslog_data_plane_flow_closed"

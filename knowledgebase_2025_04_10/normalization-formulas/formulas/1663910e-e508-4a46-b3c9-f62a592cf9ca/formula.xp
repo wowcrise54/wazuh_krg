@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {WORD} {":"?} [ID {NUMBER} audit.notice] delete user\'s login from the
+        system {$stat=WORD} session {NUMBER} by {subject.name=WORDDASH} as
+        {STRING} from {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} uauth
+        solaris.user.manage text repository = {REST}'
+
+subject = "account"
+action = "remove"
+object = "account"
+if $stat == "ok" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+importance = "medium"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_remove_user"

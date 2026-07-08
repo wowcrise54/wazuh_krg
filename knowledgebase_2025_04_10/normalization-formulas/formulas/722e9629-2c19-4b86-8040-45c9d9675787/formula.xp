@@ -1,0 +1,39 @@
+!TEXT='{"<"NUMBER">"} {NUMBER?} {DATETIME}
+       {IPV4|IPV6|$Computer=HOSTNAME} integrity - -
+       [ {STRING+?} timestamp="{time=DATETIME}" {STRING+?}
+       SourceModuleName="syslog_dbi_in_{event_src.ip=IPV4}" SourceModuleType="{WORD}"]
+       [integrity] файл \'{$obj_name=UNTIL("\'")}  был изменён: {reason=REST}'
+
+if find_substr(reason, "объект был удалён") != null then
+    action = "remove"
+elif find_substr(reason, "это новый объект") != null then
+    action = "create"
+endif
+object = "file_object"
+status = "success"
+
+object.fullpath = $obj_name
+$name_path = csv(object.fullpath, "/", "`")
+object.name = $name_path[length($name_path) - 1]
+if strip(object.fullpath, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+importance = "medium"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kontinent"
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_syslog_Object_changed"

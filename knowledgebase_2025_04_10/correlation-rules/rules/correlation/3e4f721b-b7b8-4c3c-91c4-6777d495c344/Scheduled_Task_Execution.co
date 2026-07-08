@@ -1,0 +1,307 @@
+event TaskScheduler_Event:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "129"
+        and in_list(["cmd.exe", "powershell.exe", "powershell_ise.exe", "pwsh.exe"], lower(object.process.name)) 
+    }
+
+event Svchost_Execution:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and lower(object.process.parent.name) == "svchost.exe"
+        and (regex(lower(object.process.cmdline), "cmd\.exe\s+(\/|-)(c|k)\s+", 0) != null
+            or find_substr(lower(object.process.cmdline), "powershell.exe") != null
+            or find_substr(lower(object.process.cmdline), "powershell_ise.exe") != null
+            or find_substr(lower(object.process.cmdline), "pwsh.exe") != null
+        )
+        and find_substr(lower(object.process.parent.cmdline), "svchost.exe -k netsvcs -p -s schedule") == null
+        and filter::CheckWL_Process_Creation("Scheduled_Task_Execution", lower(object.process.cmdline))
+    }
+
+event Scheduler_Execution:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and lower(object.process.parent.name) == "svchost.exe"
+        and (regex(lower(object.process.cmdline), "cmd\.exe\s+(\/|-)(c|k)\s+", 0) != null
+            or find_substr(lower(object.process.cmdline), "powershell.exe") != null
+            or find_substr(lower(object.process.cmdline), "powershell_ise.exe") != null
+            or find_substr(lower(object.process.cmdline), "pwsh.exe") != null
+        )
+        and find_substr(lower(object.process.parent.cmdline), "svchost.exe -k netsvcs -p -s schedule") != null
+        and filter::CheckWL_Process_Creation("Scheduled_Task_Execution", lower(object.process.cmdline))
+    }
+
+event Suspicious_Task_Execution:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "129"
+        # Отбрасываем powershell.exe, cmd.exe, powershell_ise.exe, taskhost.exe, taskhostw.exe, etc.
+        and regex(lower(object.process.path), "^(\w:\\\\)?(%(windir|systemroot)%|windows|winnt)\\\\(system32|syswow64)", 0) == null
+        #  Отбрасываем pwsh.exe
+        and regex(lower(object.process.path), "^\w:\\\\program\s+files\\\\powershell\\\\", 0) == null
+        and filter::CheckWL_Specific_Only("Scheduled_Task_Execution", lower(join([object.process.fullpath, object.fullpath], "|")))
+    }
+
+# Событие для "обогащения" дополнительными полезными полями события Suspicious_Task_Execution
+event TaskScheduler_Start_Suspicious_Task:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        # Отбрасываем powershell.exe, cmd.exe, powershell_ise.exe, taskhost.exe, taskhostw.exe, etc.
+        and regex(lower(object.process.path), "^(\w:\\\\)?(%(windir|systemroot)%|windows|winnt)\\\\(system32|syswow64)", 0) == null
+        # Отбрасываем pwsh.exe
+        and regex(lower(object.process.path), "^\w:\\\\program\s+files\\\\powershell\\\\", 0) == null
+    }
+
+rule Scheduled_Task_Execution: (
+        (TaskScheduler_Event and Svchost_Execution) or 
+        (TaskScheduler_Event? and Scheduler_Execution) or 
+        (TaskScheduler_Start_Suspicious_Task and Suspicious_Task_Execution)
+    ) timer 3s
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on TaskScheduler_Event {
+        $object.name = object.name
+        $object.fullpath = object.fullpath
+
+        $alert.context = coalesce(object.fullpath, object.name)
+    }
+
+    on Svchost_Execution {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    
+        $alert.key = lower(object.process.cmdline)
+        $alert.context = coalesce($alert.context, object.process.parent.cmdline)
+
+        if regex(lower(object.process.cmdline), "cmd\.exe\s{2,}(\/|-)c\s{2,}", 0) != null 
+           or find_substr(lower(object.process.cmdline), ">") != null
+        then
+            $correlation_type = "incident"
+        else
+            $correlation_type = "event"
+        endif
+
+        $reason = "Svchost spawned shell"
+
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Scheduler_Execution {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.context = coalesce($alert.context, object.process.parent.cmdline)
+
+        if regex(lower(object.process.cmdline), "cmd\.exe\s{2,}(\/|-)c\s{2,}", 0) != null 
+           or find_substr(lower(object.process.cmdline), ">") != null
+        then
+            $correlation_type = "incident"
+        else
+            $correlation_type = "event"
+        endif
+
+        $reason = "Windows Scheduled Task Service spawned shell"
+
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Suspicious_Task_Execution {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $alert.key = lower(join([object.process.fullpath, object.fullpath], "|"))
+        $alert.context = coalesce(object.fullpath, object.name)
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on TaskScheduler_Start_Suspicious_Task {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    
+        $alert.context = join([object.account.name, object.process.fullpath, $alert.context], " | ")
+
+        if in_list(["taskhost.exe", "taskhostw.exe"], lower(object.process.name)) # Эти бинари здесь не должны быть, т.к. их истинное расположение отбрасывается в фильтре
+            or (lower(object.process.name) == "winserv.exe" and not match(lower(object.process.path), "?:\\programdata\\windows tasks service\\")) # winserv.exe имеет четкое расположение
+        then
+            $correlation_type = "incident"
+            $reason = "Task was started by known process " + object.process.name + " with strange location"
+        else
+            $correlation_type = "event"
+            $reason = "Task was started by suspicious process " + object.process.name
+        endif
+    }
+
+emit {
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Scheduled Task/Job: Scheduled Task"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

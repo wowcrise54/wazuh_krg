@@ -1,0 +1,131 @@
+event Krb5kdc_Connect:
+    key:
+        src.ip, event_src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and event_src.subsys == "auditd"
+        and object == "connection"
+        and action == "open"
+        and status == "success"
+        and (
+            subject.process.name == "krb5kdc"
+            or (
+                subject.process.name == "ns-slapd"
+                and subject.account.name == "dirsrv"
+            )
+        )
+        and filter::CheckWL_Linux_Networking("FreeIPA_Directory_Data_Collection", lower(join([event_src.host, src.ip], "|")))
+    }
+
+event IPA_LDAP_Query:
+    key:
+        src.ip, dst.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "freeipa"
+        and msgid == "SRCH"
+        and src.ip != null
+        and dst.ip != null
+        and regex(lower(object.query), "\(objectclass=\*\)", 0) != null # JXplorer, LDAP Administrator
+        and find_substr(lower(datafield1), "subschemasubentry") != null
+    }
+
+rule FreeIPA_Directory_Data_Collection: Krb5kdc_Connect and IPA_LDAP_Query+ timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Networking"
+    }
+
+    on Krb5kdc_Connect {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.meta = subject.process.meta
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.chain = subject.process.chain
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.process.chain = object.process.chain
+
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        
+        $logon_service = logon_service
+        
+        $protocol = protocol
+        
+        $direction = direction
+
+        $datafield18 = datafield18 # chain with PID for subject
+        $datafield19 = datafield19 # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, src.ip], "|"))
+    }
+
+    on IPA_LDAP_Query {
+        $object.query = object.query
+        $object.property = object.property
+        $object.value = object.value
+
+        $datafield1 = datafield1
+
+        $numfield1 = numfield1
+    }
+
+emit {  
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+    $status = "success"
+    
+    $alert.context = $object.query
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery: Domain Account"
+
+    $importance = "low"    
+    
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

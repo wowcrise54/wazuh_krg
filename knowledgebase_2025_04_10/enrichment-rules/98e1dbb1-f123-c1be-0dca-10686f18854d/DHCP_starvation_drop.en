@@ -1,0 +1,12 @@
+event EnrichmentEvent:
+    filter {
+        match(lower(correlation_name), "dhcp_starvation")
+        and detect == "drop"
+    }
+
+enrichment DHCP_Starvation_drop
+
+    enrich EnrichmentEvent:
+        enrich_fields {
+            drop
+        }

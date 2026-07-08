@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Обнаружение попыток остановить важную службу. Список служб находится в табличном списке Significant_Services.</Description>
+  <EventDescriptions>
+    <EventDescription id="4f73d3c8-dc54-49d7-98e1-cb3845402010">Обнаружена попытка остановить важную службу {object.name} на узле {event_src.host}. У службы {object.name} изменен вариант запуска на SERVICE_DISABLED (не будет загружено ни при каких обстоятельствах)</EventDescription>
+    <EventDescription id="b0fa3943-d243-4dc7-afae-a28e5a7939b4">Обнаружена попытка остановить важную службу {object.name} на узле {event_src.host}. У службы {object.name} удален ключ реестра отвечающего за автозапуск</EventDescription>
+    <EventDescription id="b12da9c0-5e29-40f4-bc8a-1bc5cfe49101">Обнаружена попытка остановить важную службу {object.name} на узле {event_src.host}. У службы {object.name} изменен вариант запуска на SERVICE_DEMAND_START (будет загружено по требованию пользователя или программы)</EventDescription>
+  </EventDescriptions>
+</Localization>

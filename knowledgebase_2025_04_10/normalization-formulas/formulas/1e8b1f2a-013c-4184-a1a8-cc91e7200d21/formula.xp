@@ -1,0 +1,16 @@
+TEXT = '[{time=DATETIME}] ERROR Kernel: Failed to rename a group because {$tmp_reason=STRING+}
+        Name: {object.name=REST}'
+
+action = "modify"
+object = "user_group"
+status = "failure"
+
+reason = strip($tmp_reason, "", ".")
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_error_rename_group"

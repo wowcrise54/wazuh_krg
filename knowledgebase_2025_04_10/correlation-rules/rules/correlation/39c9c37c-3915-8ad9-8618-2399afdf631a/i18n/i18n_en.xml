@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in the Artifactory data storage system. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="0f9822eb-a9f2-2766-737d-83ef98095900">Password spraying attempts from host {src.host} in application {event_src.title} on host {event_src.host}. Number of login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="2e84e4d4-a8f0-ba41-55de-6b0fa2f327ac">Successful password spraying from host {src.host} in application {event_src.title} on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="add9cd81-136e-f465-a69f-cb101c4c3614">Successful password spraying from host {src.host} in application {event_src.title} on host {event_src.host}. Attackers obtained the passwords of the following users: {datafield2}. Number of failed login attempts: {datafield1}.</EventDescription>
+  </EventDescriptions>
+</Localization>

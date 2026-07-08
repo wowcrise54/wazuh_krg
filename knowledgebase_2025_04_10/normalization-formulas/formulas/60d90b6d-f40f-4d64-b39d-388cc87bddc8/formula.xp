@@ -1,0 +1,32 @@
+TABULAR = '__policy_id_tag,
+           action,
+           cluster_info,
+           has_accounting,
+           i/f_dir,
+           {event_src.ip=orig},
+           origin_sic_name,
+           {time=time}'
+
+COND = $product == "VPN-1 & FireWall-1" 
+       and find_substr($cluster_info, "Stopping") != null
+
+object = "service"
+action = "stop"
+status = "success"
+
+object.name = "ClusterXL"
+
+datafield4 = $origin_sic_name  # полное доменное имя
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+event_src.subsys = lower($product)
+
+id = "PT_Checkpoint_Gaia_opseclog_VPN_and_Firewall_Cluster_Service_was_stopped"

@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME}
+        View - {NUMBER} [View@{NUMBER} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = in_list(["BROKER_VC_DISABLED", "BROKER_VC_STATUS_CHANGED_UP", "BROKER_VC_ENABLED"], $kv["EventType"])
+
+action = switch $kv["EventType"]
+        case "BROKER_VC_DISABLED" "disable"
+        case "BROKER_VC_STATUS_CHANGED_UP" "modify"
+        case "BROKER_VC_ENABLED" "enable"
+endswitch
+
+object = "application"
+status = "success"
+
+object.path = $kv["VCAddress"]
+object.id = $kv["VCId"]
+
+msgid = $kv["EventType"]
+importance = "medium"
+
+event_src.vendor = "vmware"
+event_src.title = "horizon"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_Horizon_View_syslog_vCenter_enabled_disabled_up"

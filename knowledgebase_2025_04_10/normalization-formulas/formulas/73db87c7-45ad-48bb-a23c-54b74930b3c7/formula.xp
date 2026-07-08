@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+        wms[{NUMBER}]: <{msgid=NUMBER}> <WARN> < {WORDDASH}
+        {event_src.ip=IPV4|event_src.ip=IPV6} > |ids| AP({datafield1=MACADDR}@{subject.name=HOSTNAME}):
+        Station Associated to Rogue AP: An AP detected a client {datafield7=MACADDR}
+        associated to a rogue access point (BSSID {datafield2=MACADDR}
+        and SSID {datafield3=STRING+} on CHANNEL {NUMBER} ).'
+
+subject = "system"
+action = "info"
+object = "alert"
+status = "success"
+
+subject.type = "access point"
+
+# datafield1 - spectator AP mac
+# datafield2 - rogue AP BSSID
+# datafield3 - rogue AP SSID
+# datafield7 - client MAC
+
+importance = "info"
+
+event_src.title = "arubaos"
+event_src.vendor = "aruba_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Wireless"
+
+id = "PT_Aruba_Networks_ArubaOS_syslog_station_associated_to_rogue_ap"

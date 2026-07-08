@@ -1,0 +1,87 @@
+TABULAR = "{chain_id=audit_id}, action_int, resource_type_int, unix_time"
+COND = in_list([0, 1, 2], $action_int)
+       and $resource_type_int == 44
+
+subject = "account"
+
+action = switch $action_int
+    case 0 "create"
+    case 1 "modify"
+    case 2 "remove"
+endswitch
+
+object = "resource"
+status = "success"
+
+subformula "parse_json"
+    JSON = ''
+    
+    $property = ""
+    $value = ""
+    $n_value = ""
+    
+    $role_type = ['', 'User', 'Admin', 'Super admin']
+    if $['role.type'] != null then
+        $property = $property + "|type"
+        $value = $value + " | " + $role_type[number($['role.type'][2])]
+        $n_value = $n_value + " | " + $role_type[number($['role.type'][1])]
+    endif
+    
+    if $['role.name'] != null then
+        $property = $property + "|name"
+        $value = $value + " | " + $['role.name'][2]
+        $n_value = $n_value + " | " + $['role.name'][1]
+    endif
+    
+    $property = strip($property, "|", "")
+    $value = strip($value, " | ", "")
+    $n_value = strip($n_value, " | ", "")
+    
+    if replace($property, "", " | ") == "" then $property = null endif
+    if replace($value, "", " | ") == "" then $value = null endif
+    if replace($n_value, "", " | ") == "" then $n_value = null endif
+endsubformula
+
+subject.account.name = $user_alias
+subject.account.id = $user_id
+subject.account.privileges = switch $user_role_type
+    case 1 "User"
+    case 2 "Admin"
+    case 3 "Super admin"
+endswitch
+
+object.type = "role"
+object.id = $resource_id
+object.name = if $resource_name != "" then $resource_name else null endif
+
+if not in_list(["", "0"], $details) then
+    if (substr($details, 0, 2) == '{"') and (substr($details, -1, 1) == '}') and (find_substr($details, '"role.') != null) then
+        submessage("JSON", "parse_json", $details)
+        object.property = if $property != "" then $property else null endif
+        object.value = if $value != "" then $value else null endif
+        object.new_value = if $n_value != "" then $n_value else null endif
+    else
+        object.property = $field_name
+        object.value = $old_value
+        object.new_value = $new_value
+    endif
+    datafield1 = replace($details, "'", '"')  # additional info about action
+endif
+
+src.ip = $ip
+
+time = epoch_to_datetime($unix_time)
+
+msgid = switch $action_int
+    case 0 "ACTION_ADD"
+    case 1 "ACTION_UPDATE"
+    case 2 "ACTION_DELETE"
+endswitch
+
+importance = "medium"
+
+event_src.vendor = "zabbix"
+event_src.title = "zabbix"
+event_src.category = "Network monitoring system"
+
+id = "PT_Zabbix_Zabbix_odbc_User_role_management"

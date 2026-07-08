@@ -1,0 +1,72 @@
+JSON = 'source="trove"'
+
+COND = in_list(["backup-create", "backup-delete"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "backup-create" "create"
+    case "backup-delete" "remove"
+endswitch
+
+object = "resource"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["backup"]
+
+$csv_uri = csv($uri, "/", "")
+if not in_list(["", null], $properties["id"]) then
+    object.id = $properties["id"]
+else
+    object.id = $csv_uri[4]
+endif
+
+if $properties["name"] != "" then
+    object.name = $properties["name"]
+endif
+
+object.state = $properties["status"]
+object.type = "backup"
+
+object.property = "datastore"
+object.value = join([$properties["datastore"]["type"], $properties["datastore"]["version"]], " ")
+
+datafield1 = $method                     # Method
+datafield2 = $uri                        # URL
+datafield3 = $properties["instance_id"]  # The ID of the instance to create backup for
+datafield6 = $csv_uri[2]                 # The ID of the project
+
+if $properties["description"] != "" then
+    datafield9 = $properties["description"]  # A human-readable description for the resource
+endif
+
+time = $timestamp
+msgid = $action
+importance = "info"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Trove_Backup_operations"

@@ -1,0 +1,31 @@
+!TABULAR = "id,
+            {time = start_time},
+            {datafield1 = node_name},
+            {event_src.ip = ip},
+            rule_name,
+            message"
+
+!COND = ($rule_name == "Тип МСЭ")
+
+action = "modify"
+object = "application"
+status = "success"
+
+object.name = "firewall"
+
+submessage("TEXT", "type", $message)
+
+subformula "type"
+    # Извлечение object.type из $message
+    !TEXT = 'Установлен тип МСЭ: {object.type = REST}'
+endsubformula
+
+# datafield1 - имя узла
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_statewatcher"
+event_src.category = "Network monitoring system"
+
+id = "PT_Infotecs_VipNet_StateWatcher_odbc_Change_type_firewall"

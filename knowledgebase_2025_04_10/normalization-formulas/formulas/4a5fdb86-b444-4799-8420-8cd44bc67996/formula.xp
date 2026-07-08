@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {UNTIL(" - - ")}
+        The following event has occurred: Event type: {STRING} (8); Computer: {STRING}
+        ({$evsrcip=UNTIL(";")}Date_Time: {UNTIL(";")} Source: {UNTIL(";")} Action: {UNTIL(";")}
+        Name: {$opath=STRING} Info: {STRING} {STRING} {src.ip=IPV4|src.ip=IPV6}:
+        {src.port=NUMBER}({src.hostname=HOSTNAME}:{$prot=WORD}); Reason: {UNTIL(";")}
+        User name: {$sname=UNTIL(";")} User SID: {subject.id=WORDDASH}; Process name:
+        {$process_raw=UNTIL(";")} Process Id: {NUMBER}; Event id: {msgid="173"}'
+
+action = "allow"
+object = "session"
+status = "success"
+
+$tmp = find_substr($sname, "\\")
+object.account.name = strip(substr($sname, $tmp + 1, length($sname)), "\\", ";")
+object.account.domain = substr($sname, 0, $tmp)
+
+$process_raw = strip($process_raw,'', ';')
+$csv_path = csv($process_raw, "\\", "'")
+object.process.name = $csv_path[length($csv_path) - 1]
+object.process.path = strip($process_raw, "", object.process.name)
+object.process.fullpath = $process_raw
+
+direction = "ingress"
+protocol.layer7 = $prot
+
+datafield3 = strip($opath,'', ';')                # url
+
+$intf_list = strip($evsrcip, '', ')')            # снятие скобок
+$csv = csv($intf_list, ", ", "\'")                # разделение на список интерфейсов
+datafield5 = $intf_list                           # все интерфейсы источника
+
+importance = "info"
+
+event_src.vendor = "smart_line"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "devicelock"
+event_src.ip = maybe_ipv4($csv[0])
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_syslog_Incoming_data"

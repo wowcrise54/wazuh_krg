@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} synssad[{NUMBER}]:
+        Suspicious process is found on Analyzer: {object.id=NUMBER}
+        PATH={$temp_object_path=STRING} ARG=\"{$arg=STRING+}  USER={datafield1=STRING} - {$state=REST}'
+
+action = "detect"
+object = "process"
+status = "success"
+
+object.state = lower($state)
+$arg = strip($arg, '', '"')      # обрезаем закрывающую кавычку
+$space = find_substr($arg, ' ')  # находим пробел
+if $space != null then
+    object.name = substr($arg, 0, $space)
+    object.property = "argument"
+    object.value = strip ($arg, object.name + " ", "")  # отрезаем от списка аргументов имя команды и пробел
+else
+    object.name = $arg
+endif
+
+object.path = strip($temp_object_path, "", object.name)
+
+# datafield1 - username
+
+reason = "suspicious process is found"
+
+importance = "low"
+
+event_src.vendor = "mfi_soft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = 'perimetr'
+event_src.category = 'Network security'
+
+id = "PT_Mfi_Soft_Perimetr_syslog_suspicious_process_detect"

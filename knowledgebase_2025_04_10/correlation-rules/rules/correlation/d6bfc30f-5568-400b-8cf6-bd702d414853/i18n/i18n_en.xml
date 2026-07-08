@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The user renamed the AD object or requested a TGT ticket on behalf of an account that matches the name of the domain controller. This may indicate a sAMAccountName spoofing attack. It can allow an attacker to obtain a TGT ticket, for example, in the name of a domain controller, gain a foothold in the system and increase their privileges</Description>
+  <EventDescriptions>
+    <EventDescription id="2298bef2-4331-41e7-a3a7-46951c5291d2">The user {subject.account.name} from host {src.host} requested a TGT using an account that matches the domain controller name on host {event_src.host}</EventDescription>
+    <EventDescription id="5e7de605-4826-4f94-9f9b-ce87a2ed2790">The user {subject.account.name} renamed an AD object to "{object.account.name}" on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

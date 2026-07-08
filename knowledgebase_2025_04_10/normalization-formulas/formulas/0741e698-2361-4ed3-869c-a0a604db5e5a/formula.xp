@@ -1,0 +1,27 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "3885367376"
+
+action = "open"
+object = "file"
+status = "failure"
+
+submessage("TEXT", "SPLIT", $zntf_srcmsg)
+
+msgid = string($zntf_status)
+
+subformula "SPLIT"
+    # Извлечение object.path из $zntf_srcmsg
+    TEXT = 'Не удалось открыть файл {$tmp_path=REST}'
+    object.path = strip($tmp_path,"",".")
+endsubformula
+
+importance = "info"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_atempt_open_file"

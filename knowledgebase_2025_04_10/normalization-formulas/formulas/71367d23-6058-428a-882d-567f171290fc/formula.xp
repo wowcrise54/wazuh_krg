@@ -1,0 +1,47 @@
+TABULAR = "{$Computer=host_name},
+           {object.storage.fullpath=object_path},
+           {msgid=event_type}"
+
+COND = lower($event_type) == "found"
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+$full = lower(substr($username, 0, find_substr($username, ':')))
+$domain_user = csv($full, "\\", "'")
+if length($domain_user) == 2 then
+    subject.account.name = $domain_user[1]
+    subject.account.domain = $domain_user[0]
+else
+    subject.account.name = $full
+endif
+
+object.name = $virus_name
+$path_csv = csv(object.storage.fullpath, "\\", "")
+object.storage.name = $path_csv[length($path_csv) - 1]
+if length($path_csv) > 1 then
+    object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+endif
+
+time = string($infectiontime)
+
+importance = "medium"
+
+event_src.vendor = "drweb"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "security_suite"
+event_src.category = "Anti-virus"
+
+category.high = "Information Security"
+category.generic = "Malware"
+category.low = "Detection"
+
+id = "PT_DrWeb_Security_Suite_odbc_event_virus_found"

@@ -1,0 +1,127 @@
+event Process_Start:
+    key:
+        event_src.host, datafield11
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and regex(object.process.path, "^[a-z]:", 0) != regex(object.process.parent.path, "^[a-z]:", 0)
+        and filter::CheckWL_Process_Creation("Process_From_Mounted_Disk", lower(object.process.fullpath))
+    }
+
+event Registry_Actions:
+    key:
+        event_src.host, datafield5
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "13"
+        and object.path == "\\registry\\machine\\system\\mounteddevices\\\\dosdevices\\"
+        and regex(object.name, "^[a-z]:", 0) != null
+        and status == "success"
+    }
+
+rule Process_From_Mounted_Disk: (Registry_Actions -> Process_Start) within 8h
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Process_Start {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        $datafield11 = datafield11  # имя диска например "e:\\"
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(object.process.fullpath)
+        $alert.context = object.process.chain
+    }
+
+    on Registry_Actions {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.new_value = object.new_value
+
+        if lower(subject.process.name) == "vds.exe" then
+            $reason = "vhd"
+        elif lower(subject.process.name) == "system" then
+            $reason = "iso/vhd/flash"
+        else
+            $reason = "unknown"
+        endif
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Subvert Trust Controls: Mark-of-the-Web Bypass"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

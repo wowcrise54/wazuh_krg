@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {STRING?} {WORD}/{WORD}/{WORD}/{WORD}: {time=DATETIME}{":"?}
+        {WORDDASH?}{"[" NUMBER "]" ?}{":"?} %{$msgid_1="OS-SYSMGR-4-PROC_RESTART_"}{$msgid_2="JID"|$msgid_2="NAME"}:
+        User {subject.account.name=WORDDASH} ({WORDDASH}) requested a restart of process {$ending=REST}'
+
+submessage("TEXT", "process", $ending)
+subformula "process"
+    TEXT = 'with jobid {object.process.id=WORD} at {REST}'
+endsubformula
+
+subformula "process"
+    TEXT = '{object.process.name=WORDDASH} at {REST}'
+endsubformula
+
+subject = "account"
+action = "start"
+object = "process"
+status = "ongoing"
+
+msgid = $msgid_1 + $msgid_2
+importance = "info"
+
+category.generic = "Process"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "cisco"
+event_src.title = "ios_xr"
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_XR_syslog_OS_SYSMGR_PROC_RESTART_JID_NAME"

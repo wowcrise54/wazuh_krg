@@ -1,0 +1,27 @@
+TEXT = "{WORDDASH?} {WORD} {'.'?} {NUMBER} {NUMBER}:{NUMBER}:{NUMBER} {$host_candidate=STRING} CEF:0|Security Vision|Security Vision Platform|{object.version=NUMBER}|{numfield1=NUMBER}|{msgid=WORDDASH}|5|rt={$time_candidate=NUMBER} eventId={numfield2=NUMBER} act={reason=UNTIL(' suser')}={$subject_candidate=UNTIL(' categoryObject')}={object.type=WORDDASH} object={object.name=REST}"
+
+subject = "account"
+action = "alert"
+object = "resource"
+status = "success"
+
+$subject_candidate = csv($subject_candidate, "@", "`")
+subject.account.name = $subject_candidate[0]
+subject.account.domain = $subject_candidate[1]
+
+time = coalesce(epoch_to_datetime($time_candidate), recv_time)
+importance = "info"
+
+$dot_pos = find_substr($host_candidate, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($host_candidate)
+    event_src.hostname = lower(substr($host_candidate, 0, $dot_pos))
+else
+    event_src.hostname = lower($host_candidate)
+endif
+
+event_src.category = "SIEM"
+event_src.vendor = "security_vision"
+event_src.title = "security_vision_platform"
+
+id = "PT_Security_Vision_syslog_CEF_event"

@@ -1,0 +1,25 @@
+filter Login_except_Windows() {
+    filter::NotFromCorrelator()
+    and category.high == "Access Management"
+    and category.low == "Communication"
+    and action == "login"
+    and event_src.title != "windows"
+    and event_src.title != "sap_as_abap"
+    and (
+         (
+             subject.account.name != null
+             or subject.account.id != null
+         )
+         or (
+             subject.application.account.name != null
+             or subject.application.account.id != null
+         )
+         or (
+             subject == "account"
+             and (
+                  subject.name != null
+                  or subject.id != null
+             )
+         )
+    )
+}

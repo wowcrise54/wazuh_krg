@@ -1,0 +1,28 @@
+JSON = 'ENTITY_TYPE'
+COND = ($ENTITY_TYPE == "Tablespace"
+        and $OPERATION == "delete")
+
+subject = "account"
+action = "remove"
+object = "resource"
+status = "success"
+
+subject.account.id = $USER_ID
+subject.account.name = $user_or_token['USERNAME']
+subject.account.fullname = $user_or_token['DISPLAY_NAME']   
+subject.account.contact = $user_or_token['EMAIL']
+
+object.type = $ENTITY_TYPE
+object.name = $ENTITY_DISPLAY_NAME
+object.id = $ENTITY_ID
+
+time = $CHANGE_DATE
+msgid = $ENTITY_TYPE
+importance = "info"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_9_customeventcollector_Tablespace_delete"

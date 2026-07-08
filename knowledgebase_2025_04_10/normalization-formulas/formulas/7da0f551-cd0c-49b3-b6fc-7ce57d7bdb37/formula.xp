@@ -1,0 +1,34 @@
+EVENTLOG = 'EventID.text="1001"'
+COND =  $Channel == "Active Directory Web Services"
+        and ( $Provider["Name"] == "Active Directory Web Services" or $Provider["Name"] == "ADWS" )
+
+action = "start"
+object = "service"
+status = "failure"
+
+object.name = "ADWS"
+
+reason = "could not initialize endpoints: operation timed out"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "high"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1001_could_not_initialize_endpoints_operation_timed_out"

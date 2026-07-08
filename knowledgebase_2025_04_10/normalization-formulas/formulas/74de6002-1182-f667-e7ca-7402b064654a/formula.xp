@@ -1,0 +1,71 @@
+EVENTLOG = 'Channel="Application"'
+COND = $EventID["text"] == "0" and $Provider["Name"] == "SecurityConfigurator"
+         and find_substr($Data[0],"Настройка списка прав") == 0
+
+action = "modify"
+status = "success"
+
+submessage("TEXT","SPLIT",$Data[0])
+
+subformula "SPLIT"  # Добавление/удаление прав роли
+    # Извлечение object, object.name и object.type из $Data[0]
+    TEXT='Настройка списка прав - Роли {$role_name=STRING} {$act=STRING} {$rights_name=UNTIL(" в приложении")} 
+        {$application_name=STRING}'
+    object = "resource"
+    object.name = $role_name
+    object.type = "role"
+endsubformula
+
+subformula "SPLIT"  # Добавление/удаление прав группе
+    # Извлечение object и object.name из $Data[0]
+    TEXT='Настройка списка прав - Группе пользователей {$group_name=STRING} {$act=STRING} {$rights_name=UNTIL(" в приложении")} 
+        {$application_name=STRING}'
+    object = "user_group"
+    object.name = $group_name
+
+    category.generic = "Group"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endsubformula
+
+subformula "SPLIT"  # Добавление/удаление прав пользователю
+    # Извлечение object и object.account.name из $Data[0]
+    TEXT='Настройка списка прав - Пользователю {$user_name=STRING} {$act=STRING} {$rights_name=UNTIL(" в приложении")} 
+        {$application_name=STRING}'
+    object = "account"
+    object.account.name = $user_name
+
+    category.generic = "Account"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endsubformula
+
+switch $act
+    case "разрешено"
+        object.property = "added rights"
+        object.new_value = strip($rights_name, '"','"')
+    case "запрещено"
+        object.property = "removed rights"
+        object.value = strip($rights_name, '"','"')
+endswitch
+
+datafield1 = $application_name
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+event_src.vendor = "opensource"
+event_src.title = "scada_security_configurator"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "SCADA"
+
+id = "PT_Opensource_Scada_Security_Configurator_eventlog_Rights_Change"

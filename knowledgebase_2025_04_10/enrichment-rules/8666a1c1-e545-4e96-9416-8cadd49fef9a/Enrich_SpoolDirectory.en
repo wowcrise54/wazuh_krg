@@ -1,0 +1,26 @@
+event SpoolDirectory_Reg_Key:  
+    key:
+        event_src.host, object.value
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "sysmon"
+        and msgid == "13"
+        and lower(subject.process.fullpath) == "c:\\windows\\system32\\spoolsv.exe"
+        and (lower(object.name) == "spooldirectory" 
+            or match(lower(object.path), "*spooldirectory")
+            or lower(object.name) == "module" 
+            or match(lower(object.path), "*module"))
+    }
+    
+enrichment Enrich_SpoolDirectory
+
+    enrich SpoolDirectory_Reg_Key:
+        enrich_fields {
+            datafield8 = regex(lower(object.value), "[^\\\\]+$", 0)
+            
+            if find_substr(lower(object.value), "\\\\localhost") != null then
+                datafield9 = strip(lower(object.value),"\\\\localhost", null)
+            else
+                datafield9 = strip(lower(object.value), null, lower(datafield8))
+            endif
+        }

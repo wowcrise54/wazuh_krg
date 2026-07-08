@@ -1,0 +1,104 @@
+EVENTLOG = 'Provider.Name="AD FS Auditing"'
+COND = $Channel == "Security"
+       and ( 
+            $EventID/text == "1206"
+            or $EventID/text == "1207"
+       )
+
+subject = "account"
+action = "logout"
+object = "system"
+
+submessage("XML","Event_Data", $Data[1])
+
+subformula "Event_Data"
+    XML = 'AuditBase'
+
+    $check = lower($AuditBase/AuditResult)
+    if $check == "success" then
+        status = "success"
+    else
+        status = "failure"
+    endif
+    
+    $UserId = $AuditBase/ContextComponents/Component/0/UserId
+    $reason = $AuditBase/FailureType
+    
+    if find_substr($UserId, "\\") != null then
+        subject.account.name = lower(csv($UserId, "\\", "")[1])
+        subject.account.domain = lower(csv($UserId, "\\", "")[0])
+    elif find_substr($UserId, "@") != null then
+        subject.account.name = lower(csv($UserId, "@", "")[0])
+        subject.account.domain = lower(csv($UserId, "@", "")[1])
+    else
+        subject.account.name = $UserId
+    endif
+    
+    $server = $AuditBase/ContextComponents/Component/0/Server
+    if $server != "N/A" then      
+        $process_path_and_name = csv($server, "/", "")
+        $process_fullpath = $server
+        $process_name = $process_path_and_name[length($process_path_and_name) - 1]
+        $process_path = strip($server, "", $process_name)
+    
+        object.process.fullpath = $process_fullpath
+        object.process.name = $process_name
+        if  $process_path != "" then object.process.path = $process_path endif
+    endif
+
+    $authprotocol = $AuditBase/ContextComponents/Component/0/AuthProtocol
+    if $authprotocol != "N/A" then
+        protocol.layer7 = $authprotocol
+    endif
+    
+    $useragstr = $AuditBase/ContextComponents/Component/0/UserAgentString
+    $proxy = $AuditBase/ContextComponents/Component/0/ProxyServer
+    $endpoint = $AuditBase/ContextComponents/Component/0/Endpoint
+    if $useragstr != "N/A" then
+        datafield1 = $useragstr                                                     # User-agent
+    endif
+    datafield2 = $AuditBase/ContextComponents/Component/0/IpAddress                 # IP address
+    datafield3 = $AuditBase/ContextComponents/Component/0/ForwardedIpAddress        # Forwarded-client-ip,forwarded-for, proxy-client-ip(if exist) address
+    datafield4 = $AuditBase/ContextComponents/Component/0/NetworkLocation           # Network location
+    if $proxy != "N/A" then
+        datafield5 = $proxy                                                         # Proxy server
+    endif
+    if $endpoint != "N/A" then
+        datafield6 = $endpoint                                                      # Endpoint
+    endif
+    $relyparty = $AuditBase/ContextComponents/Component/0/RelyingParty
+    if $relyparty != "N/A" then
+        datafield7 = $relyparty                                                     # Relying Party
+    endif
+    datafield8 = $AuditBase/AuditType                                               # Audit type
+    
+    if $reason != "None" then
+       reason = $reason
+    endif
+endsubformula
+
+src.ip = ipv4(csv(datafield3, ",", "")[0])
+dst.ip = ipv4(csv(datafield3, ",", "")[1])
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "ad fs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1206_1207_Sign_Out_Audit"

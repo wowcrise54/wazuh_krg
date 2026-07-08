@@ -1,0 +1,39 @@
+TEXT = "{'<'NUMBER'>'?}{':'?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        mysql-server_auditing: {IPV4|IPV6|HOSTNAME},{$account=WORDDASH?},{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME|},
+        {subject.account.session_id=NUMBER},{datafield2=NUMBER},QUERY,`{datafield1=WORDDASH}`,\'CREATE TABLE
+        `{object.name=WORDDASH}` ({STRING+?} COLLATE=\\'{WORDDASH}\\'',{$dataf=NUMBER}"
+
+subject = "account"
+action = "create"
+object = "db_object"
+
+if $dataf == 0 then
+    status = "success"
+else
+    status = "failure"
+
+    reason = $dataf
+endif
+
+subject.account.id = $account
+subject.account.name = $account
+
+object.type = "table"
+
+# datafield1 - database
+# datafield2 - queryid
+
+importance = "info"
+
+event_src.title = "mysql"
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Database server"
+
+id = "PT_Oracle_MySQL_syslog_create_table"

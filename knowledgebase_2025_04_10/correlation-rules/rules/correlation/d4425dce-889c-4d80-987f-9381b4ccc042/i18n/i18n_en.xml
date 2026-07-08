@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Search for users, groups, and computers with access to Microsoft LAPS (Local Administrator Password Solution). LAPS automatically manages the local administrator account password and backs up this password on devices connected to Active Directory services.</Description>
+  <EventDescriptions>
+    <EventDescription id="3e96de1d-806b-99b5-bc61-686fc16eb073">User {subject.account.name} sent an LDAP request for attribute "ms-Mcs-AdmPwd" containing the local administrator password in clear text on host {event_src.host}</EventDescription>
+    <EventDescription id="8fad6528-7c3d-885d-6f8a-82e0d17abdae">The admwpd.dll library for Microsoft LAPS management was created on host {event_src.host}</EventDescription>
+    <EventDescription id="c97f827a-8af3-8fb8-4cd6-4d3fe0255143">An attempt to search for Active Directory users and groups with Microsoft LAPS privileges and domain-joined computers with LAPS enabled was detected on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

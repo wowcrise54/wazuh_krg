@@ -1,0 +1,30 @@
+!TABULAR = ".1.3.6.1.2.1.1.3.0,
+            .1.3.6.1.6.3.1.1.4.1.0,
+            {src.mac = .1.3.6.1.4.1.9.9.599.1.3.1.1.1.0},
+            {object.name = .1.3.6.1.4.1.9.9.513.1.1.1.1.5.0},
+            {dst.mac = .1.3.6.1.4.1.9.9.599.1.3.1.1.8.0},
+            {src.ip = .1.3.6.1.4.1.9.9.599.1.3.1.1.10.0},
+            {subject.name = .1.3.6.1.4.1.9.9.599.1.3.1.1.27.0},
+            {object.value = .1.3.6.1.4.1.9.9.599.1.3.1.1.28.0}
+            "
+
+!COND = $.1.3.6.1.6.3.1.1.4.1.0 == ".1.3.6.1.4.1.9.9.599.0.4"
+
+subject = "account"
+action = "connect"
+object = "device"
+status = "success"
+
+object.property = "SSID"
+
+reason = "Client moved to run state"
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_snmp_Wireless_client_moved_to_run_state"

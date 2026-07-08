@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {STRING?} events - - CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|events|
+        admin_console|{WORDDASH}|rt={$temp_time=NUMBER} deviceExternalId={event_src.id=STRING+}
+        suser={subject.account.name=STRING} cat=console_auth act={msgid="login_successful"|msgid="login_failed"}
+        src={src.ip=IPV4|src.ip=IPV6} cs1Label=Attributes cs1={$rest=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+switch msgid
+    case "login_successful"
+        status = "success"
+        importance = "info"
+    case "login_failed"
+        status = "failure"
+        importance = "medium"
+endswitch
+
+submessage("JSON", "SPLIT", $rest)
+
+subject.account.privileges = "administrator"
+
+subformula "SPLIT"
+    # Извлечение datafield5 и reason из $rest
+    JSON = "login"
+    datafield5 = $error_code        # Код ошибки
+    reason = $error_text
+endsubformula
+
+logon_auth_method = "remote"
+
+time = epoch_ms_to_datetime($temp_time)
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_admin_login"

@@ -1,0 +1,68 @@
+!JSON = "EventCode=5143"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "file_object"
+status = "success"
+
+subject.account.name = if $InsertionStrings[1] != "-" then lower($InsertionStrings[1]) else null endif
+subject.account.domain = if $InsertionStrings[2] != "-" then lower($InsertionStrings[2]) else null endif
+subject.account.id = if $InsertionStrings[0] != "S-1-0-0" then$InsertionStrings[0] else null endif
+if subject.account.id == null and subject.account.name != null then
+    subject.account.id = "synthetic:" + subject.account.name
+    if subject.account.domain != null then
+        subject.account.id = subject.account.id + "@" + subject.account.domain
+    endif
+endif
+subject.account.session_id = maybe_number16($InsertionStrings[3])
+
+object.storage.id = lower($InsertionStrings[5])
+
+object.storage.fullpath = lower(strip($InsertionStrings[5], "\\??\\", "\\"))
+$name_and_path_local = csv(object.storage.fullpath, "\\", "'")
+if $name_and_path_local[0] == object.storage.fullpath then
+    object.storage.path = object.storage.fullpath 
+else
+    object.storage.name = $name_and_path_local[length($name_and_path_local) - 1]    
+    object.storage.path = strip(object.storage.fullpath, "", object.storage.name)     
+endif
+
+object.fullpath = lower(strip($InsertionStrings[6], "\\\\*", "\\"))
+$name_and_path_public = csv(object.fullpath, "\\", "'")
+if $name_and_path_public[0] == object.fullpath then
+    object.path = object.fullpath 
+else
+    object.name = $name_and_path_public[length($name_and_path_public) - 1]    
+    object.path = strip(object.fullpath, "", object.name)     
+endif
+
+object.property = "Remark|MaxUsers|ShareFlags|SD"
+object.value = join([$InsertionStrings[7],$InsertionStrings[9],$InsertionStrings[11],$InsertionStrings[13]], "|")
+object.new_value = join([$InsertionStrings[8],$InsertionStrings[10],$InsertionStrings[12],$InsertionStrings[14]], "|")
+
+$dot_pos = find_substr($ComputerName, '.')
+
+if $dot_pos != null then
+    dst.fqdn = lower($ComputerName)
+    dst.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    dst.hostname = lower($ComputerName)
+endif
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+importance = "medium"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+event_src.category = "Operating system"
+event_src.hostname = dst.hostname
+event_src.fqdn = dst.fqdn
+
+id = "PT_Microsoft_Windows_wmi_5143_A_network_share_object_was_modified"

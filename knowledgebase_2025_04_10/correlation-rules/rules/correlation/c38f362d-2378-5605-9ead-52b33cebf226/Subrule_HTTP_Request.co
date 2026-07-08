@@ -1,0 +1,109 @@
+event HTTP_Request:
+    key:
+        event_src.host, src.ip, dst.port
+    filter {
+        filter::NotFromCorrelator() 
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or (event_src.title == "sysmon" and msgid == "3")
+        )
+        and src.ip == dst.ip
+        and in_list([80, 8080, 8888], dst.port)
+        and object == "connection"
+        and direction == "egress"
+        and lower(object.process.name) != "system"
+        and lower(object.account.name) != "system"
+        and filter::CheckWL_Networking("Subrule_HTTP_Request", join([lower(object.process.fullpath), src.ip], "|"))
+    }
+    
+event System_HTTP_Request:
+    key:
+        event_src.host, dst.ip, dst.port
+    filter {
+        filter::NotFromCorrelator() 
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or (event_src.title == "sysmon" and msgid == "3")
+        )
+        and src.ip == dst.ip
+        and in_list([80, 8080, 8888], dst.port)
+        and object == "connection"
+        and direction == "ingress"
+        and lower(object.process.name) == "system"
+        and lower(object.account.name) == "system"
+    }
+    
+rule Subrule_HTTP_Request: (HTTP_Request and System_HTTP_Request) timer 3s
+
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+    }
+ 
+    on HTTP_Request {
+        $subject.account.id = object.account.id
+        $subject.account.name = object.account.name
+        $subject.account.domain = object.account.domain
+
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+
+        $protocol = protocol
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+        $src.mac = src.mac
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = join([lower(object.process.fullpath), src.ip], "|")
+        $alert.context = lower(object.process.name) + " -> " + string(src.ip) + ":" + string(dst.port)
+    }
+
+    on System_HTTP_Request {
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    $importance = "info"
+
+    $subject = "process"
+    $action = "open"
+    $object = "connection"   
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+}

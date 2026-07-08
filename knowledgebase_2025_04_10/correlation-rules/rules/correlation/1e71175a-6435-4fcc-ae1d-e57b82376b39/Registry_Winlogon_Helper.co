@@ -1,0 +1,131 @@
+event Start_Process_Windows_Cmdline:
+    key:
+        event_src.host, object.process.name, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and regex(lower(object.process.cmdline), "\\\\currentversion\\\\winlogon", 0) != null
+    }
+
+event Winlogon_Settings_Changed:
+    key:
+        event_src.host, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and find_substr(lower(object.path), "\\currentversion\\winlogon\\") != null
+        and (
+                (
+                    lower(object.name) == "shell"
+                    and not match(lower(object.new_value), "*\\explorer.exe")
+                ) or (
+                    lower(object.name) == "userinit"
+                    and not match(lower(object.new_value), "*\\userinit.exe")
+                )
+                or lower(object.name) == "notify"
+            )
+        and filter::CheckWL_Registry_Actions("Registry_Winlogon_Helper", lower(join([object.fullpath, object.new_value], "|")))
+    }
+
+rule Registry_Winlogon_Helper: (Start_Process_Windows_Cmdline? and Winlogon_Settings_Changed) timer 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+    }
+
+    on Start_Process_Windows_Cmdline {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.imphash = object.process.hash.imphash
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+        $subject.process.version = object.process.version
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.meta = object.process.meta
+        $subject.process.original_name = object.process.original_name
+        $subject.process.cwd = object.process.cwd
+
+        $subject.process.parent.id = object.process.parent.id
+        $subject.process.parent.name = object.process.parent.name
+        $subject.process.parent.path = object.process.parent.path
+        $subject.process.parent.fullpath = object.process.parent.fullpath
+        $subject.process.parent.guid = object.process.parent.guid
+        $subject.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+    }
+
+    on Winlogon_Settings_Changed {
+        if $subject.account.name == null then
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+        endif
+        
+        if $subject.process.name  == null then
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+        endif
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.new_value = object.new_value
+
+        $alert.key = lower(join([object.fullpath, object.new_value], "|"))
+        $alert.regex_match = regex(lower(object.fullpath), "\\\\currentversion\\\\winlogon\\\\userinit|\\\\currentversion\\\\winlogon\\\\shell|\\\\currentversion\\\\winlogon\\\\notify", 0)
+        $alert.context = join([subject.process.name, "payload_binary " + object.new_value], " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "modify"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Boot or Logon Autostart Execution: Winlogon Helper DLL"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SecurityBackdoorDetection"
+    $incident.aggregation.timeout = 2h
+}

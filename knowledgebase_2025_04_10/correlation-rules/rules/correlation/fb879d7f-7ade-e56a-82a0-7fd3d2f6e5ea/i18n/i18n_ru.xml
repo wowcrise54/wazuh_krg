@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Использован инструмент SharpToken, который ищет утечки токенов во всех процессах системы и эксплуатирует их. Если злоумышленники получили доступ к учетной записи с низким уровнем привилегий, этот инструмент позволит им повысить привилегии до "NT AUTHORITY\SYSTEM". Также с помощью SharpToken можно захватить интерактивный сеанс пользователя</Description>
+  <EventDescriptions>
+    <EventDescription id="bd5cba8d-3143-8953-7299-8931dcccd510">Пользователь {subject.account.name} запустил инструмент SharpToken ({object.process.fullpath}), применяемый для кражи токенов и повышения привилегий, на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

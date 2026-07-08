@@ -1,0 +1,75 @@
+TABULAR = '{chain_id=TransactionId},
+           {datafield2=SequenceId},
+           {time=OccurredAt},
+           {$selector=ObjectSelector},
+           {$login=Login},
+           {$workstation=Workstation},
+           {$account=NTAccount},
+           SequenceNumber,
+           {$temp_action=Action},
+           {msgid=ObjectType},
+           {$server=Server},
+           ServerIsPrimary'
+
+COND = $ObjectType == "Workstation"
+       and in_list(["Insert", "Delete", "Include", "Exclude"], $Action)
+                
+subject = "account"
+
+if $temp_action == "Insert" or $temp_action == "Delete" then
+    action = switch $temp_action
+        case "Insert" "create"
+        case "Delete" "remove"
+    endswitch
+
+    object.name = csv($selector, "/", "")[1]
+    object.type = "device monitor security schema object"
+elif $temp_action == "Include" or $temp_action == "Exclude" then
+    action = "modify"
+
+    $symb_selector = find_substr($selector, "/") + 1
+    $csv_selector = csv($selector, "/", "")
+    $computer = $csv_selector[length($csv_selector) - 1]
+    object.name = strip($selector, $csv_selector[0] + "/", "/" + $computer)
+
+    object.property = switch $temp_action
+        case "Include" "add computer to group"
+        case "Exclude" "remove computer from group"
+    endswitch
+
+    object.value = $computer
+    object.type = "computers group"
+endif
+
+object = "resource"
+status = "success"
+
+subject.account.name = lower($login)
+
+$csv_account = csv(lower($account), "\\", "")
+subject.name = $csv_account[1]    # Имя системного пользователя
+subject.domain = $csv_account[0]  # Домен системного пользователя
+
+src.hostname = lower($workstation)
+dst.hostname = lower($server)
+
+# datafield2 - Номер действия в рамках текущей транзакции
+
+if lower($workstation) == lower($server) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+if $temp_action == "Delete" then
+    importance = "medium"
+else
+    importance = "low"
+endif
+
+event_src.vendor = "infowatch"
+event_src.title = "device_monitor"
+event_src.hostname = lower($server)
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Device_Monitor_odbc_workstation_actions"

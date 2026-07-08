@@ -1,0 +1,87 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "User"
+
+if $authorType == "User" then
+    subject = "account"
+
+    subject.account.id = $author
+    subject.account.name = $authorPresentation
+
+elif $authorType == "Service" then
+    subject = "service"
+
+    subject.id = $author
+    subject.name = $authorPresentation
+endif
+
+action = switch $type
+    case "Create" "create"
+    case "Update" "modify"
+    case "Remove" "remove"
+endswitch
+
+object = "account"
+status = "success"
+
+object.account.id = $targetId
+object.account.name = coalesce($change["name"], $change["login"], strip($authorPresentation, "", " "))
+
+chain_id = $id
+
+if $type == "Create" then
+    start_time = epoch_ms_to_datetime(number($change["creationTime"]))
+
+    datafield1 = $change["profile.email.email"]  # Users email
+
+    datafield2 = switch $change["profile.email.verified"]  # Email not/verified
+        case "true" "email verified"
+        case "false" "email not verified"
+    endswitch
+
+    datafield3 = $change["details"]["added"]["id"]  # User details ID
+
+elif $type == "Remove" then
+    object.property = $change["projectRoles"]["removed"]["fieldType"]
+    object.value = $change["projectRoles"]["removed"]["presentation"]
+
+    datafield4 = $change["teams"]["removed"]["presentation"]  # Team
+    datafield5 = $change["licenses"]["removed"]["id"]         # License ID
+
+elif $type == "Update" and $change["type"] == "LinkChangeJSON" then
+    object.property = join([$change["operation"], $change["fieldName"]], " ")
+
+    if $change["presentation"] != null then
+        $value = $change["presentation"]
+
+        datafield6 = $change["id"]  # ID subresource
+    else
+        $value = $change["id"]
+    endif
+
+    switch $change["operation"]
+        case "added"
+            object.new_value = $value
+        case "removed"
+            object.value = $value
+    endswitch
+
+elif $type == "Update" and $change["type"] == "PrimitiveChangeJSON" then
+    object.property = $change["fieldName"]
+    object.value = $change["oldValue"]
+    object.new_value = $change["newValue"]
+endif
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_User_Manage"

@@ -1,0 +1,71 @@
+event Drop_Database:
+    key:
+        event_src.host
+    filter {
+        msgid == "dropDatabase"
+        and event_src.title == "mongodb"
+        and filter::CheckWL_Database_Actions("MongoDB_Drop_Database", lower(object.name))
+    }
+     
+rule MongoDB_Drop_Database: Drop_Database
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+     }
+    
+    on Drop_Database {
+        $status = status
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.privileges = subject.privileges
+      
+        $object.name = object.name
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+             
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        
+        $datafield1 = datafield1    # БД пользователя субъекта
+        $datafield3 = reason
+        
+        $alert.key = lower(object.name)
+        $alert.context = join([subject.account.id, object.name], " deleted ")
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+        
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "remove"
+    $object = "database"
+    
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Destruction"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataDeletion"
+    $incident.aggregation.timeout = 2h
+}

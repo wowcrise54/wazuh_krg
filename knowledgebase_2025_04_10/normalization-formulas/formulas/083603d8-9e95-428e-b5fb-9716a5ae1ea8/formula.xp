@@ -1,0 +1,74 @@
+# <46>Nov 22 07:19:37 hospital mysql-server_auditing:  hospital.city.stf,hospital,localhost,138,91355,QUERY,hospital,'UPDATE users SET first_name=\'ilya\', last_name=\'ilya\', birthdate=\'1980-08-08\', gender=\'helicopter\' WHERE users.id = 42',0
+
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$event_src_ip_1=IPV4|$event_src_ip_1=IPV6|$event_src_host_1=HOSTNAME|}
+        mysql-server_auditing: {$event_src_ip_2=IPV4|$event_src_ip_2=IPV6|$event_src_host_2=UNTIL(",")}{","?}{$account=WORDDASH},
+        {src.ip=IPV4|src.ip=IPV6|$src_host=HOSTNAME|},{subject.account.session_id=NUMBER},{datafield2=NUMBER},QUERY,
+        {LITERAL??}{datafield1=WORDDASH?}{LITERAL?},{LITERAL?} {$query_1=STRING?} {$query_2="SET"} {$rest_message=REST}'
+
+$csv_rest_message = csv($rest_message, ",", "")
+$status_code = $csv_rest_message[length($csv_rest_message) - 1]
+$query = substr($rest_message, 0, length($rest_message) - length($status_code) - 1)
+$query_to_parse = if find_substr($query, "\n") != null then lower(replace($query, " ", "\n")) else lower($query) endif
+$query_to_parse = if find_substr($query_to_parse, "\"") != null then replace($query_to_parse, "", "\"") else $query_to_parse endif
+$query_to_parse = if find_substr($query_to_parse, "'") != null then replace($query_to_parse, "", "'") else $query_to_parse endif
+$query_to_parse = if find_substr($query_to_parse, "`") != null then replace($query_to_parse, "", "`") else $query_to_parse endif
+$query_to_parse = if find_substr($query_to_parse, "\\") != null then replace($query_to_parse, "", "\\\\") else $query_to_parse endif
+
+subject = "account"
+action = "modify"
+object = "resource"
+
+if number($status_code) == 0 then
+    status = "success"
+else
+    status = "failure"
+
+    reason = $status_code
+endif
+
+subformula "parse_query"
+    TEXT = "{object.type=WORD?} {object.property=UNTIL(' =')|object.property=UNTIL('=')} {object.new_value=STRING} {REST}"
+endsubformula
+
+subformula "parse_query"
+    TEXT = "{object.type=WORD} {object.new_value=STRING} {REST}"
+endsubformula
+
+subformula "parse_query"
+    TEXT = "{REST}"
+endsubformula
+
+subject.account.id = $account
+subject.account.name = $account
+
+object.query = join(remove([$query_1, $query_2, strip($query, "", "'")], null), " ")
+
+submessage("TEXT", "parse_query", $query_to_parse)
+
+if not in_list(["localhost", null], $src_host) then
+    src.hostname = $src_host
+endif
+
+# datafield1 - Resource name
+# datafield2 - queryid
+
+msgid = "set_option"
+importance = "low"
+
+event_src.title = "mysql"
+event_src.vendor = "oracle"
+
+$event_src_host = coalesce($event_src_host_2, $event_src_host_1)
+$dot = find_substr($event_src_host, ".")
+if bool($dot) then
+    event_src.hostname = substr($event_src_host, 0, $dot)
+    event_src.fqdn = $event_src_host
+else
+    event_src.hostname = $event_src_host
+endif
+
+event_src.ip = coalesce($event_src_ip_2, $event_src_ip_1)
+
+event_src.category = "Database server"
+
+id = "PT_Oracle_MySQL_syslog_set_query"

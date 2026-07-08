@@ -1,0 +1,91 @@
+event Suspicious_Request:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "confluence"
+        and event_src.vendor == "atlassian"
+        and object == "request"
+        and regex(lower(object.path), "^/(\$|%24)({|%7b)", 0) != null
+        and regex(lower(object.path), "(}|%7d)/$", 0) != null
+        and regex(lower(object.path), "\.e(xec|val)(\(|%28)", 0) != null        
+        and filter::CheckWL_Specific_Only("CVE_2022_26134_Confluence_RCE", lower(join([event_src.host, src.ip, object.path], "|")))
+    }
+
+rule CVE_2022_26134_Confluence_RCE: Suspicious_Request
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+       
+    on Suspicious_Request {
+        $subject = subject # account
+        $action = action # execute
+        $object = object # request
+        $status = status
+
+        $subject.account.name = subject.account.name # Должен быть пустой, т.к. атака не требует аутентификации
+        $subject.account.session_id = subject.account.session_id
+                
+        $subject.process.meta = subject.process.meta # User-agent
+           
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.state = object.state
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $datafield2 = datafield2  # Referrer
+        $datafield3 = reason # Description of status-code
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+               
+        $alert.key = lower(join([event_src.host, src.ip, object.path], "|"))
+        $alert.context = "Attempt to execute command (URL-encoded): " + regex(lower(object.path), "\.e(xec|val)(\(|%28)(.*?)(\)|%28)", 3)
+        $alert.regex_match = join(
+            [
+                regex(lower(object.path), "^/(\$|%24)({|%7b)", 0),
+                regex(lower(object.path), "(}|%7d)/$", 0),
+                regex(lower(object.path), "\.e(xec|val)(\(|%28)", 0)
+            ], 
+            " | "
+        )
+    }
+
+emit {  
+    if $status == "success" then 
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $importance = "high"
+
+    $detect = "CVE-2022-26134"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Exploit Public-Facing Application"
+
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

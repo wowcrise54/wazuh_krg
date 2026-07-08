@@ -1,0 +1,20 @@
+!TABULAR = "{reason = C_4},
+            {time = EVENT_TIME},
+            {subject.name = USER_NAME}"
+
+!COND = $EVENT_TYPE == "VW_CRIT_UDIARY"
+
+subject = "account"
+action = "configure"
+object = "configuration"
+status = "success"
+
+object.type = lower($C_5)
+
+importance = "info"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_info_message"

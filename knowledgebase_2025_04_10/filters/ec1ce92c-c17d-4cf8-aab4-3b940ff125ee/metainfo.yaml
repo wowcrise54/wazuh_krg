@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        ru: "Макрос проверяет специфичное значение для событий действий с реестром по системе белых списков"
+        en: "Macro checks a specific value for the registry action events using a whitelisting system"
+    Description:
+        ru: "Макрос используется, чтобы сократить повторы частей проверки через систему табличных списков. Макрос можно использовать только вместе с событиями типа \"Доступ к объектам в реестре\"."
+        en: "The macro is used to reduce the repetitive part of the check through the table list system. The macro must be used only with the events of the \"Access to the registry objects\" type."
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "Specific value to be checked"
+            ru: "Проверяемое специфическое значение"
+    rule_name:
+        Type: string
+        Name:
+            ru: "Название правила корреляции"
+            en: "Correlation rule name"
+ObjectId: PT-RF-53
+Origin: PT

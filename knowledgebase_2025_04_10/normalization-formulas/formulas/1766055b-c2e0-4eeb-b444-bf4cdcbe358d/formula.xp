@@ -1,0 +1,137 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"multiscanner"|"sandbox"} - {msgid="scan_machine.file_result.pt_sandbox"} - {$json_data=REST}'
+
+subject = "application"
+
+submessage('JSON', 'multiscanner', $json_data)
+subformula 'multiscanner'
+    JSON = 'scan_id'
+
+    if lower($result['verdict']['threat_level']) == 'clean' or lower($result['verdict']['threat_level']) == 'unknown' then
+        action = "info"
+        object = "resource"
+        importance = "low"
+    else
+        action = "detect"
+        object = "malware"
+    endif
+
+    object.property = "size"
+    object.value = $file['size']
+    object.state = lower($result['verdict']['threat_level'])
+    
+    if object.state == "dangerous" then
+        importance = "high"
+    elif object.state == "unwanted" then
+        importance = "medium"
+    endif
+    
+    if lower($result['state']) == "unscanned" then object.state = "unscanned" endif
+    
+    if find_substr($file['name'], "\\/") != null then
+        object.storage.fullpath = replace($file['name'], "", "/")
+        $splitted_parts = csv(object.storage.fullpath, "\\", "'")
+        object.storage.name = $splitted_parts[length($splitted_parts) - 1]
+        if length($splitted_parts) > 1 then
+            object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+        endif
+    else
+        object.storage.fullpath = $file['name']
+        $splitted_parts = csv(object.storage.fullpath, "/", "'")
+        object.storage.name = $splitted_parts[length($splitted_parts) - 1]
+        if length($splitted_parts) > 1 then
+            object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+        endif
+    endif
+
+    object.hash.sha256 = upper($file['sha256'])
+    object.hash.md5 = upper($file['md5'])
+    object.hash.sha1 = upper($file['sha1'])
+    
+    object.type = $file['mime_type']
+    
+    if $result['verdict']['threat']['classification'] != "" then $threat_classification = $result['verdict']['threat']['classification'] else $threat_classification = "-" endif
+    if $result['verdict']['threat']['family'] != "" then $threat_family = $result['verdict']['threat']['family'] else $threat_family = "-" endif
+    if $result['verdict']['threat']['platform'] != "" then $threat_platform = coalesce($result['verdict']['threat']['platform'], "-") else $threat_platform = "-" endif
+    
+    datafield1 = lower($threat_classification)
+    datafield2 = lower($threat_family)
+    datafield3 = lower($threat_platform)   
+    datafield4 = $suspicious_behaviors[0]["name"]
+    datafield5 = $silent_detects[0]["name"]
+    datafield6 = join([$image_info['name'], $image_info['version']], "|")    # VM image name
+    datafield7 = join([$image_info['os']['name'], $image_info['os']['version'], $image_info['os']['architecture'], $image_info['os']['service_pack'], $image_info['os']['locale']], "|")  # VM OS name
+  
+    object.name = $detects[0]['name']
+
+    $errors = $result['errors']
+    if ($errors['internal'] or $errors['corrupted'] or $errors['encrypted'] or $errors['limit_exceeded']) == false then
+        status = "success"
+    else
+        status = "failure"
+        reason = "scan finished with error(s)"
+        if $errors['internal'] == true then datafield8 = "internal|" + datafield8 endif
+        if $errors['corrupted'] == true then datafield8 = "corrupted|" + datafield8 endif
+        if $errors['encrypted'] == true then datafield8 = "encrypted|" + datafield8 endif
+        if $errors['limit_exceeded'] == true then datafield8 = "limit_exceeded|" + datafield8 endif
+    endif
+    
+    chain_id = $scan_id
+    time = epoch_to_datetime(number($created))
+endsubformula
+
+if datafield4 != null then
+    submessage("TEXT", "parse_suspicious_behaviors", $json_data)
+endif
+
+if datafield5 != null then
+    submessage("TEXT", "parse_silent_detects", $json_data)
+endif
+
+if object.name != null then
+    submessage("TEXT", "parse_detects", $json_data)
+endif
+
+subformula "parse_suspicious_behaviors"
+    TEXT = '{UNTIL("suspicious_behaviors\\": [")}{$suspicious_behaviors=UNTIL("]")}{REST}'
+    $suspicious_behaviors = replace($suspicious_behaviors, "", "\"")
+    $suspicious_behaviors = replace($suspicious_behaviors, "", "{")
+    $suspicious_behaviors = replace($suspicious_behaviors, "", "name: ")
+    $suspicious_behaviors = replace($suspicious_behaviors, "", ", version:*}")
+    $suspicious_behaviors = replace($suspicious_behaviors, "\r\n", ", ")
+    datafield4 = $suspicious_behaviors
+endsubformula
+
+subformula "parse_silent_detects"
+    TEXT = '{UNTIL("silent_detects\\": [")}{$silent_detects=UNTIL("]")}{REST}'
+    $silent_detects = replace($silent_detects, "", "\"")
+    $silent_detects = replace($silent_detects, "", "{")
+    $silent_detects = replace($silent_detects, "", "name: ")
+    $silent_detects = replace($silent_detects, "", ", version:*}")
+    $silent_detects = replace($silent_detects, "\r\n", ", ")
+    datafield5 = $silent_detects
+endsubformula
+
+subformula "parse_detects"
+    TEXT = '{UNTIL("detects\\": [")}{$detects=UNTIL("]")}{REST}'
+    $detects = replace($detects, "", "\"")
+    $detects = replace($detects, "", "{")
+    $detects = replace($detects, "", "name: ")
+    $detects = replace($detects, "", ", version:*}")
+    $detects = replace($detects, "", "}")
+    $detects = replace($detects, "|", ", ")
+    reason = $detects
+endsubformula
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multiscanner"
+event_src.category = "Anti-virus"
+
+id = "PT_Positive_Technologies_Multiscanner_syslog_scan_machine_sandbox"

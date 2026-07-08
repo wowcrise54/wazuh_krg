@@ -1,0 +1,126 @@
+event Anything_with_subject_process_hash_detailed:
+    filter {
+        filter::NotFromCorrelator()
+        and coalesce(subject.process.hash.imphash, subject.process.hash.md5, subject.process.hash.sha1, subject.process.hash.sha256) != null
+    }
+    
+event Anything_with_subject_process_parent_hash_detailed:
+    filter {
+        filter::NotFromCorrelator()
+        and coalesce(subject.process.parent.hash.imphash, subject.process.parent.hash.md5, subject.process.parent.hash.sha1, subject.process.parent.hash.sha256) != null
+    }
+    
+event Anything_with_object_process_hash_detailed:
+    filter {
+        filter::NotFromCorrelator()
+        and coalesce(object.process.hash.imphash, object.process.hash.md5, object.process.hash.sha1, object.process.hash.sha256) != null
+    }
+    
+event Anything_with_object_process_parent_hash_detailed:
+    filter {
+        filter::NotFromCorrelator()
+        and coalesce(object.process.parent.hash.imphash, object.process.parent.hash.md5, object.process.parent.hash.sha1, object.process.parent.hash.sha256) != null
+    }
+    
+event Anything_with_object_hash_detailed:
+    filter {
+        filter::NotFromCorrelator()
+        and coalesce(object.hash.imphash, object.hash.md5, object.hash.sha1, object.hash.sha256) != null
+    }
+
+
+enrichment Detailed_hash_enrichment
+    enrich Anything_with_subject_process_hash_detailed:
+        enrich_fields {
+            if regex(subject.process.hash, "(IMPHASH|MD5|SHA1|SHA256)", 0) == null then
+                if subject.process.hash.imphash != null then
+                    subject.process.hash = subject.process.hash + " IMPHASH:" + subject.process.hash.imphash
+                endif
+                if subject.process.hash.md5 != null then
+                    subject.process.hash = subject.process.hash + " MD5:" + subject.process.hash.md5
+                endif
+                if subject.process.hash.sha1 != null then
+                    subject.process.hash = subject.process.hash + " SHA1:" + subject.process.hash.sha1
+                endif
+                if subject.process.hash.sha256 != null then
+                    subject.process.hash = subject.process.hash + " SHA256:" + subject.process.hash.sha256
+                endif
+                subject.process.hash = strip(subject.process.hash, " ", "")
+            endif
+        }
+        
+    enrich Anything_with_subject_process_parent_hash_detailed:
+        enrich_fields {
+            if regex(subject.process.parent.hash, "(IMPHASH|MD5|SHA1|SHA256)", 0) == null then
+                if subject.process.parent.hash.imphash != null then
+                    subject.process.parent.hash = subject.process.parent.hash + " IMPHASH:" + subject.process.parent.hash.imphash
+                endif
+                if subject.process.parent.hash.md5 != null then
+                    subject.process.parent.hash = subject.process.parent.hash + " MD5:" + subject.process.parent.hash.md5
+                endif
+                if subject.process.parent.hash.sha1 != null then
+                    subject.process.parent.hash = subject.process.parent.hash + " SHA1:" + subject.process.parent.hash.sha1
+                endif
+                if subject.process.parent.hash.sha256 != null then
+                    subject.process.parent.hash = subject.process.parent.hash + " SHA256:" + subject.process.parent.hash.sha256
+                endif
+                subject.process.parent.hash = strip(subject.process.parent.hash, " ", "")
+            endif
+        }
+
+    enrich Anything_with_object_process_hash_detailed:
+        enrich_fields {
+            if regex(object.process.hash, "(IMPHASH|MD5|SHA1|SHA256)", 0) == null then
+                if object.process.hash.imphash != null then
+                    object.process.hash = object.process.hash + " IMPHASH:" + object.process.hash.imphash
+                endif
+                if object.process.hash.md5 != null then
+                    object.process.hash = object.process.hash + " MD5:" + object.process.hash.md5
+                endif
+                if object.process.hash.sha1 != null then
+                    object.process.hash = object.process.hash + " SHA1:" + object.process.hash.sha1
+                endif
+                if object.process.hash.sha256 != null then
+                    object.process.hash = object.process.hash + " SHA256:" + object.process.hash.sha256
+                endif
+                object.process.hash = strip(object.process.hash, " ", "")
+            endif
+        }
+        
+    enrich Anything_with_object_process_parent_hash_detailed:
+        enrich_fields {
+            if regex(object.process.parent.hash, "(IMPHASH|MD5|SHA1|SHA256)", 0) == null then
+                if object.process.parent.hash.imphash != null then
+                    object.process.parent.hash = object.process.parent.hash + " IMPHASH:" + object.process.parent.hash.imphash
+                endif
+                if object.process.parent.hash.md5 != null then
+                   object.process.parent.hash = object.process.parent.hash + " MD5:" + object.process.parent.hash.md5
+                endif
+                if object.process.parent.hash.sha1 != null then
+                   object.process.parent.hash = object.process.parent.hash + " SHA1:" + object.process.parent.hash.sha1
+                endif
+                if object.process.parent.hash.sha256 != null then
+                    object.process.parent.hash = object.process.parent.hash + " SHA256:" + object.process.parent.hash.sha256
+                endif
+                object.process.parent.hash = strip(object.process.parent.hash, " ", "")
+            endif
+        }
+        
+    enrich Anything_with_object_hash_detailed:
+        enrich_fields {
+            if regex(object.hash, "(IMPHASH|MD5|SHA1|SHA256)", 0) == null then
+                if object.hash.imphash != null then
+                    object.hash = object.hash + " IMPHASH:" + object.hash.imphash
+                endif
+                if object.hash.md5 != null then
+                    object.hash = object.hash + " MD5:" + object.hash.md5
+                endif
+                if object.hash.sha1 != null then
+                    object.hash = object.hash + " SHA1:" + object.hash.sha1
+                endif
+                if object.hash.sha256 != null then
+                    object.hash = object.hash + " SHA256:" + object.hash.sha256
+                endif
+                object.hash = strip(object.hash, " ", "")
+            endif
+        }

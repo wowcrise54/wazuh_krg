@@ -1,0 +1,67 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} production_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"controller":"Profiles::PasswordsController"') != null
+    and (
+        (
+            find_substr($json, '"method":"POST"') != null
+            and find_substr($json, '"action":"create"') != null
+        )
+        or (
+            find_substr($json, '"method":"PUT"') != null
+            and find_substr($json, '"action":"update"') != null
+        )
+    )
+)
+
+subject = "account"
+action = "modify"
+object = "account"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+object.account.id = subject.account.id
+object.account.name = subject.account.name
+
+object.property = "password"
+
+src.ip = $remote_ip
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "production"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Production_User_Password"

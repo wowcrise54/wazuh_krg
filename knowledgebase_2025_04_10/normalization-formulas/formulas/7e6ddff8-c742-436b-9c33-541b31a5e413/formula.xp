@@ -1,0 +1,34 @@
+TABULAR =  "id,
+            {subject.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name},
+            {object.type=object_type},
+            {object.value=participant_object_name},
+            {datafield1=participant_object_type}
+            "
+
+COND = $gr_name == "Управление ролями"
+       and $ev_desc == "Удаление роли с сетевого узла"
+       and $status == "Успешно"
+
+subject = "account"
+action = "modify"
+object = "resource"
+status = "success"
+
+object.id = $source_identifier
+object.property = "role"
+
+# datafield1 - тип роли
+datafield2 = $participant_source_identifier  # идентификатор роли
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_remove_role_from_host"

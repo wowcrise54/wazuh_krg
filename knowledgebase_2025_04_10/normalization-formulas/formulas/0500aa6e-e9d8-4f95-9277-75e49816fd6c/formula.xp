@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        vrrpd[{NUMBER}]: {"%"?}{msgid=WORDDASH}: Interface {interface=STRING+}
+        (local address {src.ip=IPV4|src.ip=IPV6}) became VRRP {object.state=WORD}
+        for group {object.group=NUMBER}'
+
+action = "info"
+object = "service"
+status = "success"
+
+if maybe_ipv4(src.ip) != null then
+    datafield1 = "IPv4"
+else
+    datafield1 = "IPv6"
+endif
+
+protocol = "VRRP"
+
+object.type = "FHRP"
+
+importance = "info"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+id = "PT_Juniper_junos_syslog_VRRP_state_changed"

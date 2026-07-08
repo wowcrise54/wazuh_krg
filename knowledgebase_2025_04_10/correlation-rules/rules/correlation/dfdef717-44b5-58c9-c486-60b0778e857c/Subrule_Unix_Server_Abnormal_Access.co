@@ -1,0 +1,184 @@
+query IsLoginOnRiskAsset($host, $ipaddr, $asset_id) from List_Servers {
+    os_type == "linux"
+    and (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        ) or (
+            (
+                asset_ip == $ipaddr
+                or in_subnet($ipaddr, asset_ip)
+            ) and asset_ip != null
+        ) or (
+            asset_id == $asset_id
+            and asset_id != null
+        ) or (
+            asset_ip == $host
+            and asset_ip != null
+        ) or (
+            asset_hostname == $host
+            and asset_hostname != null
+        )
+    )
+}
+
+query GetRiskAsset($asset_id) from AssetGrid_Servers {
+    os_type == "linux"
+    and (
+        asset_id == $asset_id
+        and asset_id != null
+    )
+}
+
+# Проверяем, если ли вообще в профиле такой пользователь
+query CheckUsername($username, $dst_host, $dst_ip) from Risk_User_Logon_Correlation_Profile {
+    access_type == "linux"
+    and login == $username
+    and (
+        dst_host == $dst_host
+        or dst_ip == $dst_ip
+    )
+}
+
+# Проверяем, использовал ли пользователь раньше этот адрес
+query CheckHost($username, $src_host, $dst_host, $dst_ip) from Risk_User_Logon_Correlation_Profile {
+    access_type == "linux"
+    and login == $username
+    and src_host == $src_host
+    and (
+        dst_host == $dst_host
+        or dst_ip == $dst_ip
+    )
+}
+
+# Проверяем время последнего изменения профиля в таблице
+query CheckProfile($username, $src_ip, $src_host, $dst_ip, $dst_host, $dst_path, $additional_data)
+from Risk_User_Logon_Correlation_Profile {
+    access_type == "linux"
+    and login == $username
+    and src_ip == $src_ip
+    and src_host == $src_host
+    and dst_ip == $dst_ip
+    and dst_host == $dst_host
+    and dst_path == $dst_path
+    and additional_data == $additional_data
+}
+
+event Unix_Login:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "login"
+        and logon_auth_method == "remote"
+        and lower(msgid) == "user_login"
+        and status == "success"
+        and src.host != null
+        and dst.host != null
+        and (
+            exec_query("IsLoginOnRiskAsset", [lower(event_src.host), event_src.ip, event_src.asset])
+            or exec_query("GetRiskAsset", [event_src.asset])
+        )
+        # Сверка с профилем
+        and not filter::Check_Profile(
+            "linux", # os_type
+            lower(subject.account.name), # username
+            string(src.ip), # src_ip
+            lower(src.host), # src_host
+            lower(coalesce(event_src.host, dst.host)), # dst_host
+            null, # dst_path
+            null # additional_data
+        )
+        and filter::CheckWL_Profiling("Subrule_Unix_Server_Abnormal_Access", lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|")))
+    }
+    
+rule Subrule_Unix_Server_Abnormal_Access: Unix_Login
+
+    init {
+        $labels = "CheckWL_Profiling"
+    }
+
+    on Unix_Login {
+        $status = status 
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id 
+
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.id = object.process.id
+            
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.host = src.host
+        $src.port = src.port
+        $src.asset = src.asset
+        
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+            
+        $logon_auth_method = logon_auth_method
+        $logon_service = logon_service
+        $logon_type = logon_type
+            
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+            
+        $alert.key = lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|"))
+
+        $host_role = coalesce(
+            select_query_first("GetRiskAsset", [$event_src.asset], "roles"),
+            select_query_first("IsLoginOnRiskAsset", [$event_src.title, lower($event_src.host), $event_src.asset], "roles"),
+            select_query_first("IsLoginOnRiskAsset", [$event_src.title, lower($event_src.fqdn), $event_src.asset], "roles"),
+            select_query_first("IsLoginOnRiskAsset", [$event_src.title, $event_src.ip, $event_src.asset], "roles")
+        )
+
+        $alert.context = join([lower($logon_service), $host_role], " | ")
+
+        # Роль сервера
+        $datafield1 = $host_role
+        
+        if not exec_query("CheckProfile", [lower($subject.account.name), string($src.ip), lower($src.host),
+        string($dst.ip), lower(coalesce($event_src.host, $dst.host)), lower($object.storage.name), lower($datafield6)]) then
+            # Проверка, есть ли для пользователя собранный профиль
+            if not exec_query("CheckUsername", [lower($subject.account.name), lower(coalesce($event_src.host,
+            $dst.host)), string($dst.ip)]) then
+                $reason = "no_user"
+                # Проверяем, не новый ли адрес
+            elif not exec_query("CheckHost", [lower($subject.account.name), lower($src.host), lower(coalesce(
+            $event_src.host, $dst.host)), string($dst.ip)]) then
+                $reason = "new_address"
+            endif
+        endif
+    }
+    
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $action = "login"
+    $object = "host"
+
+    $importance = "info"
+
+    $category.generic = "Anomaly"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: SSH"
+}

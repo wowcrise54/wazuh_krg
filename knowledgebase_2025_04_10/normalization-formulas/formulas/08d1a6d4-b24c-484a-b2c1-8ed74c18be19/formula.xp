@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?} CEF:0|Imperva Inc.|SecureSphere|{NUMBER}{"."}{NUMBER}{"."}{NUMBER}|User logged in|User
+        {STRING} logged in from {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}.|{WORDDASH}|{$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subject.account.name = $kv["suser"]
+subject.account.session_id = $kv["session"]
+
+time = $kv["rt"]
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "imperva"
+event_src.title = "securesphere"
+event_src.category = "Application security"
+
+id = "PT_Imperva_SecureSphere_syslog_User_logged_in"

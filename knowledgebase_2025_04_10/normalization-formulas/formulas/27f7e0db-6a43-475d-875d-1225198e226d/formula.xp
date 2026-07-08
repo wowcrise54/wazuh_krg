@@ -1,0 +1,34 @@
+!TEXT='{"<"NUMBER">"} {NUMBER?} {DATETIME}
+       {IPV4|IPV6|$Computer=HOSTNAME} django - -
+       [ {STRING?} timestamp="{time=DATETIME}" {UNTIL("SourceModuleName=")}
+       "syslog_dbi_in_{event_src.ip=IPV4}" SourceModuleType="{WORD}"]
+       Администратор {subject.name=UNTIL(" добавил ")}{object.type=STRING} {$on1=UNTIL(".")} Результат: успешно. [{UNTIL("] ")} Источник: {dst.ip=IPV4|dst.ip=IPV6}.'
+
+subject = "account"             
+action = "create"
+status = "success"
+
+switch object.type
+    case "IPSPolicy"
+        object = "policy"
+    case "IPSProfile"
+        object = "profile"
+endswitch
+
+subject.privileges = "Администратор"
+object.name = strip ($on1,'','.')
+
+importance = "info"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kontinent"
+event_src.category = "Network security"
+
+id = "PT_Security_Code_Kontinent_syslog_User_add_policy_or_profile"

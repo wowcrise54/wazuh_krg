@@ -1,0 +1,72 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME}
+        CEF:{NUMBER}|Avanpost|{$tpm_subsys=UNTIL("|")}5.{NUMBER}|{msgid="1244112571"}|
+        {reason="Нет прав"} на запрос списка лицензий для пользователей|{NUMBER}|{$kv=KEYVALUE(" ", "=")}'
+
+COND = $kv["cs3Label"] != null
+
+subject = "account"
+action = "view"
+object = "resource"
+status = "failure"
+
+$uname = csv($kv["suser"], "\\", "'")
+if length($uname) == 2 then
+    subject.domain = $uname[0]
+    subject.name = $uname[1]
+else
+    subject.name = $uname[0]
+endif
+
+object.type = "license list"
+
+object.property = "name"
+object.value = $kv["duser"]
+
+src.ip = $kv["src"]
+dst.ip = $kv["dvc"]
+
+if find_substr($kv["dvchost"], ".") != null then
+    dst.fqdn = $kv["dvchost"]
+    dst.hostname = substr($kv["dvchost"], 0, find_substr($kv["dvchost"], "."))
+else
+    dst.hostname = $kv["dvchost"]
+    if $kv["dntdom"] != null then
+        dst.fqdn = $kv["dvchost"] + "." + $kv["dntdom"]
+    endif
+endif
+
+datafield1 = $kv["request"]                     # Запрос
+datafield2 = $kv["requestMethod"]               # Метод запроса
+datafield3 = csv($kv["msg"], "," , "'")[2]      # Запрошенное право
+
+importance = "info"
+
+event_src.vendor = "avanpost"
+event_src.title = "avanpost_pki"
+event_src.subsys = lower($tpm_subsys)
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($hostname)
+        event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+    else
+        event_src.hostname = lower($hostname)
+    endif
+endif
+
+if event_src.ip == null then
+    event_src.ip = dst.ip
+endif
+
+if event_src.hostname == null then
+    event_src.hostname = dst.hostname
+endif
+
+if event_src.fqdn == null then
+    event_src.fqdn = dst.fqdn
+endif
+
+event_src.category = "AAA"
+
+id = "PT_Avanpost_Avanpost_PKI_syslog_CEF_PKI_1244112571_license_list_view_failure"

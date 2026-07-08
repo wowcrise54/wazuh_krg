@@ -1,0 +1,25 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}
+        {UNTIL("Site:")} {"Site"?} {datafield1=UNTIL(",Server")} {"Name"?}: {datafield2=UNTIL(",")} {"Event Description: "?}
+        {"One Time Backup finished successfully."|"Backup succeeded and finished."}
+        The backup file resides at the following location {"of"|"on"}
+        the server {UNTIL(":")} {$path=REST}'
+
+action = "backup"
+object = "database"
+status = "success"
+
+object.path = strip($path, '', '.')
+
+# datafield1 - Site Name
+# datafield2 - Server name
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip2, $ip1)
+event_src.hostname = coalesce($host2, $host1)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_backup_completed_en_ru"

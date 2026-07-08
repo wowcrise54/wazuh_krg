@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{object.name="PINsafe"} [{WORDDASH}]{":"?} INFO   - Scheduler
+        PINsafeScheduler_{STRING} shutdown complete.'
+
+action = "stop"
+object = "service"
+status = "success"
+
+time = recv_time
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.vendor = "swivel_secure"
+event_src.title = "pinsafe"
+event_src.category = "AAA"
+
+id = "PT_Swivel_Secure_PINsafe_syslog_stop_service"

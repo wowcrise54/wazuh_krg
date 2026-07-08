@@ -1,0 +1,128 @@
+query Check_If_Host_Is_DC($os_type, $host) from List_Servers {
+    os_type == $os_type 
+    and 
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            host == $host
+            and host != null
+        )
+    )
+}
+
+query Check_If_Host_Is_DC_AssetGrid($asset_access, $asset_id) from AssetGrid_Servers {
+    os_type == $asset_access
+    and asset_id == $asset_id
+}
+
+query Check_If_Security_Admin($userid) from Sensitive_Users {
+    user_id == $userid
+}
+
+query Check_If_Security_Admin_AssetGrid($userid) from AssetGrid_Critical_Domain_Accounts {
+    member_sid == $userid
+}
+
+event Account_Login:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::LoginSuccessful_Windows()
+        and in_list([2, 7, 10, 12], logon_type) # Interactive, Unlock, RemoteInteractive и CachedRemoteInteractive
+
+        # Администратор не со своего ПК
+        and (exec_query("Check_If_Security_Admin", [lower(subject.account.id)])
+            or exec_query("Check_If_Security_Admin_AssetGrid", [lower(subject.account.id)]))
+        # Сверка с профилем
+        and not filter::Check_Profile(
+            lower(event_src.title),
+            lower(subject.account.name),
+            null,
+            lower(src.host),
+            lower(event_src.host),
+            null,
+            null
+        )
+        # Исключение контроллеров домена
+        and not (
+            find_substr(lower(select_query_first("Check_If_Host_Is_DC", [event_src.title, lower(coalesce(dst.fqdn ,event_src.fqdn))], "roles")), "domain controller") != null
+            or find_substr(lower(select_query_first("Check_If_Host_Is_DC_AssetGrid", [event_src.title, event_src.asset], "roles")), "domain controller") != null
+        )
+        and filter::CheckWL_Profiling("SecurityAdmin_Abnormal_Access", lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|")))
+    }
+
+rule SecurityAdmin_Abnormal_Access: Account_Login
+
+    init {
+        $labels = "CheckWL_Profiling" 
+    }
+    
+    on Account_Login {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+        
+        $datafield6 = datafield6  # DecodeLogonType
+        
+        $logon_type = logon_type
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|"))
+        $alert.context = "successful login security admin from new address"
+    }
+
+emit {
+    $correlation_type = "event"
+    $importance = "high"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

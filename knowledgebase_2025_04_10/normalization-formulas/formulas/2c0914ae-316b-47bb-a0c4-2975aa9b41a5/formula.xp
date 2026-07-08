@@ -1,0 +1,91 @@
+TABULAR = '__policy_id_tag,
+           action,
+           dst,
+           orig,
+           {$tmp_subsys=product},
+           proto,
+           s_port,
+           service,
+           src,
+           {time=time}'
+
+COND = $product == "SmartDefense"
+       and (
+            $Attack_Info != null
+            or $reason == "max concurrent sessions per connection exceeded"
+       )
+
+subject = "rule"
+
+if $action == "monitor" then 
+    action = "detect"
+elif $action == "reject" then
+    action = "deny"
+elif $action == "drop" then
+    action = "deny"
+else
+    action = "detect"
+endif
+
+object = "attack"
+status = "success"
+
+subformula "user"
+    TEXT = '{object.account.fullname=UNTIL(" (")} {object.account.name=UNTIL(")")}'
+endsubformula
+
+subject.id = strip($rule_uid, "{", "}")
+subject.name = $rule_name
+subject.type = $SmartDefense_Profile
+
+submessage('TEXT', 'user', $user)
+
+object.name = $attack
+object.state = $action
+
+src.ip = $src
+src.port = $s_port
+dst.ip = $dst
+dst.port = $service
+protocol = $proto
+interface = $["i/f_name"]
+
+datafield1 = $https_inspection_action                                  # HTTPS inspection action
+datafield2 = $proxy_src_ip                                             # Proxy source ip
+datafield3 = if $resource != "Unknown" then $resource else null endif  # Resource
+datafield4 = $origin_sic_name                                          # Distinguished name
+datafield5 = $protection_id                                            # Protection ID
+datafield6 = $Protection_Name                                          # Protection Name
+datafield7 = $Protection_Type                                          # Protection Type
+datafield8 = $sub_policy_name                                          # Sub policy name
+datafield9 = $web_client_type                                          # Web client type
+datafield10 = $src_machine_name                                        # Source machine name
+
+if $reason != null and $Attack_Info != null and find_substr(lower($reason), lower($Attack_Info)) == null then
+    reason = join([strip($Attack_Info, "", "."), strip($reason, "", ".")], " | ")
+else
+    reason = strip(coalesce($reason, $Attack_Info), "", ".")
+endif
+
+if $Severity != null then
+    importance = switch number($Severity)
+        case 0 "info"
+        case 1 "low"
+        case 2 "low"
+        case 3 "medium"
+        case 4 "high"
+        case 5 "high"
+    endswitch
+else
+    importance = "medium"
+endif
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+$sic_names = keyvalue($origin_sic_name, ",", "=")
+event_src.hostname = $sic_names["CN"]
+event_src.ip = ipv4($orig)
+event_src.category = "IDS/IPS"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_opseclog_Smart_defense_attack"

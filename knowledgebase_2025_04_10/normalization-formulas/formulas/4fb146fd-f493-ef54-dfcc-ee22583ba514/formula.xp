@@ -1,0 +1,41 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{WORDDASH|STRING} vault[{NUMBER}]: {$json=REST}' 
+COND = find_substr($json, "\"mount_type\":\"kv\"") != null 
+       and find_substr($json, "\"operation\":\"update\"") != null 
+       and find_substr($json, "destroy") != null 
+       and find_substr($json, "\"destroyed\":false") == null
+
+submessage("JSON","json_in_syslog_secret_destroyed", $json)
+
+subformula 'json_in_syslog_secret_destroyed'
+    JSON = ''
+    
+    if $error != null then
+        status = "failure"
+        reason = $error
+        importance = "low"
+    else
+        status = "success"
+        importance = "medium"
+    endif
+    
+    subject.account.name = $auth["display_name"]
+    subject.account.privileges = join($auth["policies"], ", ")
+    
+    $temp = csv($request["path"], "/", " ")
+    object.name = $temp[length($temp) - 1]
+    object.fullpath = $request["path"]
+    object.path = strip(object.fullpath, "", object.name)
+    
+    src.ip = $request["remote_address"]
+    src.port = $request["remote_port"]
+endsubformula
+
+subject = "account"
+action = "remove"
+object = "resource"
+
+event_src.vendor = "hashicorp"
+event_src.title = "vault"
+event_src.category = "Application security"
+
+id = "PT_Hashicorp_Vault_syslog_Secret_destroyed"

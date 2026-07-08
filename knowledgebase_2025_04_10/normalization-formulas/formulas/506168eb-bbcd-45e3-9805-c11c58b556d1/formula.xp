@@ -1,0 +1,49 @@
+TEXT = 'LogMessageId: {WORDDASH?}, DriverId: {$sysid=WORDDASH},
+        DateTime: {$day=WORD}.{$month=WORD}.{$year=WORD} {$hour=WORD}:{$min=WORD}:{$sec=WORD},
+        IsKeyEvent: {WORD}, MessageType: {WORD}, MessageSubType:
+        {msgid="ControllerAccumulatorDischarged"|msgid="ControllerAccumulatorNorm"|
+        msgid="ControllerTamperAlarm"|msgid="ControllerTamperNorm"|msgid="ConverterNotFound"|
+        msgid="ConverterOk"|msgid="DeviceCaseOpened"|msgid="DeviceOffline"|msgid="DeviceOnline"|
+        msgid="DPLSRestoration"|msgid="TrainDisarmed"|msgid="TrainOn"|msgid="AccessPointBroken"},
+        EmployeeId: {WORDDASH?}, Message: {$reason=STRING+} Details: {$details=STRING+}
+        OperatorId: {WORDDASH?}, DriverName: {$sysname=STRING+} EmployeeFullName: {REST}'
+
+if length($hour) == 1 then
+    $hour = "0" + $hour
+endif
+
+time = $month + "." + $day + "." + $year + " " + $hour + ":" + $min + ":" + $sec
+
+subject = "system"
+action = "detect"
+object = "alert"
+status = "success"
+
+subject.id = $sysid
+subject.name = strip($sysname, "", ",")
+
+if $details != "," then
+    datafield1 = strip($details, "", ",")  # Физический или IP адрес, где обнаружено событие
+endif
+
+reason = strip($reason, "", ",")
+
+event_src.vendor = "rusguard"
+event_src.title = "rusguard_soft"
+event_src.category = "Physical security"
+
+id = "PT_RusGuard_RusGuard_Soft_filemonitor_Alert"
+
+if msgid == "ControllerAccumulatorNorm" or
+    msgid == "ControllerTamperNorm" or
+    msgid == "ConverterOk" or
+    msgid == "DeviceOnline" or
+    msgid == "DPLSRestoration" or
+    msgid == "TrainOn"
+    then
+    importance = "info"
+elif msgid == "ControllerAccumulatorDischarged" then
+    importance = "low"
+else  # ControllerTamperAlarm, ConverterNotFound, DeviceCaseOpened, DeviceOffline, AccessPointBroken, TrainDisarmed
+    importance = "high"
+endif

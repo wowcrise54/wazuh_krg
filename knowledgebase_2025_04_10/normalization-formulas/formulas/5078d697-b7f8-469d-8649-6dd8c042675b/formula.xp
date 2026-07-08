@@ -1,0 +1,30 @@
+JSON = 'category=35'
+
+COND = $data["ID"] == "ADD_CGW"
+
+subject = "account"
+action = "bind"
+object = "resource"
+status = "success"
+
+subject.name = $data["AdminName"]
+if maybe_number($data["Gate"]["Name"]) == null then
+    object.name = $data["Gate"]["Name"]
+else
+    object.id = $data["Gate"]["Name"]
+endif
+object.type = "cryptogateway"
+
+datafield1 = $cg_name   # имя криптошлюза
+datafield2 = $cg_cssid  # идентификатор криптошлюза
+
+time = $time
+msgid = $data["ID"]
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+
+id = "PT_Security_Code_Kontinent_odbc_add_cgw"

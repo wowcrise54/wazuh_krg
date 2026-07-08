@@ -1,0 +1,30 @@
+filter UserAccount_Windows(string $name, string $id) {
+    event_src.vendor == "microsoft"
+    and in_list(["active_directory", "sysmon", "windows"], event_src.title)
+    and not in_list(["анонимный вход", "anonymous logon", "система", "system", "сетевая служба", "network service", "центр nt", "локальная служба", "local service", "iusr"], lower($name))
+    and ( 
+            (
+                not in_list(["window manager", "nt authority", "nt service", "font driver host"], lower(subject.account.domain))
+                and (
+                        lower(subject.account.id) == $id
+                        or lower(subject.account.name) == $name)
+            )
+            or (
+                not in_list(["window manager", "nt authority", "nt service", "font driver host"], lower(object.account.domain))
+                and (
+                        lower(object.account.id) == $id
+                        or lower(object.account.name) == $name)
+            )
+    )
+    and (
+        $id != null
+        or $name != null
+    )
+    and lower($id) != "s-1-5-7"                        # Anonymous Logon
+    and lower($id) != "s-1-5-17"                       # IIS_USRS (An account that is used by the default Internet Information Services (IIS) user)
+    and lower($id) != "s-1-5-18"                       # System (or LocalSystem)
+    and lower($id) != "s-1-5-19"                       # NT Authority (LocalService)
+    and lower($id) != "s-1-5-20"                       # Network Service
+    and not match($name,"*$")
+    and find_substr($name, "healthmailbox") == null
+}

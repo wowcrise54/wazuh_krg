@@ -1,0 +1,12 @@
+filter ExecuteShowCommand() {
+        filter::ExecuteCommand()
+        and match(object.value, "sh*conf*")
+        and in_list([
+                "AAA",
+                "Firewall",
+                "Network device",
+                "Network security",
+                "Telecom",
+                "VPN"
+            ], event_src.category)
+}

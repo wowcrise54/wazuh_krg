@@ -1,0 +1,25 @@
+# {"TimeVal":"2015-07-20 11:39:10.000","DoorIndex":-1,"Contents":"Идентификатор хозоргана","OwnerName":"Красавина Е.","NumCom":4817973}
+
+TABULAR = "TimeVal, DoorIndex, Contents, OwnerName, NumCom"
+COND = $Contents == "Идентификатор хозоргана"
+
+subject = "system"
+action = "detect"
+object = "account"
+status = "success"
+
+time = $TimeVal
+msgid = $Contents
+
+subject.name = "door"
+subject.id = $DoorIndex
+
+object.name = $OwnerName
+object.type = "administrative body"
+
+event_src.category = "Physical security"
+event_src.vendor = "positive_technologies"
+event_src.title = "access_control"
+
+id = "PT_Positive_Technologies_Access_control_odbc_Identification"
+importance = "info"

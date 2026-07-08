@@ -1,0 +1,122 @@
+JSON = 'source="trove"'
+
+COND = in_list(["user-create", "user-update", "user-delete"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "user-create" "create"
+    case "user-update" "modify"
+    case "user-delete" "remove"
+endswitch
+
+object = "account"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subformula "item_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $is_next = bool($array[$current + 1])
+
+    $users = append($users, $item["name"])
+
+    $user_info = append($user_info, "name: " + $item["name"] + ", databases: " + join(remove([
+        $item["databases"][0]["name"],
+        $item["databases"][1]["name"],
+        $item["databases"][2]["name"],
+        $item["databases"][3]["name"],
+        $item["databases"][4]["name"],
+        $item["databases"][5]["name"],
+        $item["databases"][6]["name"],
+        $item["databases"][7]["name"],
+        $item["databases"][8]["name"],
+        $item["databases"][9]["name"]], null),  ", "))
+endsubformula
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$array = $request_body["users"]
+$current = -1
+submessage("TEXT", "item_handler", "")
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+$users = remove($users, null)
+$user_info = remove($user_info, null)
+if length($users) > 0 then
+    object.account.name = join($users, "|")
+
+    object.value = join($user_info, " | ")
+endif
+
+$csv_uri = csv($uri, "/", "")
+if in_list(["user-update", "user-delete"], $action) then
+    object.account.name = $csv_uri[6]
+endif
+
+datafield1 = $method      # Method
+datafield2 = $uri         # URL
+datafield3 = $csv_uri[4]  # The ID of the instance
+datafield6 = $csv_uri[2]  # The ID of the project
+
+time = $timestamp
+msgid = $action
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Trove_User_operations"

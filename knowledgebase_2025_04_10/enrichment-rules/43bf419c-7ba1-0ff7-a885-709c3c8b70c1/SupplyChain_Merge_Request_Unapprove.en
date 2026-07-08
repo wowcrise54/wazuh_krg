@@ -1,0 +1,162 @@
+query IsPushByRobot($asset, $host, $repo, $robot) from SupplyChain_Robots_Whitelist {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::robot_id == $robot
+}
+
+query GetMergeRequestInfoForUnapprove($asset, $host, $repo, $mr_id) from SupplyChain_Merge_Requests {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::merge_request_id == $mr_id
+}
+    qhandler {
+        $target_branch = column::target_branch
+        $creator = column::creator
+        $approvers = column::approvers
+     }
+
+query GetMergeRequestInfoForPush($asset, $host, $repo, $source_branch) from SupplyChain_Merge_Requests {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::source_branch == $source_branch
+}
+    qhandler {
+        $merge_request_id = column::merge_request_id
+        $target_branch = column::target_branch
+        $creator = column::creator
+        $approvers = column::approvers
+     }
+
+
+event Merge_Request_Unapprove:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "reject"
+        and object.type == "merge_request"
+        and status == "success"
+        and not in_list([subject.account.name, numfield3], null)
+    }
+
+event Branch_Push:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "modify"
+        and object.type == "branch"
+        and status == "success"
+        and msgid == "POST /api/:version/internal/post_receive"
+        and object.name != null
+        and not exec_query("IsPushByRobot", [event_src.asset,
+                                             event_src.host,
+                                             join([datafield2, datafield1], "/"),
+                                             subject.account.id])
+    }
+
+
+enrichment SupplyChain_Merge_Request_Unapprove
+
+    enrich Merge_Request_Unapprove:
+
+        enrich_fields {
+            $repository = join([datafield2, datafield1], "/")
+            $account = lower(subject.account.name)
+
+            # TL SupplyChain_Merge_Requests
+            $tl_data = exec_query("GetMergeRequestInfoForUnapprove", [event_src.asset, event_src.host, $repository, numfield3])
+
+            $target_branch = $tl_data["$target_branch"]
+            $creator = lower($tl_data["$creator"])
+            $approvers = if $tl_data["$approvers"] == "cleared by enrichment" then null else lower($tl_data["$approvers"]) endif
+
+            if $creator == $account then
+                if object.state == null then
+                    object.state = "unapproved by creator"
+                endif
+            endif
+
+            if $approvers == $account then
+                $approvers = "cleared by enrichment"
+
+            elif find_substr($approvers, $account + "|") == 0 then
+                $approvers = strip($approvers, $account + "|", "")
+
+            elif find_substr($approvers, "|" + $account + "|") != null then
+                $approvers = replace($approvers, "|", "|" + $account + "|")
+
+            elif substr($approvers, length($approvers) - length($account) - 1, length($account) + 1
+                 ) == ("|" + $account) then
+                $approvers = strip($approvers, "", "|" + $account)
+            endif
+
+            if $approvers != null then
+                $insert_into_merge_requests_tl = true
+            endif
+        }
+
+        insert_into SupplyChain_Merge_Requests if (
+            $insert_into_merge_requests_tl
+            and not in_list([event_src.host, $repository, numfield3, $target_branch, $creator], null)
+        ) {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = $repository
+            column::merge_request_id = numfield3
+            column::target_branch = $target_branch
+            column::creator = $creator
+            column::approvers = $approvers
+        }
+
+    enrich Branch_Push:
+
+        enrich_fields {
+            $repository = join([datafield2, datafield1], "/")
+            # TL SupplyChain_Merge_Requests
+            $tl_data = exec_query("GetMergeRequestInfoForPush", [event_src.asset, event_src.host, $repository, object.name])
+
+            $merge_request_id = $tl_data["$merge_request_id"]
+
+            if not in_list([null, "cleared by enrichment"], $tl_data["$approvers"]) then
+                $insert_into_merge_requests_tl = true
+                $merge_request_id = $tl_data["$merge_request_id"]
+                $target_branch = $tl_data["$target_branch"]
+                $creator = lower($tl_data["$creator"])
+                $approvers = "cleared by enrichment"
+            endif
+
+            if numfield3 == null then
+                numfield3 = $merge_request_id
+            endif
+        }
+
+        insert_into SupplyChain_Merge_Requests if (
+            $insert_into_merge_requests_tl
+            and not in_list([event_src.host, $repository, numfield3, $target_branch, $creator], null)
+        ) {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = $repository
+            column::merge_request_id = numfield3
+            column::source_branch = object.name
+            column::target_branch = $target_branch
+            column::creator = $creator
+            column::approvers = $approvers
+        }

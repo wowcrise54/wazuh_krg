@@ -1,0 +1,133 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} api_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"method":"POST"') != null
+    and find_substr($json, '"route":"/api/:version/internal/allowed"') != null
+)
+
+subject = "account"
+action = "login"
+object = "application"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_changes"
+    TEXT = '{$old_hash=STRING} {$new_hash=STRING} refs/heads/{$branch=REST}'
+    
+    object.property = "commit_id"
+    object.value = $old_hash
+    object.new_value = $new_hash
+    
+    datafield3 = strip($branch, "", "\\n")  # Branch Name
+endsubformula
+
+subformula "parse_changes"
+    TEXT = '{$old_hash=STRING} {$new_hash=STRING} refs/tags/{$tag=REST}'
+    
+    object.property = "commit_id"
+    object.value = $old_hash
+    object.new_value = $new_hash
+    
+    datafield5 = strip($tag, "", "\\n")  # Tag Name
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $['meta.user']
+if substr($['meta.client_id'], 0, 5) == "user/" then
+    subject.account.id = strip($['meta.client_id'], "user/", "")
+endif
+subject.process.meta = $ua
+
+$s_key_id = find_substr($json, '{"key":"key_id","value":"')
+$e_key_id = find_substr(substr($json, $s_key_id, length($json)), '"}')
+$key_id = substr($json, $s_key_id + 25, $e_key_id - 25)
+subject.account.privileges = if length($key_id) != 0 then "SSH:" + $key_id else null endif  # SSH Key ID
+
+object.type = "repository"
+
+$s_changes = find_substr($json, '{"key":"changes","value":"')
+$e_changes = find_substr(substr($json, $s_changes, length($json)), '"}')
+$changes = substr($json, $s_changes + 26, $e_changes - 26)
+$changes = if length($changes) != 0 then $changes else null endif
+
+$s_project = find_substr($json, '{"key":"project","value":"')
+$e_project = find_substr(substr($json, $s_project, length($json)), '"}')
+$project = substr($json, $s_project + 26, $e_project - 26)
+$project = if length($project) != 0 then $project else null endif
+
+if not in_list([null, "_any"], $changes) then
+    submessage("TEXT", "parse_changes", $changes)
+    $repo_fs_list = csv($project, "/", "'")
+    object.storage.name = $repo_fs_list[length($repo_fs_list)-1]
+    object.storage.path = strip($project, "", object.storage.name)
+    object.storage.fullpath = $project
+else
+    $repo_list = csv($project, "/", "'")
+    object.name = $repo_list[length($repo_list)-1]
+    object.path = strip($project, "", object.name)
+    object.fullpath = $project
+endif
+
+$s_check_ip = find_substr($json, '{"key":"check_ip","value":"')
+$e_check_ip = find_substr(substr($json, $s_check_ip, length($json)), '"}')
+$check_ip = substr($json, $s_check_ip + 27, $e_check_ip - 27)
+src.ip = if length($check_ip) != 0 then $check_ip else null endif
+
+$s_protocol = find_substr($json, '{"key":"protocol","value":"')
+$e_protocol = find_substr(substr($json, $s_protocol, length($json)), '"}')
+$protocol = substr($json, $s_protocol + 27, $e_protocol - 27)
+protocol.layer7 = if length($protocol) != 0 then $protocol else null endif
+
+$project_list = csv($['meta.project'], "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($['meta.project'], "", "/" + $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = $project_namespace_fullpath  # Namespace Fullpath
+
+$s_gl_repository = find_substr($json, '{"key":"gl_repository","value":"')
+$e_gl_repository = find_substr(substr($json, $s_gl_repository, length($json)), '"}')
+$gl_repository = substr($json, $s_gl_repository + 32, $e_gl_repository - 32)
+$gl_repository = if length($gl_repository) != 0 then $gl_repository else null endif
+
+numfield1 = strip($gl_repository, "project-", "")  # Project ID
+
+chain_id = $correlation_id
+external_link = "https://docs.gitlab.com/ee/development/internal_api.html#git-authentication"
+
+time = $time
+
+$s_action = find_substr($json, '{"key":"action","value":"')
+$e_action = find_substr(substr($json, $s_action, length($json)), '"}')
+$params_action = substr($json, $s_action + 25, $e_action - 25)
+msgid = if length($params_action) != 0 then $params_action else null endif
+
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "api"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_API_JSON_Internal_Allowed"

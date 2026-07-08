@@ -1,0 +1,62 @@
+event Disable_Logging:
+    key:
+        event_src.host
+    filter {   
+        filter::NotFromCorrelator()
+        and event_src.title == "unix_like"
+        and match(object.process.cmdline, "*net del syslog*")
+        and filter::CheckWL_Specific_Only("Cumulus_Disable_Logging", lower(join([subject.account.name, object.process.cmdline, src.host], "|")))
+
+    }
+rule Cumulus_Disable_Logging: Disable_Logging
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Disable_Logging {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+        
+        $object.process.cmdline = object.process.cmdline
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline, src.host], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $action = "disable"
+    $object = "service"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $object.process.cmdline, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 3h
+}
+    

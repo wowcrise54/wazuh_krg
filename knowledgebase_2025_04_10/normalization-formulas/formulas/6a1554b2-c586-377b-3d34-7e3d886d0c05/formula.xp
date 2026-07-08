@@ -1,0 +1,27 @@
+TABULAR = "ID,
+           {time=ORIGIN},
+           MESSAGE_OWNER,
+           {msgid=MESSAGE_CODE},
+           {subject.account.name=STRPARAM1},
+           {$depo_path=STRPARAM2},
+           {$depo_name=STRPARAM3}"
+           
+COND = $MESSAGE_CODE == 302
+
+subject = "account"
+action = "remove"
+object = "resource"
+status = "success"
+
+object.name = $depo_name
+object.type = "подразделение"                     
+object.path = $depo_path + "\\" + $depo_name
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_policy_manager"
+event_src.subsys = "vpn"
+event_src.category = "VPN"           
+           
+id = "PT_Infotecs_ViPNet_Policy_Manager_customeventcollector_remove_department"

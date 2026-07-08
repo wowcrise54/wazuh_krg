@@ -1,0 +1,45 @@
+EVENTLOG = 'EventID.text="567"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Security"
+
+subject = "account"
+action = "access"
+object = "resource"
+status = "success"
+
+subject.domain = lower(substr($User, 0, find_substr($User, '\\')))
+subject.name = lower(substr($User, find_substr($User, '\\') + 1, length($User) - find_substr($User, '\\') - 1))
+
+if $Data[2] == "File" then
+    object.type = "file"
+elif $Data[2] == "Key" then
+    object.type = "registry key"
+else
+    object.type = lower($Data[2])
+endif
+
+object.property = "AccessList"
+object.value = $Data[5]
+
+datafield1 = $Data[1]  # handle id
+datafield2 = $Data[3]  # ID процесса-субъекта
+datafield3 = $Data[4]  # Имя процесса-субъекта
+datafield4 = $Data[6]  # Маска доступа (содержит в себе весь AccessList)
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_forwarded_567_An_attempt_was_made_to_access_an_object"

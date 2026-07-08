@@ -1,0 +1,128 @@
+filter CheckWL_Windows_Login(string $rule_name, string $specific_value)
+{
+    (
+        # check if specific value is manually elevated and whitelisted
+        not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower($specific_value)
+        )
+    )
+    and
+    (
+        (
+            # check if specific value is manually elevated
+            filter::CheckWL_BlackListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+        )
+        or (
+            # check manual whitelists for the specific value
+            not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+            
+            # check manual whitelist for the exceptions inserted from UI
+            and not filter::CheckWL_WhiteListValue_3(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower(subject.account.name),
+                string(logon_type),
+                src.ip
+            )
+            
+            and not filter::CheckWL_WhiteListValue_3(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower(subject.account.name),
+                string(logon_type),
+                src.ip
+            )
+
+            # GeoIP whitelist
+            and not filter::CheckWL_WhiteListValue_2(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower(src.geo.country),
+                lower(src.geo.org)
+            )
+            and not filter::CheckWL_WhiteListValue_2(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.id),
+                lower(src.geo.country),
+                lower(src.geo.org)
+            )
+            
+            # check auto whitelist for the specific value
+            and not filter::CheckWL_Auto(
+                $rule_name,
+                lower($specific_value)
+            )
+        )
+    )
+}

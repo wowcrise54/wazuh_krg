@@ -1,0 +1,89 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {DATETIME}
+       {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+       PT_SIEM: [ID {NUMBER} {STRING} {$rest=UNTIL("</record>")}{REST}'
+
+COND = find_substr($rest, 'event="execve') != null
+
+$rest = $rest + "</record>"
+
+subformula "parse_xml"
+   XML = 'record'
+endsubformula
+
+submessage("XML", "parse_xml", $rest)
+
+#env parsing
+subformula "parse_env"
+    TEXT = '{UNTIL("<exec_env>")}{$envp=UNTIL("</exec_env>")?}{UNTIL("</record>")}'
+endsubformula
+
+#args parsing
+subformula "parse_args"
+    TEXT = '{UNTIL("<exec_args><arg>")}{$args=UNTIL("</arg></exec_args>")?}{UNTIL("</record>")}'
+endsubformula
+
+if $record/exec_env != null then
+    submessage("TEXT", "parse_env", $rest)
+    $env_dict = keyvalue(replace($envp, "", "<env>"),"</env>","=","")
+endif
+
+$env_dict = keyvalue(replace($envp, "", "<env>"),"</env>","=","")
+
+subject = "account"
+action = "execute"
+object = "command"
+if find_substr($record/return/@errval, "failure") != null then
+    status = "failure"
+elif find_substr($record/return/@errval, "success") != null then
+    status = "success"
+endif
+
+subject.account.name = $record/subject/@ruid
+subject.account.group = $record/subject/@rgid
+subject.account.privileges = $record/subject/@uid
+subject.account.session_id = $record/subject/@sid
+
+object.process.fullpath = $record["path"]["!"]
+$path_csv = csv(object.process.fullpath, "/", "")
+object.process.id = $record/subject/@pid
+object.process.name = $path_csv[length($path_csv)-1]
+if strip(object.process.fullpath, "", object.process.name) != '' then
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+endif
+
+if $record/exec_args != null then
+    submessage("TEXT", "parse_args", $rest)
+    $args = replace($args, ' ', '</arg><arg>')
+endif
+object.process.cmdline = replace($args, "", "  *")
+if object.process.cmdline == null then 
+    object.process.cmdline = $record["exec_args"]["arg"]["!"]
+endif
+
+logon_service = $env_dict["TERM"]
+
+datafield4 = $record/attribute/@gid      # группа владельца исполняемого файла
+
+if status == "failure" then
+    reason = csv($record/return/@errval, ":", "")[1]
+endif
+
+time = datetime($record["@iso8601"])
+importance = "medium"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_command_execute_xml"

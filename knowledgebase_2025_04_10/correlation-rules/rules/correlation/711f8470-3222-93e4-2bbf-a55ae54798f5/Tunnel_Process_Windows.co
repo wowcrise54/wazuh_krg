@@ -1,0 +1,134 @@
+event Windows_Process_Connection:
+    key:
+        event_src.host, object.process.fullpath, dst.port
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or (event_src.title == "sysmon" and msgid == "3")
+        )
+        and not filter::Loopback_Address(dst.ip)
+        and not filter::Loopback_Address(src.ip)
+        and src.ip != dst.ip
+        and direction == "egress"
+        and not in_list(["python.exe", "<unknown process>", "telnet.exe"], lower(object.process.name))
+        and (
+            (dst.port == 445 and not in_list(["system"], lower(object.process.name)))
+            or (dst.port == 22 and not in_list(["putty.exe", "ssh.exe", "plink.exe", "mottynew.exe", "winscp.exe", "vmnat.exe", "puttyng.exe", "wsl.exe", "mobaxterm.exe"], lower(object.process.name)))
+            or (dst.port == 3389 and not in_list(["mstsc.exe", "mremoteng.exe", "remotedesktopmanagerfree.exe", "mobarte.exe", "rdcman.exe"], lower(object.process.name)))
+            #or (dst.port == 443 and in_subnet(dst.ip, "10.0.0.0/8"))
+            or (dst.port >= 1560 and dst.port <= 1591 and not in_list(["rmngr.exe", "ragent.exe", "rphost.exe", "1cv8s.exe", "1cv8c.exe", "1cv8.exe"], lower(object.process.name)))
+        )
+        and filter::CheckWL_Networking("Tunnel_Process_Windows", join([lower(event_src.host), lower(object.process.name), string(dst.port)], "|"))
+    }
+
+rule Tunnel_Process_Windows: Windows_Process_Connection+ timer 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+        $first_event = true
+        $dst_ips = []
+        $dst_hosts = []
+        $dst_assets = []
+        $count_total_connections = 0
+    }
+
+    on Windows_Process_Connection {
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.session_id = object.account.session_id
+            $object.account.id = object.account.id
+            $object.account.privileges = object.account.privileges
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.hash = object.process.hash
+            $object.process.hash.md5 = object.process.hash.md5
+            $object.process.hash.imphash = object.process.hash.imphash
+            $object.process.hash.sha1 = object.process.hash.sha1
+            $object.process.hash.sha256 = object.process.hash.sha256
+            $object.process.version = object.process.version
+            $object.process.cmdline = object.process.cmdline
+            $object.process.guid = object.process.guid
+            $object.process.meta = object.process.meta
+            $object.process.original_name = object.process.original_name
+            $object.process.cwd = object.process.cwd
+
+            $src.asset = src.asset
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.port = src.port
+            $src.mac = src.mac
+
+            $dst.port = dst.port
+            $direction = direction
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = join([lower(event_src.host), lower(object.process.name), string(dst.port)], "|")
+            $first_event = false
+        endif 
+        
+        if not in_list($dst_ips, string(dst.ip)) then
+            $dst_ips = append($dst_ips, string(dst.ip))
+            $dst_hosts = append($dst_hosts, string(dst.host))
+            $dst_assets = append($dst_assets, string(dst.asset))
+            $count_total_connections = $count_total_connections + 1
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "medium"
+    
+    if $count_total_connections == 1 then
+        $dst.ip = join($dst_ips, "")
+        $dst.host = join($dst_hosts, "")
+        $datafield15 = join($dst_assets, "")
+    endif
+
+    $alert.context = join($dst_ips, "|")
+    $dst.host = join($dst_hosts, "\r\n")
+    $datafield15 = join($dst_assets, "\r\n")
+    if $datafield15 == "" or regex($datafield15, "^(\r\n)+$", 0) != null then
+        $datafield15 = null
+    endif
+    
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Protocol Tunneling"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}  

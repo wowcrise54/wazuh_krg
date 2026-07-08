@@ -1,0 +1,63 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} confluence_audit: {$json=REST}"
+COND = (
+    find_substr($json, '"actionI18nKey":"audit.logging.summary.login.success"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.user.logout"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.login.failed"') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+if $affectedObjects[0]["type"] == "User" then
+    subject = "account"
+endif
+
+object = "application"
+
+$act_type = csv($auditType["actionI18nKey"], ".", "'")
+switch $act_type[3]
+    case "login"
+        action = "login"
+        status = if $act_type[4] == "success" then "success" else "failure" endif
+    case "user"
+        action = "logout"
+        status = "success"
+endswitch
+
+if $affectedObjects[0]["type"] == "User" then
+    subject.account.fullname = $affectedObjects[0]["name"]
+    subject.account.id = $affectedObjects[0]["id"]
+endif
+
+$s_login_source = find_substr($json, '"nameI18nKey":"audit.logging.extra.attribute.key.login.source","value":"')
+$e_login_source = find_substr(substr($json, $s_login_source, length($json)), '"}')
+$login_source = substr($json, $s_login_source+72, $e_login_source-72)
+$login_source = if length($login_source) != 0 then $login_source else null endif
+
+logon_service = $login_source
+
+src.ip = $source
+
+msgid = $auditType["actionI18nKey"]
+time = epoch_to_datetime($timestamp["epochSecond"])
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "atlassian"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_syslog_Audit_Security_Authentication"

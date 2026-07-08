@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}localhost ideco-nflog
+        {"["?}{NUMBER}{"]"?}- -{protocol=WORD}src{src.ip=IPV4|IPV6}sport
+        {src.port=NUMBER?}dst{dst.ip=IPV4|IPV6}{"sport"|"dport"}
+        {dst.port=NUMBER?}table{datafield1=UNTIL("rule")}
+        {subject.id=NUMBER|subject.name=STRING}action accept'
+        
+subject = "rule"
+action = "allow"
+object = "connection"
+status = "success"
+
+# datafield1 - Название таблицы правил
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "ideco"
+event_src.title = "ngfw"
+event_src.category = "Network device"
+
+id = "PT_Ideco_IdecoNGFW_syslog_firewall_events"

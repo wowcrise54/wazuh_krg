@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        pdns[{NUMBER}]: No such domain \'{$zone=STRING} in our database'
+
+action = "execute"
+object = "command"
+status = "failure"
+
+object.property = "DNS zone"
+object.value = strip($zone, '', '\'')
+
+reason = "no such domain in database"
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "powerdns_authoritative_server"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_PowerDNS_Authoritative_Server_syslog_notify_command_no_such_domain"

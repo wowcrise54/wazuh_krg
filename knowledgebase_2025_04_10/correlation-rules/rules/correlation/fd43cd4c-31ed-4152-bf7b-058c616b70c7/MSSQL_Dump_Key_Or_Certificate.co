@@ -1,0 +1,69 @@
+event Dump_Virtual_Key:
+    key:
+        event_src.host
+    filter {
+        (
+            filter::MSSQL_Query("BA", "MK")
+            or filter::MSSQL_Query("BA", "CR")
+        )
+        and filter::CheckWL_Database_Actions("MSSQL_Dump_Key_Or_Certificate", lower(join([object.type, object.path], "|")))
+    }
+
+rule MSSQL_Dump_Key_Or_Certificate: Dump_Virtual_Key
+    
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Dump_Virtual_Key {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.name = object.name
+        $object.type = object.type
+        $object.path = object.path
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower(join([object.type, object.path], "|"))
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "backup"
+    $object = "resource"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    if $datafield4 == "BA" and $datafield5 == "MK" then
+        $category.low = "Unsecured Credentials: Private Keys"
+    elif $datafield4 == "BA" and $datafield5 == "CR" then
+        $category.low = "Steal or Forge Authentication Certificates"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name, $object.type], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

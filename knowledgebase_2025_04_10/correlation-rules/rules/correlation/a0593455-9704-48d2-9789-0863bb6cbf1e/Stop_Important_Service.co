@@ -1,0 +1,316 @@
+query CheckServiceSignificant($event_src, $service_name) from Significant_Services {
+    event_src == $event_src
+    and regex_match($service_name, column::service_name)
+}
+
+event Stop_In_Commandline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+                filter::ProcessStart_Windows_cmd_meta("net1.exe", "stop|pause|delete|setconfig", "description:net command | product:microsoft® windows® operating system | company:microsoft corporation")
+                or filter::ProcessStart_Windows_cmd_meta("sc.exe", "stop|pause|delete|setconfig", "description:service control manager configuration tool | product:microsoft® windows® operating system | company:microsoft corporation")
+                or filter::ProcessStart_Windows_cmd_meta("psservice.exe", "stop|pause|delete|setconfig", "description:service information and configuration utility | product:sysinternals psservice | company:sysinternals - www.sysinternals.com")
+                or filter::ProcessStart_Windows_cmd_meta("psservice64.exe", "stop|pause|delete|setconfig", "description:service information and configuration utility | product:sysinternals psservice | company:sysinternals - www.sysinternals.com")
+                or filter::ProcessStart_Windows_cmd_meta("wmic.exe", "call.*?stopservice", "description:wmi commandline utility | product:microsoft® windows® operating system | company:microsoft corporation")
+            )
+        and exec_query("CheckServiceSignificant", [
+            lower(event_src.vendor),
+            strip(regex(lower(object.process.cmdline), '(stop|pause|delete|setconfig|call.*?stopservice)\s+(\w+|".*")', 2), '"', '"')
+        ])
+        and filter::CheckWL_Process_Creation("Stop_Important_Service", lower(object.process.cmdline))
+    }
+
+event Stop_In_PowerShell_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "stop-service|suspend-service", 0) != null
+        and exec_query("CheckServiceSignificant", [
+            lower(event_src.vendor),
+            regex(lower(object.process.cmdline), '-name\s+"(.*?)"', 1)
+        ])
+        and filter::CheckWL_Powershell("Stop_Important_Service", lower(object.process.cmdline))
+    }
+
+event Stop_In_PowerShell_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "(net|psservice|sc).*(stop|pause|delete|setconfig)|wmic.*call\s+stopservice|stop-service|suspend-service", 0) != null
+        and exec_query("CheckServiceSignificant", [
+            lower(event_src.vendor),
+            strip(regex(lower(object.process.cmdline), '(stop|pause|delete|setconfig|call.*?stopservice|stop-service|suspend-service)\s+(\w+|".*")', 2), '"', '"')
+        ])
+        and filter::CheckWL_Powershell("Stop_Important_Service", lower(join([object.fullpath, object.process.cmdline], "|")))
+    }
+
+event Stop_Service:
+    key: 
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "7036"
+        and action == "stop"
+        and exec_query("CheckServiceSignificant", [
+            lower(event_src.vendor),
+            lower(object.name)
+        ])
+    }
+
+rule Stop_Important_Service: Stop_In_Commandline or Stop_In_PowerShell_Pipeline or Stop_In_PowerShell_Command or Stop_Service
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Stop_In_Commandline {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = strip(regex(lower(object.process.cmdline), '(stop|pause|delete|setconfig|call.*?stopservice)\s+(\w+|".*")', 2), '"', '"')
+
+        $datafield6 = datafield6  # Идентификатор сессии в формате UUID
+        
+        $reason = "cmdline"
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "call.*stopservice|stop|pause|delete|setconfig", 0)
+        $alert.context = object.process.name
+        $incident_fullpath = object.process.parent.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Stop_In_PowerShell_Pipeline {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = regex(lower(object.process.cmdline), '-name\s+"(.*?)"', 1)
+        $object.value = object.value
+        $object.path = object.path
+
+        $datafield8 = datafield8  # версия модуля
+
+        $chain_id = chain_id
+
+        $reason = "powershell_pipeline"
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "stop-service|suspend-service", 0)
+        $alert.context = object.fullpath
+        $incident_fullpath = object.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Stop_In_PowerShell_Command {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.id = object.id
+        $object.name = strip(regex(lower(object.path + object.name + "|" + object.process.cmdline), '(stop|pause|delete|setconfig|call.*?stopservice|stop-service|suspend-service)\s+(\w+|".*")', 2), '"', '"')
+        $object.value = object.value
+        $object.path = object.path
+
+        $reason = "powershell_command"
+
+        $alert.key = lower(join([object.fullpath, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "(net|psservice|sc).*(stop|pause|delete|setconfig)|wmic.*call\s+stopservice|stop-service|suspend-service", 0)
+        $alert.context = object.fullpath
+        $incident_fullpath = object.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Stop_Service {
+        $action = action  # Stop
+        $object = object  # Application
+
+        $object.name = object.name
+        $object.state = object.state
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $reason = "stop_event"
+
+        $alert.key = lower(join([event_src.host, object.name], "|"))
+    }
+
+emit {
+    if $reason == "stop_event" then
+        $correlation_type = "event"
+    else
+        $correlation_type = "incident"
+    endif
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Service Stop"
+
+    if $object == "application" then
+        $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    else
+        $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $incident_fullpath, $alert.context], "|")
+    endif
+    $incident.severity = $importance
+    $incident.category = "ServiceMalfunction"
+    $incident.aggregation.timeout = 2h
+}

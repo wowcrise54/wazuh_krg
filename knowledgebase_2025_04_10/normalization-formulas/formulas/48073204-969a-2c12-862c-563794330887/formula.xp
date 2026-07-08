@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} 
+        {$Computer=HOSTNAME} {subject.process.name="php-fpm"}
+        {subject.process.id = NUMBER} - - 
+        /{event_src.subsys=UNTIL(":")} Configuration Change: 
+        {subject.account.name=WORD}@{src.ip=IPV4|src.ip=IPV6} 
+        ({$database=UNTIL(")")}: {$message=REST}'
+
+COND = (find_substr($message, 'IPsec') != null 
+        and find_substr($message, 'configuration') != null)     # only events with words "IPsec" and "configuration" together
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+datafield1 = $database # Belonging to the database
+datafield3 = 'VPN -> IPsec' # Path to object in menu
+
+$message = strip($message, 'Saved ', '.')
+$message = strip($message, 'IPsec ', ' configuration')
+$message = strip($message, 'configuration changes for ', null)
+object.type = $message
+
+object.state = switch object.type #real action
+case "tunnel Phase 1" "add or modify"
+case "tunnel Phase 2" "add or modify"
+case "IPsec tunnels" "any action"
+case "Mobile Clients" "modify"
+endswitch
+
+if (object.type == "IPsec tunnels") then
+    importance = "info"
+else
+    importance = "low"
+endif
+
+event_src.title = "php"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Opensource_PHP_syslog_IPsec_configuration_saved"

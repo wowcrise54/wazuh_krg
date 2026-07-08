@@ -1,0 +1,27 @@
+EVENTLOG = ''
+COND = $Channel=="DNS Server" and $Provider["Name"]=="Microsoft-Windows-DNS-Server-Service" 
+       and ($EventID["text"]=="131" or $EventID=="131")
+
+action = "initiate"
+object = "service"
+object.name = "DNS Server"
+status = "failure"
+
+msgid = "131"
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "DNS server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_131_dns_server_failed_to_initialize_NetBIOS"

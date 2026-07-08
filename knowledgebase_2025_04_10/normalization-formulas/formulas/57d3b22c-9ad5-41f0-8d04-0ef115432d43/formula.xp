@@ -1,0 +1,51 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {UNTIL(" events - - ")}CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|events|admin_console|{WORDDASH}|
+        rt={$temp_time=NUMBER} deviceExternalId={event_src.id=STRING+} suser={subject.account.name=STRING} cat=accounts
+        act={msgid="administrator_added"} src={src.ip=IPV4|src.ip=IPV6} {UNTIL(" cs1=")}{$rest=REST}'
+
+subject = "account"
+action = "create"
+object = "account"
+status = "success"
+
+submessage("JSON", "SPLIT", $rest)
+
+subject.account.privileges = "administrator"
+
+object.account.privileges = "administrator"
+
+subformula "SPLIT"
+    # Извлечение object.id, object.state, object.value и object.name из $rest
+    JSON = "administrator"
+    object.account.id = $id
+    object.account.name = $administrator["login"]
+
+    object.state = switch $administrator["enabled"]
+        case false "disabled"
+        case true "enabled"
+    endswitch
+
+    object.value = $administrator["description"]
+
+    if object.value != null then
+        object.property = "account description"
+    endif
+endsubformula
+
+time = epoch_ms_to_datetime($temp_time)
+importance = "info"
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_create_account_administrator"

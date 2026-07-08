@@ -1,0 +1,61 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        kernel: [{NUMBER}.{NUMBER}] Iptables: {$table=STRING} IN= {$iface=WORD?} OUT= {$oface=WORD?}
+        {"MAC="?} {src.mac=MACADDR":"dst.mac=MACADDR":"NUMBER":"NUMBER?} SRC= {src.ip=IPV4} DST= {dst.ip=IPV4}
+        LEN= {NUMBER} TOS= {WORD} PREC= {WORD} TTL= {NUMBER} ID= {NUMBER} {"DF"?} {"MF"?}
+        {$rest=REST}'
+
+action = switch lower($table)
+     case "accept" "allow"
+     case "drop" "deny"
+     case "reject" "deny"
+endswitch
+ object = "connection"
+status = "success"
+
+submessage("TEXT", "parse_rest", $rest)
+
+subformula "parse_rest"
+    TEXT = 'PROTO={$proto=WORD} SPT={src.port=NUMBER} DPT={dst.port=NUMBER} WINDOW={NUMBER} RES={STRING} {$flags=STRING+} URGP={NUMBER}'
+    tcp_flag = lower(replace($flags, "|", " "))
+endsubformula
+subformula "parse_rest"
+    TEXT = 'PROTO={$proto=WORD} SPT={src.port=NUMBER} DPT={dst.port=NUMBER} {REST}'
+endsubformula
+subformula "parse_rest"
+    # ICMP
+    TEXT = 'PROTO={$proto=WORD} TYPE={datafield6=NUMBER} CODE={datafield7=NUMBER} {REST}'
+endsubformula
+subformula "parse_rest"
+    # ICMP
+    TEXT = 'PROTO={$proto=WORD} {REST}'
+endsubformula
+
+protocol = $proto
+
+if length ($iface) != 0 then
+    datafield2 = $iface  # ingress interface
+endif
+if length ($oface) != 0 then
+    datafield4 = $oface  # egress interface
+endif
+# datafield6               TYPE of ICMP
+# datafield7               CODE of ICMP
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "iptables"
+event_src.category = "Firewall"
+
+id = "PT_Opensource_Iptables_syslog_fw_rule"

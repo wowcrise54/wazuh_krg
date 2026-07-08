@@ -1,0 +1,114 @@
+event Confluence_Connection:
+    key:
+        src.ip, src.port
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and in_list(["accept", "accept4"], msgid)
+        and action == "open"
+        and object == "connection"
+        and status == "success"
+        and direction == "ingress"
+        and subject.account.id == object.account.id
+        and match(subject.process.fullpath, "*/atlassian/confluence/jre/bin/java")
+    }
+
+event Confluence_POST_Request:
+    key:
+        src.ip, src.port
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "confluence"
+        and event_src.vendor == "atlassian"
+        and action == "execute"
+        and object == "request"
+        and object.type == "POST"
+        and object.state == "200"
+        and subject.account.name != null
+        and match(object.path, "/admin/plugins/newcode/addlanguage.action*")
+    }
+
+rule Subrule_CVE_2024_21683_Confluence_RCE: Confluence_Connection and Confluence_POST_Request within 1m
+       
+    on Confluence_Connection {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+                
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.meta = subject.process.meta
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.chain = subject.process.chain
+
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        
+        $logon_service = logon_service
+        
+        $protocol = protocol
+        
+        $direction = direction
+
+        $datafield18 = datafield18 # chain with PID for subject
+        $datafield19 = datafield19 # chain with PID for object
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+               
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, src.ip, event_src.host], "|"))
+    }
+
+    on Confluence_POST_Request {
+        $object.account.name = subject.account.name
+        $object.account.id = subject.account.id
+        $object.account.session_id = subject.account.session_id
+
+        $object.process.meta = subject.process.meta
+
+        $object.type = object.type
+        $object.state = object.state
+        $object.value = object.value
+        $object.path = object.path
+
+        $datafield2 = datafield2
+
+        $alert.context = lower(join(["post request to", object.path, "from confluence user", subject.account.name], " "))
+        $alert.regex_match = regex(object.path, "(\/|%2F)admin(\/|%2F)plugins(\/|%2F)newcode(\/|%2F)addlanguage\.action$", 0)
+    }
+
+emit {  
+    $correlation_type = "subrule"
+
+    $status = "success"
+    $subject = "process"
+    $action = "execute"
+    $object = "request"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Exploit Public-Facing Application"
+}

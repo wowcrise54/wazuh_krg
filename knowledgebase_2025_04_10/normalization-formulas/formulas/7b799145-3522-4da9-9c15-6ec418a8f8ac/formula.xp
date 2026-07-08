@@ -1,0 +1,31 @@
+!TABULAR = "C_3,
+            {datafield3 = C_5},
+            {time = EVENT_TIME},
+            {datafield1 = SESSION_ID}"
+
+!COND = find_substr($C_4,"Отключение") != null and ($EVENT_TYPE == "VW_CRIT_DIARY_LOCK_INFO")
+
+subject = "account"
+action = "stop"
+object = "session"
+status = "success"
+
+object.id = substr($C_4, find_substr($C_4, ' ') + 1, length($C_4) - find_substr($C_4, ' ') - 1) #id сессии, к которой подключился пользователь
+
+submessage ("TEXT", "session_info", $C_3)
+
+subformula "session_info"
+    !TEXT = "{datafield2=UNTIL(' (')} {STRING} - {subject.name=STRING} - {REST}"
+endsubformula
+
+# datafield1 - id сессии
+# datafield2 - имя компьютера пользователя
+# datafield3 - имя файла исполняемого модуля
+
+importance = "low"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_session_disconnect"

@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        en: "Checks a specific value for PT NAD events against the white lists"
+        ru: "Проверяет специфичное значение для событий из PT NAD с помощью белых списков"
+    Description:
+        en: "This filter helps to reduce the repetitive part of the check using the table white lists"
+        ru: "Фильтр используется для сокращения повторяющейся части проверки с помощью табличных белых списков"
+    UseAsEventName: False
+Args:
+    rule_name:
+        Type: string
+        Name:
+            ru: "Название правила корреляции"
+            en: "Correlation rule name"
+    specific_value:
+        Type: string
+        Name:
+            ru: "Проверяемое специфичное значение"
+            en: "Specific value to check"
+ObjectId: PT-RF-99
+Origin: PT

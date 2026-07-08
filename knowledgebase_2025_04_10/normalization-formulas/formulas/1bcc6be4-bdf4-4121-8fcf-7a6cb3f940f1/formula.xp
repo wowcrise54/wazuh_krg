@@ -1,0 +1,62 @@
+EVENTLOG = 'EventID.text="33540"'
+!COND = $Channel=="TrustAccess" and $Task=="3"
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+if find_substr($Data[0],'/') != null then
+    submessage('TEXT', 'SPLIT1', $Data[0])
+else
+    submessage('TEXT', 'SPLIT2', $Data[0])
+endif
+
+subject.account.privileges = "administrator"
+subformula "SPLIT1"
+    TEXT = "{dst.hostname = WORDDASH}/{$csv = CSV('@','\"')}"
+    subject.account.name = $csv[0]
+    subject.account.domain = $csv[1]
+endsubformula
+
+subformula "SPLIT2"
+    TEXT = "{$csv = CSV('@','\"')}"
+    subject.account.name = $csv[0]
+    subject.account.domain = $csv[1]
+endsubformula
+
+if ($Data[4] == "%%82") then
+    object.name = "Управление конфигурацией"
+elif $Data[4] == "%%83" then
+    object.name = "Управление учётными записями пользователей и компьютеров"
+elif $Data[4] == "%%84" then
+    object.name = "Управление группами"
+elif find_substr($Data[4],'%%') != null then
+    object.name = strip ( strip($Data[4],'%',''),'%','')
+else
+    object.name = $Data[4]
+endif
+
+src.ip = $Data[1]
+dst.ip = $Data[2]
+
+if coalesce(dst.ip, dst.hostname) == coalesce(src.ip, src.hostname) then
+    logon_auth_method = 'local'
+else
+    logon_auth_method = 'remote'
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+event_src.title = "trustaccess"
+event_src.hostname = $Computer
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_TrustAccess_eventlog_admin_login"

@@ -1,0 +1,157 @@
+query GetArtifactsCount($asset, $host, $repo) from SupplyChain_Artifactory_Repositories {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+}
+
+query IsRepositoryImportant($asset, $host, $repo) from SupplyChain_Artifactory_Repositories_Registry {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == "*"
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+}
+
+query GetArtifactsByUnitCount($asset, $host, $repo, $user, $src_host) from SupplyChain_Artifactory_Repositories_And_Addresses {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::user == $user
+    and column::src_host == $src_host
+}
+
+query GetAccountsCount($asset, $host, $repo, $src_host) from SupplyChain_Artifactory_Repositories_And_Addresses {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::src_host == $src_host
+}
+    qhandler {
+        $get_user_count = count()
+     }
+
+query GetAddressesCount($asset, $host, $repo, $user) from SupplyChain_Artifactory_Repositories_And_Addresses {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::user == $user
+}
+    qhandler {
+        $get_src_host_count = count()
+     }
+
+
+event File_Upload:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "artifactory"
+        and action == "upload"
+        and object == "file_object"
+        and status == "success"
+        and not in_list([subject.account.name, object.group, src.host], null)
+    }
+
+
+enrichment SupplyChain_File_Upload
+    enrich File_Upload:
+
+        enrich_fields {
+            # TL SupplyChain_Artifactory_Repositories_Registry
+            $is_repository_important = exec_query("IsRepositoryImportant", [event_src.asset, event_src.host, object.group])
+
+            if not $is_repository_important then
+                $insert_into_repositories_tl = true
+                # TL SupplyChain_Artifactory_Repositories
+                $count = select_query_first("GetArtifactsCount", [event_src.asset, event_src.host, object.group], "count")
+
+                $count = $count + 1
+                $threshold = 30  # May be changed
+            endif
+
+            if $count > $threshold or $is_repository_important then
+                $insert_into_repositories_and_addresses_tl = true
+                # TL SupplyChain_Artifactory_Repositories_And_Addresses
+                $count_unit = select_query_first("GetArtifactsByUnitCount", [event_src.asset,
+                                                                             event_src.host,
+                                                                             object.group,
+                                                                             subject.account.name,
+                                                                             src.host
+                                                                            ], "count_unit")
+
+                $count_unit = $count_unit + 1
+            endif
+
+            if $count_unit == 1 then
+                # TL SupplyChain_Artifactory_Repositories_And_Addresses
+                $accounts_count = exec_query("GetAccountsCount", [event_src.asset, event_src.host, object.group, src.host])
+
+                # TL SupplyChain_Artifactory_Repositories_And_Addresses
+                $addresses_count = exec_query("GetAddressesCount", [event_src.asset,
+                                                                    event_src.host,
+                                                                    object.group,
+                                                                    subject.account.name])
+
+                $accounts_count = coalesce($accounts_count["$get_user_count"], 0)
+                $addresses_count = coalesce($addresses_count["$get_src_host_count"], 0)
+
+                if reason == null then
+                    if $accounts_count == 0 and $addresses_count == 0 then 
+                        reason = "upload to important repository from new address and account"
+
+                    elif $accounts_count == 0 then
+                        reason = "upload to important repository from new address"
+
+                    elif $addresses_count == 0 then
+                        reason = "upload to important repository from new account"
+                    endif
+                endif
+
+                if numfield1 == null then
+                    numfield1 = $accounts_count  # Count of an accounts with same address
+                endif
+
+                if numfield2 == null then
+                    numfield2 = $addresses_count  # Addresses count of same account
+                endif
+            endif
+        }
+
+        insert_into SupplyChain_Artifactory_Repositories if $insert_into_repositories_tl {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = object.group
+            column::count = $count
+        }
+
+        insert_into SupplyChain_Artifactory_Repositories_And_Addresses if $insert_into_repositories_and_addresses_tl {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = object.group
+            column::user = subject.account.name
+            column::src_asset = src.asset
+            column::src_host = src.host
+            column::count_unit = $count_unit
+        }

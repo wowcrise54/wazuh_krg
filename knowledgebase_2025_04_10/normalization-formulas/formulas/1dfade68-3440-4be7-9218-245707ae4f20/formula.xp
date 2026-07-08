@@ -1,0 +1,79 @@
+!TABULAR = "Date,
+            Time,
+            clientip,
+            Clienthostname,
+            Serverhostname,
+            serverIP,
+            {object.value  = RecipientAddress},
+            {msgid = EventID},
+            {object.id = MSGID},
+            NumberRecipients,
+            Encryption,
+            {$s_name = SenderAddress}
+            "
+
+!COND = ($EventID) == "1037"
+
+subject = "account"
+action = "send"
+object = "message"
+status = "ongoing"
+
+subject.name = lower($s_name)
+
+# Преобразование времени
+submessage ("TEXT", "parse_date", $Date)
+submessage ("TEXT", "parse_time", $Time)
+
+subformula "parse_date"
+  !TEXT = "{$y=NUMBER}-{$m=NUMBER}-{$d=NUMBER}"
+endsubformula
+
+subformula "parse_time"
+  !TEXT = "{$h=NUMBER}:{$min=NUMBER}:{$sec=NUMBER} {REST}"
+endsubformula
+
+if length(string($m))==1 then
+    $m = "0"+string($m)
+endif
+
+if length(string($d))==1 then
+    $d = "0"+string($d)
+endif
+
+if length(string($h))==1 then
+    $h = "0"+string($h)
+endif
+
+if length(string($min))==1 then
+    $min = "0"+string($min)
+endif
+
+if length(string($sec))==1 then
+    $sec = "0"+string($sec)
+endif
+
+time = string($y)+'-'+string($m)+'-'+string($d)+' '+string($h)+':'+string($min)+':'+string($sec)
+
+object.property = "receiver"
+
+src.ip = maybe_ipv4($clientip)
+if $Clienthostname != "-" then
+    src.hostname = lower($Clienthostname)
+endif
+dst.ip = maybe_ipv4($serverIP)
+if $Serverhostname != "-" then
+    dst.hostname = lower($Serverhostname)
+endif
+
+reason = "Retry delivery"
+
+importance = "low"
+
+event_src.ip = dst.ip
+event_src.hostname = lower(dst.hostname)
+event_src.title = "exchange"
+event_src.vendor = "microsoft"
+event_src.category = "Mail server"
+
+id = "PT_Microsoft_Exchange_2003_filemonitor_Retry_Delivery"

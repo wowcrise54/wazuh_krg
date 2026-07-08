@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+    auditor{"["object.process.id=NUMBER"]"}: {$msgid_raw_1="4051"}{$msgid_raw_2="Admin_logout"}, 
+    Admin name: {subject.account.name=UNTIL(",")}Admin name: {UNTIL(",")} Status: SUCCESS, "User logged out", 
+    Syslog server: "{datafield1=IPV4}:{datafield2=NUMBER}"'
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+subject.account.privileges = "administrator"
+
+# datafield1 - Syslog server IP
+# datafield2 - Syslog server Port
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "safeinspect"
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_4_3_syslog_4051_admin_logout_success"

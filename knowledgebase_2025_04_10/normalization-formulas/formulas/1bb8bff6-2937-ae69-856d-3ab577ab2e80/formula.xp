@@ -1,0 +1,32 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$ev_src_host=HOSTNAME|''} {WORDDASH?}
+        [{WORD} {time=DATETIME} {NUMBER}] [wsgi:error] [pid {numfield1=NUMBER}{':tid'?} {NUMBER?}] 
+        [remote {src.ip=IPV4|src.ip=IPV6}:{src.port=NUMBER}]  
+        ipa: INFO: {$subname=WORDDASH}{'@'?}{$subdomain=HOSTNAME?}: {'batch:'} 
+        {msgid='host_show'}({$objname=UNTIL('\\',')}{$information=UNTIL('):')?} SUCCESS"
+        
+subject = "account"
+action = "info"
+object = "host"
+status = "success"
+
+subject.account.name = lower($subname)
+subject.account.domain = lower($subdomain)
+
+object.name = strip($objname,"'","")
+
+# numfield1 - process id of /usr/sbin/httpd
+
+importance = "info"
+
+event_src.vendor = "freeipa"
+event_src.title = "freeipa"
+event_src.category = "Directory service"
+
+if find_substr($ev_src_host, ".") != null then
+    event_src.fqdn = $ev_src_host
+    event_src.hostname = substr($ev_src_host, 0, find_substr($ev_src_host, "."))
+else
+    event_src.hostname = $ev_src_host
+endif
+
+id = "PT_FreeIPA_FreeIPA_syslog_Host_info"

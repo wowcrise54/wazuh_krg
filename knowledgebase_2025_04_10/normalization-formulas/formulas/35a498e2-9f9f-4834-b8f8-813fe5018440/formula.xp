@@ -1,0 +1,39 @@
+TEXT = "{time = DATETIME},{subject.account.name=WORDDASH},{HOSTNAME},Execute command,{msgid='ChMod'},{$temp_csv=CSV}"
+
+subject = "account"
+action = "modify"
+
+if $temp_csv[7] == "file" then
+    object = "file_object"
+
+    object.type = "file|attribute"
+elif $temp_csv[7] == "folder" then
+    object = "file_object"
+
+    object.type = "folder|attribute"
+endif
+
+if $temp_csv[0] == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.fullpath = strip(substr($temp_csv[9], 0, find_substr($temp_csv[9], " со статусом")), "", "\\")
+$fullpath = csv(object.fullpath, "\\", "")
+object.name = $fullpath[length($fullpath) - 1]
+if strip(object.fullpath, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+importance = "low"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "accord"
+event_src.title = "sucu"
+event_src.category = "Host security"
+
+id = "PT_Accord_SUCU_filemonitor_Change_attribute"

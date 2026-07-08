@@ -1,0 +1,39 @@
+!JSON = 'EventIdentifier=682'
+!COND = $Logfile=="Security" and $Category==2
+
+subject = "account"
+action = "start"
+object = "session"
+status = "success"
+
+subject.account.name = lower($InsertionStrings[0])
+subject.account.domain = lower($InsertionStrings[1])
+subject.account.id = subject.account.name + "@" + subject.account.domain
+
+object.name = $InsertionStrings[3]
+
+src.hostname = lower($InsertionStrings[4])
+src.ip = $InsertionStrings[5]
+
+reason = "Session reconnected"
+
+datafield1 = maybe_number16(strip(csv($InsertionStrings[2], ",", "`")[1], "", ")"))   # id логона
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_682_A_user_has_reconnected_to_a_disconnected_terminal_server_session"

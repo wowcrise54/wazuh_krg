@@ -1,0 +1,197 @@
+query Check_User_Positive ($user) from UTMN_TL_Buh_Swap_Accounts {
+        	column::user == $user
+}
+
+query Check_VPC_Positive ($host) from UTMN_TL_VPC_BC_static {
+        	column::ip == $host or column::host == $host
+}
+
+query Check_Terminal_Positive ($host) from UTMN_TL_Terminal_servers_static {
+        	column::ip == $host or column::host == $host
+}
+
+event Windows_Buh_Share_File_Operations_4418:
+    key:
+        event_src.host, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4663"
+        and match(lower(object.path), "u:\\dep01_1\\59ec8eb9-1aae-4c22-8076-09d6601a5774\\закрытые\\share эб\\*")
+        and find_substr(subject.account.privileges, "%%4418") != null # AppendData (или AddSubdirectory или CreatePipeInstance)
+    }
+
+event Windows_Buh_Share_File_Operations_4417:
+    key:
+        event_src.host, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4663"
+        and match(lower(object.path), "u:\\dep01_1\\59ec8eb9-1aae-4c22-8076-09d6601a5774\\закрытые\\share эб\\*")
+        and find_substr(subject.account.privileges, "%%4417") != null # WriteData (или AddFile)
+        and find_substr(subject.account.privileges, "%%4418") == null # AppendData (или AddSubdirectory или CreatePipeInstance)
+    }
+    
+event Windows_Buh_Share_File_Operations_4416_illegal_user:
+    key:
+        event_src.host, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "5140"
+        and (match(lower(object.fullpath), "\\servicefolder") or match(lower(object.fullpath), "\\dep01_1") or match(lower(object.fullpath), "\\tsu"))
+        and find_substr(subject.account.privileges, "%%4416") != null
+        and not exec_query ("Check_User_Positive", [subject.account.name])
+    }
+    
+event Windows_Buh_Share_File_Operations_4416_illegal_host:
+    key:
+        event_src.host, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "5140"
+        and (match(lower(object.fullpath), "\\servicefolder") or match(lower(object.fullpath), "\\dep01_1") or match(lower(object.fullpath), "\\tsu"))
+        and find_substr(subject.account.privileges, "%%4416") != null
+        and not exec_query ("Check_VPC_Positive", [src.host])
+        and not exec_query ("Check_Terminal_Positive", [src.host])
+    }
+    
+event Windows_Buh_Share_File_Operations_4416_illegal_time:
+    key:
+        event_src.host, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "5140"
+        and (match(lower(object.fullpath), "\\servicefolder") or match(lower(object.fullpath), "\\dep01_1") or match(lower(object.fullpath), "\\tsu"))
+        and find_substr(subject.account.privileges, "%%4416") != null
+        and in_list([0,15,16,17,18,19,20,21,22,23], hour(datetime(time)))
+    }
+
+
+rule UTMN_CR_Windows_Buh_Share_File_Create_Modify: (Windows_Buh_Share_File_Operations_4416_illegal_user -> Windows_Buh_Share_File_Operations_4418) or (Windows_Buh_Share_File_Operations_4416_illegal_user -> Windows_Buh_Share_File_Operations_4417) or (Windows_Buh_Share_File_Operations_4416_illegal_host -> Windows_Buh_Share_File_Operations_4418) or (Windows_Buh_Share_File_Operations_4416_illegal_host -> Windows_Buh_Share_File_Operations_4417) or (Windows_Buh_Share_File_Operations_4416_illegal_time -> Windows_Buh_Share_File_Operations_4418) or (Windows_Buh_Share_File_Operations_4416_illegal_time -> Windows_Buh_Share_File_Operations_4417)
+
+    init {
+        $labels = "w_auto"
+    }
+    
+    on Windows_Buh_Share_File_Operations_4416_illegal_user {
+		
+        $src.host = src.host
+        $src.ip = src.ip
+        $datafield10 = "illegal user"
+    }
+    
+	on Windows_Buh_Share_File_Operations_4416_illegal_host {
+		
+        $src.host = src.host
+        $src.ip = src.ip
+        $datafield10 = "illegal host"
+    }
+    
+    on Windows_Buh_Share_File_Operations_4416_illegal_time {
+		
+        $src.host = src.host
+        $src.ip = src.ip
+        $datafield10 = "illegal time"
+    }
+
+    on Windows_Buh_Share_File_Operations_4418 {
+
+        $action = "modify"
+     
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.value = object.value
+
+        $datafield1 = datafield1  # handle id
+        $datafield5 = datafield5  # Маска для запрошенной или выполненной операции
+        $datafield9 = datafield9  # Расшифровка subject.account.privileges
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|"))
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+    
+    on Windows_Buh_Share_File_Operations_4417 {
+
+        $action = "create"
+     
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.value = object.value
+
+        $datafield1 = datafield1  # handle id
+        $datafield5 = datafield5  # Маска для запрошенной или выполненной операции
+        $datafield9 = datafield9  # Расшифровка subject.account.privileges
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|"))
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $object = "file"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Data Manipulation"
+    $category.low = "Stored Data Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 30m
+}

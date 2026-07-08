@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {$temp_time1=DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{$temp_time2=DATETIME|}: {WORD":"?}
+        %{msgid="SYS-5-CONFIG_NV_I"}: Nonvolatile storage configured from {object.path=STRING} {REST}'
+
+action = "apply"
+object = "configuration"
+status = "success"
+
+if in_list(["127.0.0.1", "0.0.0.0", "::1"], $origin_id_ip) == true then
+    $origin_id_ip = null
+endif
+
+$raw_dst = strip(lower(object.path), "tftp://", "")
+dst.ip = strip($raw_dst, "", substr($raw_dst, find_substr($raw_dst, "/"), length($raw_dst)))
+
+time = coalesce($temp_time2, $temp_time1)
+
+importance = "medium"
+
+event_src.vendor = "cisco"
+event_src.title = "ios"
+if number($hostname) == null then
+    event_src.hostname = coalesce($hostname, $origin_id_hostname)
+    event_src.ip = coalesce($ip, $origin_id_ip)
+endif
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_syslog_SYS_5_CONFIG_NV_I"

@@ -1,0 +1,63 @@
+!JSON = "EventCode=5157"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing" and $EventType=="5"
+
+subject = "rule"
+action = "deny"
+object = "connection"
+status = "success"
+
+subject.id = $InsertionStrings[8]
+
+object.process.id = $InsertionStrings[0]
+$name_and_path = csv(lower($InsertionStrings[1]), "\\", "'")
+if length($name_and_path) == 1 then
+    object.process.name = lower($InsertionStrings[1])
+else
+    object.process.fullpath = lower($InsertionStrings[1])
+    object.process.name = $name_and_path[length($name_and_path) - 1]
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+endif
+
+object.property = "ALE layer"
+$object_value_raw = switch $InsertionStrings[9]
+    case "%%14610" "Receive/Accept"
+    case "%%14611" "Connect"
+endswitch
+object.value = coalesce($object_value_raw, $InsertionStrings[9])
+
+src.ip = $InsertionStrings[3]
+src.port = $InsertionStrings[4]
+dst.ip = $InsertionStrings[5]
+dst.port = $InsertionStrings[6]
+
+direction = switch $InsertionStrings[2]
+    case "%%14592" "ingress"
+    case "%%14593" "egress"
+endswitch
+
+protocol = $InsertionStrings[7]
+
+datafield5 = $InsertionStrings[10]  # layer id
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_Common_Security_Auditing_5157_WFP_blocked_a_connection"

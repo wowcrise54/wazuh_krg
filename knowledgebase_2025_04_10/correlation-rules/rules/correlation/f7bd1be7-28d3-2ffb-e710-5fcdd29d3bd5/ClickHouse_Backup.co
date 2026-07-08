@@ -1,0 +1,73 @@
+event Database_Backup:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "clickhouse"
+        and action == "backup"
+        and object == "db_object"
+        and filter::CheckWL_Database_Actions("ClickHouse_Backup", lower(object.query))
+    }
+
+rule ClickHouse_Backup: Database_Backup
+
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Database_Backup {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+
+        $object.storage.path = object.storage.path
+        $object.storage.name = object.storage.name
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.type = object.type
+        $object.name = object.name
+        $object.query = object.query
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $logon_service = logon_service
+
+        $datafield1 = datafield1  # Затронутые базы
+        $datafield2 = datafield2  # Затронутые таблицы
+        $datafield3 = datafield3  # Затронутые колонки
+        $datafield4 = datafield4  # Дополнительная информация
+
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.ip = event_src.ip
+
+        $alert.key = lower(object.query)
+    }
+
+    emit {
+        $correlation_type = "event"
+
+        $subject = "account"
+        $action = "backup"
+        $object = "db_object"
+        
+        $importance = "high"
+
+        $category.generic = "Attack"
+        $category.high = "Impact"
+        $category.low = "Data Manipulation: Stored Data Manipulation"
+
+        $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+        $incident.severity = $importance
+        $incident.category = if $status == "failure" then "BackupMalfunction" else "DataLeakage" endif
+        $incident.aggregation.timeout = 2h
+    }

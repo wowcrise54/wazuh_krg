@@ -1,0 +1,116 @@
+JSON = ''
+COND = $common_data["EventName"] == "FileOpened"
+
+subject = "account"
+action = "read"
+object = "file_object"
+status = "success"
+
+$temp_user = csv(lower($logon_data["UserName"]), "\\", "")
+subject.account.name = $temp_user[1]
+subject.account.domain = $temp_user[0]
+subject.account.id = lower($logon_data["UserId"])
+subject.account.privileges = $file_data["desiredFileAccess"]
+subject.account.session_id = $process_data["SessionId"]
+
+subject.process.name = $process_data["ProcessName"]
+subject.process.cmdline = strip($process_data["CommandLine"], "\"", "\"")
+subject.process.guid = $process_data["ProcessGuid"]
+subject.process.id = $process_data["ProcessId"]
+
+if $process_data["MD5"] != "" then
+    subject.process.hash.md5 = $process_data["MD5"]
+endif
+if $process_data["SHA256"] != "" then
+    subject.process.hash.sha256 = $process_data["SHA256"]
+endif
+if $process_data["SHA1"] != "" then
+    subject.process.hash.sha1 = $process_data["SHA1"]
+endif
+
+subject.process.parent.id = $process_data["ParentProcessId"]
+
+object.fullpath = $file_data["FilePath"]
+$temp_path = csv($file_data["FilePath"], "\\", "")
+object.name = $temp_path[length($temp_path) - 1]
+object.path = strip(object.fullpath, "", object.name)
+
+if $file_data["IsDirectory"] == 1 then
+    object.type = "directory"
+else
+    object.type = "file"
+endif
+
+object.property = "file size, bytes"
+object.value = string($file_data["FileSize"])
+
+datafield1 = $logon_data["Subject_logon_id"]           # Subject logon ID
+datafield2 = lower($logon_data["LogonGuid"])           # Logon GIUD
+datafield3 = $common_data["EventRecordID"]             # Event record ID
+datafield4 = strip($process_data["Signer"], "\"", "")  # Signer
+
+datafield5 = switch $process_data["Integrity"]   # Integrity
+   case "0x0000" "Untrusted level"
+   case "0x1000" "Low  integrity level"
+   case "0x2000" "Medium integrity level"
+   case "0x3000" "High integrity level"
+   case "0x4000" "System integrity level"
+endswitch
+
+datafield6 = $process_data["Verified"]                 # Verified
+
+datafield7 = switch $process_data["ProtectionSigner"]  # Protection signer
+   case 0 "No protection"
+   case 1 "Protected Signer Authenticode"
+   case 2 "PsProtectedSignerCodeGen"
+   case 3 "PsProtectedSignerAntimalware"
+   case 4 "PsProtectedSignerLsa"
+   case 5 "PsProtectedSignerWindows"
+   case 6 "PsProtectedSignerWinTcb"
+endswitch
+
+datafield8 = switch $process_data["ProtectionType"]  # Protection type
+   case 0 "No protection"
+   case 1 "PPL"
+   case 2 "System protected"
+endswitch
+
+if $file_data["file_attributes"] != "" then
+    datafield9 = $file_data["file_attributes"]          # file_attributes
+endif
+
+datafield10 = $file_data["file_attributes_R"]           # raw file_attributes
+datafield11 = $file_data["desiredFileAccess_R"]         # raw desired file access
+
+$event_reason = csv($common_data["Status"], " : ", "")
+datafield12 = strip($event_reason[0], "error = ", "")  # error code value
+datafield13 = string($process_data["FileSize"])        # Process file size, bytes
+
+numfield1 = $common_data["Aggregation_count"]          # Aggregation_count ID
+numfield2 = $process_data["ThreadId"]                  # Thread ID
+numfield3 = $process_data["IsElevated"]                # Is elevated
+numfield4 = $common_data["SequenceNumber"]             # Sequence number of events since driver started
+
+reason = strip($event_reason[1], "", ".")
+
+msgid = $common_data["EventName"]
+time = $common_data["Time"]
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+$dot_pos = find_substr($logon_data["Computer"], '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($logon_data["Computer"])
+    event_src.hostname = lower(substr($logon_data["Computer"], 0, $dot_pos))
+else
+    event_src.hostname = lower($logon_data["Computer"])
+endif
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_xdrmon_File_opened"

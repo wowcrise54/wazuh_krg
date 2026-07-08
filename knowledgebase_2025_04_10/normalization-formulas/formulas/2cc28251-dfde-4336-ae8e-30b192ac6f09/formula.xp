@@ -1,0 +1,32 @@
+EVENTLOG = 'Channel="Application"'
+
+!COND = $EventID["text"] == "109" and $Provider["Name"] == "dwmrcs"
+
+subject = "account"
+action = "stop"
+object = "session"
+status = "success"
+
+submessage("TEXT", "SPLIT1", $Data[0])
+
+subformula "SPLIT1"
+    # обработка текста из $Data[0]
+    TEXT = '\r\nDameWare Mini Remote Control\r\nThe desktop user disconnected the session via the
+            MRC Tray menu\r\nUserID:{subject.domain=UNTIL("\\\\")} {subject.name=STRING}{REST}'
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "solarwinds"
+event_src.title = "dameware_mrc"
+if find_substr($Computer, ".") != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, find_substr($Computer, "."))
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Terminal services"
+
+id = "PT_SolarWinds_DameWare_MRC_eventlog_109_user_disconnected_session_via_tray_menu"

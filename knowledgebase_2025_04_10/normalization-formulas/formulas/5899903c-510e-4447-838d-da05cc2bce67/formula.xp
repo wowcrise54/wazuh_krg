@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        postfix{"/"event_src.subsys=WORDDASH?}{"["NUMBER"]"?}: {datafield1=WORD}:
+        to={$object.value=STRING} relay={$hostname=HOSTNAME}{"["?}{dst.ip=IPV4|dst.ip=IPV6|}{"]"?}{":"dst.port=NUMBER?},
+        delay={STRING} delays={STRING} dsn={$reason_raw=STRING} status=sent {REST}'
+
+action = "send"
+object = "message"
+status = "success"
+
+object.property = "recipient"
+object.value = strip($object.value, "<", ">,")
+reason = strip($reason_raw, "", ",")
+
+if $hostname != "unknown" and $hostname != "none" then
+    dst.hostname = $hostname
+endif
+
+protocol = "SMTP"
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "postfix"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Postfix_syslog_message_sent"

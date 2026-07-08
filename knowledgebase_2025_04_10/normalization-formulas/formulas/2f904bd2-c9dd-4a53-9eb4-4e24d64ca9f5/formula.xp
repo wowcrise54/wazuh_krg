@@ -1,0 +1,79 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} production_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"method":"POST"') != null
+    and find_substr($json, '"controller":"Repositories::GitHttpController"') != null
+    and (
+        find_substr($json, '"action":"git_upload_pack"') != null
+        or find_substr($json, '"action":"git_receive_pack"') != null
+    )
+)
+
+subject = "account"
+object = "resource"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+action = switch $action
+    case "git_upload_pack" "download"
+    case "git_receive_pack" "upload"
+endswitch
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+$s_repository_path = find_substr($json, '{"key":"repository_path","value":"')
+$e_repository_path = find_substr(substr($json, $s_repository_path, length($json)), '"}')
+$repository_path = substr($json, $s_repository_path + 34, $e_repository_path - 34)
+$repository_path = if length($repository_path) != 0 then $repository_path else null endif
+
+if substr($repository_path, -4, 4) == ".git" then
+    $path_meta_project = strip($repository_path, "", ".git")
+endif
+
+object.type = "repository"
+object.name = $repository_path
+
+src.ip = $remote_ip
+
+protocol.layer7 = "http"
+
+$meta_project = coalesce($['meta.project'], $path_meta_project)
+$project_list = csv($meta_project, "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($meta_project, "", "/" + $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = $project_namespace_fullpath  # Namespace Fullpath
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "production"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Production_Repo_HTTP"

@@ -1,0 +1,29 @@
+id = "PT_Cisco_IOS_syslog_DUAL_NBRCHANGE"
+
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{time=DATETIME}{":"?} {WORD":"?}
+        %{msgid="DUAL-5-NBRCHANGE"}: {STRING} {$as_number=NUMBER}: Neighbor {dst.ip=IPV4} ({$tmp_interface=STRING}
+        is {$tmp_state="up"|$tmp_state="down"}: {reason=REST}'
+
+if ($origin_id_ip == "127.0.0.1" or $origin_id_ip == "0.0.0.0") then
+    $origin_id_ip = null
+endif
+
+if number($hostname) == null then
+    event_src.hostname = coalesce($hostname, $origin_id_hostname)
+    event_src.ip = coalesce($ip, $origin_id_ip)
+endif
+
+action = if $tmp_state=="up" then "start" else "stop" endif
+object = "session"
+status = "success"
+
+protocol = "EIGRP"
+datafield1 = string($as_number)
+interface = strip($tmp_interface,"",")")
+
+importance = "info"
+
+event_src.title = "ios"
+event_src.vendor = "cisco"
+event_src.category = "Network device"

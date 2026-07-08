@@ -1,0 +1,107 @@
+event Run_Script:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and object == "command"
+        and event_src.title == "windows"
+        and regex(lower(object.process.cmdline), "dsinternals\.replication\.interop\.dll", 0) != null
+        and filter::CheckWL_Powershell("DSInternals_Usage", join([lower(event_src.host), lower(subject.account.id)], "|"))
+    }
+
+event Load_Module:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "7"
+        and event_src.title == "sysmon"
+        and (
+           regex(lower(object.process.meta), "(description|product):dsinternals\\b", 0) != null
+           or lower(object.name) == "dsinternals.replication.interop.dll"
+        )
+    }
+
+rule DSInternals_Usage: (Load_Module and Run_Script) timer 15s
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+    }
+
+    on Run_Script {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.process.cmdline = object.process.cmdline
+
+        $datafield2 = object.fullpath # полный путь до скрипта, в котором используется dll-ка из события 7
+        $datafield8 = datafield8  # версия модуля
+
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on Load_Module {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.version = object.version
+
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.original_name = object.process.original_name
+        $object.process.fullpath = object.process.fullpath
+        $object.process.meta = object.process.meta
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $alert.key = join([lower($event_src.host), lower($subject.account.id)], "|")
+    
+    $regex_found_meta = regex(lower($object.process.meta), "(description|product):dsinternals\\b", 0)
+    $regex_found_dll = regex(lower($object.process.cmdline), "dsinternals\.replication\.interop\.dll", 0)  
+    $alert.regex_match = $regex_found_dll
+    $alert.context = "Found in object.process.meta: \"" + $regex_found_meta + "\""
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Shared Modules"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance 
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

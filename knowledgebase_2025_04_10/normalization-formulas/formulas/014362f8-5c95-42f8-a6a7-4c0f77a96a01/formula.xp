@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        named{"-pkcs11"?}[{NUMBER}]: {$temp_time_1=STRING} {$temp_time_2=STRING} {event_src.subsys="query-errors"}: {UNTIL(":")}
+        client {dst.ip=IPV4|dst.ip=IPV6}#{dst.port=NUMBER} ({STRING} {"view" datafield1=UNTIL(":")?}
+        rate limit drop {UNTIL(" to ")}{datafield2=STRING} {$rest=REST}'
+
+subject = "rule"
+action = "deny"
+object = "connection"
+status = "success"
+
+subject.type = "rate limit rule"
+
+if $rest != "" then
+    submessage("TEXT", "parse_rest", $rest)
+endif
+subformula "parse_rest"
+    TEXT = "for {object.value=STRING+} ({REST}"
+    object.property = "resource for which response was drop"
+endsubformula
+
+reason = "response dropped"
+
+# datafield1 - the name of the view associated with the event
+# datafield2 - the address/subnet for which the ban was imposed
+
+$temp_time_3 = $temp_time_1 + " " + $temp_time_2
+time = datetime(replace($temp_time_3, "", "-", 0))
+
+importance = "medium"
+
+category.high = "Network Interaction Management"
+category.generic = "Connection"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "bind"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_BIND_syslog_rate_limit_drop_response"

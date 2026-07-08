@@ -1,0 +1,45 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"("?}nginx{")"?}{"["NUMBER"]"?}:
+        {time=DATETIME}
+        [{WORD}]
+        {NUMBER"#"NUMBER?}: {STRING?}
+        client sent invalid method {STRING+?} reading client request line,
+        client: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME},
+        {$kv=KEYVALUE(",",":")}'
+
+action = "check"
+object = "request"
+status = "failure"
+
+submessage("TEXT", "dst_and_method", $kv['server'] + "!" + $kv['request'])
+
+# parse dst address and method
+subformula "dst_and_method"
+    TEXT = '{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME|"_"}{":"dst.port=NUMBER?} {"!"} {$method=STRING} {REST}'
+    object.property = "method"
+    object.value = strip($method, '"', '"')
+endsubformula
+
+if dst.hostname == null then 
+    dst.hostname = $Computer
+elif dst.ip == null then
+    dst.ip = event_src.ip
+endif
+
+# referer
+datafield1 = strip($kv['referrer'], ' "', '"')
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nginx"
+event_src.category = "Web server"
+
+id = "PT_Opensource_Nginx_syslog_client_sent_invalid_method"

@@ -1,0 +1,37 @@
+EVENTLOG = 'Channel = "Netwrix Auditor"'
+
+COND = $EventID["text"] == "2006" or $EventID["text"] == "6104"
+
+action = "alert"
+object = "service"
+status = "success"
+
+datafield1 = string($Data[0])  # monitoring plan name
+# datafield2 - monitored item
+
+if $EventID["text"] == "2006" then
+    reason = strip($Data[2],"",".")
+elif $EventID["text"] == "6104" then
+    datafield2 = $Data[1]
+    reason = strip($Data[5],"",".")
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($Provider["Name"])
+event_src.category = "Other"
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_Monitoring_plan_error"

@@ -1,0 +1,13 @@
+filter Explicit_FileRead_Linux(string $fullpath) {
+    (
+        in_list(["cat", "tail", "head", "awk", "nano", "less", "vim", "vi", "strings", "more", "sed", "nl", "cut", "sort", "uniq", "mc", "visudo"], object.process.name)
+        and regex(object.process.cmdline, $fullpath, 0) != null
+    ) 
+    or (
+        in_list(["cat", "tail", "head", "awk", "nano", "less", "vim", "vi", "strings", "more", "sed", "nl", "cut", "sort", "uniq", "mc", "visudo"], subject.process.name)
+        and action == "access"
+        and in_list(["resource", "file", "link", "file_object"], object)
+        and in_list(['r', 'rw'], object.state)
+        and regex(object.fullpath, $fullpath, 0) != null
+    )
+}

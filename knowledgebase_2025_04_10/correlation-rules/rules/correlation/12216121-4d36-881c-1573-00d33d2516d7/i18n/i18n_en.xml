@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The MultiDump utility was used for dumping LSASS memory discreetly, without triggering Defender alerts</Description>
+  <EventDescriptions>
+    <EventDescription id="19749267-0615-0dcc-6a58-ae7213ac1b81">User {subject.account.name} locally saved the contents of the LSASS process memory to file "{object.name}" using utility {subject.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="e4e08fc9-e0bc-ddcd-4c1d-c40d8f6ff216">User {subject.account.name} dumped the LSASS process memory using utility {subject.process.name} on host {event_src.host} and then sent it to remote host {dst.ip}:{dst.port}</EventDescription>
+  </EventDescriptions>
+</Localization>

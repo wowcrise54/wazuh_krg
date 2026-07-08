@@ -1,0 +1,35 @@
+EVENTLOG = 'EventID="346"'
+COND = in_list(["AD FS 2.0/Admin", "AD FS/Admin"], $Channel) and
+       in_list(["AD FS 2.0", "AD FS"], $Provider["Name"])
+
+action = "sync"
+object = "configuration"
+status = "failure"
+
+submessage("TEXT", "reason_parse", $UserData["Event"]["EventData"]["Data"])
+
+object.name = "AD FS"
+
+subformula "reason_parse"
+    TEXT = "{STRING}{$reason_raw_1 = STRING}{$reason_raw_2 = WORD+}{'('|'.'}{REST}"
+    reason = $reason_raw_1 + " " + $reason_raw_2
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "ad fs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_346_Error_during_retrieving_config_for_secondary_federation_server"

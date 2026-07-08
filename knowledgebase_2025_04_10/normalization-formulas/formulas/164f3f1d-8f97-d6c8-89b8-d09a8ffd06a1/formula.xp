@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {STRING?}
+{time=DATETIME},{NUMBER} INFO access for license [sid={$sid=UNTIL("]")}[{src.ip=IPV4|src.ip=IPV6}] allowed: get [{$file=UNTIL("]")}, file [{$fs_fullpath=UNTIL("]")}'
+
+action = "download"
+object = "file_object"
+status = "success"
+
+subject.account.id = $sid  # SID
+
+object.name = $file
+
+$fs_list = csv($fs_fullpath, "/", "'")
+object.storage.fullpath = $fs_fullpath
+object.storage.name = $fs_list[length($fs_list) - 1]
+object.storage.path = strip($fs_fullpath, "", object.storage.name)
+
+importance = "medium"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "flus"
+event_src.category = "Web server"
+
+id = "PT_Positive_Technologies_FLUS_Download_via_SSL_Key_Success"

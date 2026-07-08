@@ -1,0 +1,13 @@
+Category:
+EventDescriptions:
+- Criteria: 'correlation_name = "Execute_PSEXEC" and datafield11 != null'
+  LocalizationId: 5b9e4ee1-eb8f-4a0d-9863-ba38f971fbb3
+- Criteria: 'correlation_name = "Execute_PSEXEC" and object.process.name != null and reason != "psexec" and datafield11 = null'
+  LocalizationId: 613cbc8e-6b70-41fb-b43b-b9a6f800991a
+- Criteria: 'correlation_name = "Execute_PSEXEC" and object.process.name != null and (reason = "psexec" or object.process.name = "psexesvc.exe")'
+  LocalizationId: 63eee384-627d-485f-bd81-5c9ab643248e
+- Criteria: 'correlation_name = "Execute_PSEXEC" and object.process.name = null'
+  LocalizationId: b843c7a0-aaa1-472f-955f-e7dd06d8e2c8
+PtkbId: 29c742a7-2ad5-4632-b461-bb3fe3e7560c
+ObjectId: PT-CR-217
+Origin: PT

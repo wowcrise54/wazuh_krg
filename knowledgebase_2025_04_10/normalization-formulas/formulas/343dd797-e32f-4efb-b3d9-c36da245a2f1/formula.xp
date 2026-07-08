@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {STRING} CEF:{NUMBER}|Infotecs|IDS HS|{UNTIL("|")}{msgid=NUMBER}|
+        {$desc=UNTIL("|")}{$priority=NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+COND = in_list(["300040", "300046", "301065", "302090", "302147", "302148",
+                "302335", "302351", "302352", "302353", "302354", "302355",
+                "302356", "302357", "302358", "302359", "302512", "302522",
+                "302523", "302524", "302535"], msgid)
+
+action = "detect"
+object = "malware"
+status = "success"
+
+$tmp_list = csv($kv['sproc'], "\\", "")
+# подозреваемый процесс
+subject.process.name = $tmp_list[length($tmp_list) - 1]
+subject.process.path = strip($kv['sproc'], '', subject.process.name)
+subject.process.cmdline = $kv['InfotecsIDSHSCommandLine']
+$tmp_list = csv($kv['InfotecsIDSHSParentProcessName'], "\\", "")
+subject.process.parent.name = $tmp_list[length($tmp_list) - 1]
+subject.process.parent.path = strip($kv['InfotecsIDSHSParentProcessName'], '', subject.process.parent.name)
+
+# пользователь, от имени которого запустили подозреваемый процесс
+object.account.name = $kv['suser']
+object.account.domain = $kv['sntdom']
+object.account.id = $kv['suid']
+object.name = strip($desc, "Вредоносный артефакт:", "")
+
+time = epoch_ms_to_datetime(number($kv['rt']))
+
+if $priority < 6 then
+    importance = "info"
+elif $priority >= 6 and $priority < 8 then
+    importance = "low"
+elif $priority >= 8 and $priority < 10 then
+    importance = "medium"
+elif $priority >= 10 then
+    importance = "high"
+endif
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids_hs"
+event_src.subsys = lower($kv['deviceFacility'])
+event_src.ip = $kv['dvc']
+event_src.hostname = $kv['InfotecsIDSHShost']
+event_src.category = "IDS/IPS"
+event_src.id = $kv['InfotecsIDSHShostId']
+
+id = "PT_Infotecs_VipNet_IDS_HS_syslog_cef_detect_malicious_artifact"

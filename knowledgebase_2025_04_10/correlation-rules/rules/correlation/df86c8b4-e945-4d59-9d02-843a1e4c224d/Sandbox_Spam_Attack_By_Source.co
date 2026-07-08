@@ -1,0 +1,179 @@
+query CheckIfContactGroup($group_name) from Sensitive_Mail_Contact_Groups {
+    regex_match($group_name, group_name)
+}
+
+event PTSandbox_Email_Received_Single_Recipient:
+    key:
+        subject.account.contact
+    filter {
+        correlation_name == "Subrule_Sandbox_Mail_Attachment"
+        and object.account.contact != null
+        and numfield1 < 25
+        and filter::CheckWL_Specific_Only("Sandbox_Spam_Attack_By_Source", lower(subject.account.contact))
+    }
+    
+event PTSandbox_Email_Received_Many_Recipients:
+    key:
+        subject.account.contact
+    filter {
+        correlation_name == "Subrule_Sandbox_Mail_Attachment"
+        and (
+            numfield1 > 24
+            or exec_query("CheckIfContactGroup", [lower(datafield7)])
+        )
+        and filter::CheckWL_Specific_Only("Sandbox_Spam_Attack_By_Source", lower(subject.account.contact))
+    }
+    
+rule Sandbox_Spam_Attack_By_Source: PTSandbox_Email_Received_Single_Recipient[25,] with different object.account.contact timer 15m or PTSandbox_Email_Received_Many_Recipients 
+
+    init {
+        $first_event = true
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on PTSandbox_Email_Received_Single_Recipient {
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.id = subject.account.id
+            $subject.account.domain = subject.account.domain
+            $subject.account.contact = subject.account.contact
+            
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.contact = object.account.contact
+            
+            $object.name = object.name
+            $object.property = object.property
+            $object.type = object.type
+            $object.value = object.value
+
+            $object.storage.name = object.storage.name
+            $object.storage.fullpath = object.storage.fullpath
+            $object.storage.path = object.storage.path
+
+            $chain_id = chain_id
+            
+            $datafield1 = datafield1    # Exchange host
+            $datafield2 = datafield2    # message receive time
+            $datafield3 = datafield3    # entry point address
+            $datafield4 = datafield4    # sender
+            $datafield5 = datafield5    # subject
+            $datafield6 = datafield6    # mail_from_to
+            $datafield7 = datafield7    # Получатель письма, но из поля 'recipients'
+            $datafield8 = datafield8    # имя вложения, при его наличии
+            $datafield9 = datafield9    # хэш вложения, при его наличии
+            $datafield11 = datafield11  # Exchange assetID
+            
+            $numfield1 = numfield1    # число получателей письма
+            
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.port = dst.port
+            $dst.asset = dst.asset
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category 
+            
+            $alert.key = lower(subject.account.contact)
+            
+            $external_link = external_link
+
+            $first_event = false
+        endif
+    }
+    
+    on PTSandbox_Email_Received_Many_Recipients {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.contact = subject.account.contact
+        
+        $object.account.contact = object.account.contact
+        
+        $object.name = object.name
+        $object.property = object.property
+        $object.type = object.type
+        $object.value = object.value
+
+        $object.storage.name = object.storage.name
+        $object.storage.fullpath = object.storage.fullpath
+        $object.storage.path = object.storage.path
+
+        $chain_id = chain_id
+
+        $datafield1 = datafield1    # Exchange host
+        $datafield2 = datafield2    # message receive time
+        $datafield3 = datafield3    # entry point address
+        $datafield4 = datafield4    # sender
+        $datafield5 = datafield5    # subject
+        $datafield6 = datafield6    # mail_from_to
+        $datafield7 = datafield7    # Получатель письма, но из поля 'recipients'
+        $datafield8 = datafield8    # имя вложения, при его наличии
+        $datafield9 = datafield9    # хэш вложения, при его наличии
+        $datafield11 = datafield11  # Exchange assetID
+        
+        $numfield1 = numfield1    # число получателей письма
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category 
+        
+        $alert.key = lower(subject.account.contact)
+        
+        $external_link = external_link
+    }
+    
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "send"
+    $object = "message"
+    $status = "success"
+    
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Phishing"
+    
+    $incident.aggregation.key = join([$correlation_name, $datafield8], "|")
+    $incident.severity = $importance
+    $incident.category = "Phishing"
+    $incident.aggregation.timeout = 2h
+}

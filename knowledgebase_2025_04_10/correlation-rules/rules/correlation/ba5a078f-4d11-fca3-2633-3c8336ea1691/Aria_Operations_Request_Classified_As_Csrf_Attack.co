@@ -1,0 +1,60 @@
+event Request_Classified_As_CSRF_Attack:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "aria_operations"
+        and action == "detect"
+        and object == "attack"
+        and object.fullpath != null
+        and filter::CheckWL_Specific_Only(
+            "Aria_Operations_Request_Classified_As_Csrf_Attack", 
+            lower(join([event_src.host, object.fullpath],"|"))
+        )
+    }
+
+rule Aria_Operations_Request_Classified_As_Csrf_Attack: Request_Classified_As_CSRF_Attack
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Request_Classified_As_CSRF_Attack {
+        $subject = subject
+        $action = action
+        $object = object    
+        $status = status
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        
+        $alert.key = lower(join([event_src.host, object.fullpath],"|"))
+        $alert.context = "Request to " + $object.name + " classified as CSRF attack"
+            
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Phishing: Spearphishing Link"
+    
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "Phishing"
+    $incident.aggregation.timeout = 2h
+}

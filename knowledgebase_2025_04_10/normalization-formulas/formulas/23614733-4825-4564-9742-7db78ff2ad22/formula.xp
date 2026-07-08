@@ -1,0 +1,32 @@
+TABULAR =  "recordid,
+            {subject.name = module_name},
+            severity,
+            event_id,
+            {time = time},
+            {datafield1 = site_code},
+            hostname,
+            {datafield2 = component},
+            {object.id = params}
+            "
+
+COND = $event_id == 2311
+
+$tmp_list = csv($params, ',', '"')
+
+subject = "application"
+object = "resource"
+object.type = "package"
+
+action = "modify"
+status = "success"
+
+msgid = string($event_id)
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "info"
+
+id = "PT_Microsoft_SCCM_odbc_2311_successfully_created_or_updated_package"

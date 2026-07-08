@@ -1,0 +1,21 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{event_src.hostname=HOSTNAME}{STRING}%HISTORY-6:({interface=WORD}:
+        {subject.account.name=WORD}{subject.account.privileges=NUMBER})[{src.ip=IPV4|src.ip=IPV6|""}]{object.process.cmdline=REST}'
+
+COND = object.process.cmdline != ""
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+importance = "info"
+
+category.high = "System Management"
+category.generic = "Command"
+category.low = "Manipulation"
+
+event_src.vendor = "yarus_networks"
+event_src.title = "yn"
+event_src.category = "Network device"
+
+id = "PT_Yarus_Networks_YN_syslog_history"

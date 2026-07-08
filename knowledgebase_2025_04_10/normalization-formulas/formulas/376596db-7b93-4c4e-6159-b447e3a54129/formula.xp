@@ -1,0 +1,21 @@
+TEXT = '{time=DATETIME} {object.process.name=STRING} ({WORD}) {WORD} {WORD+} Document Sharing {msgid="bxknp"|msgid="bxknr"} Medium
+        {UNTIL("Site :")}{object.name =STRING} {datafield2=WORDDASH} is not enabled. {datafield1=WORDDASH}'
+
+action = "info"
+object = "resource"
+status = "success"
+
+object.type = "document sharing"
+
+# datafield1 - Correlation: Unique GUID-based ID, generated for each request received by the SharePoint server (unique to each request, not each error)
+# datafield2 - Type of sharing
+
+reason = "Site: " + object.name + " " + datafield2 + " is not enabled"
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Sharing_is_not_enabled"

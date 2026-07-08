@@ -1,0 +1,42 @@
+EVENTLOG = 'Channel = "Netwrix Auditor"'
+
+COND = $EventID["text"] == "1001" or $EventID["text"] == "1002" or $EventID["text"] == "1101" or
+       $EventID["text"] == "1102" or $EventID["text"] == "4001" or $EventID["text"] == "4002"
+
+if $EventID["text"] == "1001" or $EventID["text"] == "1101" then
+    action = "start"
+elif $EventID["text"] == "1002" or $EventID["text"] == "1102" then
+    action = "stop"
+elif $EventID["text"] == "4001" then
+    action = "start"
+    object.name = $Data[0]
+elif $EventID["text"] == "4002" then
+    action = "stop"
+    object.name = $Data[0]
+endif
+
+object = "service"
+status = "success"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($Provider["Name"])
+event_src.category = "Other"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_Service_started_stopped"

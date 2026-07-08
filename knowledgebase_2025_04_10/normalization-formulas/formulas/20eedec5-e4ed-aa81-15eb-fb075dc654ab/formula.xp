@@ -1,0 +1,44 @@
+JSON = 'Provider = "Microsoft-Windows-Kernel-Process"'
+COND = ($EventID == 5 or $EventID == 6) and 
+        ($TaskName == "ImageUnload" or $TaskName == "ImageLoad")
+
+subject = "process"
+
+if $TaskName == "ImageLoad" then
+    action = "start"
+elif $TaskName == "ImageUnload" then
+    action = "stop"
+endif
+
+object = "module"
+status = "success"
+
+subject.process.id = $EventData["ProcessID"]
+
+object.fullpath = $EventData["ImageName"]
+$imagepath = csv(object.fullpath, "\\", "")
+object.name = $imagepath[length($imagepath) - 1]
+object.path = strip(object.fullpath, "", object.name)
+object.type = "DLL"
+
+datafield1 = $EventData["DefaultBase"]        # Default base
+datafield2 = $EventData["ImageBase"]          # Image base
+datafield3 = $EventData["ImageCheckSum"]      # Image checksum
+datafield4 = $EventData["ImageSize"]          # Image size
+datafield5 = $TaskName                        # Task name
+datafield6 = $ThreadID                        # ThreadID
+if $Name != "" then datafield7 = $Name endif  # process name if not empty
+
+time = $Timestamp
+msgid = $EventID
+importance = "info"
+
+category.generic = "Executable Module"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_ETW_Image_load_unload"

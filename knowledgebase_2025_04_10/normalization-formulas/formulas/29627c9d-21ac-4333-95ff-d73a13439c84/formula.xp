@@ -1,0 +1,26 @@
+!TABULAR = "id,
+            {time = start_time},
+            {datafield1 = node_name},
+            {event_src.ip = ip},
+            rule_name,
+            message"
+
+!COND = ($rule_name == "Выключение координатора")
+
+action = "stop"
+object = "application"
+status = "success"
+
+object.name = "coordinator"
+
+# datafield1 - имя узла
+
+reason = lower($message)
+
+importance = "high"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_statewatcher"
+event_src.category = "Network monitoring system"
+
+id = "PT_Infotecs_VipNet_StateWatcher_odbc_Application_stop"

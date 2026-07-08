@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {$dt=STRING} INFO  
+        [{UNTIL("]")} com.vmware.vcops.{"util.admin.HTTPSRequester.doHttpUpload"|
+        "adminui.service.PakUploadService.handleFileUpload"} - {"Upload file"|"Upload solution"} {$info=REST}'
+
+action = "upload"
+object = "file_object"
+status = "ongoing"
+
+subformula "parse_info"
+    TEXT = '{$obj_name=UNTIL("\'")} to URL : {$url=REST}'
+    
+    object.name = lower($obj_name)
+    
+    if $url != '' then
+        datafield1 = $url                           # Upload endpoint
+    endif
+endsubformula
+
+subformula "parse_info"
+    TEXT = '{$kv_pak = KEYVALUE(",", "=", "")}'
+    
+    object.name = lower($kv_pak['name'])
+    object.type = "pak"
+    
+    datafield1 = $kv_pak['force']                   # Replace current installation
+    datafield2 = $kv_pak['ignoreSignatureChecking'] # Whether to ignore the signature
+endsubformula
+
+submessage("TEXT", "parse_info", $info)
+
+time = datetime(replace($dt, ".", ","))
+importance = switch object.type
+    case null "info"
+    case "pak" "medium"
+endswitch
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_file_or_pak_upload"

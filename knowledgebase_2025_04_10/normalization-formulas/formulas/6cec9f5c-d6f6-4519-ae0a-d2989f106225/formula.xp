@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        Vaultize - - [origin software= {datafield2=STRING} version= {datafield3=STRING} src={src.ip=IPV4|src.ip=IPV6} ][
+        userid user= {object.value=UNTIL("][")} client url=https:// {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME} {"/"?}
+        userAgent={datafield1=UNTIL("][")} path filename={$path_raw=UNTIL("]")} {"OBJECT"|"DEVICE"} Synced:
+        {$act="Sync Start"|$act="Sync Finished"}'
+
+action = "sync"
+object = "resource"
+status = switch $act
+    case "Sync Start" "ongoing"
+    case "Sync Finished" "success"
+endswitch
+
+object.type = "directory"
+object.property ="owner account id"
+$path_delim_index = coalesce(find_substr($path_raw, "/"), find_substr($path_raw, "\\"))
+$path_delimeter = substr($path_raw, $path_delim_index, 1)
+$csv_path = csv($path_raw, $path_delimeter, "'")
+if length($csv_path) > 1 then
+    object.name = $csv_path[length($csv_path) - 2]
+    object.path = strip($path_raw, "", object.name + $path_delimeter)
+else
+    object.name = $path_raw
+endif
+
+# datafield1 - user agent
+# datafield2 - application name
+# datafield3 - application version
+
+importance = "info"
+
+event_src.vendor = "vaultize_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vdr"
+event_src.category = "Application server"
+
+id = "PT_Vaultize_Technologies_VDR_syslog_object_synced"

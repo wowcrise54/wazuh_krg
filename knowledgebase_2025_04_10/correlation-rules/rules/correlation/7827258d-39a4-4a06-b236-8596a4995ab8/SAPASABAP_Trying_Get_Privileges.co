@@ -1,0 +1,83 @@
+query SAP_Check_Transaction($transaction) from SAP_ABAP_Transactions_To_Get_Privileges {
+    transaction == $transaction
+}
+
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid 
+    and group == "Production"
+}
+
+event Trying_Start_Transaction:
+    key:
+        event_src.host, event_src.id, subject.account.name, src.host, datafield1
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and reason == "User is not authorized for this transaction"
+        and src.host != null
+        and datafield1 != null
+        and subject.account.name != null
+        and exec_query("SAP_Check_Transaction", [object.name])
+        and exec_query("SAP_Check_Groups", [event_src.id])
+    }
+
+rule SAPASABAP_Trying_Get_Privileges: (Trying_Start_Transaction[2] with different object.name) within 1h
+
+    init {
+        $first_event = true
+    }
+
+    on Trying_Start_Transaction {
+        if $first_event then
+            if subject.account.name != null then
+                $subject = "account"
+
+                $subject.account.id = subject.account.name
+            endif
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+        
+            $datafield1 = datafield1  # SAP Client
+
+            $event_src.id = event_src.id
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $first_event = false
+        endif
+
+        $modules_list = append($modules_list, object.name)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "start"
+    $object = "transaction"
+    $status = "failure"
+
+    $object.name = join($modules_list, "|")
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Valid Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id, $subject.account.id, $src.host, $datafield1], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

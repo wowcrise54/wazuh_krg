@@ -1,0 +1,13 @@
+event ARP_with_error:
+    key:
+        event_src.host, interface, src.mac, src.host, id, reason,
+        importance, event_src.category
+
+    action = "alert"
+    object = "arp_table"
+    status = "success"
+
+    event_src.vendor = "cisco"
+    event_src.title = "nexus"
+
+aggregate Cisco_Nexus_ARP_with_error: ARP_with_error[3,300] within 10m

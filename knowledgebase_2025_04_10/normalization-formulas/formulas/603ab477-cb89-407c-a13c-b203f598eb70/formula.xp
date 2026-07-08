@@ -1,0 +1,33 @@
+EVENTLOG = 'EventID.text="7023"'
+!COND = $Channel=="System" and $Provider["Name"]=="Service Control Manager"
+
+action = "terminate"
+object = "service"
+status = "success"
+
+object.name = $Data["param1"]
+
+reason = $Data["param2"]
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_7023_Windows_Service_Fails_or_Crashes"

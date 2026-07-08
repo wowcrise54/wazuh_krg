@@ -1,0 +1,29 @@
+EVENTLOG = 'Channel="Application"'
+!COND = $EventID["text"] == "0" and ($Provider["Name"] == "KSHSecurityService" or $Provider["Name"] == "KSHAdministrationService")
+        and ($Data[0] == "Service started successfully." or $Data[0] == "Service stopped successfully.")
+
+action = switch $Data[0]
+    case "Service started successfully." "start"
+    case "Service stopped successfully." "stop"
+endswitch
+object = "service"
+status = "success"
+
+object.name = $Provider["Name"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_sharepoint_server"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Security_for_SharePoint_Server_eventlog_0_service_info"

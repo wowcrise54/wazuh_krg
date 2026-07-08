@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        %%10SHELL/{NUMBER}/{msgid="SHELL_LOGOUT"}(l): {"-DevIP="?}{event_src.ip=IPV4|event_src.ip=IPV6|}{";"?}
+        {subject.account.name=WORDDASH} logged out from {src.ip=IPV4|src.ip=IPV6}.'
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "comware_software"
+event_src.subsys = "shell"
+event_src.category = "Network device"
+
+id = "PT_Hewlett_Packard_Enterprise_Comware_Software_syslog_shell_logout"

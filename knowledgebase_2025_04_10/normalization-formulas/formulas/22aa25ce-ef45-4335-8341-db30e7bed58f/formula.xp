@@ -1,0 +1,28 @@
+!JSON = 'TargetInstance.__CLASS="Win32_LoggedOnUser"'
+
+time = win_ticks_to_datetime($TIME_CREATED)
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subject.account.name = lower($Win32_Account['Name'])
+subject.account.domain = lower($Win32_Account['Domain'])
+subject.account.session_id = $Win32_LogonSession['LogonId']
+subject.account.id = $Win32_Account['SID']
+
+logon_type = $Win32_LogonSession['LogonType']
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.subsys = "notifications"
+event_src.title = "windows"
+event_src.vendor = "microsoft"
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_LogonSession"

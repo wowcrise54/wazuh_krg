@@ -1,0 +1,99 @@
+event Failed_TGS_Request:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "microsoft"
+        and event_src.title == "windows"
+        and msgid == "4769"
+        and status == "failure"
+        and reason == "0x6"
+        and subject.account.name != null
+        and filter::CheckWL_Specific_Only("TGS_Request_By_Non_Existent_User", lower(join([src.host, subject.account.name, object.account.id], "|"))) 
+    }
+
+rule TGS_Request_By_Non_Existent_User: Failed_TGS_Request+ timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $count_total = 0
+        $users = []
+    }
+    
+    on Failed_TGS_Request {
+        if $count_total == 0 then  # блок выполняется только при первом событии инстанса
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+                
+            $logon_service = logon_service
+            
+            $datafield2 = datafield2    # Тип шифрования билета
+            $datafield4 = datafield4    # Расшифровка статуса завершения
+            $datafield5 = datafield5    # Идентификатор сессии субъекта в формате GUID
+            $datafield6 = datafield6    # Расшифровка типа шифрования билета 
+            $datafield8 = datafield8    # Флаги-свойства билета в шестнадцатеричном формате
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            
+            $alert.key = lower(join([src.host, subject.account.name, object.account.id], "|"))
+            $alert.context = lower(join([subject.account.name, subject.account.domain, src.host, datafield4], "|"))
+        endif
+
+        $subj_acc = lower(subject.account.name)
+
+        if $subj_acc != null and not in_list($users, $subj_acc) then
+            $users = append($users, $subj_acc)
+        endif
+
+        $count_total = $count_total + 1
+    }
+
+emit {
+    if $count_total == 1 then
+        $correlation_type = "event"
+    else
+        $correlation_type = "incident"
+    endif
+
+    $subject = "account"
+    $action = "access"
+    $object = "system"
+    $status = "failure"
+
+    $numfield1 = $count_total
+    $alert.context = "Attempts: " + string($numfield1) + "|" + $alert.context
+
+    $datafield11 = join($users, "|")    # Все затронутые пользователи
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Steal or Forge Kerberos Tickets"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $src.host, $subject.account.name, $object.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

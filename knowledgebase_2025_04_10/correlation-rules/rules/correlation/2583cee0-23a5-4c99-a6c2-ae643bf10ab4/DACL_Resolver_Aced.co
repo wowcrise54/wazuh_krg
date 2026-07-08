@@ -1,0 +1,143 @@
+query Get_Significant_Groups($name) from Significant_Windows_Groups {
+    name == $name
+}
+
+event SubSchema_ObjectClass:
+    key:
+        event_src.host, subject.account.id, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "1644"
+        and lower(object.query) == "(objectclass=subschema)"
+        and filter::CheckWL_LDAP_Request("DACL_Resolver_Aced", join([lower(subject.account.name), src.ip], "|"))
+    }
+ 
+event ServicePrincipalName_CN:
+    key:
+        event_src.host, subject.account.id, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "1644"
+        and lower(object.query) == "(cn=service-principal-name)"
+    }
+
+event MsDSKeyCredentialLink_CN:
+    key:
+        event_src.host, subject.account.id, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "1644"
+        and lower(object.query) == "(cn=ms-ds-key-credential-link)"
+    }
+
+event SAMAccountName_Query:
+    key:
+        event_src.host, subject.account.id, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "1644"
+        and match(lower(object.query), "(samaccountname=*)")
+        and match(lower(object.value), "[all_with_list]ntsecuritydescriptor")
+    }
+
+rule DACL_Resolver_Aced: SubSchema_ObjectClass and ServicePrincipalName_CN and MsDSKeyCredentialLink_CN and SAMAccountName_Query+ timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_LDAP_Request"
+    }
+    
+    on SubSchema_ObjectClass {
+        $subject.account.id = object.account.id
+        $subject.account.name = object.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = object.account.domain
+        $subject.account.session_id = object.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name        
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.type = object.type
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = join([lower(subject.account.name), src.ip], "|")
+        $alert.context = $alert.context + "|" + object.query
+
+        if exec_query("Get_Significant_Groups", [strip(lower(object.query), "(cn=", ")")]) then
+            $reason = "Significant group request: " + strip(lower(object.query), "(cn=", ")")
+        endif
+    }
+
+    on ServicePrincipalName_CN {
+        $alert.context = $alert.context + "|" + object.query
+
+        if exec_query("Get_Significant_Groups", [strip(lower(object.query), "(cn=", ")")]) then
+            $reason = "Significant group request: " + strip(lower(object.query), "(cn=", ")")
+        endif
+    }
+
+    on MsDSKeyCredentialLink_CN {
+        $alert.context = $alert.context + "|" + object.query
+
+        if exec_query("Get_Significant_Groups", [strip(lower(object.query), "(cn=", ")")]) then
+            $reason = "Significant group request: " + strip(lower(object.query), "(cn=", ")")
+        endif
+    }
+
+    on SAMAccountName_Query {
+        $alert.context = $alert.context + "|" + object.query
+
+        if exec_query("Get_Significant_Groups", [strip(lower(object.query), "(cn=", ")")]) then
+            $reason = "Significant group request: " + strip(lower(object.query), "(cn=", ")")
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+    $status = "success"
+
+    $importance = "low"
+    
+    if $reason != null then
+        $importance = "medium"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Permission Groups Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id, $src.ip], "|")
+    $incident.severity = $importance
+    $incident.category = "BackupMalfunction"
+    $incident.aggregation.timeout = 2h
+}

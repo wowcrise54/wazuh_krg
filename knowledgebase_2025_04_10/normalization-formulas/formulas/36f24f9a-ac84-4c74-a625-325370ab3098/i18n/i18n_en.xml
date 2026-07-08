@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Authentication failed</Description>
+  <EventDescriptions>
+    <EventDescription id="4c3cf3ee-7aeb-4e4f-8a67-303bd3eebb6c">The user {subject.account.name}@{subject.account.domain} from host {src.host} failed to pass Kerberos authentication on host {event_src.host}. Reason: {reason}</EventDescription>
+    <EventDescription id="584b1712-e299-4fce-ac44-bcbcee6f6051">The user {subject.account.name} from host {src.host} failed to pass Kerberos authentication on host {event_src.host}. Reason: {reason}</EventDescription>
+    <EventDescription id="816aad50-8dec-48f9-8dc3-836e221d8100">The Kerberos service on host {event_src.host} failed to issue a session ticket (TGS), which is requested from host {src.host}, for the account {subject.account.name} to access the service {logon_service}. Reason: {reason}</EventDescription>
+    <EventDescription id="f9e5d41f-4450-4e65-bba8-3bb09ce4c909">The Kerberos service on host {event_src.host} failed to issue a session ticket (TGS), which is requested from host {src.host}, for the account {subject.account.name}@{subject.account.domain} to access the service {logon_service}. Reason: {reason}</EventDescription>
+  </EventDescriptions>
+</Localization>

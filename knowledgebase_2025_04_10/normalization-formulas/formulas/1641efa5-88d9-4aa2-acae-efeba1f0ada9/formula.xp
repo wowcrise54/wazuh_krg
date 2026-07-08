@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["product"] == "Security Gateway/Management"
+       and $kv["status"] == "Failed"
+       and $kv["failure_impact"] != null
+       and $kv["update_service"] != null
+
+action = "download"
+object = "update"
+status = "failure"
+
+object.type = $kv["description"]
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+reason = $kv["failure_impact"] + ". " + strip($kv["reason"], "", ".")
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Security_Gateway_Management_Update_failed"

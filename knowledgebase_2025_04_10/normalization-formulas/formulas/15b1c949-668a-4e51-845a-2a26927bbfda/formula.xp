@@ -1,0 +1,18 @@
+TEXT = '[{time=DATETIME}] INFO Kernel: Login failed. {reason=WORD+}. User name: {subject.account.name=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_user_login_fail"

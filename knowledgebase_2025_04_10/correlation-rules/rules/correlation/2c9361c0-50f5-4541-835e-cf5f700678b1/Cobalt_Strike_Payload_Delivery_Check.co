@@ -1,0 +1,93 @@
+event Payload_Delivery_Check:
+    key:
+        event_src.host, src.ip, object.storage.id, object.storage.path
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and lower(object.storage.id) == "\\\\*\\admin$"
+        and match(lower(object.storage.path), "?:\\windows\\")
+        and lower(datafield9) == "the right to read file attributes"
+        and regex(lower(object.storage.name), "\.exe\.\w{3}$", 0) != null
+        and filter::CheckWL_Windows_Shares("Cobalt_Strike_Payload_Delivery_Check", lower(join([src.ip, event_src.host, subject.account.name], "|")))
+    }
+    
+rule Cobalt_Strike_Payload_Delivery_Check: Payload_Delivery_Check[3,] timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Windows_Shares"
+        $first_event = true
+        $count_total = 0
+    }
+
+    on Payload_Delivery_Check {
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id
+
+            $subject.account.privileges = subject.account.privileges
+
+            $object.storage.id = object.storage.id
+            $object.storage.name = object.storage.name
+            $object.storage.path = object.storage.path
+            $object.storage.fullpath = object.storage.fullpath
+
+            $object.name = regex(lower(object.storage.name), "(\w+\.exe)\.\w{3}$", 1) # Payload name
+            
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+                    
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.port = dst.port
+            $dst.asset = dst.asset
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            
+            $alert.key = lower(join([src.ip, event_src.host, subject.account.name], "|"))
+            
+            $first_event = false
+        endif
+        
+        $count_total = $count_total + 1
+        $alert.regex_match = regex(lower(object.storage.name), "\.\w{3}$", 0)
+        $alert.context = $object.storage.fullpath
+    }
+    
+emit {
+    $correlation_type = "incident" 
+    
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "high"
+    
+    $reason = $count_total
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Ingress Tool Transfer"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $src.ip], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

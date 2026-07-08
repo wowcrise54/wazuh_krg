@@ -1,0 +1,25 @@
+!TEXT = '{time=DATETIME} {UNTIL("]")} INFO {msgid="Umbraco.Core.CoreBootManager"} -
+         Umbraco application startup complete (took {$temp_duration=NUMBER} ms)'
+
+action = "start"
+object = "service"
+status = "success"
+
+object.name = "Umbraco CMS"
+
+duration = div($temp_duration, 1000)
+if mod($temp_duration, 1000) > 500 then
+    duration = duration + 1
+endif
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+event_src.title = "umbraco_cms"
+event_src.category = "Other"
+
+id = "PT_Opensource_Umbraco_CMS_filemonitor_Umbraco_started"

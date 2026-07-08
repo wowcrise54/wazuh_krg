@@ -1,0 +1,29 @@
+TABULAR = "{msgid=event_id}"
+COND = $event_id == 1250
+
+subject = "account"
+action = "start"
+object = "service"
+status = if $status == 0 then "success" else "failure" endif
+
+subject.account.name = $user
+
+object.type = "remote control"
+object.state = $status
+
+datafield1 = $guid  # guid
+datafield2 = $obj_name  # the object in which the action takes place
+
+time = epoch_ms_to_datetime($unix_time + ($timezone * 60000))
+if $comment != "" then reason = $comment endif  # comment
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.vendor = "confident"
+event_src.title = "ucc_dallas_lock"
+event_src.category = "Other"
+
+id = "PT_Confident_UCC_Dallas_Lock_odbc_launching_remote_control"

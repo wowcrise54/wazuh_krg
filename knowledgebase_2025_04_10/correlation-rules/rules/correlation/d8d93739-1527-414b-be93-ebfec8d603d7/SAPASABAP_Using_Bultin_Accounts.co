@@ -1,0 +1,70 @@
+query SAP_User_In_Default_List($user, $event_src_title) from Applications_Significant_Users {
+    user == $user
+    and event_src_title == $event_src_title
+    and reason == 'default'
+}
+
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid
+    and (
+             group == "Production"
+             or group == "Test"
+        )
+}
+
+event Logon_Bultin_Account:
+    key:
+        event_src.host, event_src.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and in_list(["AU1", "AU5"], msgid)
+        and exec_query("SAP_User_In_Default_List", [subject.account.id, event_src.title])
+        and exec_query("SAP_Check_Groups", [event_src.id])
+    }
+
+rule SAPASABAP_Using_Bultin_Accounts: Logon_Bultin_Account
+
+    on Logon_Bultin_Account {
+        $subject.account.id = subject.account.id
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $datafield1 = datafield1  # SAP Client
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Valid Accounts: Default Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

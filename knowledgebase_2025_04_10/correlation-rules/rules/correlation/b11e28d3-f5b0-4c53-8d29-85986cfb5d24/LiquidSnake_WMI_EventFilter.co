@@ -1,0 +1,147 @@
+event WMI_Subscription_Create:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "19"
+        and object.state == "created"
+        and lower(object.name) == "eventfilter"
+        and object.query != null
+        and filter::CheckWL_Specific_Only("LiquidSnake_WMI_EventFilter", lower(subject.account.name + "|" + object.query))
+    }
+
+event Network_Logon:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::LoginAttempt_Windows_Endpoint()
+        and logon_type == 3
+        and lower(subject.process.name) == "scrcons.exe"
+        and lower(logon_service) == "authz"
+    }
+
+event DCOM_Process_Launch:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and match(lower(object.process.fullpath), "?:\\windows\\system32\\wbem\\scrcons.exe")
+        and match(lower(object.process.parent.cmdline), "?:\\windows\\system32\\svchost.exe -k dcomlaunch -p")
+    }
+
+rule LiquidSnake_WMI_EventFilter: (WMI_Subscription_Create and Network_Logon and DCOM_Process_Launch) within 3m
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on WMI_Subscription_Create {
+        $object.name = object.name
+        $object.type = object.type
+        $object.state = object.state
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.query = object.query
+
+        $alert.key = lower(subject.account.name + "|" + object.query)
+        if lower(object.path) == "\\\\root\\\\cimv2" and match(lower(object.query), "*win32_logonsession*") then
+            $alert.context = "known tool: liquid snake"
+            $importance = "high"
+            $incident.category = "HackToolsDetection"
+        else
+            $importance = "medium"
+            $incident.category = "HostOrSoftCompromising"
+        endif
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Network_Logon {
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+         
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.id = subject.process.id
+
+        $logon_type = logon_type
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+    }
+
+    on DCOM_Process_Launch {       
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $subject = "account"
+    $action = "modify"
+    $object = "resource"
+    $status = "success"
+
+    $correlation_type = "incident"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: Distributed Component Object Model"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

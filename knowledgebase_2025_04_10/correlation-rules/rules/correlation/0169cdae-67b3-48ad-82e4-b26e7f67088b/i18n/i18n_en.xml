@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Possible exploitation of the CVE-2022-33679 vulnerability in Kerberos, which will allow attackers to obtain an authenticated session on behalf of the victim and execute arbitrary code on a compromised node. This may allow an attacker to extract the credentials of other users and move horizontally to other infrastructure nodes</Description>
+  <EventDescriptions>
+    <EventDescription id="b1ae72d0-776d-4e3f-92be-cff091b532b5">Possible exploitation of vulnerability CVE-2022-33679 in Kerberos on domain controller {event_src.host} is detected. An attempt was made from host {src.host} to recover the session key of the user {subject.account.name} to gain access to the service {logon_service}.</EventDescription>
+  </EventDescriptions>
+</Localization>

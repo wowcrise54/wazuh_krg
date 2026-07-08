@@ -1,0 +1,123 @@
+!EVENTLOG = 'EventID="4103"'
+!COND = $Provider["Name"] == "Microsoft-Windows-PowerShell"
+        and $Channel == "Microsoft-Windows-PowerShell/Operational"
+        and find_substr($Data["ContextInfo"], "= PSConsoleHostReadline") == null
+        and find_substr($Data["ContextInfo"], "= Set-StrictMode") == null
+        and find_substr($Data["ContextInfo"], "= Set-ExecutionPolicy") == null
+        and find_substr($Data['ContextInfo'], "= Get-ExecutionPolicy") == null
+        and find_substr($Data['Payload'], "CommandInvocation(PSConsoleHostReadline): ") == null
+        and find_substr($Data["ContextInfo"], "Command Name = \r\n") == null
+        and find_substr($Data["ContextInfo"], "Имя команды = \r\n") == null
+        and find_substr($Data['Payload'], "CommandInvocation(Set-StrictMode): ") == null
+        and find_substr($Data['Payload'], "CommandInvocation(Set-ExecutionPolicy): ") == null
+        and find_substr($Data['Payload'], "CommandInvocation(Get-ExecutionPolicy): ") == null
+
+subject = "account"
+action = "execute"
+object = "command"
+if find_substr($Data["Payload"], "TerminatingError(") != null then
+    status = "failure"
+    submessage("TEXT", "GetTerminatingError", $Data["Payload"])
+else
+    status = "success"
+endif
+
+$kv = keyvalue($Data["ContextInfo"], "\r\n", "=")
+$subject_raw = coalesce($kv["User"], $kv["Пользователь"])
+$subject_raw_csv = csv($subject_raw, "\\", "'")
+$object_path_name = lower(coalesce($kv["Script Name"], $kv["Имя сценария"], $kv["Command Path"], $kv["Путь команды"]))
+$sub_user = lower(coalesce($kv["Connected User"], $kv["Подключенный пользователь"]))
+
+if $sub_user != null then
+    # наличие Connected User свидетельствует о Remote PowerShell, подключение может выполняться от одного пользователя, а исполнение команд от другого
+    $sub_user_csv = csv($sub_user, "\\", "'")
+    if length($sub_user_csv) > 1 then
+        subject.account.name = lower($sub_user_csv[1])
+        subject.account.domain = lower($sub_user_csv[0])
+    else
+        subject.account.name = lower($sub_user)
+    endif
+    if $sub_user == lower($subject_raw) then
+        subject.account.id = $Security["UserID"]
+    endif
+else
+    subject.account.id = $Security["UserID"]
+endif
+
+if length($subject_raw_csv) > 1 then
+    object.account.name = lower($subject_raw_csv[1])
+    object.account.domain = lower($subject_raw_csv[0])
+else
+    object.account.name = lower($subject_raw)
+endif
+if subject.account.name == null and object.account.name != null then
+    # фактически условие говорит о том, что не было Remote PowerShell
+    subject.account.name = object.account.name
+    subject.account.domain = object.account.domain
+endif
+
+$object_path_name_csv = csv($object_path_name,'\\','"')
+object.name = $object_path_name_csv[length($object_path_name_csv) - 1]  # часть пути после последнего слеша
+object.path = strip($object_path_name, "", object.name)
+object.fullpath = object.path + object.name
+
+object.process.name = lower(coalesce($kv["Command Name"], $kv["Имя команды"]))
+object.value = $Data["Payload"]
+
+object.process.parent.id = $Execution["ProcessID"]
+object.process.parent.cmdline = coalesce($kv["Host Application"], $kv["Ведущее приложение"])
+
+object.account.id = $Security["UserID"]
+
+$raw_commandline = replace($Data["Payload"], ' |', 'CommandInvocation(*):')  # преобразование Payload в CommandLine
+$raw_commandline = replace($raw_commandline, '', 'ParameterBinding(*):')
+$raw_commandline = replace($raw_commandline, '\r\n', 'NonTerminatingError(*\r\n')
+$raw_commandline = replace($raw_commandline, '', 'TerminatingError(*')
+if find_substr($raw_commandline, 'name="') != null then
+    $temp = csv($raw_commandline, 'name="', '')
+    $raw_commandline = join($temp, '-')
+    $temp = csv($raw_commandline, '"; value=', '')
+    $raw_commandline = join($temp, ' ')
+elif find_substr($raw_commandline, 'имя') != null then  # поддерживаем русскую локализацию
+    $temp = csv($raw_commandline, 'имя="', '')
+    $raw_commandline = join($temp, '-')
+    $temp = csv($raw_commandline, '"; значение=', '')
+    $raw_commandline = join($temp, ' ')
+endif
+$raw_commandline = replace($raw_commandline, '', '[\n\r]')
+$raw_commandline = strip($raw_commandline, ' ', 'Non')  # strip(Non) для 13 теста, в котором нет \r\n в нужном месте и replace на 74 строке отрабатывает неправильно
+object.process.cmdline  = strip($raw_commandline, '| ', '')
+
+subformula "GetTerminatingError"
+    TEXT = "{STRING+?}{'Non'?}TerminatingError({UNTIL(')')}: {$reason_raw=REST}"
+    reason = strip($reason_raw, '"', '"')
+endsubformula
+
+datafield1 = $Data["ContextInfo"]  # контекcт выполнения конвейера Powershell
+datafield8 = coalesce($kv["Engine Version"], $kv["Версия модуля"])  # версия модуля
+datafield9 = coalesce($kv["Host Application"], $kv["Ведущее приложение"])
+
+chain_id = coalesce($kv["Pipeline ID"], $kv["ИД конвейера"])
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Common_PowerShell_4103_pipeline_executed"

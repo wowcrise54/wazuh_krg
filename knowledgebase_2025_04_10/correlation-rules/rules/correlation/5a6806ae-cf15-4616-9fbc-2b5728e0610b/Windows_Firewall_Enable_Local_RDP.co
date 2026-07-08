@@ -1,0 +1,277 @@
+event Enabe_RDP_Via_Netsh:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("netsh.exe", "(advfirewall\s+)?firewall.*?remote(\s+)?desktop.*?enable(=yes)?")
+        and filter::CheckWL_Process_Creation("Windows_Firewall_Enable_Local_RDP", lower(object.process.cmdline))
+    }
+
+event Change_RDP_Registry_Settings:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            msgid == "13"
+            and event_src.title == "sysmon"
+        )
+        and match(lower(object.path), "*control\\terminal server*")
+        and match(lower(object.name), "fdenytsconnections")
+        and lower(object.new_value) == "dword (0x00000000)"
+        and filter::CheckWL_Registry_Actions("Windows_Firewall_Enable_Local_RDP", lower(join([event_src.host, subject.process.fullpath], "|")))
+    }
+
+event Enabe_RDP_Via_Powershell_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and event_src.title == "windows"
+        and regex(lower(object.process.cmdline + " | " + object.process.parent.cmdline), "enable-netfirewallrule.*?remote\s+desktop", 0) != null
+        and filter::CheckWL_Powershell("Windows_Firewall_Enable_Local_RDP", lower(object.process.cmdline))
+    }
+
+event Enabe_RDP_Via_Powershell_ScriptblockLogging:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and event_src.title == "windows"
+        and regex(lower(object.path + object.name + " | " + object.process.cmdline), "enable-netfirewallrule.*?remote\s+desktop", 0) != null
+        and regex(lower(object.process.cmdline), "(\{.*){10,}", 0) == null
+        and filter::CheckWL_Powershell("Windows_Firewall_Enable_Local_RDP", lower(object.process.cmdline))
+    }
+
+rule Windows_Firewall_Enable_Local_RDP: Change_RDP_Registry_Settings or Enabe_RDP_Via_Netsh or Enabe_RDP_Via_Powershell_Pipeline or Enabe_RDP_Via_Powershell_ScriptblockLogging
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Change_RDP_Registry_Settings {  
+        $action = "modify"
+        $object = "configuration"
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.new_value = object.new_value
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+       
+        $alert.key = lower(join([event_src.host, subject.process.fullpath], "|"))
+        $alert.context = subject.process.name
+        $labels = $labels + "|CheckWL_Registry_Actions"
+    }
+    
+    on Enabe_RDP_Via_Netsh {
+        $action = "start"
+        $object = "process"
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.process.parent.fullpath
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), '(advfirewall\s+)?firewall.*?remote(\s+)?desktop.*?enable(=yes)?', 0)
+        $alert.context = "regex match: " + $alert.regex_match
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Enabe_RDP_Via_Powershell_Pipeline {
+        $action = "execute"
+        $object = "command"
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield8 = datafield8  # версия модуля
+
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.fullpath
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline + " | " + object.process.parent.cmdline), "enable-netfirewallrule.*?remote\s+desktop", 0)
+        $alert.context = "regex match: " + $alert.regex_match
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Enabe_RDP_Via_Powershell_ScriptblockLogging {
+        $action = "execute"
+        $object = "command"
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+        $object.account.id = object.account.id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $object.value = object.value
+        $object.process.cmdline = object.process.cmdline
+        $object.process.id = object.process.id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.fullpath
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.path + object.name + " | " + object.process.cmdline), "enable-netfirewallrule.*?remote\s+desktop", 0)
+        $alert.context = "regex match: " + $alert.regex_match
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    if $action == "modify" and $object == "configuration" then
+        $category.high = "Defense Evasion"
+        $category.low = "Modify Registry"
+    else    
+        $category.high = "Defense Evasion"
+        $category.low = "Impair Defenses: Disable or Modify System Firewall"
+    endif    
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $incident_fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

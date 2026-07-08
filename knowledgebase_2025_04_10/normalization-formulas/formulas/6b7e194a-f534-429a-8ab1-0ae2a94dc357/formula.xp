@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=STRING+} {"GMT"?} {event_src.hostname=HOSTNAME} 
+        {NUMBER"-"?}PPE-{NUMBER} : {"default"?} {event_src.subsys="ROUTING"} 
+        {msgid="ZEBOS_CMD_EXECUTED"} {NUMBER} {NUMBER} :  
+        Command {object.name = UNTIL(" mode")} ({NUMBER})'
+
+action = "execute"
+object  = "command"
+status = "success"
+
+object.name = strip(object.name, '\\\"', '\\\"')
+
+# Converting time to mm/dd/yyyy:hh:mm:ss format
+if find_substr($sys_time, "/") == 4 then
+    $yyyy = substr($sys_time, 0, 4)
+    $mm_dd = substr($sys_time, 5, 5)
+    $sys_time = $mm_dd + "/" + $yyyy + substr($sys_time, 10, 20)
+endif
+
+# Adding/removing a space in $sys_time depending on the time zone format
+if find_substr($sys_time, " ") != null and (find_substr($sys_time, "+") != null or find_substr($sys_time, "-") != null) then
+    $sys_time = substr($sys_time, 0, 19) + substr($sys_time, 20, 10)
+elif find_substr($sys_time, " ") == null and find_substr($sys_time, "+") == null and find_substr($sys_time, "-") == null then
+    $sys_time = substr($sys_time, 0, 19) + " " + substr($sys_time, 19, 10)
+endif
+
+time = strip($sys_time, "", " ")
+importance = "low"
+
+category.high = "System Management"
+category.generic = "Command"
+category.low = "Manipulation"
+
+event_src.title = "ZebOS"
+event_src.vendor = "Opensource"
+event_src.category = "Operating system"
+
+id = "PT_Opensource_ZebOS_syslog_command_execution"

@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        % {msgid="UCSM-3-EQUIPMENT_REMOVED"}: [{UNTIL("][")}{UNTIL("][")}{UNTIL("][")}{object.path=UNTIL("]")} Service profile
+        {object.name=STRING} underlying resource removed'
+
+action = "remove"
+object = "profile"
+status = "success"
+
+object.type = "service"
+
+importance = "low"
+
+event_src.title = "ucs_manager"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_UCS_Manager_syslog_Service_profile_removed"

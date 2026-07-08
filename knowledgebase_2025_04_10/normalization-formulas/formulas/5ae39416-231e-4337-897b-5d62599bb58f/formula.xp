@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} %%{NUMBER?}
+        {$tmp_subsys=WORD}/{NUMBER}/{msgid="COMM_FAIL"}{"("WORD")"?}{"["NUMBER"]"?}:task:{object.process.parent.name=STRING+}
+        ip:{src.ip=IPV4|src.ip=IPV6} user:{subject.account.name=STRING+} comm failed:" {object.value=UNTIL("\\"")}'
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "failure"
+
+object.account.name = subject.account.name
+object.process.cmdline = object.value
+
+importance = "medium"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Request_fail"

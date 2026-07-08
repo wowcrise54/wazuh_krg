@@ -1,0 +1,187 @@
+event Pipe_Created_Or_Connected:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["17", "18"], msgid)
+        and event_src.title == "sysmon"
+        and status == "success"
+        and regex(lower(object.name), 
+            "(?:sapiserverpipes-1-5-5-0|epmapper-|atsvc-|plugplay\+|srvsvc-1-5-5-0|w32time_alt_|tapsrv_|printer_spools_)\d{4}", 0) != null 
+    }
+
+event Process_Started:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                filter::ProcessStart_Windows("explorer.exe")           
+                and regex(lower(object.process.parent.fullpath), "c:\\\\windows\\\\system32\\\\(?:userinit|svchost)\.exe", 0) == null
+            ) or (
+                # браузер запускается в скрытом режиме
+                (
+                    filter::ProcessStart_Windows("chrome.exe")
+                    or filter::ProcessStart_Windows("edge.exe")
+                )
+                and find_substr(lower(object.process.cmdline), "--no-sandbox") != null
+                and find_substr(lower(object.process.cmdline), "--allow-no-sandbox-job") != null
+                and find_substr(lower(object.process.cmdline), "--disable-3d-apis") != null
+                and find_substr(lower(object.process.cmdline), "--disable-gpu") != null
+                and find_substr(lower(object.process.cmdline), "--disable-d3d11") != null
+                and find_substr(lower(object.process.cmdline), "--disable-accelerated-layers") != null
+                and find_substr(lower(object.process.cmdline), "--disable-accelerated-plugins") != null
+                and find_substr(lower(object.process.cmdline), "--disable-accelerated-2d-canvas") != null
+                and find_substr(lower(object.process.cmdline), "--disable-deadline-scheduling") != null
+                and find_substr(lower(object.process.cmdline), "--disable-ui-deadline-scheduling") != null
+                and find_substr(lower(object.process.cmdline), "--aura-no-shadows") != null
+                and find_substr(lower(object.process.cmdline), "--allow-profiles-outside-user-dir") != null
+                and find_substr(lower(object.process.cmdline), "--user-data-dir=") != null
+            ) or (
+                # срабатывает во время запуска модуля hd-launch-run
+                filter::ProcessStart_Windows("rundll32.exe")
+                and find_substr(lower(object.process.cmdline), "rundll32.exe shell32.dll,#61") != null
+                and not in_list(["conhost.exe", "svchost.exe", "explorer.exe"], lower(object.process.parent.name))
+            )
+        )
+        and filter::CheckWL_Process_Creation("Cobalt_Strike_HiddenDesktop",
+            lower(join([object.process.parent.fullpath, object.process.name, object.process.cmdline], "|")))
+    }
+
+event Suspicious_Actions:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                # срабатывает во время запуска модуля hd-launch-explorer
+                event_src.title == "sysmon"
+                and in_list(["12", "13"], msgid)
+                and status == "success"
+                and match(lower(object.fullpath), "*\\software\\microsoft\\windows\\currentversion\\explorer\\advanced\\*")
+            ) or (
+                # создаются файлы во время запуска модуля hd-launch-chrome и hd-launch-edge
+                filter::FileCreate_Windows()
+                and regex(lower(object.fullpath), "\\\\appdata\\\\local\\\\temp\\\\\d+\\\\", 0) != null
+            )
+        )
+    }
+
+rule Cobalt_Strike_HiddenDesktop: (Pipe_Created_Or_Connected and Suspicious_Actions? and Process_Started) timer 10m
+    
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+    
+    on Pipe_Created_Or_Connected {
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id 
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.hash.md5 = subject.process.hash.md5
+        $subject.process.hash.imphash = subject.process.hash.imphash
+        $subject.process.hash.sha1 = subject.process.hash.sha1
+        $subject.process.hash.sha256 = subject.process.hash.sha256
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.regex_match = regex(lower(object.name),
+            "(?:sapiserverpipes-1-5-5-0|epmapper-|atsvc-|plugplay\+|srvsvc-1-5-5-0|w32time_alt_|tapsrv_|printer_spools_)[0-9]{4}", 0)
+
+        $context = "pipe: " + object.name
+    }
+
+    on Process_Started {
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6  # LogonGuid
+        $datafield19 = datafield19
+
+        $alert.key = lower(join([object.process.parent.fullpath, object.process.name, object.process.cmdline], "|"))
+    }
+
+    on Suspicious_Actions {
+        $datafield1 = object.fullpath
+
+        if object.new_value != null then
+            $datafield2 = object.new_value
+        endif
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $alert.context = $context + " -> " + $object.process.parent.name + " started " + $object.process.name
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Remote Access Software"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

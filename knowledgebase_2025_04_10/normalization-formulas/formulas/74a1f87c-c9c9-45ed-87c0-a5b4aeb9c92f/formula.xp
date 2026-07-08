@@ -1,0 +1,51 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {STRING} CEF:{NUMBER}|Infotecs|IDS HS|{UNTIL("|")}{msgid=NUMBER}|
+        {$desc=UNTIL("|")}{$priority=NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+COND = in_list(["301035", "301036", "301037", "301038", "301039", "301040",
+                "301041", "301042", "301044", "301045", "301046", "301047",
+                "301049", "301050", "301043", "301048", "301051", "301052"], msgid)
+
+subject = "account"
+action = "view"
+object = "service"
+status = "success"
+
+subject.account.name = $kv['suser']
+subject.account.domain = $kv['sntdom']
+subject.account.id = $kv['suid']
+
+subject.process.fullpath = $kv['sproc']
+$tmp_list = csv(subject.process.fullpath, "\\", "")
+subject.process.name = $tmp_list[length($tmp_list) - 1]
+if length($tmp_list) > 1 then 
+    subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+endif
+subject.process.cmdline = $kv['InfotecsIDSHSCommandLine']
+
+$tmp_list = csv($kv['InfotecsIDSHSParentProcessName'], "\\", "")
+subject.process.parent.name = $tmp_list[length($tmp_list) - 1]
+subject.process.parent.path = strip($kv['InfotecsIDSHSParentProcessName'], '', subject.process.parent.name)
+
+datafield9 = $desc  # описание события
+
+time = epoch_ms_to_datetime(number($kv['rt']))
+
+if $priority < 6 then
+    importance = "info"
+elif $priority >= 6 and $priority < 8 then
+    importance = "low"
+elif $priority >= 8 and $priority < 10 then
+    importance = "medium"
+elif $priority >= 10 then
+    importance = "high"
+endif
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids_hs"
+event_src.subsys = lower($kv['deviceFacility'])
+event_src.ip = $kv['dvc']
+event_src.hostname = $kv['InfotecsIDSHShost']
+event_src.category = "IDS/IPS"
+event_src.id = $kv['InfotecsIDSHShostId']
+
+id = "PT_Infotecs_VipNet_IDS_HS_syslog_cef_info_system"

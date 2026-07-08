@@ -1,0 +1,30 @@
+EVENTLOG = 'EventID.text="13516"'
+COND =  $Channel == "File Replication Service"
+        and $Provider["Name"] == "NtFrs"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+object = "service"
+object.name = "File Replication Service"
+action = "info"
+status = "success"
+
+reason = "Service now does not prevent computer to became a domain controller"
+
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_13516_service_does_not_prevent_computer_to_became_domain_controller"

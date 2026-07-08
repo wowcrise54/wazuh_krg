@@ -1,0 +1,177 @@
+event Webshell_File_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and (
+            regex(lower(object.path), "(\\\\inetpub)?\\\\wwwroot\\\\(aspnet_client\\\\)?", 0) != null
+            or regex(lower(object.path), "\\\\(apache.*?|xampp)\\\\htdocs\\\\", 0) != null
+            or regex(lower(object.path), "\\\\www\\\\", 0) != null
+            or regex(lower(object.path), "((\\\\nginx.*?)|(\\\\web))?\\\\html\\\\", 0) != null
+            or regex(lower(object.path), "(\\\\tomcat.*?)?\\\\webapps\\\\(root\\\\)?", 0) != null
+            or regex(lower(object.path), "\\\\clientaccess\\\\((owa\\\\\auth)|ecp)\\\\", 0) != null
+            or regex(lower(object.path), "\\\\exchange\sserver\\\\\vd+\\\\(clientaccess|frontend)\\\\", 0) != null
+            or regex(lower(object.path), "\\\\microsoft\sshared\\\\web\sserver\sextensions\\\\\d+\\\\template\\\\layouts\\\\", 0) != null
+            or regex(lower(object.path), "\\\\httpproxy\\\\((owa\\\\auth)|ecp|oab)\\\\", 0) != null
+            or regex(lower(object.path), "\\\\((wp-content\\\\(themes|plugins|uploads))|(wp-includes)|(wp-admin))\\\\", 0) != null
+            or regex(lower(object.path), "\\\\bitrix\\\\((tools|(admin\\\\mobile)|(.*?(images|upload(s)?)))\\\\)?", 0) != null
+            or (
+                (        
+                    regex(lower(object.path), "(\\\\joomla)?\\\\(templates|(administrator\\\\)?components|(images(\\\\stories)?)|modules|tmp|cache)\\\\", 0) != null
+                    or regex(lower(object.path), "\\\\(app|(public\\\\(.*?)(uploads|images)))\\\\", 0) != null
+                    or regex(lower(object.path), "(\\\\sites\\\\default\\\\(files)?)|((\\\\sites\\\\all)?\\\\(modules|themes)\\\\)|(\\\\profiles\\\\)", 0) != null
+                    or regex(lower(object.path), "\\\\(uploads|jsp)\\\\", 0) != null 
+                )
+                and regex(lower(object.path), "\\\\appdata\\\\(local|roaming)\\\\|c:\\\\(users|windows)\\\\", 0) == null
+            )
+        )
+        and regex(lower(object.name), "\.(aspx|asp|asmx|asax|ashx|jspx|jsp|js|phpt|php(3|4|5)?|phtml|pht|cfm|shtml|htaccess|fcgi|cgi|pl|py)$", 0) != null
+        and filter::CheckWL_File_Creation("Windows_Webshell_Created", lower(join([object.fullpath, subject.process.fullpath], "|")))
+    }
+
+rule Windows_Webshell_Created: Webshell_File_Created+ timer 10s
+
+    init {
+        $labels = "w_auto"
+        $count_events = 0
+    }
+
+    on Webshell_File_Created {
+        if $count_events == 0 then
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+            
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.value = object.value
+
+            $alert.key = lower(join([object.fullpath, subject.process.fullpath], "|"))
+            
+            $regex_path = []
+            $pattern_iis = regex(lower(object.path), "(\\\\inetpub)?\\\\wwwroot\\\\(aspnet_client\\\\)?", 0)
+            $pattern_apache_xampp = regex(lower(object.path), "\\\\(apache.*?|xampp)\\\\htdocs\\\\", 0)
+            $pattern_base = regex(lower(object.path), "\\\\www\\\\", 0)
+            $pattern_nginx = regex(lower(object.path), "((\\\\nginx.*?)|(\\\\web))?\\\\html\\\\", 0)
+            $pattern_tomcat = regex(lower(object.path), "(\\\\tomcat.*?)?\\\\webapps\\\\(root\\\\)?", 0)
+            $pattern_owa = regex(lower(object.path), "\\\\clientaccess\\\\((owa\\\\\auth)|ecp)\\\\", 0)
+            $pattern_exchange = regex(lower(object.path), "\\\\exchange\sserver\\\\\vd+\\\\(clientaccess|frontend)\\\\", 0)
+            $pattern_webext = regex(lower(object.path), "\\\\microsoft\sshared\\\\web\sserver\sextensions\\\\\d+\\\\template\\\\layouts\\\\", 0)
+            $pattern_httpproxy = regex(lower(object.path), "\\\\httpproxy\\\\((owa\\\\auth)|ecp|oab)\\\\", 0)
+            $pattern_wordpress = regex(lower(object.path), "\\\\((wp-content\\\\(themes|plugins|uploads))|(wp-includes)|(wp-admin))\\\\", 0)
+            $pattern_joomla = regex(lower(object.path), "(\\\\joomla)?\\\\(templates|(administrator\\\\)?components|(images(\\\\stories)?)|modules|tmp|cache)\\\\", 0)
+            $pattern_nodejs = regex(lower(object.path), "\\\\(app|(public\\\\(.*?)(uploads|images)))\\\\", 0)
+            $pattern_drupal = regex(lower(object.path), "(\\\\sites\\\\default\\\\(files)?)|((\\\\sites\\\\all)?\\\\(modules|themes)\\\\)|(\\\\profiles\\\\)", 0)
+            $pattern_bitrix = regex(lower(object.path), "\\\\bitrix\\\\((tools|(admin\\\\mobile)|(.*?(images|upload(s)?)))\\\\)?", 0)
+            $pattern_other = regex(lower(object.path), "\\\\(uploads|jsp)\\\\", 0)
+            
+            if $pattern_iis != null then 
+                $regex_path = append($regex_path, $pattern_iis) 
+            endif
+            if $pattern_apache_xampp != null then 
+                $regex_path = append($regex_path, $pattern_apache_xampp) 
+            endif
+            if $pattern_base != null then 
+                $regex_path = append($regex_path, $pattern_base) 
+            endif
+            if $pattern_nginx != null then 
+                $regex_path = append($regex_path, $pattern_nginx) 
+            endif
+            if $pattern_tomcat != null then 
+                $regex_path = append($regex_path, $pattern_tomcat) 
+            endif
+            if $pattern_owa != null then 
+                $regex_path = append($regex_path, $pattern_owa) 
+            endif
+            if $pattern_exchange != null then 
+                $regex_path = append($regex_path, $pattern_exchange) 
+            endif
+            if $pattern_webext != null then 
+                $regex_path = append($regex_path, $pattern_webext) 
+            endif
+            if $pattern_httpproxy != null then 
+                $regex_path = append($regex_path, $pattern_httpproxy) 
+            endif
+            if $pattern_wordpress != null then 
+                $regex_path = append($regex_path, $pattern_wordpress) 
+            endif
+            if $pattern_joomla != null then 
+                $regex_path = append($regex_path, $pattern_joomla) 
+            endif
+            if $pattern_nodejs != null then 
+                $regex_path = append($regex_path, $pattern_nodejs) 
+            endif
+            if $pattern_drupal != null then 
+                $regex_path = append($regex_path, $pattern_drupal) 
+            endif
+            if $pattern_bitrix != null then 
+                $regex_path = append($regex_path, $pattern_bitrix) 
+            endif
+            if $pattern_other != null then 
+                $regex_path = append($regex_path, $pattern_other) 
+            endif
+            
+            # Если случилось так, что ненулевые несколько паттернов, нужна вот такая проверка
+            $regex_path_length = length($regex_path)
+            if $regex_path_length == 1 then
+                $regex_match = $regex_path[0]
+            elif $regex_path_length == 2 then
+                if length($regex_path[0]) >= length($regex_path[1]) then
+                    $regex_match = $regex_path[0]
+                else 
+                    $regex_match = $regex_path[1]
+                endif
+            else
+                $regex_match = $regex_path[0]
+            endif
+            
+            $alert.regex_match = "regex_match_extension: " + regex(lower(object.name), "\.(aspx|asp|asmx|asax|ashx|jspx|jsp|js|phpt|php(3|4|5)?|phtml|pht|cfm|shtml|htaccess|fcgi|cgi|pl|py)$", 0) + " | regex_match_path: " + $regex_match
+            $alert.context = subject.process.fullpath
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        endif
+        
+        if $count_events > 2 then 
+            close 
+        endif
+        
+        $count_events = $count_events + 1
+        $labels = $labels + "|CheckWL_File_Creation"
+    }
+
+emit {
+    if in_list(["httpd.exe", "nginx.exe", "w3wp.exe", "java.exe", "mysqld.exe", "postgres.exe", "mongod.exe", "sqlservr.exe", "node.exe"], lower($subject.process.name)) then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "process"
+    $action = "create"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Server Software Component: Web Shell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "SecurityBackdoorDetection"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,42 @@
+TABULAR = "name,
+           {time=start_time},
+           {datafield1=guid},
+           result,
+           {msgid=event_type}"
+
+COND = $event_type == "Preparing_backup_plan"
+
+action = "check"
+object = "task"
+status = switch $result
+        case "Succeeded" "success"
+        case "Failed" "failure"
+    endswitch
+
+$csv = csv($name, "|", "\"")
+if length($csv) == 7 then
+    object.name = $csv[1] + " to " + $csv[2] + " " + $csv[3]
+    dst.hostname = $csv[2]
+    datafield2 = $csv[3]
+    datafield4 = $csv[5]
+else
+    object.name = $csv[1] + " to " + $csv[2]
+    datafield2 = $csv[2]
+    datafield4 = $csv[4]
+endif
+
+object.type = "backup plan"
+object.state = strip($csv[0], " ", " ")    # название шага проверки для backup plan
+
+# dst.hostname - заполняется, если в активности указано Net-BIOS имя узла, куда происходит сохранение резервной копии
+# datafield1 - GUID процесса, если использовать данный GUID в acrocmd, можно посмотреть весь лог
+# datafield2 - путь, по которому осуществляется резервное копирование
+# datafield4 - общий GUID для всех активностей проверки для нового плана резервного копирования
+
+importance = "info"
+
+event_src.vendor = "acronis"
+event_src.title = "backup"
+event_src.category = "Backup server"
+
+id = "PT_Acronis_Backup_customeventcollector_Preparing_backup_plan"

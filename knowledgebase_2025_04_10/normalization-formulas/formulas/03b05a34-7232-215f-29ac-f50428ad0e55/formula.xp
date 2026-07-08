@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {$event_src_ip=IPV4|$event_src_ip=IPV6|$event_src_host=HOSTNAME|} hub-all.log:
+    {$mday_raw=WORD} {$month_raw=WORD} {$year_raw=WORD} {$hours_raw=UNTIL(",")}{NUMBER}
+    WARN [{LITERAL*}] [{LITERAL*}] [{LITERAL*}]
+    Binding with LDAP failed\\n {$reason_raw=REST}'
+
+action = "open"
+object = "session"
+status = "failure"
+
+protocol.layer7 = "ldap"
+
+$exception_text = csv($reason_raw, "\\n", "'")[0]
+$exception_csv = csv($exception_text, ":", "")
+reason = strip($exception_text, $exception_csv[0] + ": ", ".")
+
+$dot_pos = find_substr($event_src_host, '.')
+
+if $dot_pos != null then
+    $event_src_fqdn = lower($event_src_host)
+    $event_src_hostname = lower(substr($event_src_host, 0, $dot_pos))
+else
+    $event_src_hostname = lower($event_src_host)
+endif
+src.ip = $event_src_ip
+src.hostname = $event_src_hostname
+src.fqdn = $event_src_fqdn
+
+time = $month_raw + " " + $mday_raw + " " + $year_raw + " " + $hours_raw
+importance = "medium"
+
+event_src.ip = $event_src_ip
+event_src.hostname = $event_src_hostname
+event_src.fqdn = $event_src_fqdn
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_JetBrains_Hub_syslog_binding_with_ldap_failed"

@@ -1,0 +1,22 @@
+EVENTLOG = 'EventID="4897"'
+!COND = $Channel=="Security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "system"
+action = "modify"
+object = "service"
+object.type = "certificate_services"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+object.property = "role separation"
+object.value = $Data["RoleSeparationEnabled"]
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+event_src.category = "Certification authority"
+
+id = "PT_Microsoft_Certification_Authority_eventlog_4897_Role_separation_enabled"
+importance = "info"

@@ -1,0 +1,57 @@
+filter ProcessStart_Linux_Service_Disable(string $serviceNameRegex) {
+    filter::OperatingSystem_UNIXLike()
+    and status == "success"
+    and ( 
+        (
+            # Обычный запуск процесса
+            (
+                category.generic == "Process"
+                and category.high == "Availability Management"
+                and category.low == "Control"
+                and action == "start"
+            )
+            # Запуск через sudo
+            or (
+                msgid == "sudo"
+                and action == "execute" 
+                and category.generic == "Command"
+                and category.high == "System Management"
+                and category.low == "Manipulation"
+            )
+        )
+        and 
+        (
+            # Команда по остановке сервиса
+            (
+                # [sudo] systemctl stop <serviceNameRegex> или systemctl stop <serviceNameRegex>.service
+                # [sudo] systemctl stop --quiet <serviceNameRegex> или systemctl --quiet stop <serviceNameRegex>.service
+                regex(object.process.cmdline, "systemctl[\S\s]+?(disable|stop)\s+" + $serviceNameRegex + "(\.service)?", 0) != null
+                or
+                # [sudo] /etc/init.d/<serviceNameRegex> stop
+                regex(object.process.cmdline, "/etc/init.d/" + $serviceNameRegex + "\s+(disable|stop)", 0) != null
+                or
+                # [sudo] service <serviceNameRegex> stop
+                regex(object.process.cmdline, "service\s+" + $serviceNameRegex + "\s+(disable|stop)", 0) != null
+                or 
+                # [sudo] update-rc.d <serviceNameRegex> disable
+                regex(object.process.cmdline, "update-rc.d\s+" + $serviceNameRegex + "\s+disable", 0) != null
+                or 
+                # [sudo] pkill -f "<serviceNameRegex>"
+                regex(object.process.cmdline, "pkill\s+-f\s+" + $serviceNameRegex, 0) != null
+                or 
+                # [sudo] killall <serviceNameRegex>
+                regex(object.process.cmdline, "killall\s+" + $serviceNameRegex, 0) != null
+            )
+        ) 
+    )
+    # Остановка сервиса
+    or (
+        msgid == "SERVICE_STOP" 
+        and regex(object.name, $serviceNameRegex, 0) != null
+        and category.generic == "Service"
+        and category.high == "Availability Management"
+        and category.low == "Control"
+    )
+}
+
+

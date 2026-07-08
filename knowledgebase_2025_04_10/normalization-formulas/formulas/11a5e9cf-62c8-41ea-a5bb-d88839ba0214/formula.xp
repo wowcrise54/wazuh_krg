@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        % {msgid="UCSM-3-VIF_DOWN"}: [{UNTIL("][")}{UNTIL("][")}{UNTIL("][")}{UNTIL("]")} Virtual interface {interface=NUMBER}
+        link state is down'
+
+action = "down"
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "data link"
+
+importance = "info"
+
+event_src.title = "ucs_manager"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_UCS_Manager_syslog_Virtual_interface_down"

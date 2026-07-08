@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} 
+        {$Computer=HOSTNAME} {subject.process.name="php"} 
+        {subject.process.id = NUMBER} - - 
+        {"/"?}/etc/rc.packages: Configuration Change: (system): 
+        {$message=REST}'
+
+COND = (find_substr($message, 'Intermediate config') == null)
+
+subject = "account"
+action = "install"
+object = "packet"
+status = "success"
+
+$message = strip($message, "Successfully ", ".")
+$message = strip($message, null, " package")
+$csv_msg = csv($message, ' ', '*')
+object.name = $csv_msg[length($csv_msg) - 1]
+$csv_msg = remove($csv_msg, object.name)
+$message = join($csv_msg, ' ')
+$message = strip($message, null, ':')
+$message = strip($message, null, ' of')
+$message = strip($message, null, ' package')
+object.state = lower($message)    # real action
+
+if datafield2 == 'removed' then
+    action = "remove"
+endif
+
+importance = "info"
+
+event_src.title = "php"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Opensource_PHP_syslog_Packet_actions"

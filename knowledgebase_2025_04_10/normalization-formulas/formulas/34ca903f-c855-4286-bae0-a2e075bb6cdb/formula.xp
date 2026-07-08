@@ -1,0 +1,43 @@
+TABULAR = ' Audit_Status,
+            EndpointName,
+            EndpointUser,
+            ObjectType,
+            Operation,
+            Subject,
+            orig,
+            product,
+            time'
+
+COND = $product == "Endpoint Management" and $Operation == "Create Object"
+
+if $EndpointUser != "localhost" then
+    subject = "account"
+    $subj_info = csv($EndpointUser, "@", "")
+    subject.name = $subj_info[0]
+    subject.domain = $subj_info[1]
+endif
+action = "modify"
+object = "configuration"
+
+if $Audit_Status == "Success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.name = $EndpointName
+object.type = $ObjectType
+
+reason = "create"
+
+time = $time
+msgid = $Operation
+importance = "high"
+
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.subsys = lower($product)
+event_src.ip = $orig
+event_src.category = "Host security"
+
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Endpoint_management_Create_object"

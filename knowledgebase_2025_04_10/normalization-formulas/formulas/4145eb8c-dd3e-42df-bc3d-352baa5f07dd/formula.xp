@@ -1,0 +1,44 @@
+EVENTLOG = 'EventID="113"'
+COND = $Channel == "Microsoft-Windows-TaskScheduler/Operational"
+        and $Provider["Name"] == "Microsoft-Windows-TaskScheduler"
+
+action = "create"
+object = "task"
+status = "success"
+
+object.fullpath = lower($Data["TaskName"])
+$temp = csv(lower($Data["TaskName"]), "\\", "")
+object.name = $temp[length($temp) - 1]
+$path = strip(object.fullpath, "", object.name)
+if  $path != "\\" then
+    object.path = $path
+else
+    object.path = null
+endif
+
+datafield1 = $Data['ResultCode']  # Result code
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+reason = "Task registered without some triggers"
+
+category.generic = "Task"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Common_TaskScheduler_113_Task_Scheduler_Task_Registered_Without_Some_Triggers"

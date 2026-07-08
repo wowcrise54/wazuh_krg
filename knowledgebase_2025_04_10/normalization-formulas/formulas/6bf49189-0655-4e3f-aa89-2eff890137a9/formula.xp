@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = find_substr($kv["default_device_message"], "from CLI shell") != null
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+$sym1 = find_substr($kv["default_device_message"], "User") + 5
+$sym2 = find_substr($kv["default_device_message"], " logged")
+subject.account.name = substr($kv["default_device_message"], $sym1, $sym2 - $sym1)
+
+object.name = "clish"
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+if find_substr($kv["default_device_message"], "due to inactivity") != null then
+    reason = "due to inactivity"
+endif
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Clish_logout"

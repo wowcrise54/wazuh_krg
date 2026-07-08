@@ -1,0 +1,50 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "PASSWORD_POLICY_UPDATE - Updating password policy succeeded") != null
+       
+subject = "account"
+action = "modify"
+object = "policy"
+status = "success"
+
+subformula "parse_category"
+    TEXT = "PASSWORD_POLICY_UPDATE - Updating password policy succeeded. ID: {$obj_id=REST}"
+    
+    $bad_values = [null, 'n/a', 'null', '']
+    $obj_id = strip($obj_id, '"','".')
+    
+    if not in_list($bad_values, $obj_id) then
+        object.id = $obj_id
+    endif
+endsubformula
+
+submessage("TEXT", "parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+object.type = "password"
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "PASSWORD_POLICY_UPDATE"
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_password_policy_manipulation"

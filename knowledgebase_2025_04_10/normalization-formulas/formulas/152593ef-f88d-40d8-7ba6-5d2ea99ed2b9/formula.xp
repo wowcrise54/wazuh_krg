@@ -1,0 +1,44 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+{'CEF'|'LEEF'}:{NUMBER}{'.' NUMBER?}|AVSoft|{$tmp_subsys=WORD}|1.3.6|{msgid='TrapAuthorization'}|{'act=' ?}loki001
+{$kv=KEYVALUE(' ', '=', '\"')}"
+
+subject = "account"
+action = "login"
+object = "resource"
+if $kv["AuthStatus"] == "false" then
+    status = "failure"
+elif $kv["AuthStatus"] == "true" then
+    status = "success"
+endif
+
+subject.account.name = $kv["Username"]
+
+object.id = $kv["NetworkUnitID"]
+object.type = $kv["AttackListType"]
+
+src.ip = $kv["AttackListSrcIP"]
+dst.ip = $kv["AttackListTargetIP"]
+protocol.layer7 = $kv["AttackListProtocol"]
+
+start_time = $kv["AttackListTimeStamp"]
+
+datafield1 = $kv["msg"]                  # Описание события
+datafield2 = $kv["AttackListSession"]    # uuid4 hex номер сессии атаки
+datafield3 = $kv["Password"]             # Пароль
+
+importance = "medium"
+
+event_src.id = $kv["NodeName"]
+event_src.vendor = "avsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "loki"
+event_src.category = "Honeypot"
+
+id = "PT_AVSoft_Loki_syslog_TrapAuthorization"

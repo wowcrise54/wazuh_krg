@@ -1,0 +1,129 @@
+event Connect_Through_Mongodump:
+    key:
+        event_src.host, src.ip
+    filter {
+        msgid == "isMaster"
+        and event_src.title == "mongodb"
+        and action == "backup"
+    }
+     
+event Connect_Sasl:
+    key:
+        event_src.host, src.ip
+    filter {
+        msgid == "saslStart"
+        and event_src.title == "mongodb"
+    }
+    
+event Execute_ListCollections_No_Filter:
+    key:
+        event_src.host, src.ip
+    filter {
+        msgid == "listCollections"
+        and event_src.title == "mongodb"
+        and object.value == null
+    }
+    
+event Execute_ListIndexes:
+    key:
+        event_src.host, src.ip
+    filter {
+        msgid == "listIndexes"
+        and event_src.title == "mongodb"
+        and filter::CheckWL_Database_Actions("MongoDB_Dump_Database", lower(object.name))
+    }
+    
+event Close_Connection:
+    key:
+        event_src.host, src.ip
+    filter {
+        msgid == "endSessions"
+        and event_src.title == "mongodb"
+    }
+     
+rule MongoDB_Dump_Database: Connect_Through_Mongodump -> Connect_Sasl -> Execute_ListCollections_No_Filter -> Execute_ListIndexes? -> Close_Connection within 5m
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+     }
+    
+    on Connect_Through_Mongodump {
+        $subject.process.name = datafield2
+        $subject.process.meta = "driver:" + datafield3 + "|version:" + datafield4
+        
+        $object.value = object.value
+        $object.property = object.property
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+             
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        
+        $datafield4 = object.name                    # имя БД, к которой было исходное подключение
+        $datafield5 = datafield5                     # тип ОС
+        $datafield6 = datafield6                     # название ОС
+        $datafield7 = datafield7 + "|" + datafield8  # архитектура ОС и версия ОС
+        $datafield8 = object.value                   # saslSupportedMechs
+        $datafield9 = datafield1                     # платформа подключившегося пользователя
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+    
+    on Connect_Sasl {
+        $datafield10 = object.value  # sasl mechanism
+    }
+    
+    on Execute_ListCollections_No_Filter {
+        $status = status
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.privileges = subject.privileges
+      
+        $object.name = object.name
+        
+        $datafield1 = datafield1  # БД пользователя субъекта
+        $datafield3 = reason
+    }
+        
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "copy"
+    $object = "database"
+    
+    if $object.name == "admin" then
+        $alert.context = "Creating a backup using a user with high permissions"
+    elif $src.ip == "127.0.0.1" or $src.ip == $dst.ip then
+        $alert.context = "Creating a backup on the local system"
+    endif
+    
+    $importance = "low"
+
+    $alert.key = lower($object.name)
+    
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Data from Local System"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 12h
+}

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля в Aria Operations for Logs. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="26b450fd-0365-8d07-78aa-3f31e7b5d25b">Попытки распыления пароля (password spraying) на узле Aria Operations for Logs {event_src.host}. Количество попыток входа: {count.subevents}</EventDescription>
+    <EventDescription id="68703720-e2de-cfe9-c3fc-aa24a632b523">Распыление пароля (password spraying) на узле Aria Operations for Logs {event_src.host}. Подобран пароль пользователя {subject.account.name}. Количество неудачных попыток входа: {count.subevents}</EventDescription>
+    <EventDescription id="c37eed06-2d3c-74f1-f241-cb02a7b25b4e">Распыление пароля (password spraying) на узле Aria Operations for Logs {event_src.host}. Подобраны пароли пользователей {datafield2}. Количество неудачных попыток входа: {count.subevents}</EventDescription>
+  </EventDescriptions>
+</Localization>

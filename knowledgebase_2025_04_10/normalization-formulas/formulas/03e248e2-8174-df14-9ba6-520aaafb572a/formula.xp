@@ -1,0 +1,25 @@
+TABULAR = "{msgid=event_id}"
+COND = $event_id == 1301
+
+subject = "account"
+action = "stop"
+object = "task"
+status = if $status == 0 then "success" else "failure" endif
+
+subject.account.name = $user
+
+object.type = "task by the module"
+object.state = $status
+
+datafield1 = $guid  # guid
+datafield2 = $obj_name  # the object in which the action takes place
+
+time = epoch_ms_to_datetime($unix_time + ($timezone * 60000))
+if $comment != "" then reason = $comment endif  # comment
+importance = "info"
+
+event_src.vendor = "confident"
+event_src.title = "ucc_dallas_lock"
+event_src.category = "Other"
+
+id = "PT_Confident_UCC_Dallas_Lock_odbc_completion_task_by_the_module"

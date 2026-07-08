@@ -1,0 +1,62 @@
+query Get_user_role($host, $uid, $name) from Auditd_User_Roles {
+    (
+        uid_or_name == $uid
+        or uid_or_name == $name
+    )
+    and (
+        host == "*"
+        or host == $host
+    )
+}
+
+event Auditd_event:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "unix_like"
+        and event_src.subsys == "auditd"
+        and object.account.id != null
+    }
+
+enrichment Auditd_user_role_check
+
+    enrich Auditd_event:
+        enrich_fields {
+            if object.account.id != null then
+                $account_id = number(object.account.id)
+                $account_name = object.account.name
+            elif subject.account.id != null then
+                $account_id = number(subject.account.id)
+                $account_name = subject.account.name
+            endif
+            
+            if $account_id == 0 then
+                $user_role = "root"
+            elif ($account_id == 33) and ($account_name == "www-data") then
+                $user_role = "web daemon"
+            elif ($account_id == 48) and ($account_name == "apache") then
+                $user_role = "web daemon"
+            elif ($account_id > 100) and ($account_id < 200) and ($account_name == "nginx") then
+                $user_role = "web daemon"
+            elif ($account_id > 100) and ($account_id < 200) and ($account_name == "zabbix") then
+                $user_role = "app daemon"
+            elif ($account_id > 100) and ($account_id < 200) and in_list(["mysql", "postgres"], $account_name) then
+                $user_role = "db daemon"
+            elif ($account_id > 990) and ($account_id < 1000) and (substr($account_name, 0, 3) == "git") then
+                $user_role = switch $account_name
+                    case "git" "app daemon"
+                    case "gitlab-www" "web daemon"
+                    case "gitlab-psql" "db daemon"
+                    case "gitlab-redis" "app daemon"
+                    case "gitlab-runner" "app daemon"
+                    case "gitlab-prometheus" "app daemon"
+                endswitch
+            endif
+            
+            if $user_role == null then
+                $user_role = select_query_first("Get_user_role", [event_src.host, string($account_id), $account_name], "role")
+            endif
+            
+            if $user_role != null then
+                subject.type = $user_role
+            endif
+        }

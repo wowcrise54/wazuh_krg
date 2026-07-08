@@ -1,0 +1,34 @@
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_FDE_Wake_on_lan"
+
+TABULAR = 'client_name, client_version, description, event_type, fde_details, orig, os_name, os_version, product, product_family, src, src_machine_name, src_user_name, time'
+
+COND = ($product_family == "Endpoint" and $product == "FDE" and $event_type == "Status" and ($description == "System update Wake-on-LAN was disabled." or $description == "System update Wake-on-LAN was enabled."))
+
+object = "configuration"
+object.name = "Wake-on-LAN"
+
+if $description == "System update Wake-on-LAN was enabled."
+    then action = "enable"
+elif $description == "System update Wake-on-LAN was disabled."
+    then action = "disable"
+endif
+
+status = "success"
+
+subject = "account"
+subject.name = $src_user_name
+
+reason = $description
+
+time = $time
+
+msgid = $event_type
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.ip = $src
+event_src.hostname = $src_machine_name
+event_src.subsys = lower($product)
+event_src.category = "Host security"

@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} pfsp: Host Detection alert #{datafield1=NUMBER}, start
+        {DATETIME} {WORD?}, duration {duration=NUMBER}, {object.state="stop"} {DATETIME} {WORD?}, ,
+        importance {NUMBER}, managed_objects {$tmp_managed_object=STRING+} is now done, {REST}'
+
+action = "detect"
+object = "attack"
+object.name = "DoS"
+status = "success"
+
+# datafield1 - ID
+datafield2 = strip($tmp_managed_object, '("', '"),')  # managed object
+
+importance = "low"
+
+event_src.title = "peakflow_sp"
+event_src.vendor = "arbor_networks"
+event_src.category = "Network security"
+
+id = "PT_Arbor_Networks_Peakflow_SP_syslog_dos_host_alert_stop"

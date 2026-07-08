@@ -1,0 +1,32 @@
+# A Windows Firewall setting has changed
+
+EVENTLOG = 'EventID="2002"'
+!COND = $Channel=="Microsoft-Windows-Windows Firewall With Advanced Security/Firewall" and $Provider["Name"]=="Microsoft-Windows-Windows Firewall With Advanced Security"
+
+subject = "account"
+action = "modify"
+object = "policy"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "Firewall"
+event_src.id = $Provider["Name"]
+
+object.type = $Data["SettingType"]
+object.value = $Data["SettingValue"]
+subject.id =  $Data["ModifyingUser"]
+
+id = "PT_Microsoft_Windows_eventlog_2002_A_Windows_Firewall_setting_has_changed"
+importance = "info"

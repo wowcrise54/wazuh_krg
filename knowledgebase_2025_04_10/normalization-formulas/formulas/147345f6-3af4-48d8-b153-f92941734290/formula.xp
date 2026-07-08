@@ -1,0 +1,33 @@
+EVENTLOG = 'EventID="4872"'
+!COND = $Channel=="Security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "system"
+action = "info"
+object = "certificate"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+datafield1 = $Data["PublishURLs"]
+$all = csv($Data["PublishURLs"], ";", "")
+datafield2 = string(length($path))
+if length($all) == 2 then
+    object.fullpath = strip($Data["PublishURLs"], "", ";")
+    $path = csv($Data["PublishURLs"], "/", "")
+    object.name = strip(csv($Data["PublishURLs"], "/", "")[length($path) - 1], "", ";")
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+object.property = "base_crl"
+object.value = $Data["IsBaseCRL"]
+object.id = $Data["CRLNumber"]
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+event_src.category = "Certification authority"
+
+id = "PT_Microsoft_Certification_Authority_eventlog_4872_Publish_certificate_revocation_list"
+importance = "info"

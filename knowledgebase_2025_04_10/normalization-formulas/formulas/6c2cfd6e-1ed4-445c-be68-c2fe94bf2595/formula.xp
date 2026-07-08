@@ -1,0 +1,45 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {UNTIL(" traffic - - ")}CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|traffic|nat|{WORDDASH}|
+        rt={$temp_time=NUMBER} deviceExternalId={event_src.id=STRING+} suser={STRING} {$kv=KEYVALUE(" ","=")}'
+
+action = "create"
+object = "conntrack"
+status = "success"
+
+object.type = "nat"
+
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+
+assigned_src_ip = $kv["sourceTranslatedAddress"]
+assigned_src_port = $kv["sourceTranslatedPort"]
+assigned_dst_ip = $kv["destinationTranslatedAddress"]
+assigned_dst_port = $kv["destinationTranslatedPort"]
+
+protocol = $kv["proto"]
+
+count.bytes_out = $kv["out"]
+count.bytes_in = $kv["in"]
+count.packets_out = $kv["cn2"]
+count.packets_in = $kv["cn1"]
+
+time = epoch_ms_to_datetime($temp_time)
+importance = "info"
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_nat_traffic"

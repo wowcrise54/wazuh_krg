@@ -1,0 +1,40 @@
+#LEEF:1.0|KasperskyLab|SecurityCenter|13.0.0.11247|KLSRV_HOST_STATUS_WARNING|cat=KLSC EVC_EV_DESC=Статус устройства 'DOMAIN-FILESHARE' изменился на 'Предупреждение': Обнаружено много вирусов; Давно не выполнялся поиск вирусов; Базы устарели; Давно не выполнялась проверка обновлений Центра обновления Windows. devTime=2021-05-27 10:28:58 devTimeFormat=yyyy-MM-dd HH:mm:ss EVC_EV_GROUP_NAME=Управляемые устройства EVC_EV_DISP_HOST_NAME=DOMAIN-KSC src=127.0.0.1 identSrc=127.0.0.1 identNetBios=DOMAIN-KSC EVC_EV_KL_PRODUCT_DISPVER=13.0.0.11247 EVC_EV_KL_PRODUCT_NAME=1093 EVC_EV_KL_PRODUCT_VER=1.0.0.0
+
+TEXT = "LEEF:1.0|KasperskyLab|SecurityCenter|{UNTIL('|')}{msgid='KLSRV_HOST_STATUS_WARNING'}|{STRING}{$kv=KEYVALUE('\t','=', '')}"
+
+action = "state"
+object = "host"
+status = "success"
+
+submessage("TEXT", "object_reason", $kv['EVC_EV_DESC'])
+subformula "object_reason"
+    !TEXT = "Статус устройства \'{object.name=HOSTNAME}\' изменился на {STRING} {reason=STRING+}"
+endsubformula
+
+object.state = "warning"
+
+datafield1 = $kv['EVC_EV_GROUP_NAME']    # имя группы администрирования, в которую входит узел-источник
+
+time = $kv['devTime']
+importance = "low"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $kv['EVC_EV_KL_PRODUCT_NAME']
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+if $kv['src'] != "127.0.0.1" then
+    event_src.ip = $kv['src']
+endif
+event_src.hostname = lower($kv['EVC_EV_DISP_HOST_NAME'])
+event_src.category = "Host security"
+
+id = "UTMN_PT_Kaspersky_Security_Center_syslog_KLSRV_HOST_STATUS_WARNING"

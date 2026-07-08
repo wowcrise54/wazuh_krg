@@ -1,0 +1,30 @@
+TEXT = '{$src_host=HOSTNAME} {$date=STRING} {$time=STRING} {$proto=STRING} {src.ip=IPV4|src.ip=IPV6|HOSTNAME|"-"}{":"?}{src.port=NUMBER|"-"|}
+        {dst.ip=IPV4| dst.ip=IPV6|"-"}{":"?}{dst.port=NUMBER|"-"|} {IPV4|IPV6|HOSTNAME|"-"} {STRING+?} Establish 0x0 {$csv=CSV("\\t", "\'")}'
+
+action = "detect"
+object = "connection"
+status = "success"
+
+direction = "egress"
+protocol = lower($proto)
+count.bytes_out = $csv[3]
+count.bytes_in = $csv[5]
+
+time = $date+' '+$time
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "State"
+
+event_src.vendor = "microsoft"
+if $csv[21] != null then
+    event_src.title = "tmg"
+    id = "PT_Microsoft_TMG_filemonitor_firewall_act_Establish"
+else
+    event_src.title = "isas"
+    id = "PT_Microsoft_ISAS_filemonitor_firewall_act_Establish"
+endif
+event_src.hostname = lower($src_host)
+event_src.category = "Proxy server"

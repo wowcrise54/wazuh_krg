@@ -1,0 +1,35 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Общие настройки"
+       and find_substr($event_message, "installed a new license file") != null
+       and ($event_id == 536870912
+            or $event_id == 536870916)
+
+action = "install"
+object = "resource"
+status = "success"
+
+object.type = "license"
+
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_license_installed"

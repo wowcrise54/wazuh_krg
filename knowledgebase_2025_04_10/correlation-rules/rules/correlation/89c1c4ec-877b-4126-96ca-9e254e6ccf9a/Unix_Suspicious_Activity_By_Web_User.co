@@ -1,0 +1,159 @@
+query Check_WebServer_Users($user_name, $user_id, $host) from Auditd_User_Roles {
+    (host == $host or host == "*")
+    and (uid_or_name == $user_name or uid_or_name == $user_id)
+    and role == "web daemon"
+}
+
+event Suspicious_Activity_By_Web_User:
+    key:
+        event_src.host, subject.account.id, subject.account.session_id
+    filter {
+        (in_list([
+            "Unix_Internet_Connection_Discovery", # "ping", "telnet", "nc", "netcat", "traceroute"
+            "Unix_Local_Account_Discovery", # "who", "w", "w.procps", "logins", group|passwd|shadow|gshadow
+            "Unix_Password_Policy_Discovery", # "/etc/pam.d/common-password", "/etc/pam.d/common-auth", "/etc/login.defs"
+            "Unix_Process_Discovery", # "ps", "pstree", "top", "atop", "htop", "lsof", "pgrep", "pidof"
+            "Unix_Security_Software_Discovery",
+            "Unix_Software_Discovery",
+            "Unix_System_Information_Discovery", # "hostname", "hostnamectl", "dnsdomainname", "lsb_release", "uname", "dmesg", "inxi", "lscpu", "lsblk", "fdisk", "df"
+            "Unix_System_Network_Configuration_Discovery", # "ip", "ifconfig", "netstat", "arp", "tcpdump", "nmcli", "nslookup", "ss"
+            "Unix_System_Service_Discovery",
+            "Unix_System_User_Discovery", # "groups", "whoami", "id", "pwd", "lastlog", "last", "logname"
+            "Unix_Suspicious_Command",
+            "Unix_Inline_Reverse_Or_Bind_Shell",
+            "Unix_Hacktool_Usage",
+            "Unix_Suspicious_Emodji_Cmdline",
+            "Unix_Run_Process_From_Suspicious_Directory"
+        ], correlation_name)
+            or (
+                filter::NotFromCorrelator() 
+                and filter::ProcessStart_Linux() 
+                and (
+                    regex(lower(object.process.cwd), "(/(srv|public_html)/www)|(/usr/((local|share)/)?(nginx|var)/(www|html))", 0) != null
+                    or regex(lower(object.process.cwd), "/var/www/html(/drupal.*)?", 0) != null
+                    or regex(lower(object.process.cwd), "/((wp-content/(themes|plugins|uploads))|(wp-includes)|(wp-admin))", 0) != null
+                    or regex(lower(object.process.cwd), "(/joomla)?/(templates|(administrator/)?components|images|modules|cache)", 0) != null
+                    or regex(lower(object.process.cwd), "/static/.*/uploads", 0) != null
+                    or regex(lower(object.process.cwd), "(/uploads)|(/webapps(/root)?)", 0) != null
+                    or regex(lower(object.process.cwd), "(/app/)|(/public/(.*/)?uploads)", 0) != null
+                    or regex(lower(object.process.cwd), "(/sites/default(/files)?)|((/sites/all)?/(modules|themes))|(/profiles)", 0) != null
+                    or regex(lower(object.process.cwd), "/bitrix/admin/mobile", 0) != null
+                    or regex(lower(object.process.cwd), "/usr/local/www", 0) != null
+                )
+            )
+        )
+        and (
+            (number(subject.account.id) > 990 and number(subject.account.id) < 1000 and subject.account.name == "gitlab-www")
+            or in_list(["33", "48", "500"], subject.account.id)
+            or (
+                in_list(["nginx", "apache", "wwwrun", "www-data", "nagios", "oracle", "confluence", "bitrix", "git", "teamcity", "zabbix"], subject.account.name)
+                or regex(lower(subject.account.name), "tomcat|node(.*)?js", 0) != null
+            )
+            or subject.type == "web daemon"
+            or exec_query("Check_WebServer_Users", [lower(subject.account.name), lower(subject.account.id), lower(event_src.host)])
+        )
+        and filter::CheckWL_Linux_Process_Creation("Unix_Suspicious_Activity_By_Web_User",
+            lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+
+rule Unix_Suspicious_Activity_By_Web_User: Suspicious_Activity_By_Web_User+ timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+        $first_event = true
+        $count.subevents = 0
+        $recon_commands = []
+        $recon_rules = []
+    }
+
+    on Suspicious_Activity_By_Web_User {
+        $count.subevents = $count.subevents + count.subevents
+
+        if $first_event then
+            $first_event = false
+
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            $subject.type = subject.type
+
+            $object.account.id = object.account.id
+            $object.account.domain = object.account.domain
+            $object.account.name = object.account.name
+            $object.account.group = object.account.group
+
+            $object.process.id = object.process.id
+            $object.process.parent.id = object.process.parent.id
+            $object.process.cwd = object.process.cwd
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.cmdline = object.process.cmdline
+            $object.process.meta = object.process.meta
+
+            $logon_service = logon_service
+
+            $datafield1 = datafield1  # Executable Name
+            $datafield2 = datafield2  # Binary File Owner User Name
+            $datafield3 = datafield3  # Binary File Access Mode
+            $datafield4 = datafield4  # Interpreter or Binary
+            $datafield5 = datafield5  # The file that caused the error
+
+            $numfield2 = numfield2  # Binary File Owner User ID
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.key = lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|"))
+        endif
+
+        if not in_list($recon_commands, object.process.name) then
+            $recon_commands = append($recon_commands, object.process.name)
+        endif
+        
+        if correlation_name != null and not in_list($recon_rules, correlation_name) then
+            $recon_rules = append($recon_rules, correlation_name)
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "high"
+
+    if length($recon_rules) > 0 then
+        $alert.context = "recon commands: " + join($recon_commands, "|")
+        $alert.context = $alert.context + " | recon rules: " + join($recon_rules, "|")
+    else
+        $alert.context = $object.process.name + " started from " + $object.process.cwd
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Exploit Public-Facing Application"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

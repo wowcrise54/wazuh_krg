@@ -1,0 +1,193 @@
+event Registry_Creation_Event:
+        key:
+            event_src.host
+        filter {
+            filter::NotFromCorrelator()
+            and event_src.title == "sysmon"
+            and msgid == "12"
+            and action == "create"
+            and find_substr(lower(object.path), "\\schedule\\taskcache\\tree\\") != null
+            and lower(subject.process.fullpath) != "c:\\windows\\system32\\svchost.exe"
+            and filter::CheckWL_Registry_Actions("Hidden_Scheduled_Task", join([lower(subject.process.name),lower(object.fullpath)], "|"))
+        }
+    
+event No_Event_In_Log:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and in_list(["4698", "4702"], msgid)
+    }
+
+# Данных событий может приходить несколько. Стоит отметить, что даже если не поступит событие 12 о создании задачи, то
+# это можно обнаружить с помощью события sysmon 13, в котором object.path имеет вид 
+# "\registry\machine\software\microsoft\windows nt\currentversion\schedule\taskcache\tree\*", а object.name = "id".
+# При модификации задачи таких событий не поступает.
+event Registry_Modification_Event:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "13"
+        and regex(lower(object.path), "\\\\schedule\\\\taskcache\\\\(tree|tasks)\\\\", 0) != null
+        and lower(subject.process.fullpath) != "c:\\windows\\system32\\svchost.exe"
+        and filter::CheckWL_Registry_Actions("Hidden_Scheduled_Task", join([lower(subject.process.name),lower(object.path)], "|"))
+    }
+
+rule Hidden_Scheduled_Task: 
+        (Registry_Creation_Event and not No_Event_In_Log) timer 15s or 
+        (Registry_Modification_Event+ and not Registry_Creation_Event and not No_Event_In_Log) timer 15s
+    
+    
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+        $first_event = true
+        # Массивы для удобного отслеживания сделанных изменений
+        $tree_modifications = null
+        $tasks_modifications = null
+        $tree_location = null
+        $tasks_location = null
+    }
+
+    on Registry_Creation_Event {
+        $action = action  # create
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        
+        $object.name = object.name
+        $object.type = object.type
+        $object.path = object.path
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = join([lower(subject.process.name),lower(object.fullpath)], "|")
+        $alert.context = object.name
+        $reason = reason
+    }
+
+    on Registry_Modification_Event {
+        if $first_event then
+            $action = action  # modify, create
+
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = join([lower(subject.process.name),lower(object.path)], "|")
+
+            $first_event = false
+        endif
+
+        $lower_obj_path = lower(object.path)
+        $lower_obj_name = lower(object.name)
+        
+        if find_substr($lower_obj_path, "\\schedule\\taskcache\\tree\\") != null then
+            # id задачи ставится автоматически при ее создании, имеет вид {5c34d474-a503-4e20-ba33-c6f302e00b66}
+            if $lower_obj_name == "id" then
+                $object.id = object.new_value
+                $action = "create"
+            endif
+            # Добавляем имя измененного поля в массив $tree_modifications
+            $tree_modifications = append($tree_modifications, $lower_obj_name)
+            if $tree_location == null then
+                $tree_location = object.path
+            endif            
+        elif find_substr($lower_obj_path, "\\schedule\\taskcache\\tasks\\") != null then
+            if in_list(["path", "uri"], $lower_obj_name) and $object.path == null then
+                # Расположение задачи
+                $object.fullpath = object.new_value
+                $object.name = object.new_value
+            elif $lower_obj_name == "author" then
+                # Пользователь, от имени которого будет запускаться задача (формат: <домен>\<имя>)
+                $object.account.domain = regex(object.new_value, "(^(.*?)\\\\)?(.*?)$", 2)
+                $object.account.name = regex(object.new_value, "(^(.*?)\\\\)?(.*?)$", 3)
+            endif
+            # Добавляем имя измененного поля в массив $tasks_modifications
+            $tasks_modifications = append($tasks_modifications, $lower_obj_name)
+            if $tasks_location == null then
+                $tasks_location = object.path
+            endif
+        endif           
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    # Блок для Registry_Modification_Event:
+    if not $first_event then
+        # Заполнение alert.context для кейса Registry_Modification_Event
+        $len_tree_modifications = length($tree_modifications)
+        if length($tree_modifications) != null then
+            $alert.context = "Modified keys in " + $tree_location + ": " + join($tree_modifications, ", ")
+        endif
+        if length($tasks_modifications) != null then
+            $context = "Modified keys in " + $tasks_location + ": " + join($tasks_modifications, ", ")
+            if $len_tree_modifications != null then
+                $alert.context = join([$alert.context, $context], " | ")
+            else
+                $alert.context = $context
+            endif
+        endif
+        # Если object.id или object.fullpath для Registry_Modification_Event не заполнились выше, то
+        if $object.id == null and $tasks_location != null then
+            $object.id = regex($tasks_location, ".*?\\\\schedule\\\\taskcache\\\\tasks\\\\(\{.*?\})", 1)
+        endif
+        if $object.fullpath == null and $tree_location != null then
+            $regex_fullpath = regex($tree_location, ".*?\\\\schedule\\\\taskcache\\\\tree\\\\(.*?)$", 1)
+            $object.fullpath = "\\" + strip($regex_fullpath, "", "\\")
+            $object.name = strip($regex_fullpath, "", "\\")
+        endif 
+    endif   
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Scheduled Task/Job: Scheduled Task"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.process.name)], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

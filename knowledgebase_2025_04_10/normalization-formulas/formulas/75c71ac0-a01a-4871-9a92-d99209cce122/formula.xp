@@ -1,0 +1,120 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} production_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '{"key":"file.name","value":') != null
+    and find_substr($json, '"controller":"Projects::BlobController"') != null
+    and (
+        (
+            find_substr($json, '"method":"POST"') != null
+            and find_substr($json, '"action":"create"') != null
+        )
+        or (
+            find_substr($json, '"method":"PUT"') != null
+            and find_substr($json, '"action":"update"') != null
+        )
+    )
+)
+
+subject = "account"
+object = "file_object"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+action = switch $action
+    case "create" "upload"
+    case "update" "modify"
+endswitch
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+object.type = "file"
+
+$s_file_path = find_substr($json, '{"key":"file.path","value":"')
+$e_file_path = find_substr(substr($json, $s_file_path, length($json)), '"}')
+$file_path = substr($json, $s_file_path + 28, $e_file_path - 28)
+$file_path = if length($file_path) != 0 then $file_path else null endif
+
+$file_path_list = csv($file_path, "/", "")
+object.storage.fullpath = $file_path
+object.storage.name = $file_path_list[length($file_path_list)-1]
+object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+
+object.property = "branch/fullpath | local_file"
+
+$s_file_name = find_substr($json, '{"key":"file.name","value":"')
+$e_file_name = find_substr(substr($json, $s_file_name, length($json)), '"}')
+$file_name = substr($json, $s_file_name + 28, $e_file_name - 28)
+$file_name = if length($file_name) != 0 then $file_name else null endif
+
+$s_id = find_substr($json, '{"key":"id","value":"')
+$e_id = find_substr(substr($json, $s_id, length($json)), '"}')
+$id = substr($json, $s_id + 21, $e_id - 21)
+$id = if length($id) != 0 then $id else null endif
+
+$s_branch_name = find_substr($json, '{"key":"branch_name","value":"')
+$e_branch_name = find_substr(substr($json, $s_branch_name, length($json)), '"}')
+$branch_name = substr($json, $s_branch_name + 30, $e_branch_name - 30)
+
+switch $action
+    case "create"
+        object.name = $file_name
+        object.fullpath = "/" + $file_name
+        object.value = $id + "/" + $file_name + " | " + $file_name
+    case "update"
+        $id_list = csv($id, "/", "'")
+        object.name = $id_list[length($id_list)-1]
+        object.fullpath = strip($id, $branch_name, null)
+        object.value = $id + " | " + $file_name
+endswitch
+    
+src.ip = $remote_ip
+
+$s_project_id = find_substr($json, '{"key":"project_id","value":"')
+$e_project_id = find_substr(substr($json, $s_project_id, length($json)), '"}')
+$project_id = substr($json, $s_project_id + 29, $e_project_id - 29)
+datafield1 = if length($project_id) != 0 then $project_id else null endif  # Project Slug
+
+$s_namespace_id = find_substr($json, '{"key":"namespace_id","value":"')
+$e_namespace_id = find_substr(substr($json, $s_namespace_id, length($json)), '"}')
+$namespace_id = substr($json, $s_namespace_id + 31, $e_namespace_id - 31)
+datafield2 = if length($namespace_id) != 0 then $namespace_id else null endif  # Namespace Fullpath
+
+datafield3 = if length($branch_name) != 0 then $branch_name else null endif  # Target Branch Name
+
+$s_commit_message = find_substr($json, '{"key":"commit_message","value":"')
+$e_commit_message = find_substr(substr($json, $s_commit_message, length($json)), '"}')
+$commit_message = substr($json, $s_commit_message + 33, $e_commit_message - 33)
+datafield4 = if length($commit_message) != 0 then $commit_message else null endif  # Commit Title
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "production"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Production_Repo_Upload_File"

@@ -1,0 +1,58 @@
+!TABULAR = 'Version,
+            DateTime,
+            Severity,
+            MessageID'
+
+!COND = $Location == "com.sap.security.core.util.SecurityAudit" and find_substr($MsgText, "SET_ATTRIBUTE: islocked=[true]") != null
+
+if $User != '' then
+    subject = "account"
+    subject.name = lower($User)
+endif
+action = "lock"
+object = "account"
+status = "success"
+
+submessage("TEXT", "parse_msg_text", $MsgText)
+subformula "parse_msg_text"
+    TEXT = '{"User account modified"|STRING} | USERACCOUNT.MODIFY | UACC.{"R3"|"PRIVATE"}_DATASOURCE.{$username=STRING} | |
+            SET_ATTRIBUTE: {"lockreason"|"islocked"}=[{$attrib1="true"|$attrib1=NUMBER}],
+            SET_ATTRIBUTE: {"lockreason"|"islocked"}=[{$attrib2="true"|$attrib2=NUMBER}]'
+
+    object.name = lower(strip($username, "un:", ""))
+    if $attrib1 == "true" then
+        reason = $attrib2
+    else
+        reason = $attrib1
+    endif
+endsubformula
+
+if $Application != '' then
+    datafield1 = $Application   # application
+endif
+if $Transaction != '' then
+    datafield2 = $Transaction   # transaction id
+endif
+if $ThreadName != '' then
+    datafield3 = $ThreadName    # thread name
+endif
+if $Session != '' then
+    datafield4 = $Session       # session id
+endif
+if $DsrComponent != '' then
+    datafield5 = $DsrComponent  # component name
+endif
+
+
+importance = "info"
+if ($TimeZone != null) then
+    time = $DateTime + "#" + $TimeZone
+else
+    time = $DateTime
+endif
+event_src.vendor = "sap"
+event_src.title = "sap_as_java"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_JAVA_Security_Audit_filemonitor_User_locked"

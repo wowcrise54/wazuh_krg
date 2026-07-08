@@ -1,0 +1,1693 @@
+/* -----------------------------------------------------------------------------
+  API reference pages (using ReDoc)
+----------------------------------------------------------------------------- */
+
+@import "../inc/variables";
+@import "../inc/mixins";
+@import "../inc/root";
+@import "../inc/content";
+
+@import "../components/brand";
+@import "../components/version-selector";
+@import "../components/mode-switch";
+@import "../components/back-to-top";
+@import "../components/contact-side-tab";
+
+// Variables used only for ReDoc
+$light-color-redoc-type: #757575 !default;
+$light-color-redoc-type-border: #b4b4b4 !default;
+$light-color-redoc-code-background: #f6f6f6 !default;
+$dark-color-redoc-base-space: $dark-color-base-space;
+$dark-color-redoc-table-heading: #292929 !default;
+$dark-color-redoc-table-background: #2a2d34 !default;
+$dark-color-redoc-danger: #e31b0f !default;
+
+:root {
+  scroll-behavior: unset;
+}
+
+.loading {
+  header,
+  footer {
+    display: none;
+  }
+}
+
+#central-column {
+  padding-top: $no-latest-notice-height-xl;
+}
+
+body {
+  position: relative;
+  margin-top: 0;
+  font-family: Manrope, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 32px;
+  & > div:first-of-type {
+    padding-top: $redoc-header-height;
+  }
+
+  &.no-latest-docs {
+    & > div:first-of-type {
+      @media screen and (max-width: 576px){
+        padding-top: #{$redoc-header-height * 2.3};
+      }
+      @media screen and (min-width: 576px) and (max-width: 50rem){
+        padding-top: #{$redoc-header-height * 2};
+      }
+      @media screen and (min-width: 50rem) and (max-width: 75rem){
+        padding-top: #{$redoc-header-height * 1.7};
+      }
+      @include media-min (xl) {
+        padding-top: #{$redoc-header-height + 50px};
+      }
+      redoc[spec-url] .menu-content {
+        @media screen and (min-width: 50rem) and (max-width: 75rem){
+          top: #{$redoc-header-height + $header-height-xl} !important;
+        }
+        @include media-min (xl) {
+          top: #{$redoc-header-height + 50px} !important;
+        }
+      }
+    }
+    header {
+      @media screen and (max-width: 75rem){
+        padding-top: $header-height-xl;
+        width: 100%;
+        height: #{$redoc-header-height + $header-height-xl};
+      }
+      @media screen and (max-width: 50rem){
+        padding-top: 0;
+        height: #{$redoc-header-height};
+      }
+      @include media-min (xl) {
+        padding-top: 50px;
+        height: #{$redoc-header-height + 50px};
+      }
+      .no-latest-notice-wrapper {
+        @include media-min (xxl) {
+          display: flex;
+          align-items: center;
+        }
+      }
+    }
+  }
+}
+
+.inner-body {
+  display: block;
+  @include media-min (xl) {
+    max-width: 100%;
+  }
+}
+
+main {
+  padding: 0;
+  strong {
+    font-weight: 600;
+  }
+}
+#light-dark-switch {
+  padding: 0;
+}
+#central-column {
+  margin-left: auto;
+  margin-right: auto;
+}
+header {
+  position: fixed;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: row;
+  width: calc(#{$left-redoc-sidebar-width} + (100% - #{$left-redoc-sidebar-width}) * .6);
+  height: $redoc-header-height;
+  @media screen and (max-width: 75rem){
+    padding-top: 0;
+    width: 100%;
+    height: #{$redoc-header-height};
+  }
+  @media screen and (max-width: 50rem){
+    padding-top: 0;
+    flex-direction: column;
+    width: 100%;
+    height: $redoc-header-height;
+  }
+  #version-selector {
+    .dropdown-btn {
+      @media screen and (min-width: 50.01rem) and (max-width: 75rem) {
+        padding: 5px 10px;
+        border: 2px solid;
+      }
+      @media screen and (min-width: 50.01rem) {
+        border-color: $light-color-accent;
+      }
+      @include media-only (lg, xl) {
+        width: 263px;
+      }
+    }
+    .dropdown-menu {
+      @media screen and (min-width: 50.01rem) and (max-width: 75rem) {
+        left: 0 !important;
+        border: 2px solid;
+      }
+    }
+  }
+  .header-left {
+    position: relative;
+    z-index: 20;
+    width: $left-redoc-sidebar-width;
+    padding: 7px 40px;
+    pointer-events: all;
+    display: flex;
+    flex-shrink: 0;
+    justify-content: center;
+    flex-direction: column;
+    @media screen and (min-width: 50rem){
+      padding: 10px 15px;
+    }
+    @media screen and (max-width: 50rem){
+      width: 100%;
+      height: calc($redoc-header-height / 2);
+      padding: 10px 40px;
+    }
+
+    .navbar-brand {
+      justify-content: flex-start;
+      @media screen and (min-width: 50rem){
+        align-items: center;
+        height: 50px;
+      }
+    }
+    #light-dark-switch {
+      align-items: center;
+      padding-top: 0;
+      border-top: 2px solid;
+      @media screen and (min-width: 50rem){
+        height: 50px;
+      }
+      @media screen and (max-width: 50rem){
+        position: absolute;
+        right: 26px;
+        bottom: calc($redoc-header-height / -2);
+        height: calc($redoc-header-height / 2);
+        border: none;
+      }
+    }
+  }
+  .header-right {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    width: calc(100% - #{$left-redoc-sidebar-width} - 80px);
+    padding-bottom: 15px;
+    margin-right: 40px;
+    margin-left: 40px;
+    border-bottom: 1px solid;
+    @media screen and (max-width: 50rem){
+      position: absolute;
+      bottom: 0;
+      z-index: 20;
+      align-items: center;
+      justify-content: flex-start;
+      width: auto;
+      height: calc($redoc-header-height / 2);
+      padding: 0 0 0 22px;
+      margin: 0;
+      border: none;
+    }
+  }
+}
+#footer-redoc {
+  .powered-by-badge {
+    position: absolute;
+    right: 0;
+    bottom: 15px;
+    z-index: 50;
+    height: 40px;
+    padding: 0 40px;
+    font-size: .8rem;
+    color: $light-color-shaded-text;
+    text-align: right;
+    a {
+      color: $light-color-shaded-text;
+      text-decoration: none;
+    }
+  }
+}
+
+.no-latest-notice-wrapper {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 10;
+  padding-right: 0;
+  padding-left: 0;
+  margin: 0;
+  @media screen and (max-width: 50rem){
+    top: $redoc-header-height;
+  }
+
+  .no-latest-notice {
+    padding: 3px 40px 5px;
+    display: inline-flex;
+    width: 100%;
+    min-height: $header-height-xl;
+    @media screen and (max-width: 50rem){
+      display: inline-block;
+      padding: 0 20px 5px;
+      line-height: 26px;
+    }
+    @include media-min (xl){
+      min-height: 50px;
+      height: 50px;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .no-latest-title {
+      position: relative;
+      display: inline;
+      padding: 0 20px 0 38px;
+      font-weight: 600;
+      line-height: 32px;
+      
+      @media screen and (max-width: 50rem){
+        display: inline-block;
+        padding: 4px 10px 4px 38px;
+      }
+
+      &::after {
+        position: absolute;
+        top: 3px;
+        left: 0;
+        display: inline-block;
+        width: 1.5rem;
+        height: 1.5rem;
+        vertical-align: middle;
+        content: "";
+        background: url("#{$ico-path}svg-icons.svg#circle-exclamation-orange");
+      }
+    }
+
+    .no-latest-text-wrapper {
+      display: inline;
+      padding: 0 .5em 0 0;
+    
+      @media screen and (max-width: 50rem){
+        display: inline-block;
+      }
+    }
+  }
+}
+
+.light-theme,
+.dark-theme {
+  [role=main] {
+    caption,
+    td,
+    th {
+      background-color: transparent;
+    }
+  } 
+}
+
+/* Redoc Element styles ----------------------------------------------------- */
+
+redoc[spec-url] .redoc-wrap {
+  font-family: Manrope, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 32px;
+  letter-spacing: .03em;
+
+  // Right column dark background only
+  & > div:last-of-type {
+    top: calc(-60px - #{$redoc-header-height});
+    width: calc((100% - #{$left-redoc-sidebar-width}) * .4);
+  }
+
+  // Responsive tables
+  .table.table-striped {
+    display: block;
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    overflow-x: auto;
+    .property-name {
+      font-family: Manrope,sans-serif;
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 32px;
+      display: inline-block;
+      padding: 0 10px 10px 0;
+    }
+  }
+
+  // Advanced table style
+  .table {
+    // Bordered table style
+    &.table-bordered {
+      border: none;
+      th {
+        font-weight: 500;
+        border: 2px solid;
+      }
+      td {
+        border: 2px solid;
+      }
+    }
+  }
+
+  // QUERY PARAMETERS and REQUEST BODY SCHEMA
+  h5 {
+    span {
+      font-size: 16px;
+    }
+  }
+
+  // Code blocks
+  code {
+    font-family: "Fira Mono", monospace;
+    font-size: 14px;
+    line-height: 32px;
+    letter-spacing: .03em;
+  }
+  pre code {
+    background-color: $dark-color-code-block-background;
+    border: none;
+  }
+  .token {
+    color: $dark-color-main-text;
+    font-family: "Fira mono", monospace;
+    font-size: 14px;
+    &.property, 
+    &.property.string, 
+    &.tag,
+    &.number,
+    &.constant,
+    &.symbol {
+      color: $dark-color-code-number;
+    }
+    &.comment,
+    &.prolog,
+    &.doctype,
+    &.cdata {
+      color: $dark-color-code-comment;
+    }
+    &.atrule, 
+    &.attr-value, 
+    &.keyword {
+      color: $dark-color-code-variable;
+    }
+    &.selector, 
+    &.attr-name, 
+    &.string, 
+    &.char, 
+    &.builtin, 
+    &.inserted {
+      color: $dark-color-code-string;
+    }
+    &.operator, 
+    &.entity, 
+    &.url, 
+    &.variable {
+      color: $dark-color-code-default;
+    }
+  }
+
+  // Fix error of the connecting line on sigle properties
+  tr.last:first-of-type > [kind="field"] {
+    background-image: none;
+  }
+
+  // One of... - TODO
+  .sc-hzhJZQ {
+    font-size: 15px;
+    border-radius: 3px;
+  }
+
+  // Code block area container
+  .react-tabs__tab-panel {
+    div {
+      margin-top: 0;
+    }
+
+    // Code block content
+    .redoc-json {
+      overflow-x: auto;
+      a {
+        text-decoration: none !important;
+      }
+    }
+  }
+
+  // Samples tabs (in dark background part)
+  [data-rttabs] {
+    .react-tabs__tab-list {
+      [role="tab"] {
+        width: 5em;
+        padding: 3px 10px;
+        margin-top: 7px;
+        font-size: 1rem;
+        font-weight: 500;
+        border-radius: 3px;
+
+        & > [role="tab"].react-tabs__tab--selected {
+          font-weight: 500;
+        }
+        &.tab-success::before,
+        &.tab-error::before,
+        &.tab-redirect::before,
+        &.tab-info::before {
+          position: relative;
+          top: -2px;
+          display: inline-block;
+          width: 5px;
+          height: 5px;
+          margin-right: .5em;
+          content: "";
+          border-radius: 50%;
+        }
+      }
+    }
+    .react-tabs__tab-panel {
+      .token {
+        &.punctuation {
+          opacity: 0.7;
+        }
+        &.number {
+          color: $dark-color-code-function;
+        }
+      }
+    }
+  }
+
+  // API specs download button
+  a[download] {
+    padding: 0 34px;
+    text-decoration: none;
+    user-select: none;
+    border: 2px solid;
+    border-radius: 8px;
+  }
+
+  // Left sidebar
+  .menu-content {
+    position: fixed;
+    top: $redoc-header-height !important;
+    width: $left-redoc-sidebar-width;
+    height: calc(100vh - 110px) !important;
+    z-index: 100;
+    @media screen and (max-width: 50rem){
+      width: 100%;
+    }
+    // Toggle mobile  menu
+    & + div {
+      top: 6px;
+      right: 15px;
+      width: 45px;
+      height: 45px;
+      padding: .4rem;
+      border-radius: 4px;
+      box-shadow: none;
+    }
+    label {
+      padding-right: 26px;
+      padding-left: 26px;
+      font-family: Manrope, sans-serif;
+      font-size: 16px;
+      font-weight: 500;
+      > span.operation-type {
+        display: none;
+      }
+      &.-depth1 {
+        text-transform: uppercase;
+      }
+      &.-depth2 {
+        padding-left: 36px;
+      }
+    }
+    // Original "Powered by ReDoc" link
+    [role="menu"] {
+      & + div a {
+        display: none;
+      }
+    }
+    
+    // Search box
+    [role="search"],
+    & >div:first-of-type {
+      padding: 30px 0 5px;
+      input {
+        padding-bottom: 0;
+        padding-left: 28px;
+        font-family: Manrope, sans-serif;
+        font-size: 16px;
+        font-weight: 500;
+        background-repeat: no-repeat;
+        background-position: left center;
+        background-size: 25px 25px;
+        border-bottom: 2px solid;
+      }
+      svg {
+        display: none;
+      }
+    }
+    [role="search"] {
+      .scrollbar-container {
+        border-bottom: 1px solid $light-color-border-deeper;
+      }
+      [data-role="search:results"] {
+        background-color: transparent;
+        padding: 0 15px;
+      }
+    }
+  }
+
+  // Central and right content columns
+  .api-content {
+    scroll-margin-top: $redoc-header-height;
+    margin-left: $left-redoc-sidebar-width;
+    @media screen and (max-width: 50rem){
+      margin-left: 0;
+    }
+
+    h2 {
+      margin-top: calc(1.2rem + 10px);
+      margin-bottom: 1rem;
+    }
+
+    [id="section/Authentication"] {
+      & > div:first-of-type > div:first-of-type {
+        padding-top: 0;
+        padding-bottom: 0;
+      }
+      // Simple table style
+      table {
+        th {
+          font-weight: 500;
+        }
+        th,
+        td {
+          padding: 6px 20px;
+          border: 2px solid;
+        }
+      }
+      & > [id^="section/"] {
+        & > div > div {
+          padding-top: 0;
+          padding-bottom: 0;
+          & > div:last-of-type {
+            margin-bottom: 1.5em;
+            margin-top: 1.5em;
+            padding-bottom: 0;
+            border:  2px solid;
+            display: table;
+            & > div {
+              margin: 0;
+              display: table-row;
+              &:first-child {
+                display: inline-block;
+                border-bottom: 2px solid;
+                width: 100%;
+              }
+              div,
+              b {
+                margin: 0;
+                font-weight: 400;
+              }
+              b {
+                display: inline-block;
+                padding: 6px 20px;
+                box-sizing: content-box;
+                width: 100%;
+                @media screen and (min-width: 50rem){
+                  border-right: 2px solid;
+                  width: 256px;
+                }
+                @media screen and (max-width: 50rem){
+                  padding: 10px;
+                  font-weight: 500;
+                }
+                & + span {
+                  margin-right: 20px;
+                  margin-left: 20px;
+                  @media screen and (max-width: 50rem){
+                    margin-right: 10px;
+                    margin-left: 10px;
+                  }
+                }
+              }
+              & > div {
+                display: block;
+                border-bottom: 2px solid;
+                &:last-of-type {
+                  border-bottom: none;
+                }
+                & > :last-child {
+                  margin-right: 20px;
+                  margin-left: 20px;
+                  @media screen and (max-width: 50rem){
+                    margin-right: 10px;
+                    margin-left: 10px;
+                  }
+                }
+                div,
+                span {
+                  font-weight: 400;
+                  display: table-cell;
+                  min-width: 92px;
+                  padding: 6px 20px;
+                  box-sizing: content-box;
+                  @media screen and (max-width: 50rem){
+                    padding: 10px;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    [id="section/Authentication/basicAuth"] {
+      & > div>div>div:last-of-type>div>div:first-of-type {
+        border-bottom: none;
+      }
+    }
+
+    // Tags
+    [id^="tag/"] {
+      & > div {
+        // Right column (and middle in some parts)
+        & > div:last-of-type {
+          color: $dark-color-main-text;
+          code {
+            color: $dark-color-main-text;
+          }
+          .token,
+          .token.punctuation {
+            // opacity: 1;
+            background-color: $dark-color-code-block-background;
+          }
+          button {
+            border-radius: 3px;
+            span {
+              font-family: Manrope, sans-serif;
+              font-size: 16px;
+              letter-spacing: .03em;
+              &[type] {
+                color: $light-color-code-default;
+              }
+            }
+          }
+          [role="tablist"] {
+            font-family: Manrope, sans-serif;
+            font-size: 16px;
+            letter-spacing: .03em;
+            color: $light-color-code-default;
+          }
+
+          h3 {
+            font-size: 16px;
+            font-weight: 500;
+            color: $dark-color-main-text;
+            text-transform: uppercase;
+          }
+
+          .http-verb {
+            font-family: Manrope, sans-serif;
+            font-size: 16px;
+            color: #000;
+            &.get {
+              background-color: $dark-color-success;
+            }
+            &.post {
+              background-color: $dark-color-primary-lighter;
+            }
+            &.put {
+              background-color: $dark-color-code-variable;
+            }
+            &.delete {
+              background-color: $dark-color-danger;
+            }
+          }
+
+          .react-tabs__tab-panel > div{
+            padding-top: 10px;
+            margin-top: 10px;
+            & > div {
+              margin-top: 0;
+              &:first-of-type {
+                display: none;
+              }
+              // Copy/expande buttons
+              & > div {
+                &:hover,
+                &:focus { 
+                  & > div:first-of-type {
+                    opacity: 1;
+                  }
+                }
+                & > div:first-of-type {
+                  opacity: 0.4;
+                }
+              }
+            }
+          }
+
+          .react-tabs__tab-list {
+            [role="tab"] {
+              width: 5em;
+              padding: 3px 10px;
+              margin-top: 7px;
+              font-size: 1rem;
+              font-weight: 500;
+              border-radius: 3px;
+
+              & > [role="tab"].react-tabs__tab--selected {
+                font-weight: 500;
+              }
+              &.tab-success::before,
+              &.tab-error::before,
+              &.tab-redirect::before,
+              &.tab-info::before {
+                position: relative;
+                top: -2px;
+                display: inline-block;
+                width: 5px;
+                height: 5px;
+                margin-right: .5em;
+                content: "";
+                border-radius: 50%;
+              }
+            }
+          }
+        }
+        // Middle column
+        & > div:first-of-type {
+          &:not(.redoc-markdown) {
+            padding: 0 40px;
+          }
+          & > div {
+            // Responses
+            &:last-of-type {
+              margin-bottom: 40px;
+              // Individual response
+              & > div {
+                & > button {
+                  display: flex;
+                  flex-direction: row;
+                  justify-content: flex-start;
+                  align-items: center;
+                  strong {
+                    margin-right: 10px;
+                  }
+                  p {
+                    margin-top: 0;
+                  }
+                }
+              }
+            }
+            & > h5 {
+              display: block;
+              width: 100%;
+              margin-right: 0;
+              span {
+                font-size: 16px;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // AUTHORIZATIONS
+    // Section:
+    > [data-section-id] {
+      h5 {
+        font-size: 16px !important;
+        display: inline-block;
+      }
+      & > [data-section-id] > div > h5 {
+        display: block;
+        width: 100%;
+        margin-top: 30px;
+      }
+      & > div > div > div > div {
+        &[aria-hidden] {
+          background: $dark-color-code-block-background;
+          p {
+            color: $dark-color-main-text;
+          }
+        } 
+      }
+      &::after {
+        content: none;
+      }
+    }
+
+    // Tag sections
+    [data-section-id],
+    & > div:first-of-type {
+      padding: 10px 0 0;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      position: relative;
+      font-family: Manrope, sans-serif;
+      font-weight: 600;
+      letter-spacing: .03em;
+      a {
+        position: absolute;
+        top: .3em;
+        right: -24px;
+      }
+    }
+
+    // Main h1 heading
+    .api-info {
+      // Tag sections head:
+      padding-top: 0;
+      padding-bottom: 0;
+      [data-role="redoc-description"] {
+        margin-top: 2em;
+      }
+
+      h1 {
+        font-size: 34px;
+        line-height: 46.44px;
+      }
+    }
+
+    h1 {
+      font-size: 28px;
+      line-height: 40px;
+    }
+    h2,
+    h3 {
+      font-size: 22px;
+      line-height: 36px;
+    }
+  }
+}
+
+/* End of ReDoc element styles */
+
+
+/* Light theme -------------------------------------------------------------- */
+
+.light-theme body {
+  color: $light-color-main-text;
+  & > div:not(.loading):first-of-type {
+    @include  media-min (xl) {
+      background: linear-gradient(90deg,$light-color-sidebar-space 50%, $dark-color-index-toc-background 50%)
+    }
+  }
+  .no-latest-notice-wrapper {
+    background-color: $light-color-base-space;
+    .no-latest-notice {
+      background-color: rgba($light-color-warning, .1);
+      .no-latest-title {
+        color: $light-color-warning-dark;
+      }
+    }
+  }
+  .loading {
+    redoc {
+      div {
+        color: $light-color-primary !important;
+        * {
+          fill: $light-color-primary !important;
+        }
+      }
+    }
+  }
+  header {
+    background: $light-color-base-space;
+    @media screen and (max-width: 50rem){
+      background-color: $light-color-admonition-background;
+    }
+    .header-left {
+      background-color: $light-color-sidebar-space;
+      #light-dark-switch {
+        border-top-color: $light-color-border-deeper;
+      }
+    }
+    .header-right {
+      border-bottom-color: $light-color-global-toc-highlight;
+    }
+  }
+  redoc[spec-url] .redoc-wrap {
+    color: $light-color-main-text;
+
+    // Generic links
+    a {
+      color: $light-color-primary;
+      &:hover,
+      &:focus {
+        color: $light-color-primary-lighter;
+      }
+    }
+    p {
+      color: $light-color-main-text;
+    }
+    // Code blocks tokens
+    .token {
+      &.boolean {
+        color: $dark-color-danger;
+      }
+    }
+
+    [id="section/Authentication"] {
+      & > [id^="section/"] {
+        & > div > div {
+          & > div:last-of-type {
+            border-color: $light-color-table-border;
+            & > div {
+              &:first-child {
+                border-color: $light-color-table-border;
+              }
+              &:last-child {
+                & > div:nth-child(odd) {
+                  background-color: $light-color-sidebar-space;
+                }
+              }
+              b {
+                @media screen and (min-width: 50rem){
+                  border-right-color: $light-color-table-border;
+                }
+              }
+              & > div {
+                border-bottom-color: $light-color-table-border;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    table {
+      .property-name {
+        color: $light-color-main-text;
+        & + svg {
+          polygon {
+            fill: $light-color-primary;
+          }
+        }
+      }
+      tr {
+        &.expanded {
+          svg polygon {
+            fill: $light-color-primary;
+          }
+        }
+      }
+      td[kind="field"] {
+        :first-child {
+          &::before,
+          &::after {
+            background-color: $dark-color-primary-lighter;
+          }
+        }
+        // Expandable property
+        button {
+          color: $light-color-main-text;
+        }
+      }
+      
+      // Nested expandable properties
+      & > tbody > tr {
+        & > [colspan="2"] {
+          & > div,
+          & > div [colspan="2"] [colspan="2"] > div,
+          & > div [colspan="2"] [colspan="2"] [colspan="2"] [colspan="2"] > div {
+            background: $light-color-admonition-background;
+          }
+          & > div [colspan="2"] > div,
+          & > div [colspan="2"]  [colspan="2"] [colspan="2"] > div,
+          & > div [colspan="2"]  [colspan="2"] [colspan="2"]  [colspan="2"] [colspan="2"] > div {
+            background-color: $light-color-base-space;
+          }
+        }
+      }
+    }
+
+    // Advanced table style
+    .table {
+      // Bordered table style
+      &.table-bordered {
+        th {
+          color: $dark-color-main-text;
+          background-color: $light-color-primary;
+          border-color: $light-color-primary;
+        }
+        td {
+          border-color: $light-color-table-border;
+        }
+      }
+
+      // Striped table style
+      &.table-striped tbody {
+        tr:nth-of-type(odd) {
+          background-color: $light-color-base-space;
+        }
+        tr:nth-of-type(even) {
+          background-color: $light-color-sidebar-space;
+        }
+      }
+    }
+
+    // AUTHORIZATIONS
+    h5 {
+      color: $light-color-redoc-type;
+      border-bottom-color: $light-color-redoc-type-border !important;
+      & + svg {
+        fill: $light-color-primary-lighter;
+      }
+      span {
+        color: $light-color-main-text;
+      }
+    }
+
+    // Properties
+    [kind="field"] {
+      border-left-color: $light-color-primary-lighter;
+      color: $light-color-main-text;
+    }
+
+    // API menu toggle
+    svg {
+      color: $light-color-primary-lighter;
+    }
+
+    // Properties connecting line
+    table:not(.table) {
+      & > tbody {
+        & > tr {
+          &:first-of-type > td:first-of-type {
+            background-image: linear-gradient(transparent 0%, transparent 28px, $light-color-primary-lighter 28px, $light-color-primary-lighter 100%);
+          }
+          & > td:first-of-type {
+            border-left-color: $light-color-primary-lighter;
+          }
+        }
+      }
+      td:first-of-type {
+        & > span {
+          &::before,
+          &::after {
+            background-color: $light-color-primary-lighter;
+          }
+        }
+      }
+      tr.last + tr > td:first-of-type {
+        border-left-color: transparent;
+      }
+      tr.last {
+        & > td:first-of-type {
+          background-image: linear-gradient($light-color-primary-lighter 0%, $light-color-primary-lighter 29px, transparent 29px, transparent 100%);
+        }
+        &:first-of-type > td:first-of-type {
+          background-image: none;
+        }
+      }
+    }
+
+    // One of... TODO
+    .sc-fUnMCh.kaVHuF {
+      color: $light-color-main-text;
+    }
+    .sc-hzhJZQ {
+      border-color: $light-color-primary-lighter;
+      &.fCWfjy {
+        color: $light-color-main-text;
+        background-color: $light-color-base-space;
+      }
+      &.fpPbRN {
+        color: $light-color-base-space;
+        background-color: $light-color-primary-lighter;
+      }
+    }
+
+    // Samples tabs (in dark background part)
+    .react-tabs__tab-list {
+      & > [role="tab"].react-tabs__tab--selected {
+        color: $light-color-main-text;
+        background-color: $light-color-base-space;
+      }
+      [role="tab"] {
+        color: $dark-color-main-text;
+        background-color: $dark-color-code-block-background;
+        &.tab-success::before {
+          background-color: $light-color-success-dark;
+          box-shadow: 0 0 3px 0 $dark-color-success-dark;
+        }
+        &.tab-error::before {
+          background-color: $dark-color-danger;
+          box-shadow: 0 0 3px 0 $dark-color-danger;
+        }
+        &.tab-redirect::before {
+          background-color: $dark-color-warning;
+          box-shadow: 0 0 3px 0 $dark-color-warning;
+        }
+        &.tab-info::before {
+          background-color: $dark-color-primary;
+          box-shadow: 0 0 3px 0 $dark-color-primary;
+        }
+      }
+    }
+
+    // Samples tab content
+    [data-tabs] > .react-tabs__tab-panel {
+      background-color: $dark-color-code-block-background;
+    }
+
+    // Code block area container
+    .react-tabs__tab-panel {
+      // Code block content
+      .redoc-json {
+        background-color: $dark-color-code-block-background;
+        code {
+          background-color: $dark-color-code-block-background;
+        }
+        a {
+          color: $dark-color-primary;
+          &:hover,
+          &:focus {
+            color: $dark-color-primary-lighter;
+          }
+        }
+        .hoverable {
+          color: $dark-color-main-text;
+        }
+      }
+    }
+
+    // Download button
+    a[download] {
+      color: $light-color-main-text;
+      border-color: $light-color-primary-lighter;
+      &:hover,
+      &:focus {
+        color: $dark-color-main-text;
+        background-color: $light-color-primary;
+        border-color: $light-color-primary;
+      }
+    }
+
+    // Left sidebar
+    .menu-content {
+      background-color: $light-color-sidebar-space;
+
+      // Menu items
+      label[role="menuitem"],
+      [role="menuitem"] > label {
+        color: $light-color-main-text;
+        background-color: $light-color-sidebar-space;
+        &:hover {
+          color: $light-color-primary;
+          background-color: $light-color-sidebar-space;
+        }
+
+        svg polygon {
+          fill: $light-color-primary;
+        }
+        &.active {
+          background-color: $light-color-global-toc-highlight;
+          color: $light-color-base-space;
+          svg polygon {
+            fill: $light-color-base-space;
+          }
+        }
+      }
+    }
+
+    // Search box
+    [role="search"] {
+      input {
+        color: rgba($light-color-main-text, .8);
+        background-image: url("#{$ico-path}svg-icons.svg#search-lt");
+        border-bottom-color: $light-color-border-deeper;
+      }
+      ::placeholder {
+        color: $light-color-focus-shade;
+      }
+    }
+
+    // Central and right content columns
+    .api-content {
+      h1,
+      h2,
+      h3,
+      h4 {
+        color: $light-color-main-text-extra;
+      }
+    }
+  }
+  #version-selector {
+    .dropdown-btn {
+      @media screen and (min-width: 50.01rem) and (max-width: 75rem) {
+        border-color: $light-color-accent;
+      }
+    }
+    .dropdown-menu {
+      @media screen and (min-width: 50.01rem) and (max-width: 75rem) {
+        border-color: $light-color-accent;
+      }
+    }
+  }
+}
+
+/* Dark- theme -------------------------------------------------------------- */
+
+.dark-theme body {
+  color: $dark-color-main-text;
+  background-color: $dark-color-redoc-base-space;
+  & > div:not(.loading):first-of-type {
+    @include  media-min (xl) {
+      background: linear-gradient(90deg,$dark-color-sidebar-space 50%, $dark-color-index-toc-background 50%)
+    }
+  }
+  .no-latest-notice-wrapper {
+    background-color: $dark-color-base-space;
+    .no-latest-notice {
+      background-color: rgba($dark-color-warning, .1);
+      .no-latest-title {
+        color: $dark-color-warning;
+      }
+    }
+  }
+  .loading {
+    redoc {
+      div {
+        color: $dark-color-primary !important;
+        * {
+          fill: $dark-color-primary !important;
+        }
+      }
+    }
+  }
+  header {
+    background: $dark-color-redoc-base-space;
+    @media screen and (max-width: 50rem){
+      background-color: $dark-color-sidebar-space;
+    }
+    .header-left {
+      background-color: $dark-color-sidebar-space;
+      #light-dark-switch {
+        border-top-color: $light-color-border-deeper;
+      }
+    }
+    .header-right {
+      border-bottom-color: $dark-color-global-toc-highlight;
+    }
+  }
+  redoc[spec-url] .redoc-wrap {
+    color: $dark-color-main-text;
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      a:before {
+        filter: invert(1);
+      }
+    }
+
+    // Generic links
+    a {
+      color: $dark-color-primary;
+      &:hover,
+      &:focus {
+        color: $dark-color-primary-lighter;
+      }
+    }
+    p {
+      color: $dark-color-main-text;
+    }
+    // Code blocks tokens
+    .token {
+      &.boolean {
+        color: $dark-color-danger;
+      }
+    }
+
+    // Very specific style
+    [id^="tag/"] [id^="operation/"] > div:first-child > div > div:last-child,  // Wazuh Server API
+    [id^="tag/"] > div > div:first-child > div > div:last-child // Wazuh Cloud API
+     {
+      background: transparent;
+    }
+
+    [id="section/Authentication"] {
+      & > [id^="section/"] {
+        & > div > div {
+          & > div:last-of-type {
+            border-color: $light-color-table-border;
+            & > div {
+              background-color: $dark-color-redoc-table-background;
+              &:first-child {
+                border-color: $light-color-table-border;
+              }
+              &:last-child {
+                & > div:nth-child(odd) {
+                  background-color: $dark-color-highlight-background;
+                }
+              }
+              b {
+                @media screen and (min-width: 50rem){
+                  border-right-color: $light-color-table-border;
+                }
+              }
+              & > div {
+                border-bottom-color: $light-color-table-border;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    .api-content [id^="tag/"]>div>div:first-of-type>div:last-of-type {
+      button:not([aria-label]) {
+        & > svg {
+          filter: brightness(3) saturate(0.95);
+          & + strong {
+            filter: brightness(3) saturate(0.95);
+          }
+        }
+      }
+    }
+
+    table {
+      .property-name {
+        color: $dark-color-main-text;
+        & + svg {
+          polygon {
+            fill: $light-color-primary-lighter;
+          }
+        }
+      }
+      // Nested expandable properties
+      & > tbody > tr {
+        & > [colspan="2"] {
+          & > div,
+          & > div [colspan="2"] [colspan="2"] > div,
+          & > div [colspan="2"] [colspan="2"] [colspan="2"] [colspan="2"] > div {
+            background: $dark-color-sidebar-space;
+          }
+          & > div [colspan="2"] > div,
+          & > div [colspan="2"]  [colspan="2"] [colspan="2"] > div,
+          & > div [colspan="2"]  [colspan="2"] [colspan="2"]  [colspan="2"] [colspan="2"] > div {
+            background-color: $dark-color-redoc-base-space;
+          }
+        }
+      }
+      tr {
+        &.expanded {
+          svg {
+            polygon {
+              fill: $light-color-primary-lighter;
+            }
+          }
+        }
+      }
+      td {
+        div {
+          & > span {
+            color: #b4b4b4;
+          }
+        }
+      }
+      td[kind="field"] {
+        :first-child {
+          &::before,
+          &::after {
+            background-color: $dark-color-primary-lighter;
+          }
+        }
+        // Expandable property
+        button {
+          color: $dark-color-main-text;
+          svg polygon {
+            fill: $dark-color-primary;
+          }
+        }
+      }
+    }
+
+    // Advanced table style
+    .table {
+      // Bordered table style
+      td,
+      th {
+        color: $dark-color-main-text;
+      }
+      &.table-bordered {
+        th {
+          background-color: $dark-color-redoc-table-heading;
+          border-color: $light-color-table-border;
+        }
+        td {
+          border-color: $light-color-table-border;
+        }
+      }
+
+      // Striped table style
+      &.table-striped tbody {
+        tr:nth-of-type(odd) {
+          background-color: $dark-color-redoc-table-background;
+        }
+        tr:nth-of-type(even) {
+          background-color: $dark-color-highlight-background;
+        }
+      }
+    }
+
+    // AUTHORIZATIONS
+    h5 {
+      color: $light-color-redoc-type-border;
+      border-bottom-color: $light-color-redoc-type-border !important;
+      & + svg {
+        fill: $dark-color-primary-lighter;
+      }
+      span {
+        color: $dark-color-main-text;
+      }
+    }
+
+    // Properties
+    [kind="field"] {
+      color: $dark-color-main-text;
+    }
+    tr.last:first-of-type > [kind="field"] {
+      background-image: none;
+    }
+
+    // Expandable property
+    [kind="field"] {
+      border-left-color: $light-color-primary-lighter;
+    }
+
+    // API menu toggle
+    svg {
+      color: $dark-color-primary-lighter;
+    }
+    
+    // Properties connecting line
+    table:not(.table) {
+      & > tbody {
+        & > tr {
+          &:first-of-type > td:first-of-type {
+            background-image: linear-gradient(transparent 0%, transparent 28px, $dark-color-primary-lighter 28px, $dark-color-primary-lighter 100%);
+          }
+          & > td:first-of-type {
+            border-left-color: $dark-color-primary-lighter;
+          }
+        }
+        td:first-of-type {
+          & > span {
+            &::before,
+            &::after {
+              background-color: $dark-color-primary-lighter;
+            }
+          }
+        }
+        tr.last + tr > td:first-of-type {
+          border-left-color: transparent;
+        }
+        tr.last {
+          & > td:first-of-type,
+          & > [kind="field"] {
+            background-image: linear-gradient($dark-color-primary-lighter 0%, $dark-color-primary-lighter 29px, transparent 29px, transparent 100%);
+          }
+          &:first-of-type > td:first-of-type {
+            background-image: none;
+          }
+        }
+      }
+    }
+
+    // One of...
+    // Important: this redoc classes may change from version to version
+    .sc-fUnMCh.kaVHuF {
+      color: $dark-color-main-text;
+    }
+    .sc-hzhJZQ {
+      &.fCWfjy {
+        color: $light-color-main-text;
+        background-color: $light-color-base-space;
+        border-color: $light-color-base-space;
+      }
+      &.fpPbRN {
+        color: $light-color-main-text;
+        background-color: $dark-color-primary-lighter;
+        border-color: $dark-color-primary-lighter;
+      }
+    }
+    
+    // Samples tabs (in dark background part)
+    [data-rttabs] {
+      .react-tabs__tab-list {
+        & > [role="tab"].react-tabs__tab--selected {
+          color: $light-color-main-text;
+          background-color: $light-color-base-space;
+        }
+        [role="tab"] {
+          color: $dark-color-main-text;
+          background-color: $dark-color-code-block-background;
+          &.tab-success::before {
+            background-color: $light-color-success-dark;
+            box-shadow: 0 0 3px 0 $dark-color-success-dark;
+          }
+          &.tab-error::before {
+            background-color: $dark-color-danger;
+            box-shadow: 0 0 3px 0 $dark-color-danger;
+          }
+          &.tab-redirect::before {
+            background-color: $dark-color-warning;
+            box-shadow: 0 0 3px 0 $dark-color-warning;
+          }
+          &.tab-info::before {
+            background-color: $dark-color-primary;
+            box-shadow: 0 0 3px 0 $dark-color-primary;
+          }
+        }
+      }
+      
+      // Samples tab content
+      & > .react-tabs__tab-panel {
+        background-color: $dark-color-code-block-background;
+      }
+    }
+    
+    // Code block area container
+    .react-tabs__tab-panel {
+      // Code block content
+      .redoc-json {
+        background-color: $dark-color-code-block-background;
+        code {
+          background-color: $dark-color-code-block-background;
+        }
+        a {
+          color: $dark-color-primary;
+          &:hover,
+          &:focus {
+            color: $dark-color-primary-lighter;
+          }
+        }
+        .hoverable {
+          color: $dark-color-main-text;
+        }
+      }
+    }
+
+    // Download button
+    a[download] {
+      color: $dark-color-main-text;
+      border-color: $dark-color-primary;
+      &:hover,
+      &:focus {
+        color: $light-color-main-text;
+        background-color: $dark-color-primary-lighter;
+        border-color: $dark-color-primary-lighter;
+      }
+    }
+
+    // Left sidebar
+    .menu-content {
+      background-color: $dark-color-sidebar-space;
+
+      // Menu items
+      label[role="menuitem"],
+      [role="menuitem"] > label {
+        color: $dark-color-main-text;
+        background-color: $dark-color-sidebar-space;
+        &:hover {
+          // color: $dark-color-primary-lighter;
+          color: $dark-color-primary;
+          background-color: $dark-color-sidebar-space;
+          // background: transparent
+        }
+
+        svg polygon {
+          fill: $dark-color-primary;
+        }
+        &.active {
+          background-color: $light-color-global-toc-highlight;
+          color: $light-color-base-space;
+          svg polygon {
+            fill: $light-color-base-space;
+          }
+        }
+      }
+    }
+
+    // Search box
+    [role="search"] {
+      input {
+        color: rgba($dark-color-main-text, .8);
+        background-image: url("#{$ico-path}svg-icons.svg#search-dt");
+        border-bottom-color: $light-color-border-deeper;
+      }
+      ::placeholder {
+        color: $dark-color-focus-shade;
+      }
+      [data-role="search:results"] {
+        color: $dark-color-main-text;
+      }
+    }
+
+    // Central and right conten columns
+    .api-content {
+      h1,
+      h2,
+      h3,
+      h4 {
+        color: $dark-color-main-text;
+      }
+    }
+  }
+  #version-selector {
+    .dropdown-btn {
+      @media screen and (min-width: 50.01rem) and (max-width: 75rem) {
+        border-color: $dark-color-accent;
+      }
+    }
+    .dropdown-menu {
+      @media screen and (min-width: 50.01rem) and (max-width: 75rem) {
+        border-color: $dark-color-accent;
+      }
+    }
+  }
+}

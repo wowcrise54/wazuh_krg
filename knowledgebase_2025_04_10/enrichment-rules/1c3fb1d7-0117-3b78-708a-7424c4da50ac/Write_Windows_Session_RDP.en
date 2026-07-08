@@ -1,0 +1,78 @@
+query GetSession($host, $username, $privileges) from Windows_Logon_Sessions_RDP {
+    host == $host
+    and username == $username
+    and user_privileges == $privileges
+}
+    qhandler {
+        $src_ip = src_ip
+        $session_id = session_id
+    }
+
+event Windows_Session_RDP:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows" 
+        and msgid == "4624"
+        and filter::LoginAttempt_Windows_Endpoint()
+        and in_list([7, 10, 12], logon_type)
+        and not filter::Loopback_Address(src.ip)
+        and subject.account.privileges != null
+    }
+
+event Windows_Session_2_11:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows" 
+        and msgid == "4624"
+        and filter::LoginAttempt_Windows_Endpoint()
+        and in_list([2, 11], logon_type)
+    }
+
+enrichment Write_Windows_Session_RDP
+    enrich Windows_Session_RDP:
+        enrich_fields {
+            $result = exec_query("GetSession", [lower(event_src.host), lower(subject.account.name), lower(subject.account.privileges)])
+            # В событиях RDP сессии может присутствовать logon_type = 7, если сессия не закончена
+            if in_list([7, 12], logon_type) then
+                $temp_session = coalesce($result["$session_id"], subject.account.session_id)
+                $temp_logon_type = 10
+            else
+                if $result["$src_ip"] != src.ip then 
+                    $temp_session = coalesce($result["$session_id"], subject.account.session_id)
+                    $temp_logon_type = logon_type
+                else
+                    $temp_session = subject.account.session_id
+                    $temp_logon_type = logon_type
+                endif
+            endif
+        }
+        # Записываем сессию в ТС
+        insert_into Windows_Logon_Sessions_RDP {
+            host = lower(event_src.host)
+            src_ip = src.ip
+            src_host = lower(src.host)
+            src_asset = src.asset
+            dst_ip = dst.ip
+            dst_host = lower(dst.host)
+            logon_type = string($temp_logon_type)
+            session_id = $temp_session
+            username = lower(subject.account.name)
+            user_domain = lower(subject.account.domain)
+            user_sid = lower(subject.account.id)
+            user_privileges = lower(subject.account.privileges)
+        }
+        
+    enrich Windows_Session_2_11:
+        insert_into Windows_Logon_Sessions {
+            host = lower(event_src.host)
+            src_ip = src.ip
+            src_host = lower(src.host)
+            src_asset = src.asset
+            dst_ip = dst.ip
+            dst_host = lower(dst.host)
+            logon_type = string(logon_type)
+            session_id = subject.account.session_id
+            username = lower(subject.account.name)
+            user_domain = lower(subject.account.domain)
+            user_sid = lower(subject.account.id)
+        }

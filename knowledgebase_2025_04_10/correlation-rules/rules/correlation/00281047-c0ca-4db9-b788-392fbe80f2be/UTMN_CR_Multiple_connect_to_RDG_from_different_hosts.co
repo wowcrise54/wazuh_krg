@@ -1,0 +1,64 @@
+event User_was_authorized_to_connect:
+	key:
+        subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows" 
+        and msgid == "300"
+        and not filter::Loopback_Address(src.ip)
+    }
+    
+rule UTMN_CR_Multiple_connect_to_RDG_from_different_hosts: User_was_authorized_to_connect[2] with different src.ip
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on User_was_authorized_to_connect {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        #$subject.account.fullname = subject.account.fullname
+        #$subject.account.session_id = datafield1
+
+        $object.name = object.name
+        
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        #$dst.asset = event_src.asset
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        #$event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    
+        $alert.key = lower(src.host)
+
+        $labels = $labels + "|RDG"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "connect"
+    $object = "host"
+    $status = "success"
+
+    $category.generic = "Access"
+    $category.high = "Authentication"
+    $category.low = "Default Credentials"
+
+    $importance = "high"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $object.name], "|")
+    $incident.severity = "high"
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 10h
+}

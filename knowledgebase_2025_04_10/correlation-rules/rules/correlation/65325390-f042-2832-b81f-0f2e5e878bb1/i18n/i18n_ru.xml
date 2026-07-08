@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Изменение и перемещение конфигурационных файлов подключаемого модуля аутентификации. Атакующие могут изменять конфигурацию подключаемых модулей аутентификации, чтобы получить доступ к учетным данным пользователя или авторизоваться без пароля</Description>
+  <EventDescriptions>
+    <EventDescription id="6308cf1a-5359-0e54-3df9-fc93122e6aed">Обнаружено изменение конфигурационного файла подключаемого модуля аутентификации {object.name} на узле {event_src.host}</EventDescription>
+    <EventDescription id="75912bb4-3669-69a2-13b1-95e768e22a86">Пользователь {subject.account.name} переместил файл {object.name} в папку с конфигурационными файлами подключаемого модуля аутентификации на узле {event_src.host}</EventDescription>
+    <EventDescription id="7967895d-29d0-8a03-215b-67b3fe217b08">Обнаружено перемещение файла {object.name} в папку с конфигурационными файлами подключаемого модуля аутентификации на узле {event_src.host}</EventDescription>
+    <EventDescription id="98d0b1a1-cc92-a7d1-4146-6ba5592122d8">Пользователь {subject.account.name} изменил конфигурационный файл подключаемого модуля аутентификации {object.name} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

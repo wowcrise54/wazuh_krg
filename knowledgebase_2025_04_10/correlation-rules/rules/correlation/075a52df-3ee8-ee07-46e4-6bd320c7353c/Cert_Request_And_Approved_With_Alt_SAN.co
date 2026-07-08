@@ -1,0 +1,79 @@
+event Certificate_Request:
+    key:
+        event_src.host, datafield1
+    filter {
+        filter::NotFromCorrelator()
+        and lower(event_src.title) == "certification_authority"
+        and msgid == "4886"
+        and find_substr(lower(datafield5), "upn=") != null
+        and regex(datafield5, "(?i)upn=(.+)@", 1) != lower(subject.account.name)
+    }
+
+event Certificate_Approved:
+    key:
+        event_src.host, datafield1
+    filter {
+        filter::NotFromCorrelator()
+        and lower(event_src.title) == "certification_authority"
+        and msgid == "4887"
+        and find_substr(lower(datafield5), "upn=") != null
+        and filter::CheckWL_Specific_Only("Cert_Request_And_Approved_With_Alt_SAN", lower(join([subject.account.name, event_src.host], "|")))
+    }
+    
+rule Cert_Request_And_Approved_With_Alt_SAN: (Certificate_Request and Certificate_Approved) within 5m
+
+    on Certificate_Approved {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+
+        $object.account.name = regex(datafield5, "(?i)upn=(.+)@", 1)
+        $object.account.domain = regex(datafield5, "(?i)upn=(.+)@(.+)$", 2)
+
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type  = object
+        
+        $alert.context = join([$subject.account.name, $object.account.name], " | ")
+        $alert.key = lower(join([subject.account.name, event_src.host], "|"))
+    }
+
+    on Certificate_Request {
+        $datafield1 = datafield1    # RequestId
+        $datafield2 = datafield2    # CDC (Client DC name)
+        $datafield3 = datafield3    # RMD (Request Machine DNS name) 
+        $datafield4 = datafield4    # CCM (Cert Client Machine)
+        $datafield5 = datafield5    # SAN (Subject Alternative Names)
+        $datafield6 = datafield6    # CertificateTemplate
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "allow"
+    $object = "certificate"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Steal or Forge Authentication Certificates"
+    
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

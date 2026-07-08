@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying for a ViPNet IDS device. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="6288e488-1d40-7b32-fc04-c0525317d0f4">Password spraying attempts on host {event_src.host}. Number of login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="b603e03c-b502-6b89-0938-dcf35f2c046c">Successful password spraying from host {src.host} on host {event_src.host}. Attackers obtained the passwords of the following users: {datafield2}. Number of failed login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="e4af8351-5fbb-aba9-2296-f7fbc8780052">Successful password spraying from host {src.host} on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {datafield1}.</EventDescription>
+  </EventDescriptions>
+</Localization>

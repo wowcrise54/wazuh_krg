@@ -1,0 +1,39 @@
+TEXT =  '{$day=NUMBER}.{$mon=NUMBER}.{$year=NUMBER} {$h=NUMBER}:{$m=NUMBER}:{$s=NUMBER}[{$tmp_subsys=WORDDASH}]
+        Процесс {object.process.fullpath=STRING+} (PID = {object.process.id=NUMBER}) завершен с кодом 0'
+
+object = "process"
+action = "stop"
+status = "success"
+
+$tmp = csv(object.process.fullpath, '\\', '')
+object.process.name = $tmp[length($tmp) - 1]
+object.process.path = strip(object.process.fullpath, '', object.process.name)
+
+$ds = string($day)
+$ms = string($mon)
+$ys = string($year)
+$hs = string($h)
+$mis = string($m)
+$ss = string($s)
+$mms = if length($ms) == 1 then "0"+ $ms else $ms endif
+$dds = if length($ds) == 1 then "0"+ $ds else $ds endif
+$mmis = if length($mis) == 1 then "0"+ $mis else $mis endif
+$hhs = if length($hs) == 1 then "0"+ $hs else $hs endif
+$sss = if length($ss) == 1 then "0"+ $ss else $ss endif
+
+$timf = $mms+"/"+$dds+"/"+$ys+" "+$hhs+":"+$mmis+":"+$sss
+
+time = $timf
+
+importance = "low"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "nii_teplopribor"
+event_src.title = "ptk_kvint"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "SCADA"
+
+id = "PT_NII_Teplopribor_PTK_Kvint_filemonitor_stop_process"

@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$host=HOSTNAME|}{":"?}
+        #ILO 4{":"?} {$month=WORD?}{"/"?}{$day=WORD?}{"/"?}{$year=WORD?} {$hour=WORD?}{":"?}{$min=WORD?}
+        {"- - - "?}{$object_value=STRING+} {"M"|"m"}odified by: {$subject_name_raw=STRING}'
+        
+subject = "account"
+action = "update"
+object = "configuration"
+status = "success"
+
+# Deleting the final character
+$subject_name_raw = strip($subject_name_raw, "", "\\u0000")
+subject.account.name = lower(strip($subject_name_raw, "", "."))
+
+object.property = "system service configurations"
+object.value = lower($object_value)
+
+if time == null then
+    time = $year + "-" + $month + "-" + $day + "T" + $hour + ":" + $min + ":00"
+endif
+
+importance = "info"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "ilo"
+event_src.hostname = lower($host)
+event_src.category = "Server management"
+
+id = "PT_Hewlett_Packard_Enterprise_iLO_syslog_settings_changed"

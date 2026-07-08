@@ -1,0 +1,56 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$Computer=STRING} {event_src.subsys="wabengine"}
+        {"["subject.process.id=NUMBER"]"?}: [wabaudit] {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["type"] == "Cluster"
+       and in_list(["add", "edit", "delete"], $kv["action"])
+
+subject = "account"
+
+action = switch $kv["action"]
+    case "add" "create"
+    case "edit" "modify"
+    case "delete" "remove"
+endswitch
+
+object = "resource"
+status = "success"
+
+if find_substr($kv["user"], "\\") != null then
+    $temp_acc_1 = csv($kv["user"], "\\", "")
+    subject.account.name = $temp_acc_1[length($temp_acc_1) - 1]
+    subject.account.domain = $temp_acc_1[0]
+
+    logon_auth_method = "remote"
+elif find_substr($kv["user"], "@") != null then
+    $temp_acc_2 = csv($kv["user"], "@", "")
+    subject.account.name = $temp_acc_2[0]
+    subject.account.domain = $temp_acc_2[1]
+
+    logon_auth_method = "remote"
+else
+    subject.account.name = $kv["user"]
+
+    logon_auth_method = "local"
+endif
+
+object.name = $kv["object"]
+object.type = $kv["type"]
+
+src.ip = $kv["client_ip"]
+
+datafield5 = $kv["infos"]   # Информация о кластере
+
+importance = "low"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_syslog_cluster_manage"

@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        named{"-pkcs11"?}[{NUMBER}]: {object.value=UNTIL(": ")} {reason=STRING+} failed {", back trace"?}'
+
+action = "terminate"
+object = "service"
+status = "success"
+
+object.property = "error occured (file:line)"
+
+importance = "high"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "bind"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_BIND_syslog_assertion_failure"

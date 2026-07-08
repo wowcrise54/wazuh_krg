@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4} {event_src.hostname=HOSTNAME}
+        - {"Log"|"Alert"} [Fields@{STRING} UUid={STRING}
+        sys_message:=\"The {interface=STRING+} {reason="interface is not protected by the anti-spoofing feature"}.
+        Your network may be at risk\" {REST}'
+
+action = "info"
+object = "interface"
+status = "success"
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_Common_Anti_spoofing"

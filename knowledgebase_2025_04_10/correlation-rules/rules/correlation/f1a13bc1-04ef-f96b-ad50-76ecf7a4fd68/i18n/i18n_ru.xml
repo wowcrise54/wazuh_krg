@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля на веб-сервере Internet Information Services. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="2f49dab5-24f3-c9a1-d25e-1688efaae1be">Успешное распыление пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Подобран пароль для следующих пользователей: {datafield2}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="3e25b373-b473-3462-018e-de4fbe113d1e">Попытки распыления пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Количество попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="62924208-da08-c2b3-9ce0-0fec5eeac54b">Успешное распыление пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Подобран пароль для пользователя {subject.account.name}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+  </EventDescriptions>
+</Localization>

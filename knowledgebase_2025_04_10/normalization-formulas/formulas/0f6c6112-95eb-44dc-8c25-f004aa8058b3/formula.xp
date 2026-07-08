@@ -1,0 +1,37 @@
+TABULAR =  "recordid,
+            {subject.name = module_name},
+            severity,
+            event_id,
+            {time = time},
+            {datafield1 = site_code},
+            hostname,
+            {datafield2 = component},
+            params
+            "
+
+COND = $event_id == 3011
+
+subject = "application"
+object = "application"
+object.name = "ConfigMgr"
+
+action = "install"
+status = "failure"
+
+msgid = string($event_id)
+
+submessage ("TEXT", "add_info", $params)
+subformula "add_info"
+    TEXT = '{$csv=CSV}'
+
+    dst.hostname = lower($csv[2])  # название узла
+endsubformula
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "high"
+
+id = "PT_Microsoft_SCCM_odbc_3011_failed_to_complete_installation_on_client"

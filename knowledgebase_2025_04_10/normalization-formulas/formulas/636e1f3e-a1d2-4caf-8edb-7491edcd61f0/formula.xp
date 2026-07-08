@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?} date={$date=WORDDASH} time={$time=STRING} device_id={event_src.id=WORDDASH} log_id={msgid=WORD}
+        type=spam {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+action = "info"
+object = "message"
+status = "success"
+
+if $kv["client_ip"] == null then
+    submessage("TEXT", "src_info", $kv["client_name"])
+else
+    src.hostname = $kv["client_name"]
+    src.ip = $kv["client_ip"]
+endif
+
+subformula "src_info"
+    TEXT = '{src.hostname=HOSTNAME?} {"["?}{src.ip=IPV4|src.ip=IPV6|}{"]"?}'
+endsubformula
+
+reason = $kv["msg"]
+
+datafield1 = $kv["to"]    # Адрес получателя (случаев с несколькими получателями пока не было)
+datafield2 = $kv["from"]      # Адрес отправителя
+
+time = $date + " " + $time
+importance = "low"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortimail"
+event_src.category = "Application security"
+
+id = "PT_Fortinet_Fortimail_syslog_Spam_detection_event"

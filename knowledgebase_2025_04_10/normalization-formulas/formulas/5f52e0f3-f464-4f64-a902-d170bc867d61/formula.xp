@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        postfix{"/"event_src.subsys=WORDDASH?}{"["NUMBER"]"?}: {datafield1=WORD}:
+        discard: {WORD} from {$hostname=HOSTNAME}[{src.ip=IPV4|src.ip=IPV6}]{":"src.port=NUMBER?}: {STRING} Helo command {$reason_raw=STRING+}
+        from={$subject_name_raw=STRING} to={$object_name_raw=STRING} proto={protocol=WORD} helo={STRING}'
+
+subject = "account"
+action = "send"
+object = "account"
+status = "failure"
+
+subject.name = strip($subject_name_raw, "<", ">")
+object.name = strip($object_name_raw, "<", ">")
+
+reason = strip($reason_raw, "", ";")
+
+if $hostname != "unknown" and $hostname != "none" then
+    src.hostname = $hostname
+endif
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "postfix"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Postfix_syslog_message_discarded"

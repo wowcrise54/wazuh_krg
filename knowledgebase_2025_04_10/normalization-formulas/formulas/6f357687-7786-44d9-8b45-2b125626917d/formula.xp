@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$host=HOSTNAME|}{":"?}
+        #ILO 4{":"?} {$additional_info=STRING+}
+        iLO Management Processor reset {reason="for configuration changes"|"to factory defaults"}{"."?}{REST}'
+        
+subformula "get_real_time"
+    TEXT = '{$month=WORD}/{$day=WORD}/{$year=WORD} {$hour=WORD}:{$min=WORD}'
+    
+    time = $year + "-" + $month + "-" + $day + "T" + $hour + ":" + $min + ":00"
+endsubformula
+
+action = "restart"
+object = "system"
+status = "success"
+
+if find_substr($additional_info, ":") != null then
+    submessage("TEXT", "get_real_time", $additional_info)
+endif
+
+importance = "medium"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "ilo"
+event_src.hostname = lower($host)
+event_src.category = "Server management"
+
+id = "PT_Hewlett_Packard_Enterprise_iLO_syslog_ilo_management_processor_reset"

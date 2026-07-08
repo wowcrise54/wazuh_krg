@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+shell[{object.process.parent.id=NUMBER}]: [{subject.account.name=WORDDASH}]: {object.value=REST}'
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+object.account.name = subject.account.name
+object.process.cmdline = object.value
+
+importance = "medium"
+
+category.high = "System Management"
+category.generic = "Command"
+category.low = "Manipulation"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_5_0_syslog_Exec_command_on_ESXi_host"

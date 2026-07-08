@@ -1,0 +1,112 @@
+event Connection_From_Internal_Detect:
+    key:
+        src.ip, dst.host, event_src.vendor
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                object == "connection"
+                and in_list(["allow", "deny", "open", "detect"], action)
+            )
+            or (
+                object == "conntrack"
+                and in_list(["create", "remove"], action)
+            )
+            or (
+                object == "packet"
+                and in_list(["allow", "deny"], action)
+            )
+        )
+        and status == "success"
+        and dst.host != null
+        and not filter::External_Address(src.ip)
+        and not filter::External_Address(dst.ip)
+        and src.ip != dst.ip
+        and not filter::Loopback_Address(dst.ip)
+        and filter::CheckWL_Networking_Enlighted("Port_Scan_From_Localnet_To_Single_Host", join([src.ip, lower(dst.host)], "|"))
+    }
+
+rule Port_Scan_From_Localnet_To_Single_Host: (Connection_From_Internal_Detect[40,] with different dst.port) timer 1m
+
+    init {
+        $port_count = 0
+        $labels = "w_auto|CheckWL_Networking_Enlighted"
+    }
+
+    on Connection_From_Internal_Detect {
+        $port_count = $port_count + 1
+
+        if $port_count == 1 then
+            $object = object
+            $action = action
+            
+            $subject.account.domain = subject.account.domain
+            $subject.account.name = subject.account.name
+            $subject.account.id = subject.account.id
+            $subject.account.fullname = subject.account.fullname
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            
+            $object.account.domain = object.account.domain
+            $object.account.name = object.account.name
+            $object.account.id = object.account.id
+            $object.account.fullname = object.account.fullname
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.asset = src.asset
+
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.asset = dst.asset
+
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $alert.key = join([src.ip, lower(dst.host)], "|")
+            $alert.context = "from: " + src.host + "|to: " + dst.host + "| ports:"
+        endif
+
+        if $direction == null then
+            $direction = direction
+        endif
+
+        $alert.context = $alert.context + string(dst.port) + ","
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "rule"
+    $status = "success"
+
+    $importance = "low"
+
+    $object.value = $port_count
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Network Service Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.account.id, $src.ip], "|")
+    $incident.severity = $importance
+    $incident.category = "NetworkScan"
+    $incident.aggregation.timeout = 2h
+}

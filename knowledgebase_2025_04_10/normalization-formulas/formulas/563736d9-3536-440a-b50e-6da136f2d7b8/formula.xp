@@ -1,0 +1,60 @@
+# {"class":"vim.event.EventEx","key":"738991908","chainId":"738991908","createdTime":"2022-02-20 20:53:25.792000+00:00","userName":"","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"DCenter","datacenter":"vim.Datacenter:datacenter-2"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"STAND-CC","computeResource":"vim.ClusterComputeResource:domain-c15169"},"host":{"class":"vim.event.HostEventArgument","name":"storage12.vs.domain.ru","host":"vim.HostSystem:host-14338"},"fullFormattedMessage":"Multiple remote login failures detected for ESXi local user account 'vpxuser'.","eventTypeId":"esx.audit.account.loginfailures","severity":"","message":"","arguments":{"1":"vpxuser"},"objectId":"host-14338","objectName":"storage12.vs.domain.ru"}
+
+JSON = ''
+COND = $eventTypeId == "esx.audit.account.loginfailures"
+ 
+subject = "account"
+action = "login"
+object = "system"
+status = "failure" 
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $arguments["1"] != "" then
+    submessage("TEXT", "parse_user", $arguments["1"])
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+ 
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = coalesce(if $objectName == "" then null else $objectName endif, $entity["name"])  # Entity Name
+datafield6 = $host["name"]  # Host Name
+datafield7 = $parent["name"]  # Parent Entity Name
+datafield10 = if $objectId == "" then null else $objectId endif  # Internal Entity ID
+ 
+chain_id = $chainId
+ 
+time = $createdTime
+msgid = $eventTypeId
+importance = "high"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_Multiple_Login_Failures"

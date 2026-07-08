@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Пользователь аварийно завершил работу службы. Злоумышленник может аварийно завершить работу службы журнала событий Windows от имени любого пользователя на любом удаленном компьютере с Windows 10 или Windows Server 2022 в том же домене. Сбой происходит в wevtsvc!VerifyUnicodeString, когда злоумышленник отправляет специально сформированный необрабатываемый объект UNICODE_STRING в метод ElfrRegisterEventSourceW, предоставляемый протоколом удаленного взаимодействия EventLog на основе RPC</Description>
+  <EventDescriptions>
+    <EventDescription id="08099773-dc57-180e-debb-30b3bb07c4a0">Пользователь {subject.account.name} с узла {src.host} аварийно завершил работу службы "{object.name}" на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

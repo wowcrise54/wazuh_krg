@@ -1,0 +1,39 @@
+EVENTLOG = 'EventID.text="552"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Security"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subject.account.name = lower($Data[0])
+subject.account.domain = lower($Data[1])
+subject.account.session_id = maybe_number16(csv(strip($Data[2], "(", ")"), ",", "")[1])
+
+object.account.name = lower($Data[4])
+object.account.domain = lower($Data[5])
+
+dst.hostname = lower($Computer)
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_forwarded_552_Logon_success"

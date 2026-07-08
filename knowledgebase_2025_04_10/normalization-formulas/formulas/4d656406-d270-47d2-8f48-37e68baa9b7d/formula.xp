@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="hwLacpTotalLinkLoss_active"}({WORD}){"["NUMBER"]"?}:
+        {"CID="UNTIL(";")?}Link bandwidth lost totally.({$kv=UNTIL(")")}'
+
+$kv = keyvalue($kv, ',', '=', '"')
+
+action = "alert"
+object = "interface"
+status = "success"
+
+object.name = $kv["TrunkName"]
+object.type = "trunk"
+object.id = $kv["TrunkId"]
+
+reason = strip($kv["Reason"], '', '.')
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_hwLacpTotalLinkLoss_active"

@@ -1,0 +1,46 @@
+!TABULAR = "{object.type = C_4},
+            {object.value = C_6},
+            {datafield2 = C_7},
+            {time = EVENT_TIME},
+            {datafield1 = SESSION_ID},
+            USER_NAME"
+
+!COND = in_list(['Хранение', 'Ключ архивации', 'Добавление раздела', 'Зеркало', 'Обмен', 'Зеркалирование',
+                 'Создание', 'Пересоздание', 'Полное удаление', 'Добавление', 'Удаление', 'Компиляция',
+                 'Изменение', 'Ошибки'], $C_5)
+        and ($EVENT_TYPE == "VW_CRIT_DIARY_STORAGE_EXT")
+
+subject = "account"
+action = switch $C_5
+    case "Хранение" "info"
+    case "Ключ архивации" "info"
+    case "Добавление раздела" "info"
+    case "Обмен" "info"
+    case "Зеркало" "info"
+    case "Зеркалирование" "info"
+    case "Пересоздание" "modify"
+    case "Добавление" "modify"
+    case "Изменение" "modify"
+    case "Создание" "create"
+    case "Полное удаление" "remove"
+    case "Удаление" "remove"
+    case "Компиляция" "info"
+    case "Ошибки" "info"
+endswitch
+object = "resource"
+status = "success"
+
+subject.name = $USER_NAME
+object.state = $C_5
+object.property = "type BP"
+
+# datafield1 - id сессии
+# datafield2 - подробности
+
+importance = "info"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_storage_elements_action"

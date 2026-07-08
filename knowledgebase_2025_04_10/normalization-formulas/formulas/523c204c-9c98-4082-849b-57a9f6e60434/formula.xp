@@ -1,0 +1,90 @@
+!TABULAR = 'GLOBAL_ID,
+            MESSAGE_TEXT,
+           {time=EVENT_TIME},
+           DRIVER_NAME,
+           MESSAGE_ID'
+
+COND = $DRIVER_NAME == "Бастион-ELSYS" and
+       in_list([1, 3, 13, 14, 18, 35, 36, 40, 56, 57, 124, 126, 127], $MESSAGE_ID) == true and
+       $MESSAGE_TEXT != ""
+
+if in_list([1, 56], $MESSAGE_ID) == true then
+    action = "allow"
+    object.state = "enter"
+    importance = "info"
+
+elif in_list([3, 57], $MESSAGE_ID) == true then
+    action = "allow"
+    object.state = "exit"
+    importance = "info"
+
+elif in_list([13, 14, 18, 124, 126], $MESSAGE_ID) == true then
+    action = "deny"
+    object.state = "enter"
+    importance = "medium"
+
+elif in_list([35, 36, 40, 127], $MESSAGE_ID) == true then
+    action = "deny"
+    object.state = "exit"
+    importance = "medium"
+endif
+
+subject = "system"
+object = "account"
+status = "success"
+
+object.name = $USER_FAMILY_NAME + " " + $USER_NAME + " " + $USER_PATRONYMIC
+
+$temp = replace($MESSAGE_TEXT, $USER_FAMILY_NAME, "%nm")  # %nm - имя пользователя
+reason = replace($temp, $ACCESS_CARD_NUMBER, "%cn")       # %cn - номер карточки
+
+if find_substr(reason, "%st") != null then
+    reason = replace(reason, $SOURCE_DEVICE_NAME, "%st")
+endif
+
+if $SOURCE_DEVICE_NAME != "" then
+    datafield1 = $SOURCE_DEVICE_NAME  # Источник события
+endif
+
+if $DEVICE_TYPE_NAME != "" then
+    datafield2 = $DEVICE_TYPE_NAME    # Тип источника
+endif
+
+if $USER_TABLE_NUMBER != "" then
+    datafield3 = $USER_TABLE_NUMBER   # Табельный номер
+endif
+
+if $USER_POSITION != "" then
+    datafield4 = $USER_POSITION       # Должность
+endif
+
+if $USER_DEPARTMENT != "<нет>" then
+    datafield5 = $USER_DEPARTMENT     # Название подразделения
+endif
+
+if $USER_ORGANIZATION != "" then
+    datafield6 = $USER_ORGANIZATION   # Название организации
+endif
+
+if $USER_COMMENT != "" then
+    datafield7 = $USER_COMMENT        # Комментарий
+endif
+
+if $ACCESS_CARD_NUMBER != "" then
+    datafield8 = $ACCESS_CARD_NUMBER  # Номер карты доступа
+endif
+
+msgid = $MESSAGE_ID
+
+event_src.vendor = "es_prom"
+event_src.title = "bastion"
+event_src.category = "Physical security"
+event_src.subsys = "bastion-elsys"
+
+if $WORKSTATION_NAME == "Локальный компьютер" then
+    event_src.hostname = "localhost"
+else
+    event_src.hostname = $WORKSTATION_NAME
+endif
+
+id = "PT_es_prom_bastion_odbc_elsys_user_events"

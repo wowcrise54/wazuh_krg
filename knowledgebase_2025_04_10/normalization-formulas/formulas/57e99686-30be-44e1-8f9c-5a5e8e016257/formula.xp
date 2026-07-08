@@ -1,0 +1,53 @@
+!TEXT = '{$day_month=WORD}{LITERAL}{$month_day=WORD}{LITERAL}{$year=WORD} {$hour=WORD}{LITERAL}{$mmss=STRING} {$ampm="AM"|$ampm="PM"|} {WORD}
+        EVENT The DNS server has started signing the scope {datafield2=WORD} of zone {$zone=STRING}'
+
+action = "info"
+object = "service"
+status = "success"
+
+object.name = "DNS server"
+
+reason = "Zone scope signing started"
+
+# Zone is being signed:
+datafield1 = strip($zone, "", ".")
+# datafield2 - scope of the zone
+
+# TODO - change to simple DATETIME when the token will be updated
+if $ampm == null then
+    # 24-hours timestamp
+    $month = $month_day
+    $day = $day_month
+else
+    # AM/PM timestamp
+    $month = $day_month
+    $day = $month_day
+    if $ampm == "AM" then
+        if $hour == "12" then
+            $hour = "00"
+        endif
+    elif $hour != "12" then
+            $hour = string(number($hour) + 12)
+    endif
+endif
+
+if length($month) == 1 then
+    $month = "0" + $month
+endif
+if length($day) == 1 then
+    $day = "0" + $day
+endif
+if length($hour) == 1 then
+    $hour = "0" + $hour
+endif
+
+# Time in ISO 8601 format:
+time = maybe_datetime($year + "-" + $month + "-" + $day + "T" + $hour + ":" + $mmss)
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "DNS server"
+
+id = "PT_Microsoft_Windows_filemonitor_Server_roles_DNS_Zone_scope_signing_started"

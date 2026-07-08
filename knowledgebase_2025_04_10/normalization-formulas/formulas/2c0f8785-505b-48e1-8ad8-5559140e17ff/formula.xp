@@ -1,0 +1,32 @@
+EVENTLOG = 'EventID ="540"'
+COND =  $Channel == "Microsoft-Windows-TerminalServices-Gateway/Admin"
+        and $Provider["Name"] == "Microsoft-Windows-TerminalServices-Gateway"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+subject = "account"
+subject.id = $Security["UserID"]
+
+action = "create"
+status = "success"
+
+object = "policy"
+object.name = $UserData["EventInfo"]["Name"]
+
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Terminal services"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_540_Resource_authorization_policy_created"

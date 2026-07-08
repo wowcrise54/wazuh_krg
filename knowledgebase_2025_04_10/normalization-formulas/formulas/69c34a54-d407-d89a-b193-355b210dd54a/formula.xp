@@ -1,0 +1,78 @@
+EVENTLOG = 'EventID="4822"'
+COND = $Channel == "Security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "login"
+object = "service"
+status = "failure"
+
+subject.account.name = $Data["AccountName"]  #  Account Name
+src.hostname = $Data["DeviceName"]  # Device Name
+reason = $Data["Status"] # Error Code
+
+datafield1 = switch $Data["Status"] # Error Code
+    case "0xc0000064" "user name does not exist"
+    case "0xc000006a" "user name is correct but the password is wrong"
+    case "0xc0000234" "user is currently locked out"
+    case "0xc0000072" "account is currently disabled"
+    case "0xc000006f" "user tried to logon outside his day of week or time of day restrictions"
+    case "0xc0000070" "workstation restriction"
+    case "0xc0000192" "an attempt was made to logon but the netlogon service was not started"
+    case "0xc0000193" "account expiration"
+    case "0xc0000071" "expired password"
+    case "0xc0000133" "clocks between DC and other computer too far out of sync"
+    case "0xc0000413" "the machine you are logging onto is protected by an authentication firewall. The specified account is not allowed to authenticate to the machine"
+    case "0xc0000224" "user is required to change password at next logon"
+    case "0xc0000225" "the object was not found"
+    case "0xc000015b" "the user has not been granted the requested logon type (aka logon right) at this machine"
+    case "0xc000006d" "this is either due to a bad username or authentication information"
+    case "0xc000006e" "user name and authentication information are valid, but some user account restriction has prevented successful authentication (such as time-of-day restrictions)"
+    case "0xc000018c" "the logon request failed because the trust relationship between the primary domain and the trusted domain failed"
+    case "0xc000005e" "there are currently no logon servers available to service the logon request"
+    case "0xc00000dc" "the Sam Server was in the wrong state to perform the desired operation"
+    case "0xc00002ee" "an error occurred during Logon"
+    case "0x80090325" "the certificate chain was issued by an trust anchor (ca) that is not trusted"
+    case "0xc0000321" "the kerberos protocol encountered an error while validating the KDC certificate during smart card logon"
+    case "0xc00002fa" "smart card logon is required and was not used"
+    case "0xc0000022" "a process has requested access to an object but has not been granted those access rights"
+    case "0xc0000017" "not enough virtual memory or paging file quota is available to complete the specified operation"
+    case "0xc0000380" "an incorrect PIN was presented to the smart card"
+    case "0x80090308" "the token supplied to the function is invalid"
+    case "0x80090302" "the function requested is not supported"
+    case "0x8009030e" "no credentials are available in the security package"
+    case "0xc000010b" "an invalid value has been provided for the logontype requested"
+    case "0xc000018d" "the logon request failed because the trust relationship between this workstation and the primary domain failed"
+    case "0x80090317" "the context has expired and can no longer be used"
+    case "0xc000018b" "on applicable Windows Server releases the SAM database does not have a computer account for this workstation trust relationship"
+    case "0x80090310" "the message supplied for verification is out of sequence"
+    case "0xc0000008" "an invalid HANDLE was specified"
+    case "0xc000038b" "the revocation status of the smart card certificate that is used for authentication could not be determined"
+    case "0xc0000384" "the requested key container does not exist on the smart card"
+    case "0xc00000fe" "a specified authentication package is unknown"
+    case "0xc0000062" "the name provided is not a properly formed account name"
+    case "0xc00002a1" "the specified directory service attribute or value does not exist"
+    case "0xc003000c" "the stub received bad data"
+    case "0xc0000381" "the smart card is blocked"
+    case "0xc000035b" "the client's supplied SSPI channel bindings were incorrect"
+    case "0xc000040c" "the revocation status of the domain controller certificate used for smart card authentication could not be determined"
+endswitch
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_4822_NTLM_Failed_Protected_User_Group"

@@ -1,0 +1,34 @@
+filter ProcessStart_Linux_Service_Restart(string $serviceNameRegex) {
+    filter::OperatingSystem_UNIXLike()
+    and status == "success"
+    and (
+        # Обычный запуск процесса
+        (
+            category.generic == "Process"
+            and category.high == "Availability Management"
+            and category.low == "Control"
+            and action == "start"
+        )
+        # Запуск через sudo
+        or (
+            msgid == "sudo"
+            and action == "execute"
+            and category.generic == "Command"
+            and category.high == "System Management"
+            and category.low == "Manipulation"
+        )
+    )
+    and object.process.cmdline != null
+    and (
+        # [sudo] systemctl restart <serviceNameRegex> или systemctl restart <serviceNameRegex>.service
+        regex(object.process.cmdline, "systemctl\s+(restart|reload|reload-or-restart)\s+" + $serviceNameRegex + "(\.service)?", 0) != null
+        or
+        # [sudo] /etc/init.d/<serviceNameRegex> restart
+        regex(object.process.cmdline, "/etc/init.d/" + $serviceNameRegex + "\s+(restart|reload)", 0) != null
+        or
+        # [sudo] service <serviceNameRegex> restart
+        regex(object.process.cmdline, "service\s+" + $serviceNameRegex + "\s+(restart|reload)", 0) != null
+    )
+}
+
+

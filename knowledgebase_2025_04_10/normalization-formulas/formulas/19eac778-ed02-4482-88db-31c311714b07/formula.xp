@@ -1,0 +1,330 @@
+JSON = ''
+
+COND = in_list(["yandex.cloud.audit.k8s.CreateNodeGroup",
+                "yandex.cloud.audit.k8s.UpdateNodeGroup",
+                "yandex.cloud.audit.k8s.DeleteNodeGroup"], $event_type)
+
+subject = "account"
+
+$operation = strip($event_type, "yandex.cloud.audit.k8s.", "")
+
+action = switch $operation
+    case "CreateNodeGroup" "create"
+    case "UpdateNodeGroup" "modify"
+    case "DeleteNodeGroup" "remove"
+endswitch
+
+object = "resource"
+
+status = switch $event_status
+    case "DONE" "success"
+    case "STARTED" "ongoing"
+    case "ERROR" "failure"
+    case "CANCELLED" "failure"
+endswitch
+
+subformula "items_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $next = bool($array[$current + 1])   
+endsubformula
+
+subject.account.id = $authentication["subject_id"]
+subject.account.name = $authentication["subject_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+object.account.id = $details["service_account_id"]
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+$cloud = $resource_metadata["path"][1]["resource_name"] 
+$folder = $resource_metadata["path"][2]["resource_name"]
+object.storage.fullpath = join([$organization, $cloud, $folder], "|")
+
+object.id = $details["node_group_id"]
+object.name = $details["name"]
+
+$array = $details["allocation_policy"]["locations"]
+$current = -1
+submessage("TEXT", "items_handler", "")
+$zone_ids = append($zone_ids, $item["zone_id"])
+$subnet_ids = append($subnet_ids, $item["subnet_id"])
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $zone_ids = append($zone_ids, $item["zone_id"])
+    $subnet_ids = append($subnet_ids, $item["subnet_id"])
+endif
+
+object.path = join($zone_ids, "|")
+
+object.state = $details["status"]
+object.type = "node group"
+object.version = $details["master"]["version_info"]["current_version"]
+
+if $operation == "UpdateNodeGroup" then
+    object.property = $request_parameters["update_mask"]
+endif
+
+$remote_address = ipv4($request_metadata["remote_address"])
+if $remote_address != null then
+    src.ip = $remote_address
+
+    logon_auth_method = "remote"
+else
+    logon_auth_method = "local"
+endif
+
+datafield1 = $organization           # Наименование организации
+datafield2 = $cloud                  # Наименование облака
+datafield3 = $folder                 # Наименование каталога
+datafield4 = $details["cluster_id"]  # Идентификатор кластера
+datafield5 = join($subnet_ids, "|")  # Идентификаторы подсетей
+
+$array = $details["node_template"]["network_interface_specs"]
+$current = -1
+submessage("TEXT", "items_handler", "")
+if bool($item) then
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+if $next then
+    submessage("TEXT", "items_handler", "")
+    $security_group_ids = append($security_group_ids, join($item["security_group_ids"], ", "))
+    $nat_item = if $item["primary_v4_address_spec"]["one_to_one_nat_spec"]["ip_version"] == "IPV4" then true else false endif
+    $nat = $nat_item or $nat
+endif
+
+datafield9 = join($security_group_ids, "|")  # Группы безопасности
+
+if $nat then
+    $properties = append($properties, "assign public ip: true")
+endif
+if $details["node_template"]["platform_id"] != null then 
+    $properties = append($properties, "platform id: " + $details["node_template"]["platform_id"])
+endif
+if $details["node_template"]["resources_spec"]["memory"] != null then 
+    $properties = append($properties, "memory: " + $details["node_template"]["resources_spec"]["memory"])
+endif
+if $details["node_template"]["resources_spec"]["cores"] != null then 
+    $properties = append($properties, "cores: " + $details["node_template"]["resources_spec"]["cores"])
+endif
+if $details["node_template"]["resources_spec"]["core_fraction"] != null then 
+    $properties = append($properties, "core fraction: " + $details["node_template"]["resources_spec"]["core_fraction"])
+endif
+if $details["node_template"]["boot_disk_spec"]["disk_type_id"] != null then 
+    $properties = append($properties, "disk type id: " + $details["node_template"]["boot_disk_spec"]["disk_type_id"])
+endif
+if $details["node_template"]["boot_disk_spec"]["disk_size"] != null then 
+    $properties = append($properties, "disk size: " + $details["node_template"]["boot_disk_spec"]["disk_size"])
+endif
+if $details["node_template"]["metadata"]["ssh-keys"] != null then 
+    $properties = append($properties, "ssh keys: " + $details["node_template"]["metadata"]["ssh-keys"])
+endif
+if $details["node_template"]["scheduling_policy"]["preemptible"] != null then 
+    $properties = append($properties, "preemptible: " + string($details["node_template"]["scheduling_policy"]["preemptible"]))
+endif
+if $details["scale_policy"]["fixed_scale"]["size"] != null then 
+    $properties = append($properties, "size: " + $details["scale_policy"]["fixed_scale"]["size"])
+endif
+if $details["maintenance_policy"]["auto_upgrade"] == true then 
+    $properties = append($properties, "auto upgrade: true")
+else
+    $properties = append($properties, "auto upgrade: false")
+endif
+if $details["deploy_policy"]["max_expansion"] != null then 
+    $properties = append($properties, "max expansion: " + $details["deploy_policy"]["max_expansion"])
+endif
+
+datafield10 = lower(join($properties, "|"))  # Свойства группы узлов
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = $operation
+importance = "low"
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = $event_source
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_Kubernetes_Node_Group_Manage"

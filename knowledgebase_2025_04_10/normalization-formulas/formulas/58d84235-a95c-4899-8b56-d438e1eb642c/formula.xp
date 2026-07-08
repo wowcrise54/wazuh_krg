@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$ip=IPV4|$ip=IPV6|$Computer=HOSTNAME} CEF:{NUMBER}|Cyber-Ark|
+        Vault|10.{NUMBER}.{NUMBER}|{msgid="103"}|Failure: User Has Expired|{NUMBER}|{$kv=KEYVALUE(" ", "=")}'
+
+action = "info"
+object = "account"
+status = "success"
+
+object.name = $kv["suser"]
+object.state = "expired"
+
+if maybe_ipv4($kv["shost"]) != null or maybe_ipv6($kv["shost"]) != null then
+    if in_list(["0.0.0.0", "::"], $kv["shost"]) != null then
+        src.ip = $kv["shost"]
+    endif
+else
+    src.hostname = $kv["shost"]
+endif
+
+importance = "info"
+
+event_src.vendor = "cyberark"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "enterprise_password_vault"
+event_src.ip = coalesce($ip, $kv["dvc"])
+event_src.category = "Other"
+
+id = "PT_CyberArk_Enterprise_Password_Vault_syslog_CEF_103_User_has_expired"

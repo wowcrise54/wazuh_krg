@@ -1,0 +1,139 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = in_list([
+           "TaskEvent",
+           "TaskTimeoutEvent",
+           "ScheduledTaskCompletedEvent",
+           "ScheduledTaskCreatedEvent",
+           "ScheduledTaskFailedEvent",
+           "ScheduledTaskReconfiguredEvent",
+           "ScheduledTaskRemovedEvent",
+           "ScheduledTaskStartedEvent"
+       ], $event_class)
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+action = switch $event_class
+    case "TaskEvent" "create"
+    case "TaskTimeoutEvent" "execute"
+    case "ScheduledTaskCompletedEvent" "execute"
+    case "ScheduledTaskCreatedEvent" "create"
+    case "ScheduledTaskFailedEvent" "execute"
+    case "ScheduledTaskReconfiguredEvent" "configure"
+    case "ScheduledTaskRemovedEvent" "remove"
+    case "ScheduledTaskStartedEvent" "execute"
+endswitch
+
+object = "task"
+
+status = switch $event_class
+    case "TaskEvent" "success"
+    case "TaskTimeoutEvent" "failure"
+    case "ScheduledTaskCompletedEvent" "success"
+    case "ScheduledTaskCreatedEvent" "success"
+    case "ScheduledTaskFailedEvent" "failure"
+    case "ScheduledTaskReconfiguredEvent" "success"
+    case "ScheduledTaskRemovedEvent" "success"
+    case "ScheduledTaskStartedEvent" "ongoing"
+endswitch
+    
+subformula "sheduled_task_completed"
+    TEXT = '[Task {$name=STRING+} on {$entity_name=STRING+} in datacenter {$datacenter_name=STRING*} completed successfully]'
+endsubformula
+
+subformula "sheduled_task_created"
+    TEXT = '[Created task {$name=STRING+} on {$entity_name=STRING+} in datacenter {$datacenter_name=REST}'
+endsubformula
+
+subformula "sheduled_task_failed"
+    TEXT = '[Task {$name=STRING+} on {$entity_name=STRING+} in datacenter {$datacenter_name=STRING*} cannot be completed: {$reason_msg=REST}'
+    
+    reason = strip($reason_msg, "", "]")
+endsubformula
+
+subformula "sheduled_task_reconfigured"
+    TEXT = '[Reconfigured task {$name=STRING+} on {$entity_name=STRING+} in datacenter {$datacenter_name=STRING*} Modified: {$changes=REST}'
+    
+    $datacenter_name = strip($datacenter_name, "", ".")
+    $changes = replace($changes, "'", "\"")
+    object.property = "configuration"
+    object.new_value = "Modified: " + strip($changes, " ", ".]")
+endsubformula
+
+subformula "sheduled_task_removed"
+    TEXT = '[Removed task {$name=STRING+} on {$entity_name=STRING+} in datacenter {$datacenter_name=REST}'
+endsubformula
+
+subformula "sheduled_task_started"
+    TEXT = '[Running task {$name=STRING+} on {$entity_name=STRING+} in datacenter {$datacenter_name=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+$raw_message = replace($raw_message, "", "\\\\n")
+
+switch $event_class
+    case "TaskEvent" 
+        $name = strip($raw_message, "[Task: ", "]")
+    case "TaskTimeoutEvent" 
+        $name = strip($raw_message, "[Task: ", " time-out]") 
+        reason = "time-out"
+    case "ScheduledTaskCompletedEvent"
+        submessage("TEXT", "sheduled_task_completed", $raw_message)
+    case "ScheduledTaskCreatedEvent"
+        submessage("TEXT", "sheduled_task_created", $raw_message)
+    case "ScheduledTaskFailedEvent"
+        submessage("TEXT", "sheduled_task_failed", $raw_message)
+    case "ScheduledTaskReconfiguredEvent"
+        submessage("TEXT", "sheduled_task_reconfigured", $raw_message)
+    case "ScheduledTaskRemovedEvent"
+        submessage("TEXT", "sheduled_task_removed", $raw_message)
+    case "ScheduledTaskStartedEvent"
+        submessage("TEXT", "sheduled_task_started", $raw_message)
+endswitch
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $name
+
+datafield1 = coalesce(strip($datacenter_name, "", "]"), $def_dc_name)  # Datacenter Name
+datafield4 = $entity_name  # Entity Name
+
+msgid = $event_class
+importance = "info"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Task_Event"

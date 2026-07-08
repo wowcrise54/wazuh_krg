@@ -1,0 +1,36 @@
+EVENTLOG = 'Channel = "Netwrix Auditor"'
+
+COND = $EventID["text"] == "4601"
+
+action = "modify"
+object = "account"
+status = "success"
+
+$csv1 = csv($Data[1], "\\", "'")
+
+object.name = $csv1[1]
+object.domain = $csv1[0]
+
+datafield1 = $Data[0]  # Report server host
+
+reason = "role assigned"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($Provider["Name"])
+event_src.category = "Other"
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_User_roles_assigned"

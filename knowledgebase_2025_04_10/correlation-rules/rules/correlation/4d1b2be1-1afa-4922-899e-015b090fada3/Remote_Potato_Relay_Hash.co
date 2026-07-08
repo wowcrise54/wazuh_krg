@@ -1,0 +1,117 @@
+event Remote_Potato_Trigger:
+    key:
+        event_src.host, subject.process.id, subject.process.name, src.ip
+    filter {
+        correlation_name == "Remote_Potato_Capture_Hash"
+        and filter::CheckWL_Specific_Only("Remote_Potato_Relay_Hash", join([lower(subject.process.fullpath), src.ip], "|"))
+    }
+
+event NTLM_Relay_Connection:
+    key:
+        event_src.host, object.process.id, object.process.name, dst.ip
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (event_src.title == "sysmon" and msgid == "3")
+            or (event_src.title == "windows" and msgid == "5156")
+        )
+        and not filter::Loopback_Address(dst.ip)
+        and src.ip != dst.ip
+        and in_list([80, 445, 25, 1433], dst.port)
+        and object == "connection"
+        and direction == "egress"
+    }
+    
+rule Remote_Potato_Relay_Hash: (Remote_Potato_Trigger and NTLM_Relay_Connection) within 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Remote_Potato_Trigger {
+        if $subject.account.id == null then
+            $subject.account.name = subject.account.name
+            $subject.account.id = subject.account.id
+            $subject.account.domain = subject.account.domain
+        endif
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        if $object.account.id == null then
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+        endif
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.fqdn = event_src.fqdn
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    
+        $object.name = object.name
+        $object.domain = object.domain
+        $object.id = object.id
+
+        $alert.key = join([lower(subject.process.fullpath), src.ip], "|")
+
+        if $alert.context == null then
+            $alert.context = alert.context
+        endif
+    }
+    
+    on NTLM_Relay_Connection {
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+    }
+    
+emit {
+    $correlation_type = "incident"
+    
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "high"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Adversary-in-the-Middle: LLMNR/NBT-NS Poisoning and SMB Relay"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

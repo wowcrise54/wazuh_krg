@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$Computer=HOSTNAME} notice mcpd[{NUMBER}]:
+        {NUMBER}:{NUMBER}: AUDIT - client {datafield1=WORD}, {STRING?} user {subject.name=STRING} -
+        transaction {STRING} - object {NUMBER} - create {"{"} self_ip {"{"} self_ip_name
+        "/{WORDDASH}/{object.name=WORDDASH}" self_ip_addr {$ip_addr=STRING} self_ip_netmask
+        {$netmask=STRING} self_ip_traffic_group
+        "/{WORDDASH}/traffic-group-local-only" self_ip_vlan_name "/{WORDDASH}/{interface=WORDDASH}"
+        self_ip_service_policy {UNTIL(" } }")} [Status=Command OK]'
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+object.state = "add ip-address"
+object.property = "ip-address"
+object.value = $ip_addr+'/'+$netmask
+
+# datafield1 - creation interface
+
+importance = "info"
+
+event_src.vendor = "f5_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "big_ip_virtual_edition"
+event_src.category = "Network device"
+
+id = "PT_F5_Networks_BIG_IP_Virtual_Edition_syslog_ip_bind"

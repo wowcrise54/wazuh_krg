@@ -1,0 +1,35 @@
+TABULAR = '__policy_id_tag,
+           action,
+           cluster_info,
+           has_accounting,
+           i/f_dir,
+           {event_src.ip=orig},
+           origin_sic_name,
+           {time=time}'
+
+COND = $product == "VPN-1 & FireWall-1"
+       and find_substr($cluster_info, "(ClusterXL) interface") != null
+
+action = "info"
+object = "interface"
+status = "success"
+
+subformula 'sub1'
+    TEXT = '(ClusterXL) interface {object.name=WORD} of member {datafield2=NUMBER} ({object.value=IPV4|object.value=IPV6}) is
+    {object.state="down"|object.state="up"} {REST}'
+endsubformula
+
+submessage('TEXT', 'sub1', $cluster_info)
+
+object.property = "ip address"
+
+#datafield2 - идентификатор участника кластера
+
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+event_src.subsys = lower($product)
+
+id = "PT_Checkpoint_Gaia_opseclog_VPN_and_Firewall_Cluster_Interface_state"

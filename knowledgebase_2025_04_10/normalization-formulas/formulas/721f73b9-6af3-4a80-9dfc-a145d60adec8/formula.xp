@@ -1,0 +1,40 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "Health Service Modules" and $number == 10403
+
+submessage("XML","Event_data",$eventdata)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    object.name = $DataItem / eventdata / Data [1]   # имя процесса
+    object.property = "namespace"
+    object.value = $DataItem / eventdata / Data [4]  # пространство имён
+endsubformula
+
+msgid = $number
+
+object = "process"
+action = "access"
+status = "success"
+subject = "host"
+
+importance = "info"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_10403_module_was_able_to_connect"

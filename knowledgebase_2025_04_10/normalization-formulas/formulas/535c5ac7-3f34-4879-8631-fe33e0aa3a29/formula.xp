@@ -1,0 +1,129 @@
+TEXT = '{"<"NUMBER">"?}{"v"NUMBER"xxxx"?}date={$date=WORDDASH} time={$time=STRING} log_id={$log_id=NUMBER} msg_id={NUMBER}
+        device_id={event_src.hostname=WORDDASH} {UNTIL(" type=traffic")}
+        {$rest_data=KEYVALUE(" ", "=", "\\"")}'
+
+$success_list = ["100","101","102","200","201","202","203","204",
+                 "205","206","207", "208","226","300", "301",
+                 "302", "303","304", "305", "306", "307", "308"]
+
+action = "access"
+object = "resource"
+if in_list($success_list, string($rest_data['http_retcode'])) then
+    status = "success"
+    importance = "info"
+else
+    status = "failure"
+    importance = "low"
+endif
+
+object.path = strip($rest_data['http_url'], "", "\"")
+
+src.ip = coalesce(ipv4($rest_data['src']), ipv6($rest_data['src']))     # проверка ip источника
+src.port = $rest_data['src_port']
+
+dst.ip = coalesce(ipv4($rest_data['dst']), ipv6($rest_data['dst']))     # проверка ip цели
+dst.port = $rest_data['dst_port']
+dst.hostname = $rest_data['http_host']
+
+protocol = upper($rest_data['service'])
+
+count.bytes_in = $rest_data['http_request_bytes']
+count.bytes_out = $rest_data['http_response_bytes']
+
+datafield1 = string($rest_data['http_retcode'])  # код ответа HTTP
+datafield2 = switch datafield1  # человекочитаемый код ответа HTTP
+    case "000" "Unassigned"
+    case "100" "Continue"
+    case "101" "Switching"
+    case "102" "Processing"
+    case "200" "OK"
+    case "201" "Created"
+    case "202" "Accepted"
+    case "203" "Non-Authoritative Information"
+    case "204" "No Content"
+    case "205" "Reset Content"
+    case "206" "Partial Content"
+    case "207" "Multi-Status"
+    case "226" "IM Used"
+    case "300" "Multiple Choices"
+    case "301" "Moved Permanently"
+    case "302" "Found"
+    case "303" "See Other"
+    case "304" "Not Modified"
+    case "305" "Use Proxy"
+    case "307" "Temporary Redirect"
+    case "308" "Permanent Redirect"
+    case "400" "Bad Request"
+    case "401" "Unauthorized"
+    case "402" "Payment Required"
+    case "403" "Forbidden"
+    case "404" "Not Found"
+    case "405" "Method Not Allowed"
+    case "406" "Not Acceptable"
+    case "407" "Proxy Authentication Required"
+    case "408" "Request Timeout"
+    case "409" "Conflict"
+    case "410" "Gone"
+    case "411" "Length Required"
+    case "412" "Precondition Failed"
+    case "413" "Payload Too Large"
+    case "414" "URI Too Long"
+    case "415" "Unsupported Media Type"
+    case "416" "Range Not Satisfiable"
+    case "417" "Expectation Failed"
+    case "418" "Unassigned, I'm a teapot"
+    case "420" "Unassigned, Method Failure (Spring Framework) or Enhance Your Calm (Twitter) - Unofficial codes"
+    case "421" "Misdirected Request"
+    case "422" "Unprocessable Entity"
+    case "423" "Locked"
+    case "424" "Failed Dependency"
+    case "425" "Unassigned, Unordered Collection"
+    case "426" "Upgrade Required"
+    case "428" "Precondition Required"
+    case "429" "Too Many Requests"
+    case "431" "Request Header Fields Too Large"
+    case "434" "Unassigned, Requested host unavailable"
+    case "440" "Unassigned, Login Timeout - Internet Information Services - Unofficial code"
+    case "444" "Unassigned, Connection Closed Without Response or No Response - nginx - Unofficial code"
+    case "449" "Unassigned, Retry With - Internet Information Services - Unofficial code"
+    case "450" "Unassigned, Blocked by Windows Parental Controls (Microsoft) - Unofficial code"
+    case "451" "Unavailable For Legal Reasons or Redirect - Internet Information Services - Unofficial code"
+    case "495" "Unassigned, SSL Certificate Error - nginx - Unofficial code"
+    case "496" "Unassigned, SSL Certificate Required - nginx - Unofficial code"
+    case "497" "Unassigned, HTTP Request Sent to HTTPS Port - nginx - Unofficial code"
+    case "498" "Unassigned, Invalid Token (Esri) - Unofficial code"
+    case "499" "Unassigned, Token Required (Esri) or Request has been forbidden by antivirus or Client Closed Request - nginx - Unofficial codes"
+    case "500" "Internal Server Error"
+    case "501" "Not Implemented"
+    case "502" "Bad Gateway"
+    case "503" "Service Unavailable"
+    case "504" "Gateway Timeout"
+    case "505" "HTTP Version Not Supported"
+    case "506" "Variant Also Negotiates"
+    case "507" "Insufficient Storage"
+    case "508" "Loop Detected"
+    case "509" "Unassigned, Bandwidth Limit Exceeded (Apache Web Server/cPanel) - Unofficial code"
+    case "510" "Not Extended"
+    case "511" "Network Authentication Required"
+    case "520" "Unassigned, Unknown Error - CloudFlare - Unofficial code"
+    case "521" "Unassigned, Web Server Is Down - CloudFlare - Unofficial code"
+    case "522" "Unassigned, Connection Timed Out - CloudFlare - Unofficial code"
+    case "523" "Unassigned, Origin Is Unreachable - CloudFlare - Unofficial code"
+    case "524" "Unassigned, A Timeout Occurred - CloudFlare - Unofficial code"
+    case "525" "Unassigned, SSL Handshake Failed - CloudFlare - Unofficial code"
+    case "526" "Unassigned, Invalid SSL Certificate - CloudFlare - Unofficial code"
+    case "530" "Unassigned, Site is frozen - Unofficial code"
+    case "599" "Network Connect Timeout Error"
+endswitch
+datafield3 = upper($rest_data['http_method'])            # метод HTTP
+datafield4 = strip($rest_data['http_agent'], "", "\"")   # User-Agent
+datafield5 = $rest_data['policy']                        # примененная политика
+
+time = $date + " " + $time
+msgid = $log_id
+
+event_src.vendor = "fortinet"
+event_src.title = "fortiweb"
+event_src.category = "Web security"
+
+id = "PT_Fortinet_Fortiweb_syslog_Traffic"

@@ -1,0 +1,44 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {UNTIL(" events - - ")}CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|events|admin_console|{WORDDASH}|
+        rt={$temp_time=NUMBER} deviceExternalId={event_src.id=STRING+} suser={subject.account.name=STRING} cat=accounts
+        act={msgid="ta_users_deleted_bulk"} src={src.ip=IPV4|src.ip=IPV6} {UNTIL(" cs1=")}{$rest=REST}'
+
+subject = "account"
+action = "remove"
+object = "account"
+status = "success"
+
+submessage("JSON", "SPLIT", $rest)
+
+subject.account.privileges = "administrator"
+
+object.account.privileges = "guest"
+
+subformula "SPLIT"
+    # Извлечение object.name из $rest
+    JSON = "users"
+    # Ограничимся 10 логинами:
+    $user_login = remove([$users[0]["auth_login"], $users[1]["auth_login"], $users[2]["auth_login"], $users[3]["auth_login"],
+                          $users[4]["auth_login"], $users[5]["auth_login"], $users[6]["auth_login"], $users[7]["auth_login"],
+                          $users[8]["auth_login"], $users[9]["auth_login"]], null)
+    object.account.name = join($user_login, "|")    # Удаленные логины
+
+endsubformula
+
+time = epoch_ms_to_datetime($temp_time)
+importance = "medium"
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_remove_guest_users"

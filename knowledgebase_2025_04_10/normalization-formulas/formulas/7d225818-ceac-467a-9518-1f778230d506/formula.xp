@@ -1,0 +1,76 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        {"\\""?}{"Event Description: "?}
+        {"SHA-256: ,MD-5: ,"?} Local {"Host IP"?}:{$ip_1=IPV4|$ip_1=IPV6},Local {"Port"?}: {$port_1=NUMBER},Local{"Host MAC"?}:
+        {$mac_1=WORD}, Remote{"Host IP"?}: {$ip_2=IPV4|$ip_2=IPV6},Remote{"Host Name"?}:
+        {$host_2_temp=HOSTNAME?} {",Remote"?} {"Port"?}: {$port_2=NUMBER},Remote {"Host MAC"?}:
+        {$mac_2=WORD},{$prot=WORD},{$direction=WORD},Begin {"Time"?}: {DATETIME},End {"Time"?}: {DATETIME},
+        Occurrences: {NUMBER}, {$kv=KEYVALUE(",", ":")}'
+
+subject = "rule"
+
+if find_substr($kv['Action'], 'Blocked') != null then
+    action = "deny"
+elif find_substr($kv['Action'], 'Allowed') != null then
+    action = "allow"
+endif
+
+object = "connection"
+status = "success"
+
+object.account.name = coalesce($kv['User Name'], strip($kv['User'], ' ', ''))
+object.account.domain = coalesce($kv['Domain Name'], strip($kv['Domain'], ' ', ''))
+
+
+subject.name = strip($kv['Rule'], ' ', '')
+
+$d_2 = strip($host_2_temp, '', ',Remote:')
+if $d_2 != "" then
+   $host_2 = $d_2
+endif
+
+if $direction == "Inbound" then
+    src.ip = $ip_2
+    src.hostname = $host_2
+    src.port = $port_2
+    src.mac = $mac_2
+    dst.ip = $ip_1
+    dst.port = $port_1
+    dst.mac = $mac_1
+    direction = "ingress"
+else
+    src.ip = $ip_1
+    src.port = $port_1
+    src.mac = $mac_1
+    dst.ip = $ip_2
+    dst.hostname = $host_2
+    dst.port = $port_2
+    dst.mac = $mac_2
+    direction = "egress"
+endif
+
+if $prot != "OTHERS" then
+    protocol = lower($prot)
+endif
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_rule_action_en_ru"

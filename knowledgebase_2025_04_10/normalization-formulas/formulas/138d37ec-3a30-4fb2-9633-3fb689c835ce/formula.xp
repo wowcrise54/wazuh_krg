@@ -1,0 +1,60 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?}{$time_raw=DATETIME?} {"Message forwarded from"?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?} {subject.name="auditd"}{"["?}{subject.id=NUMBER?}{"]"?}{":"?}{"-"*}
+{"The"?} {"A"|"a"}udit daemon {$act="has"|$act="is suspending logging"|$act="is now changing the system to single user mode"|$act="is now halting the system"} {"due to"?} {$r_reason="no space left on logging partition"|$r_reason="previously mentioned write error"|$r_reason="low disk space"|$r_reason="logfile size"|$r_reason=""}{"."?}'
+
+subject = "service"
+
+action = switch $act
+    case "has" "info"
+    case "is suspending logging" "stop"
+    case "is now changing the system to single user mode" "configure"
+    case "is now halting the system" "stop"
+endswitch
+
+if $act == "is suspending logging due to" then
+    object = "logging"
+else
+    object = "system"
+endif
+
+status = "success"
+
+reason = switch $r_reason
+    case "no space left on logging partition" "No space left on logging partition"
+    case "previously mentioned write error" "Disk write error"
+    case "low disk space" "Low disk space"
+    case "" "Low disk space"
+    case "logfile size" "Log file is larger than max size"
+endswitch
+
+time = coalesce($time_raw, recv_time)
+
+object.property = "auditd.conf"
+$value = switch $r_reason
+    case "no space left on logging partition" "disk_full_action="
+    case "previously mentioned write error" "disk_error_action="
+    case "low disk space" "(admin_)space_left_action="
+    case "" "(admin_)space_left_action="
+    case "logfile size" "max_log_file_action="
+endswitch
+
+object.value = switch $act
+    case "has" $value + "*"
+    case "is suspending logging" $value + "SUSPEND"
+    case "is now changing the system to single user mode" $value + "SINGLE"
+    case "is now halting the system" $value + "HALT"
+endswitch
+
+importance = "low"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_auditd_syslog_action_suspend_single_halt"

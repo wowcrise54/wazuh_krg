@@ -1,0 +1,20 @@
+!TEXT = '{time=DATETIME} - OK,{msgid="CALL_DELETE"},{subject.name=WORDDASH+},
+        id_call:{object.value=NUMBER} callingNr:{datafield1=STRING} calledNr:{datafield2=STRING} date:{REST}'
+
+subject = "account"
+action = "remove"
+object = "file"
+status = "success"
+
+object.property = "Call ID"
+
+# datafield1 - Caller Number
+# datafield2 - Called Number
+
+importance = "low"
+
+event_src.vendor = "zoom_international"
+event_src.title = "call_recording"
+event_src.category = "Telecom"
+
+id = "PT_ZOOM_International_Call_Recording_filemonitor_Call_delete"

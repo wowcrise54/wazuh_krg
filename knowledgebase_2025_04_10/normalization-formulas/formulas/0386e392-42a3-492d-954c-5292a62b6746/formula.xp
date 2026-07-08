@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        % {msgid="UCSM-4-HEALTH_LED_AMBER"}: [{UNTIL("][")}{UNTIL("][")} {WORDDASH}][{datafield1=UNTIL("]")} {STRING}
+        shows error. Reason:  {$rest=REST}'
+
+action = "alert"
+object = "device"
+status = "success"
+
+# datafield1 - path to health-led with error
+
+reason = strip($rest, '', ' ;')
+
+importance = "medium"
+
+event_src.title = "ucs_manager"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_UCS_Manager_syslog_Health_led_shows_error"

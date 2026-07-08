@@ -1,0 +1,176 @@
+JSON = 'header.version = 10'
+
+$H = $header
+$R = $record
+
+if $R['USERNAME'] != null then
+    subject = "account"
+    
+    subject.account.name = $R['USERNAME']
+endif
+
+if $R['natEvent'] != null then
+    action = switch $R['natEvent']
+        case 1 "create"
+        case 2 "remove"
+    endswitch
+
+    object = "conntrack"
+
+    object.type = "nat"
+
+    category.generic = "Connection Tracking Record"
+    category.high = "Network Interaction Management"
+    category.low = "Manipulation"
+elif in_list([1, 2, 3, 5], $R['firewallEvent']) then
+    if $R['firewallEvent'] == 5 then
+        action = "info"
+
+        object.state = "updated"
+
+        category.low = "State"
+    else
+        action = switch $R['firewallEvent']
+            case 3 "deny"
+            case 1 "open"
+            case 2 "close"
+        endswitch
+
+        if action == "deny" then
+            category.low = "Control"
+        else
+            category.low = "Communication"
+        endif
+    endif
+
+    object = "flow"
+
+    category.generic = "Flow"
+    category.high = "Network Interaction Management"
+else
+    action = "detect"
+    object = "flow"
+
+    category.generic = "Flow"
+    category.high = "Network Interaction Management"
+    category.low = "State"
+endif
+
+status = "success"
+
+if $R['sourceIPv4Address'] != null then
+    $src_ip = $R['sourceIPv4Address']
+    $dst_ip = $R['destinationIPv4Address']
+elif $R['sourceIPv6Address'] != null then
+    $src_ip = $R['sourceIPv6Address']
+    $dst_ip = $R['destinationIPv6Address']
+endif
+src.ip = $src_ip
+dst.ip = $dst_ip
+
+$proto = upper($R['protocolIdentifier'])
+if in_list(["TCP", "UDP"], $proto) then
+    src.port = $R['sourceTransportPort']
+    dst.port = $R['destinationTransportPort']
+    if src.port == null and dst.port == null then
+        if $proto == "UDP" then
+            src.port = $R['udpSourcePort']
+            dst.port = $R['udpDestinationPort']
+        elif $proto == "TCP" then
+            src.port = $R['tcpSourcePort']
+            dst.port = $R['tcpDestinationPort']
+        endif
+    endif
+elif in_list(["ICMP", "ICMPv6"], $proto) then
+    datafield7 = coalesce($R['icmpTypeIPv4'], $R['icmpTypeIPv6'])  # ICMP type
+    datafield8 = coalesce($R['icmpCodeIPv4'], $R['icmpCodeIPv6'])  # ICMP code
+endif
+protocol = lower($proto)
+
+if not in_list([$src_ip, "", "0.0.0.0"], $R['postNATSourceIPv4Address']) then
+    assigned_src_ip = $R['postNATSourceIPv4Address']
+    if $R['postNAPTSourceTransportPort'] != 0 then
+        assigned_src_port = $R['postNAPTSourceTransportPort']
+    endif
+endif
+
+if not in_list([$dst_ip, "", "0.0.0.0"], $R['postNATDestinationIPv4Address']) then
+    assigned_dst_ip = $R['postNATDestinationIPv4Address']
+    if $R['postNAPTDestinationTransportPort'] != 0 then
+        assigned_dst_port = $R['postNAPTDestinationTransportPort']
+    endif
+endif
+
+if $R['ingressInterface'] >= 2 and $R['ingressInterface'] != 65535 then
+    $is = true
+else
+    $is = false
+endif
+
+if $R['egressInterface'] >= 2 and $R['egressInterface'] != 65535 then
+    $os = true
+else
+    $os = false
+endif
+
+if $is and $os then
+    if $R['flowDirection'] == null or $R['flowDirection'] == 0 then
+        $int = $R['ingressInterface']  # int - interface
+    elif $R['flowDirection'] == 1 then
+        $int = $R['egressInterface']
+    endif
+elif $is or $os then
+    if $is then
+        $int = $R['ingressInterface']
+    elif $os then
+        $int = $R['egressInterface']
+    endif
+endif
+
+interface = $int
+direction = if $R['flowDirection'] == null or $R['flowDirection'] == 0 then "ingress" else "egress" endif
+
+if $R['tcpControlBits'] != null then
+    tcp_flag = lower(join($R['tcpControlBits'], "|"))
+endif
+
+count.bytes_in = $R['octetDeltaCount']
+count.packets_in = $R['packetDeltaCount']
+
+$absolute_time = $H['export_time'] * 1000
+
+if $R['flowStartMilliseconds'] != null and $R['observationTimeMilliseconds'] != null then
+    $st = $R['flowStartMilliseconds']
+    $du = $R['observationTimeMilliseconds'] - $R['flowStartMilliseconds']
+elif $R['flowStartSysUpTime'] != null and $R['flowEndSysUpTime'] != null then
+    $st = $absolute_time + $R['flowStartSysUpTime']
+    $du = $R['flowEndSysUpTime'] - $R['flowStartSysUpTime']
+elif $R['flowStartSysUpTime'] != null or $R['flowEndSysUpTime'] != null then
+    $st = $absolute_time + $R['flowStartSysUpTime'] + $R['flowEndSysUpTime']
+    $du = 0
+else
+    $st = $H['export_time'] * 1000
+    $du = 0
+endif
+
+start_time = epoch_ms_to_datetime($st)
+duration = $du
+
+datafield1 = $R['forwardingStatus']        # forwarding status
+datafield2 = $R['firewallEvent']            # firewall event type
+datafield3 = $R['flowLabelIPv6']          # IPv6 flow label
+datafield4 = $R['ipv6ExtensionHeaders']      # IPv6 option headers
+datafield5 = $R['flowId']                   # Flow ID
+datafield6 = $R['natEvent']                 # nat event type
+# datafield7 - ICMP type
+# datafield8 - ICMP code
+
+time = epoch_ms_to_datetime($H['export_time'] * 1000)
+importance = "info"
+
+event_src.title = "packets_transmission"
+event_src.vendor = "netflow"
+event_src.subsys = "netflow"
+event_src.category = "Network device"
+
+id = "PT_NetFlow_netflow_v10_Flow_event"

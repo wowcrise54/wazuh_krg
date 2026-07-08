@@ -1,0 +1,33 @@
+query CheckSubnet($ip) from Specific_Local_Networks {
+    in_subnet($ip, local_network)
+}
+
+event Event:
+    filter {
+        correlation_name != null
+        and (
+             (
+                 src.ip != null
+                 and src.geo.org == null
+                 and exec_query("CheckSubnet", [src.ip])
+             )
+             or (
+                 dst.ip != null
+                 and dst.geo.org == null
+                 and exec_query("CheckSubnet", [dst.ip])
+            )
+        )
+    }
+
+enrichment Local_Subnet_IP_Enrichment
+    
+    enrich Event:
+        enrich_fields {
+            if src.ip != null and src.geo.org == null then
+                src.geo.org = select_query_first("CheckSubnet", [src.ip], "description")
+            endif
+
+            if dst.ip != null and dst.geo.org == null then
+                dst.geo.org = select_query_first("CheckSubnet", [dst.ip], "description")
+            endif
+        }

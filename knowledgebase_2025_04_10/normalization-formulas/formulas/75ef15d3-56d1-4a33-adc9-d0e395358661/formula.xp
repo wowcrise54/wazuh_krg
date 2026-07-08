@@ -1,0 +1,43 @@
+JSON = "EventCode=5139"
+
+COND = $Logfile == "Security" and $SourceName == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "ds_object"
+status = "success"
+
+subject.account.id = $InsertionStrings[2]
+subject.account.domain = lower($InsertionStrings[4])
+subject.account.name = lower($InsertionStrings[3])
+subject.account.session_id = maybe_number16($InsertionStrings[5])
+
+object.name = $InsertionStrings[8]
+object.type = $InsertionStrings[11]
+object.property = "name"
+object.new_value = $InsertionStrings[9]
+
+chain_id = strip($InsertionStrings[0], "{", "}")
+
+reason = "A directory service object was moved"
+
+importance = "medium"
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "active_directory"
+event_src.subsys = lower($Logfile)
+if find_substr($ComputerName, '.') != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(csv($ComputerName, ".", "")[0])
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Directory service"
+
+id = "PT_Microsoft_Windows_wmi_5139_A_directory_service_object_was_moved"

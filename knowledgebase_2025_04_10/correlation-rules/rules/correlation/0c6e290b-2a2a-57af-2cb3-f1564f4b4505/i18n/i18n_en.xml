@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious activity related to creating or launching hidden files</Description>
+  <EventDescriptions>
+    <EventDescription id="437dd36f-db87-5e09-13de-aad9eb73008b">User {subject.name} launched a hidden file on host {event_src.host}</EventDescription>
+    <EventDescription id="567fde14-e632-7736-d303-bf4864d6bde8">User {subject.account.name} created hidden file {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="a1b4d8c7-52bc-438c-46cd-56b7462c88b2">User {subject.account.name} created file "{object.name}" to hide files in directory {object.path} on host {event_src.host}</EventDescription>
+    <EventDescription id="c9f8d04a-8e46-22e6-db98-f7dc32efb0a8">User {subject.account.name} changed attributes of file "{object.name}" on host {event_src.host} to hide it</EventDescription>
+    <EventDescription id="cba7bc8c-252f-1b0b-f239-c615936024e9">User {subject.account.name} launched a file {object.process.name} from a hidden directory {datafield4} on host {event_src.host}</EventDescription>
+    <EventDescription id="ea3f1eaa-59c3-44d7-4e68-55a23a915878">User {subject.account.name} launched a file {subject.process.name} from a hidden directory {datafield4} on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,70 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} 
+        {$Computer=HOSTNAME} {subject.process.name="php-fpm"}
+        {subject.process.id = NUMBER} - - /
+        {event_src.subsys=UNTIL(":")} 
+        Configuration Change: 
+        {subject.account.name=WORD}@{src.ip=IPV4|src.ip=IPV6} 
+        ({$database=UNTIL(")")}: {$message=REST}'
+COND = (find_substr(lower($message), 'enable') != null 
+       or find_substr(lower($message), 'disable')!= null)
+
+subject = "account"
+if find_substr(lower($message), 'disable') != null then
+    action = "disable"
+else
+    action = "enable"
+endif
+status = "success"
+
+if (find_substr($message, ':') != null) then
+    if (find_substr($message, '-') != null) then
+        object.type = csv($message, '-', '*')[0]
+        object.type = replace(object.type, '', ':')
+    elif (find_substr($message, 'enable/disable') != null) then
+        $object_position = find_substr($message, 'enable')
+        object.type = substr($message, 0, $object_position-2)
+        datafield2 = "enable/disable"   # real action
+    else
+        $object_position = find_substr($message, action)
+        object.type = substr($message, 0, $object_position-2)
+        datafield2 = substr($message, -10, 10)    # enabled route to IPv4/Mask
+    endif
+elif (find_substr($message, 'Disable') != null 
+     or find_substr($message, 'Enable') != null) then
+     object.type = strip(lower($message), action + 'd the ', '.')
+else
+     $object_position = find_substr($message, action)
+     object.type = substr($message, 0, $object_position - 1)
+endif
+ 
+importance = "low"
+ 
+if object.type == "Firewall Rules " then
+    object.type = "Firewall Rules"
+    importance = "medium"
+    object = "rule"
+elif object.type == "default check ip service" then
+    object = "rule"
+elif (find_substr(object.type, 'DNS') != null) then
+    object = "service"
+elif object.type == "Static Routes" or object.type == "Gateways" then
+    object = "resource"
+    object.type = strip(object.type, null, 's')
+else
+    object = "configuration"
+endif
+
+datafield1 = $database # Belonging to the database
+
+event_src.title = "php"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Opensource_PHP_syslog_Enable_disable_rule"

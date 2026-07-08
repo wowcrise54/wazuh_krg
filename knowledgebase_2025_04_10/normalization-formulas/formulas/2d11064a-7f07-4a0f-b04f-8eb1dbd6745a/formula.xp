@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} mgr:
+        SME {$protocol=STRING} from {src.ip=IPV4|src.ip=IPV6} - {object.value=STRING} Mode'
+
+action = "create"
+object = "session"
+status = "success"
+
+object.property = "connection mode"
+object.value = lower(object.value)
+
+protocol = lower($protocol)
+
+importance = "info"
+
+event_src.vendor = "hp"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "small_business_solution"
+event_src.category = "Network device"
+
+id = "PT_HP_SBS_syslog_connection_auth_mode"

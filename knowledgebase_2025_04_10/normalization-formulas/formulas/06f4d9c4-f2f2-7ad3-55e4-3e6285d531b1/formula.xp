@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {WORD} {":"?}
+        {"%"?} {msgid="ACL-6-IPACCESS"}: list {event_src.rule=STRING} denied {protocol=WORD} {src.ip=IPV4} ({src.port=NUMBER}) -> 
+        {dst.ip=IPV4} ({dst.port=NUMBER}) {REST} '
+
+subject = "rule"
+action = "deny"
+object = "connection"
+status = "failure"
+
+importance = "high"
+
+category.high = "Connection"
+category.generic = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "arista"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eos"
+event_src.category = "Network device"
+
+id = "PT_Arista_Arista_EOS_syslog_acl_6_ipaccess"

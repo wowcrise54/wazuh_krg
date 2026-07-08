@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys=WORDDASH} {":"?} [wabaudit]  Authorisation {$obj=STRING} has been added by {subject.name=WORDDASH}
+        - changes: {REST}'
+
+subject = "account"
+action = "modify"
+object = "rule"
+status = "success"
+
+object.name = strip($obj,"\'","\'")
+
+importance = "medium"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_syslog_modify_access_rules_4_2"

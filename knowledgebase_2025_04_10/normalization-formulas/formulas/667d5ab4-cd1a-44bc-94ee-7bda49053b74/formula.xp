@@ -1,0 +1,35 @@
+!JSON = 'event.originator.module.name="Requests"'
+!COND =  $event["actionType"]=="Requests:draftCreated" or $event["actionType"]=="Requests:requestRegistered"
+
+if $event["actionType"] == "Requests:draftCreated" then
+    subject = "account"
+    subject.name = $userLogin
+    object.state = "draft"
+endif
+
+action = "create"
+object = "request"
+status = "success"
+
+object.id = $event["originator"]["id"]["id"]
+
+src.ip = $userIp
+
+time = $datetime
+importance = "info"
+
+$dot_pos = find_substr($systemIp, '.')
+if maybe_ipv4($systemIp) != null then
+   event_src.ip = $systemIp
+elif $dot_pos != null then
+   event_src.fqdn = $systemIp
+   event_src.hostname = substr($systemIp, 0, $dot_pos)
+else
+   event_src.hostname = $systemIp
+endif
+
+event_src.title = "fcsp"
+event_src.vendor = "positive_technologies"
+event_src.category = "Other"
+
+id = "PT_Positive_Technologies_Operators_Participants_Portal_filemonitor_Requests_request_created"

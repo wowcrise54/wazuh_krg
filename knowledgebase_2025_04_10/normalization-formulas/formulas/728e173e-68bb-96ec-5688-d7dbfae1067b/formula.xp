@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {time=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?}
+        {"python3["?}{subject.process.id=NUMBER?}{"]"?}{":"?}
+        ansible-ansible.builtin.group{":"?} Invoked with {$kv=KEYVALUE(" ","=","")}'
+
+subject = "process"
+object = "user_group"
+status = "success"
+
+if $kv["state"] == "absent" then
+    action = "remove"
+else
+    action = "create"
+endif
+
+if $kv["gid"] != "None" then
+    object.id = $kv["gid"]
+endif
+
+object.name = $kv["name"]
+
+importance = "info"
+
+category.high = "Users And Rights Management"
+category.generic = "Group"
+category.low = "Manipulation"
+
+event_src.vendor = "ansible"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ansible"
+event_src.category = "Other"
+
+id = "PT_Ansible_Ansible_syslog_group_manipulation"

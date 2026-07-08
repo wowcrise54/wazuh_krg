@@ -1,0 +1,16 @@
+filter AuthVPN() {
+    (
+        (event_src.vendor == "openvpn" and id == "PT_OpenVPN_OpenVPN_syslog_primary_virtual_ip")
+        or
+        (event_src.vendor == "cisco" and msgid == "722051")
+        or
+        (event_src.vendor == "fortinet" and msgid == "0101039947")
+        or 
+        (event_src.vendor == "citrix" and lower(msgid) == "sslvpn login")
+        or
+        (event_src.vendor == "cryptopro" and id == "PT_CryptoPro_NGate_syslog_access_granted")
+        or 
+        (event_src.vendor == "palo_alto_networks" and msgid == "globalprotectgateway-auth-succ")
+    )
+    and filter::External_Address(src.ip)
+}

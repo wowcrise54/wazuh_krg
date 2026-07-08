@@ -1,0 +1,53 @@
+EVENTLOG = 'Provider.Name="PostgreSQL"'
+
+COND = find_substr(lower($Data[0]), "log:  connection authorized:") != null
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+subformula "get_data"
+    # 1601630051.875 | [unknown] | postgres | postgres | iivanov(64434)  |  | 00000 LOG:
+    # connection authorized: user=postgres database=postgres
+    # application_name=pgAdmin 4 - DB:postgres\n
+
+    TEXT = '{$dt1=UNTIL(" |")} {$app_name=STRING+} | {subject.application.account.id=STRING+} | {object.path=STRING+}
+            | {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME|"[local]"}{"("?}{src.port=NUMBER?}{")"?}
+            | {"authentication"?} | {WORD} log:  connection authorized: {$kv=KEYVALUE(" ","=","")}'
+
+    subject.application.account.name = subject.application.account.id
+endsubformula
+
+submessage("TEXT", "get_data", lower($Data[0]))
+
+if $app_name != "[unknown]" then
+    logon_service = $app_name    # application (driver) name
+endif
+
+subject.application.name = $kv["application_name"]
+subject.name = subject.application.account.id
+
+if find_substr($dt1, "-") != null then
+    time = $dt1
+else
+    time = epoch_ms_to_datetime(number(csv($dt1, ".", "")[0])*1000 + number(csv($dt1, ".", "")[1]))  # для версий postgreSQL > 9.5
+endif
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "opensource"
+event_src.title = "postgresql"
+event_src.category = "Database server"
+$first_dot = find_substr($Computer, ".")
+if $first_dot != null then
+    event_src.fqdn = lower($Computer)
+    event_src.hostname = lower(substr($Computer, 0, $first_dot))
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_Opensource_PostgreSQL_eventlog_user_connect"

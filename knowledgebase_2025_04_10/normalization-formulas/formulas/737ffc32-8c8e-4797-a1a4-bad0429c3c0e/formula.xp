@@ -1,0 +1,42 @@
+EVENTLOG = 'Channel="Application"'
+!COND = $EventID["text"] == "1016" and $Provider["Name"] == "KSHSecurityService"
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+submessage("TEXT","SPLIT1",$Data[0])
+
+subformula "SPLIT1"
+    # Извлечение subject.name, object.name, object.path, datafield1, datafield2, datafield3, datafield4 и datafield5 из $Data[0]
+    TEXT='{subject.name=UNTIL("\r\n")} Произошел инцидент при контентной фильтрации файла во время проверки при обращении. {$kv=KEYVALUE("\r\n", ":")}'
+    object.path = $kv["Расположение на сервере"]
+    datafield1 = $kv["Идентификатор инцидента"]
+    datafield2 = $kv["Помещение файла в резервное хранилище"]
+    datafield3 = $kv["Размер"]
+    $csv = csv($kv["Результаты проверки"], ":", "'")
+    datafield4 = $csv[0]
+    datafield5 = $csv[2]
+endsubformula
+
+object.state = "not cured"
+
+# datafield1 - Идентификатор инцидента
+# datafield2 - Помещен ли файл в резервное хранилище
+# datafield3 - Размер файла
+# datafield4 - Действие над файлом
+# datafield5 - Категории контентной фильтрации
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "high"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_sharepoint_server"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Security_for_SharePoint_Server_eventlog_1016_file_content_filtering"

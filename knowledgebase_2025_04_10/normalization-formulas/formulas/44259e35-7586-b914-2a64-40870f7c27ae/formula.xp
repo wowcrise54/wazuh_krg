@@ -1,0 +1,64 @@
+TEXT = "{'<'NUMBER'>'?}{time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        {STRING}{$json=REST}"
+
+COND =  find_substr($json, "message\":\"File created:") != null
+
+subject = "account"
+action = "create"
+object = "file_object"
+status = "success"
+        
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject.account.name = $user
+
+subject.process.meta = $userAgent
+
+object.storage.fullpath = $url
+$temp_storagepath = csv(object.storage.fullpath, "/", "")
+object.storage.name = $temp_storagepath[length($temp_storagepath) - 1]
+object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+
+object.query = $method + ' ' + $url
+object.fullpath = strip(csv($message, "File created: ", "")[1], '\"', '\"')
+$temp_path = csv(object.fullpath, "/", "")
+
+if length($temp_path) > 1 then
+    object.name = $temp_path[length($temp_path) - 1]
+    object.path = strip(object.fullpath, '', object.name)
+else
+    object.name = $temp_path[0]
+endif
+
+src.ip = $remoteAddr
+
+datafield1 = $app        # affected app
+datafield2 = $version    # nextcloud version
+datafield3 = $data       # additional data
+datafield4 = $exception  # exception
+
+chain_id = $reqId
+
+importance = "low"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nextcloud"
+event_src.category = "File service"
+
+id = "PT_Opensource_Nextcloud_syslog_File_created"

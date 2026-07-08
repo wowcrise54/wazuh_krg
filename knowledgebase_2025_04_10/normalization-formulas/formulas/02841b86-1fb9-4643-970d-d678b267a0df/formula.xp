@@ -1,0 +1,42 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and in_list(["Create Configuration Policy", "Delete Configuration Policy", "Update Configuration Policy"], $msgid) == true
+
+subformula "get_data"
+    TEXT = '{UNTIL("Configuration policy [")}{object.name=UNTIL("],")}
+            {REST}'
+endsubformula
+
+subject = "account"
+
+action = switch $msgid
+    case "Create Configuration Policy" "create"
+    case "Delete Configuration Policy" "remove"
+    case "Update Configuration Policy" "modify"
+endswitch
+
+object = "policy"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+submessage("TEXT", "get_data", $data)
+
+object.type = "configuration"
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "medium"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_configuration_policy"

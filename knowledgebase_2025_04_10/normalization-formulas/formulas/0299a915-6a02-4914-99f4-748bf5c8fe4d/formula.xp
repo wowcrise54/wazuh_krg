@@ -1,0 +1,65 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        CEF:0|IT-Bastion LLC|SKDPU-NT|{datafield5=UNTIL("|")}{"SKDPUNT.WS.00001"
+        |"SKDPUNT.WS.00003"}|{$act=WORD}|{NUMBER}|  {$kv=KEYVALUE(" ", "=")}'
+   
+COND = $act == "LoginSuccessful" or $act == "Logout"
+        
+subject = "account"
+if $act == "LoginSuccessful" then
+    action = "login"
+elif $act == "Logout" then
+    action = "logout"
+endif
+
+object = "application"
+status = "success"
+
+if find_substr($kv["suser"], "@") != null then
+    $temp_acc = csv($kv["suser"], "@", "")
+    subject.application.account.domain = $temp_acc[length($temp_acc) - 1]
+    subject.application.account.name = $temp_acc[0]
+else
+    subject.application.account.name = $kv["suser"]
+endif
+
+if ipv4($kv["src"]) != null then
+    src.ip = $kv["src"]
+else
+    src.hostname = $kv["src"]
+endif
+
+if coalesce(maybe_ipv4($kv["dst"]),maybe_ipv6($kv["dst"])) != null then
+    dst.ip = $kv["dst"]
+else    
+    dst.fqdn = strip($kv["dst"], "https://", "")
+    $temp_csv = csv(dst.fqdn, ".", "")
+    dst.hostname = $temp_csv[0]
+endif
+
+datafield1 = $kv["cat"]               # action category
+datafield2 = datetime($kv["start"])   # session start time
+datafield3 = datetime($kv["end"])     # session start time
+
+if $kv["dst"] != $kv["dvchost"] then
+    datafield4 = $kv["dvchost"]       # dst name or IP if different
+endif
+# datafield5 skdpu nt version
+
+importance = "info"
+
+category.high = "Access Management"
+category.generic = "Operating System"
+category.low = "Communication"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_cef_nt_login_or_logout"

@@ -1,0 +1,66 @@
+#<134>2023-12-04T12:44:10.785Z HOME-PC 1C-SIEM-converter: CEF:0|1С_Positive|1CV8C||_$InfoBase$_.ParametersUpdateError|8258|0| cs1={"Event":{"Data":{"ParametersUpdateData":{"LockWaitTime":"21"}},"DataPresentation":"","Level":"Ошибка","Date":"2023-11-27T15:36:38","ApplicationName":"1CV8C","ApplicationPresentation":"Тонкий клиент","Event":"_$InfoBase$_.ParametersUpdateError","EventPresentation":null,"User":"7c193498-a8c6-4a0b-bd3e-e9fb77225cad","UserName":"Администратор (ОрловАВ)","Computer":"DESKTOP-AK6R6QM","Metadata":"","Comment":"","TransactionStatus":"N","TransactionID":"01.01.1970 0:00:00 (0)","Connection":10862,"Session":8258,"ServerName":"load01","Port":1588,"SyncPort":0}} cs1Label=JsonData
+
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} 
+        1C-SIEM-converter: CEF:0|{UNTIL("|")}{subject.application.name=WORD}||_$InfoBase$_.ParametersUpdateError|{NUMBER}|
+        {NUMBER}|  cs1={$json=UNTIL(" cs1Label=JsonData")}'
+      
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "failure"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+  
+subject.application.account.session_id = $Event['Session']
+subject.application.account.id = lower($Event['User'])
+
+if $Event['UserName'] != "" then
+    subject.application.account.name = lower($Event['UserName'])
+endif
+
+if $Event['Metadata'] != "" then
+    object.property = $Event['Metadata']
+endif
+
+if $Event['DataPresentation'] != "" then
+    object.value = $Event['DataPresentation']
+endif
+
+if $Event['Computer'] != "" then
+    src.hostname = lower($Event['Computer'])
+endif
+
+# Construction to cut the TransactionID from the parentheses: 18.04.2016 10:07:08 (10798)
+$transaction_id = string($Event['TransactionID'])
+$id_start = find_substr ($transaction_id,"(")
+
+if $Event['ServerName'] == null or $Event['ServerName'] == "" or lower($Event['ServerName']) == lower($Event['Computer']) then
+    logon_auth_method = "local"
+    
+    dst.hostname = lower($Event['Computer'])  # to have at least any info
+else
+    logon_auth_method = "remote"
+    
+    dst.hostname = lower($Event['ServerName'])
+endif
+dst.port = $Event['Port']
+
+datafield2 = substr($transaction_id, $id_start + 1, length($transaction_id) - $id_start - 2)  # transaction id
+datafield3 = $Event['ApplicationPresentation']  # event info
+
+reason = $Event['EventPresentation'] 
+
+time = $Event['Date']
+msgid = $Event['Event']
+importance = "medium"
+
+event_src.id = $Event['v8ibase']
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_syslog_registration_log_ParametersUpdateError"

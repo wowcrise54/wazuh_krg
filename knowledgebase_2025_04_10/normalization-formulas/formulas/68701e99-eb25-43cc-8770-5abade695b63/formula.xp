@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER":"?} {DATETIME} {$Computer=HOSTNAME} {event_src.subsys="mongod"}:
+        {time=DATETIME} [{WORDDASH}] authenticate db: {object.name=STRING} {UNTIL("user:")} {$sname = STRING}{REST}'
+
+subject = "account"
+action = "connect"
+object = "database"
+status = "success"
+
+subject.name = strip($sname, '"', '",')
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "mongodb"
+event_src.category = "Database server"
+
+id = "PT_Opensource_MongoDB_syslog_Authentication_success"
+

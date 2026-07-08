@@ -1,0 +1,102 @@
+event Network_Login:
+    key:
+        src.ip, event_src.host, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4624"
+        and filter::LoginAttempt_Windows_Endpoint()
+        and logon_type == 3
+        and not filter::Loopback_Address(src.ip)
+    }
+
+event Access_Svcctl_Share:
+    key:
+        src.ip, event_src.host, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and not filter::Loopback_Address(src.ip)
+        and subject.account.id != null
+        and lower(subject.account.id) != "s-1-5-7"
+        and lower(object.storage.name) == "svcctl"
+        and filter::CheckWL_Windows_Shares("SVCCTL_Connection", lower(join([src.ip, subject.account.name, event_src.host], "|")))
+}
+
+rule SVCCTL_Connection: Network_Login and Access_Svcctl_Share within 30s
+    init {
+        $labels = "w_auto|CheckWL_Windows_Shares" 
+    }
+ 
+    on Network_Login {
+        $subject = subject
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+      
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $datafield7 = subject.account.session_id  # TargetLogonId
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([src.ip, subject.account.name, event_src.host], "|"))
+        $alert.context = subject.account.name + " | named_pipe:svcctl"
+    }
+
+    on Access_Svcctl_Share {
+        $subject.account.session_id = subject.account.session_id
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $datafield9 = datafield9  # Полученные права (письменный вариант)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Exploitation of Remote Services"
+
+    $importance = "medium"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

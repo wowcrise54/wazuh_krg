@@ -1,0 +1,8 @@
+event teardown:
+    key:
+        event_src.host, !src.host, !dst.host, id, importance, event_src.category, event_src.vendor, event_src.title, protocol
+    action = "remove"
+    object = "conntrack"
+    status = "success"
+
+aggregate Connection_teardown: teardown[3,1000] within 1m

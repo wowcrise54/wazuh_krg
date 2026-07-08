@@ -1,0 +1,46 @@
+TEXT = 'header,{NUMBER},{NUMBER},{datafield1="recvfrom(2)"},{WORDDASH?},
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|},
+        {$time_y=WORD"-"$time_mo=WORD"-"$time_d=WORD}
+        {$time_h=WORD":"$time_m=WORD":"$time_s=WORD"."NUMBER} {LITERAL}{NUMBER}:
+        {NUMBER}, argument,{NUMBER},{WORD},so,argument,{NUMBER},{WORD},flags,
+        socket,{WORD},{NUMBER}x0100,{WORD},{IPV4|IPV6},{WORD},
+        {IPV4|IPV6}, subject,{datafield5=WORDDASH},{datafield3=WORDDASH},
+        {datafield4=WORDDASH},{WORDDASH},{WORDDASH}, {NUMBER},{datafield2=NUMBER},
+        {NUMBER+} {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME},return,
+        {$stat=WORD},{NUMBER}'
+
+action = "receive"
+object = "packet"
+if $stat == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+# datafield1 - тип события (в данном случае всегда "recvfrom(2)")
+# datafield2 - id сессии
+# datafield3 - от чьего имени выполняется команда (username)
+# datafield4 - от чьего имени выполняется команда (group)
+# datafield5 - пользователь, от имени которого запущен процесс, принявший пакет
+
+protocol = "udp"
+
+time = $time_y + $time_mo + $time_d + $time_h + $time_m + $time_s
+importance = "info"
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_udp_recieve_data_csv"

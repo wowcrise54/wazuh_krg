@@ -1,0 +1,59 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {$dt=STRING} INFO 
+        [{UNTIL("]")} [{$req_id=WORD?}] {"sysadmin.sb.SupportBundleService:"?}{NUMBER?} - {$kv_str=REST}'
+
+COND = find_substr($kv_str, "Downloading support bundle from") != null
+       or find_substr($kv_str, "CREATE_BUNDLE_SUPPORT - User creating support bundle") != null
+       or find_substr($kv_str, "DELETE_BUNDLE_SUPPORT - User deleting support bundle") != null
+
+subject = "account"
+object = "report"
+status = "ongoing"
+
+if find_substr($kv_str, "Downloading") != null then
+    subject = "application"
+    action = "send"
+elif find_substr($kv_str, "creating") != null then
+    action = "create"
+    $act = "CREATE_BUNDLE_SUPPORT"
+elif find_substr($kv_str, "deleting") != null then
+    action = "remove"
+    $act = "DELETE_BUNDLE_SUPPORT"
+endif
+
+subformula "parse_action"
+    TEXT = 'Downloading support bundle from {dst.ip=IPV4|dst.ip=IPV6}'
+endsubformula
+
+subformula "parse_action"
+    TEXT = '{$kv=KEYVALUE(", ",":")}'
+    
+    subject.account.id = lower($kv["UserId"])
+    subject.account.name = lower($kv["UserName"])
+    subject.account.provider = switch $kv["AuthSource"]
+        case "LOCAL" "local"
+    endswitch 
+    
+    if $kv["Session"] != "unknown" then
+        subject.account.session_id = lower($kv["Session"])
+    endif
+    
+    if $kv["AuthSource"] != "unknown" then
+        logon_service = $kv["AuthSource"]
+    endif
+endsubformula
+
+submessage("TEXT","parse_action", $kv_str)
+
+object.type = "support bundle"
+
+time = datetime(replace($dt, ".", ","))
+if $act != null then
+    msgid = $act
+endif
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_support_bundle_manipulation"

@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"?}{WORD+}/{NUMBER}/{msgid="UPDOWN"}{"(l)"?}{"["NUMBER"]"?}:
+        The state of interface {interface=STRING} was changed to {$state="UP"|$state="DOWN"}.'
+
+action = if $state == "UP" then "up" else "down" endif
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "data link"
+
+reason = "Line protocol changed state to " + string(action)
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Interface_was_changed_into_state"

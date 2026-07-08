@@ -1,0 +1,62 @@
+{#
+    wazuh_doc_theme_v3/template-parts/body.html
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    
+    Content template that defines the main layout of the body.
+
+-#}
+
+{%- extends "!wazuh_doc_theme_v3/layout.html" -%}
+{%- block body -%}
+{%- block header %}
+{% include "template-parts/header.html" %}
+{% endblock header -%}
+
+{%- block contact_side_tab %}
+{% include "template-parts/contact-side-tab.html" %}
+{% endblock contact_side_tab -%}
+    <div class="inner-body">
+      {% block sidebar1 -%}
+        {% include "template-parts/sidebar-left.html" %}
+      {% endblock sidebar1 -%}
+      
+      {%- block main_column -%}
+      <div id="central-column" {% if "release-notes/" in pagename %} data-pagefind-weight="0.1" {% endif %}>
+        {%- block latest %}
+          {% include "template-parts/no-latest-notice.html" %}
+        {% endblock latest %}
+
+        {% if pagename not in special_pages or (theme_breadcrumb_root_title == 'Training' and pagename == 'index')
+          or pagename == 'user-manual/api/reference' and version < '4.0' %}
+          <div class="breadcrumb-wrapper">
+            {% include "template-parts/breadcrumbs.html" %}
+          </div>
+        {% endif %}
+        
+        {# Main content #}
+        {% set is_orphan = meta and meta.orphan is defined %}
+        <main role="main" 
+        {%- if pagename in ignore_page_search or is_orphan -%}
+          data-pagefind-ignore="all"
+        {%- else -%}
+          data-pagefind-body
+        {%- endif -%}>
+        {{ body }}
+        {% if pagename not in special_pages or theme_breadcrumb_root_title == 'Training' and pagename == 'index' %}
+        {% include "template-parts/navigation.html" %}
+        {% endif %}
+        </main>
+      </div>
+      {%- endblock main_column -%}
+      
+      {%- block sidebar2 -%}
+      {% include "template-parts/sidebar-right.html" %}
+      {% endblock sidebar2 -%}
+    </div>
+    {%- block footer %}
+    <footer>
+      {% include "template-parts/footer.html" %}
+      {% include "template-parts/back-to-top.html" %}
+    </footer>
+    {% endblock footer -%}
+{%- endblock %}

@@ -1,0 +1,40 @@
+EVENTLOG = 'EventID.text="1202"'
+COND =  $Channel == "Active Directory Web Services"
+        and ( $Provider["Name"] == "Active Directory Web Services" or $Provider["Name"] == "ADWS" )
+
+subject = "application"
+action = "access"
+object = "ds_object"
+status = "failure"
+
+subject.process.name = "ADWS"
+
+object.name = $Data[0]
+
+# LDAP port
+datafield1 = $Data[1]
+# SSL port
+datafield2 = $Data[2]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "high"
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1200_servicing_the_specified_directory_instance"

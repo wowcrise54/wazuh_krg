@@ -1,0 +1,40 @@
+!JSON = "EventCode=4616"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+if $EventType == "4" then
+    status = "success"
+elif $EventType == "5" then
+    status = "failure"
+endif
+
+subject.account.id = $InsertionStrings[0]
+subject.account.name = $InsertionStrings[1]
+subject.account.domain = lower($InsertionStrings[2])
+
+object.path = $InsertionStrings[7]
+
+datafield1 = maybe_number16($InsertionStrings[3])  # ID сессии
+datafield2 = $InsertionStrings[4]
+datafield3 = $InsertionStrings[5]
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Operating system"
+event_src.title = "windows"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_4616_System_time_changed"

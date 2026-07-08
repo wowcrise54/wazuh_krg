@@ -1,0 +1,106 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        haproxy{'['?}{NUMBER}{']'?}{':'?} {'Backup'?} Server {$ps=STRING} is {$st='DOWN'|$st='stopping'|$st='UP'}
+        {$appended_status=REST}"
+
+COND = (
+    substr($appended_status, 0, 1) != '/'
+    and find_substr($appended_status, "drain)") == null
+)
+
+if $st == "UP" then
+    action = "start"
+    status = "success"
+
+    object.state = "running"
+
+elif $st == "DOWN" then
+    action = "stop"
+    status = "success"
+
+    object.state = "stopped"
+
+elif $st == "stopping" then
+    action = "stop"
+    status = "ongoing"
+
+    object.state = "stopping"
+endif
+
+object = "application"
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=STRING+} {NUMBER} active and {NUMBER} backup servers left. {'Running on backup.'?} {NUMBER} sessions active, {NUMBER} requeued, {NUMBER} remaining in queue."
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=STRING+} {NUMBER} active and {NUMBER} backup servers online. {'Running on backup.'?} {NUMBER} sessions requeued, {NUMBER} total in queue."
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=REST}"
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=STRING+} {NUMBER} active and {NUMBER} backup servers left. {'Running on backup.'?} {NUMBER} sessions active, {NUMBER} requeued, {NUMBER} remaining in queue."
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=STRING+} {NUMBER} active and {NUMBER} backup servers online. {'Running on backup.'?} {NUMBER} sessions requeued, {NUMBER} total in queue."
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=REST}"
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = "{REST}"
+endsubformula
+
+submessage("TEXT", "parse_appended_status", $appended_status)
+
+$ps_list = csv($ps, "/", "")
+$proxy = $ps_list[0]
+$server = $ps_list[1]
+
+object.type = "proxied server"
+object.group = $proxy
+object.name = $server
+
+datafield3 = $server  # Server Name
+datafield4 = $proxy   # Proxy Name
+
+reason = strip($reason_raw, "", " ")
+
+importance = "low"
+
+category.generic = "Application"
+category.high = "Availability Management"
+category.low =  "Control"
+
+event_src.vendor = "haproxy_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "haproxy"
+event_src.category = "Proxy server"
+
+id = "PT_HAProxy_Technologies_HAProxy_syslog_Server_Status"

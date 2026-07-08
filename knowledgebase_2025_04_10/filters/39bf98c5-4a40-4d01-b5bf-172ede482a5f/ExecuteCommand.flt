@@ -1,0 +1,9 @@
+filter ExecuteCommand() {
+        filter::NotFromCorrelator()
+        and status == "success"
+        and object.value != null
+        and object.value != ""
+        and category.generic == "Command"
+        and category.high == "System Management"
+        and category.low == "Manipulation"
+}

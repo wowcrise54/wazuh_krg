@@ -1,0 +1,40 @@
+EVENTLOG = 'EventID ="264"'
+COND =  $Channel == "Remote-Desktop-Management-Service-Operational"
+        and $Provider["Name"] == "Microsoft-Windows-Remote-Desktop-Management-Service"
+
+action = "sync"
+object = "configuration"
+status = "ongoing"
+
+object.property = "Service"
+object.value = "Remote Desktop Management"
+
+$dot_pos = find_substr($UserData["EventXML"]["param1"], '.')
+
+if $dot_pos != null then
+	dst.fqdn = lower($UserData["EventXML"]["param1"])
+	dst.hostname = lower(substr($UserData["EventXML"]["param1"], 0, $dot_pos))
+else
+	dst.hostname = lower($UserData["EventXML"]["param1"])
+endif
+
+datafield1 = $Security["UserID"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Terminal services"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_264_RDM_config_sync_started"

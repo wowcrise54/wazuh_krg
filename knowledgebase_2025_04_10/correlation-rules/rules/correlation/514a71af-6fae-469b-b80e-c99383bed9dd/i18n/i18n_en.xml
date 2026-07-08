@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Running a process under a database account may indicate an attempt of an attacker who gained the ability to execute queries to the database to escalate privileges</Description>
+  <EventDescriptions>
+    <EventDescription id="10400083-44ea-4c8f-9641-3406765e7420">Attempt to create user-defined function {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="46b57f3b-9924-454f-8d38-710f9b320890">Process {object.process.name} is run as user {subject.account.name} (MySQL database user "{subject.application.account.name}") on host {event_src.host}</EventDescription>
+    <EventDescription id="f633ec57-9a0a-4386-b831-20ad626994e2">Attempt to run a process as user "{subject.application.account.name}" of the MySQL database on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

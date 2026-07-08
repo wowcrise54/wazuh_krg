@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?} PINsafe[{STRING} INFO
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} {subject.name=STRING} - Viewed the PINsafe
+        log.'
+
+subject = "account"
+action = "view"
+object = "log"
+status = "success"
+
+time = recv_time
+importance = "info"
+
+event_src.vendor = "swivel_secure"
+event_src.title = "pinsafe"
+event_src.category = "AAA"
+
+id = "PT_Swivel_Secure_PINsafe_syslog_view_log"

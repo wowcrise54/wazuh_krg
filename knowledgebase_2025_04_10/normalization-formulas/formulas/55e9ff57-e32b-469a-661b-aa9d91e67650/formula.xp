@@ -1,0 +1,75 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "USER_GROUP_CREATE - Creating user group(s)") != null
+       or find_substr($kv["Category"], "USER_GROUP_IMPORT - Importing user group(s)") != null
+       or find_substr($kv["Category"], "USER_GROUP_UPDATE - Updating user group(s)") != null
+       or find_substr($kv["Category"], "USER_GROUP_DELETE - Deleting user group(s)") != null
+
+subject = "account"
+object = "user_group"
+
+subformula "parse_category"
+    TEXT = 'USER_GROUP_{$act="CREATE"|$act="IMPORT"|$act="UPDATE"|$act="DELETE"} - {"Creating"|"Importing"|"Updating"|"Deleting"} 
+            user group(s) {$res="succeeded"|$res="failed"}. {$kv_group=KEYVALUE(",",":","\\"")}'
+    
+    action = switch $act
+        case "CREATE" "create"
+        case "IMPORT" "upload"
+        case "UPDATE" "modify"
+        case "DELETE" "remove"
+    endswitch
+    status = switch $res
+        case "succeeded" "success"
+        case "failed" "failure"
+    endswitch
+    
+    if not in_list($bad_values, $kv_group["ID(s)"]) then
+        datafield1 = strip($kv_group["ID(s)"],"[", "]")     # Group ids
+    endif 
+endsubformula
+
+$bad_values = ['n/a', 'null', '[]', '']
+
+submessage("TEXT","parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+if not in_list($bad_values, $kv["Name(s)"]) then
+    datafield2 = replace($kv["Name(s)"], "", "[\"\[\]]")    # Group names
+endif
+
+$kv_sr = keyvalue("Source(s):" + $kv["Source(s)"], '.', ':', '"')
+if not in_list($bad_values, $kv_sr["Source(s)"]) then
+    datafield3 = strip($kv_sr["Source(s)"], "[", "]")       # Group sources
+endif
+
+reason = $kv_sr["Due to the following error"]
+
+time = datetime(replace($dt, ".", ","))
+msgid = "USER_GROUP_" + $act
+importance = "info"
+
+category.high = "Users And Rights Management"
+category.generic = "Group"
+category.low = "Manipulation"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_user_group_manipulation"

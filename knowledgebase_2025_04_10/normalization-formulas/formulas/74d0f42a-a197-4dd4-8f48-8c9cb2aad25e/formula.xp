@@ -1,0 +1,52 @@
+!JSON = 'EventIdentifier=540'
+!COND = $Logfile=="Security" and $Category==2
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+if $InsertionStrings[0] != "" then
+    subject.account.name = lower($InsertionStrings[0])
+    subject.account.domain = lower($InsertionStrings[1])
+else
+    $d_n = csv($User, '\\', '')
+    subject.account.name = lower($d_n[1])
+    subject.account.domain = lower($d_n[0])
+endif
+
+subject.account.id = subject.account.name + "@" + subject.account.domain  # for compatibility
+subject.account.session_id = maybe_number16(strip(csv($InsertionStrings[2], ",", "`")[1], "", ")"))
+
+if $InsertionStrings[13] != "-" then
+    src.ip = $InsertionStrings[13]
+    src.port = $InsertionStrings[14]
+endif
+
+dst.hostname = lower($ComputerName)
+
+logon_type = $InsertionStrings[3]
+
+datafield7 = subject.account.session_id  # compatibility with eventlog
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_540_Logon_success"

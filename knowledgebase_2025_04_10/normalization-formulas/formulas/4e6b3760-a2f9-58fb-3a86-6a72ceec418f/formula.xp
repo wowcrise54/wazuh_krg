@@ -1,0 +1,53 @@
+# INFO  [Native-Transport-Requests-1] 2023-11-20 18:54:15.109 FileAuditLogger.java:51 - user:dba|host:localhost/127.0.0.1:7000|source:/127.0.0.1|port:35240|timestamp:1700495655024|type:GRANT|category:DCL|ks:mbean|scope:mbean|operation:GRANT SELECT ON ALL MBEANS TO jmx;
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type'] == 'GRANT')
+
+subject = "account"
+action = "grant"
+object = "account"
+status = "success"
+
+subformula "parse_query"
+    TEXT = 'grant {$priviledge=UNTIL(" on")} {"all functions"|
+    "all functions in keyspace"|"function"|"all keyspaces"|"keyspace"|"table"|
+    "all mbeans"|"mbean"|"mbeans"|"all roles"|"role"|} {$ks_name=UNTIL(".")?}
+    {$object_name=WORD?} to {object.account.name=WORD}{REST}'
+endsubformula
+
+submessage('TEXT', 'parse_query', lower($kv['operation']))
+
+if $kv['scope'] != null then  
+    object.name = $kv['scope']
+else
+    object.name = $object_name
+endif 
+
+if $kv['ks'] != null then  
+    object.name = $kv['ks']
+else
+    object.name = $ks_name
+endif 
+
+object.property = "priviledges"
+object.query = $kv['operation']
+
+datafield1 = $kv['category'] # Категория CQL-запроса
+datafield2 = $priviledge # Привилегии
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Grant" 

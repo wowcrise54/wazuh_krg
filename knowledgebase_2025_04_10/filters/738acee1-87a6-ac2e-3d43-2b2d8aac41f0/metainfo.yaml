@@ -1,0 +1,46 @@
+Filter:
+    Name:
+        ru: "Поиск записи в табличном списке профилей доступа"
+        en: "Search for an entry in the tabular list of access profiles"
+    Description:
+        ru: "Поиск записи в автоматически заполняемом табличном списке профилей доступа к разным узлам инфраструктуры"
+        en: "Search for an entry in the automatically filled tabular list of access profiles to different infrastructure nodes"
+    UseAsEventName: True
+Args:
+    access_type:
+        Type: string
+        Name:
+            ru: "Тип доступа"
+            en: "Access type"
+    login:
+        Type: string
+        Name:
+            ru: "Имя пользователя"
+            en: "Username"
+    dst_path:
+        Type: string
+        Name:
+            ru: "Ресурс на целевом узле"
+            en: "The resource on the destination host"
+    src_host:
+        Type: string
+        Name:
+            ru: "Узел-источник"
+            en: "Source host"
+    src_ip:
+        Type: string
+        Name:
+            en: "IP-address of the source host"
+            ru: "IP-адрес узла-источника"
+    dst_host:
+        Type: string
+        Name:
+            ru: "Узел назначения"
+            en: "Destination host"
+    additional_data:
+        Type: string
+        Name:
+            ru: "Дополнительная информация"
+            en: "Additional information"
+ObjectId: PT-RF-101
+Origin: PT

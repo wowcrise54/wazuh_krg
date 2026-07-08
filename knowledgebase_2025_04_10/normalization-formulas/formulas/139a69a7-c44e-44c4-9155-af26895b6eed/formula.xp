@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+         sshd{"["NUMBER"]"?}: %AUTH-6: Received disconnect from {src.ip=IPV4|src.hostname=HOSTNAME}: {REST}'
+
+action = "logout"
+object = "system"
+status = "success"
+
+dst.hostname = coalesce($host, $host_pref)
+dst.ip = coalesce($ip, $ip_pref)
+protocol.layer7 = "ssh"
+
+logon_auth_method = "remote"
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_ssh_session_logout"

@@ -1,0 +1,66 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           {subject.account.id=user_id},
+           {subject.account.domain=user_domain},
+           {subject.account.name=user_name}
+           "
+
+COND = string($event_id) == "1230"
+       and (
+        $event_category == "Контроль приложений"
+        or $event_category == "Application control"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+subject = "account"
+action = "start"
+object = "process"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+subformula "message"
+    TEXT = '{"Запуск процесса"|"Process start"}. {$kv=KEYVALUE("\n", ": ", "")}'
+
+    subject.account.session_id = maybe_number16(coalesce($kv['Идентификатор сессии'], $kv['Session LUID']))
+
+    object.account.session_id = subject.account.session_id
+    object.account.id = subject.account.id
+    object.account.domain = subject.account.domain
+    object.account.name = subject.account.name
+
+    $path = coalesce($kv["Имя процесса"], $kv["Process name"])
+    $tmp = csv($path, '\\', '')
+    object.process.name = $tmp[length($tmp) - 1]
+    object.process.path = strip($path, '', object.process.name)
+    object.process.fullpath = $path
+    object.process.id = coalesce($kv["Идентификатор процесса"], $kv["ID процесса"], $kv["PID"])
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Контроль приложений" then
+    event_src.subsys = "application control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1230_process_started"

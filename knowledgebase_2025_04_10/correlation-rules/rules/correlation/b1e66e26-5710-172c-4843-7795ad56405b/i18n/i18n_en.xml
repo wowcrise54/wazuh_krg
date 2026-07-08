@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The interaction of the PostgreSQL database with the file system may indicate reconnaissance or an attempt of an attacker to escalate privileges if this is not the standard integration of the database with external systems</Description>
+  <EventDescriptions>
+    <EventDescription id="1f793ad7-d4d2-8b10-c570-71c978aa2489">Getting of subdirectories in path "{object.path}" using the pg_ls_dir function of the PostgreSQL database is detected on host {event_src.host}</EventDescription>
+    <EventDescription id="476b8970-3304-961f-8ad7-d650d6bc35cd">Reading of data from file "{object.fullpath}" to table {object.name} of the PostgreSQL database is detected on host {event_src.host}</EventDescription>
+    <EventDescription id="4fda4a0a-1fe1-b903-aa32-06da81f59553">Interaction with the file system via PostgreSQL database SQL queries is detected on host {event_src.host}</EventDescription>
+    <EventDescription id="a0f4848e-3255-9ad3-f6e0-8b0b2696a70a">Reading of data from file "{object.path}" via PostgreSQL database SQL queries is detected on host {event_src.host}</EventDescription>
+    <EventDescription id="ab0142d5-bb59-a026-3cfe-f37f5710eddf">Writing of encoded data to file "{object.fullpath}" via PostgreSQL database SQL queries is detected on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

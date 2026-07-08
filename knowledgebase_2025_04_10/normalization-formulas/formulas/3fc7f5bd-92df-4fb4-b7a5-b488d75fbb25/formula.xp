@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$title="ASA"|$title="PIX"|$title="FWSM"|$title="FTD"}{"-session"?}-{NUMBER}-{msgid="106021"}:
+        Deny {protocol=WORD} reverse path check from {src.ip=IPV4|src.ip=IPV6} to {dst.ip=IPV4|dst.ip=IPV6} on interface {interface=REST}'
+
+action = "deny"
+object = "packet"
+status = "success"
+
+reason = "reverse path check failed"
+
+importance = "medium"
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "cisco"
+event_src.title = lower($title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_106021_Deny_protocol_reverse_path_check"

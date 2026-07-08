@@ -1,0 +1,20 @@
+TABULAR = "ID,
+           {time=ORIGIN},
+           MESSAGE_OWNER,
+           {msgid=MESSAGE_CODE},
+           {object.name=STRPARAM2}"
+           
+COND = $MESSAGE_CODE == 201
+
+action = "detect"
+object = "host"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_policy_manager"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_ViPNet_Policy_Manager_customeventcollector_host_discovery"

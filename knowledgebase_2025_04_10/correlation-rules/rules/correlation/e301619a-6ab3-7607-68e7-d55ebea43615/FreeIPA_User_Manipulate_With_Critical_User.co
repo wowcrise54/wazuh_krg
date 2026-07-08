@@ -1,0 +1,74 @@
+query CheckIfRoleIsCritical($user) from Applications_Significant_Users {
+    user == $user
+    and event_src_title == "freeipa"
+}
+
+event Modify_User_Critical:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "freeipa"
+        and msgid == "user_mod"
+        and status == "success"
+        and exec_query("CheckIfRoleIsCritical", [lower(object.account.name)])
+        and filter::CheckWL_Specific_Only("FreeIPA_User_Manipulate_With_Critical_User", lower(object.account.name))
+    }
+
+rule FreeIPA_User_Manipulate_With_Critical_User: Modify_User_Critical
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Modify_User_Critical {
+
+        $subject.account.name = subject.account.name    
+        $subject.account.domain = subject.account.domain
+        
+        $object.account.name = object.account.name    
+        $object.account.id = object.account.id
+        $object.account.contact = object.account.contact
+        $object.account.fullname = object.account.fullname
+
+        $numfield1 = numfield1      # process id of /usr/sbin/httpd
+        $numfield2 = numfield2      # port of event_src.host
+        
+        $datafield1 = datafield1    # API version
+        $datafield2 = datafield2    # Home directory
+        $datafield3 = datafield3    # Shell
+        $datafield4 = datafield4    # Password change flag
+        
+        $alert.key = lower(object.account.name)
+        $alert.context = join(remove([subject.account.name, object.account.name], null), " | ")
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.id = event_src.id
+
+    }
+
+emit { 
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

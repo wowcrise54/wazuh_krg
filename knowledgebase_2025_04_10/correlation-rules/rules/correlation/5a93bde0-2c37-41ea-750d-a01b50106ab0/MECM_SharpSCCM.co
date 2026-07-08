@@ -1,0 +1,336 @@
+event Process_Start:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::ProcessStart_Windows("sharpsccm.exe")
+            or (
+                filter::ProcessStart_Windows_any()
+                and (
+                    regex(lower(object.process.cmdline), "local\s+(class-(instances|properties)|(client|site)-?info$|(grep|query)\s+\".*\"|secrets\s+(-m|--method)\s+(wmi|disk)|triage|user-sid)", 0) != null
+                    or regex(lower(object.process.cmdline), "get\s+(applications|class(es|-instances|-properties)|collection(s|-members|rules)|deployments|devices|primary-users|naa|secrets|site-(push-settings|info))", 0) != null
+                    or regex(lower(object.process.cmdline), "exec\s+(-d|--device|-u|--user|-rid|--resource-id|-mp|--management-point)\s+\S+\s+((-p|--path)\s+\"\S+\"|(-r|--relay-server)\s+\S+)", 0) != null
+                    or regex(lower(object.process.cmdline), "invoke\s+(admin-service\s+(-q|--query|-i|--(collection|resource)-id|-r|-d|--delay|-re|--retries|-mp|--management-point|-sc|--site-code)|client-push(\s+(-mp|--management-point|-sc|--site-code|-a|--as-admin|-c|--certificate|-i|--client-id|-t|--target))?|query\s+(\".*\"|-n|--wmi-namespace|-mp|--management-point|-sc|--site-code)|update\s+(-d|--device|-i|--(collection|policy|resource)-(id|type|name)|-u|--user|-mp|--management-point|-sc|--site-code))", 0) != null
+                    or regex(lower(object.process.cmdline), "(new|remove)\s+(application\s+(-n|--name|-p|--path|-r|--run-as-user|-s|--show|-mp|--management-point|-sc|--site-code)|(collection(-member)?|deployment)\s+(-mp|--management-point|-sc|--site-code|-n|-t|--(collection|resource|application)-(name|type|id)|-d|--device)|device\s+(-n|--name|-p|--password|-u|--username|-mp|--management-point|-sc|--site-code))", 0) != null
+                )
+            )
+        )
+        and filter::CheckWL_Process_Creation("MECM_SharpSCCM", lower(join([object.account.name, object.process.name, object.process.cmdline], "|")))
+    }
+
+event Powershell_Command_Execute:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            regex(lower(object.process.cmdline), "^invoke-sharpsccm", 0) != null
+            or regex(lower(object.process.cmdline), "local\s+(class-(instances|properties)|(client|site)-?info\"$|(grep|query)\s+\".*\"|secrets\s+(-m|--method)\s+(wmi|disk)|triage|user-sid)", 0) != null
+            or regex(lower(object.process.cmdline), "get\s+(applications|class(es|-instances|-properties)|collection(s|-members|rules)|deployments|devices|primary-users|naa|secrets|site-(push-settings|info))", 0) != null
+            or regex(lower(object.process.cmdline), "exec\s+(-d|--device|-u|--user|-rid|--resource-id|-mp|--management-point)\s+\S+\s+((-p|--path)\s+\"\S+\"|(-r|--relay-server)\s+\S+)", 0) != null
+            or regex(lower(object.process.cmdline), "invoke\s+(admin-service\s+(-q|--query|-i|--(collection|resource)-id|-r|-d|--delay|-re|--retries|-mp|--management-point|-sc|--site-code)|client-push(\s+(-mp|--management-point|-sc|--site-code|-a|--as-admin|-c|--certificate|-i|--client-id|-t|--target))?|query\s+(\".*\"|-n|--wmi-namespace|-mp|--management-point|-sc|--site-code)|update\s+(-d|--device|-i|--(collection|policy|resource)-(id|type|name)|-u|--user|-mp|--management-point|-sc|--site-code))", 0) != null
+            or regex(lower(object.process.cmdline), "(new|remove)\s+(application\s+(-n|--name|-p|--path|-r|--run-as-user|-s|--show|-mp|--management-point|-sc|--site-code)|(collection(-member)?|deployment)\s+(-mp|--management-point|-sc|--site-code|-n|-t|--(collection|resource|application)-(name|type|id)|-d|--device)|device\s+(-n|--name|-p|--password|-u|--username|-mp|--management-point|-sc|--site-code))", 0) != null
+        )
+        and filter::CheckWL_Powershell("MECM_SharpSCCM", lower(join([object.account.name, object.process.cmdline],"|")))
+    }
+
+event Powershell_Pipeline_Execute:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            regex(lower(object.process.cmdline), "^invoke-sharpsccm", 0) != null
+            or regex(lower(object.process.cmdline), "local\s+(class-(instances|properties)|(client|site)-?info\"$|(grep|query)\s+\".*\"|secrets\s+(-m|--method)\s+(wmi|disk)|triage|user-sid)", 0) != null
+            or regex(lower(object.process.cmdline), "get\s+(applications|class(es|-instances|-properties)|collection(s|-members|rules)|deployments|devices|primary-users|naa|secrets|site-(push-settings|info))", 0) != null
+            or regex(lower(object.process.cmdline), "exec\s+(-d|--device|-u|--user|-rid|--resource-id|-mp|--management-point)\s+\S+\s+((-p|--path)\s+\"\S+\"|(-r|--relay-server)\s+\S+)", 0) != null
+            or regex(lower(object.process.cmdline), "invoke\s+(admin-service\s+(-q|--query|-i|--(collection|resource)-id|-r|-d|--delay|-re|--retries|-mp|--management-point|-sc|--site-code)|client-push(\s+(-mp|--management-point|-sc|--site-code|-a|--as-admin|-c|--certificate|-i|--client-id|-t|--target))?|query\s+(\".*\"|-n|--wmi-namespace|-mp|--management-point|-sc|--site-code)|update\s+(-d|--device|-i|--(collection|policy|resource)-(id|type|name)|-u|--user|-mp|--management-point|-sc|--site-code))", 0) != null
+            or regex(lower(object.process.cmdline), "(new|remove)\s+(application\s+(-n|--name|-p|--path|-r|--run-as-user|-s|--show|-mp|--management-point|-sc|--site-code)|(collection(-member)?|deployment)\s+(-mp|--management-point|-sc|--site-code|-n|-t|--(collection|resource|application)-(name|type|id)|-d|--device)|device\s+(-n|--name|-p|--password|-u|--username|-mp|--management-point|-sc|--site-code))", 0) != null
+        )
+        and filter::CheckWL_Powershell("MECM_SharpSCCM", regex(lower(object.process.cmdline), "(^invoke-sharpsccm|local|get|exec|invoke|new|remove).{0,100}", 0))
+    }
+
+event Registry_Action:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            in_list(["12", "13"], msgid)
+            and event_src.title == "sysmon"
+            or (
+                msgid == "4657"
+                and event_src.title == "windows"
+            )
+        )
+        and lower(object.fullpath) == "\\registry\\machine\\software\\microsoft\\wbem\\cimom"
+    }
+
+event Network_Connect:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and not filter::Loopback_Address(dst.ip)
+        and not filter::External_Address(dst.ip)
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or 
+            (event_src.title == "sysmon" and msgid == "3")
+        )
+        and in_list([80, 443], dst.port)
+        and direction == "egress"
+        and lower(object.account.name) != "network service"
+        and not in_list(["chrome.exe", "telegram.exe", "outlook.exe", "msedge.exe", "browser.exe", "firefox.exe", "svchost.exe", "python.exe", "searchprotocolhost.exe", "backgroundtaskhost.exe", "opera.exe", "pycharm64.exe", "officeclicktorun.exe", "excel.exe", "skype.exe", "winword.exe", "brave.exe"], lower(object.process.name))
+    }
+
+rule MECM_SharpSCCM: ((Process_Start or Powershell_Command_Execute or Powershell_Pipeline_Execute) and Registry_Action and Network_Connect?) timer 2s
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Process_Start {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $datafield18 = datafield18 # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19 # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([object.account.name, object.process.name, object.process.cmdline], "|"))
+        $alert.regex_match = coalesce(regex(lower(object.process.cmdline), "local\s+(class-(instances|properties)|(client|site)-info$|(grep|query)\s+\".*\"|secrets\s+(-m|--method)\s+(wmi|disk)|triage|user-sid)", 0),
+            regex(lower(object.process.cmdline), "get\s+(applications|class(es|-instances|-properties)|collection(s|-members|rules)|deployments|devices|primary-users|naa|secrets|site-(push-settings|info))", 0),
+            regex(lower(object.process.cmdline), "exec\s+(-d|--device|-u|--user|-rid|--resource-id|-mp|--management-point)\s+\S+\s+((-p|--path)\s+\"\S+\"|(-r|--relay-server)\s+\S+)", 0),
+            regex(lower(object.process.cmdline), "invoke\s+(admin-service\s+(-q|--query|-i|--(collection|resource)-id|-r|-d|--delay|-re|--retries|-mp|--management-point|-sc|--site-code)|client-push(\s+(-mp|--management-point|-sc|--site-code|-a|--as-admin|-c|--certificate|-i|--client-id|-t|--target))?|query\s+(\".*\"|-n|--wmi-namespace|-mp|--management-point|-sc|--site-code)|update\s+(-d|--device|-i|--(collection|policy|resource)-(id|type|name)|-u|--user|-mp|--management-point|-sc|--site-code))", 0),
+            regex(lower(object.process.cmdline), "(new|remove)\s+(application\s+(-n|--name|-p|--path|-r|--run-as-user|-s|--show|-mp|--management-point|-sc|--site-code)|(collection(-member)?|deployment)\s+(-mp|--management-point|-sc|--site-code|-n|-t|--(collection|resource|application)-(name|type|id)|-d|--device)|device\s+(-n|--name|-p|--password|-u|--username|-mp|--management-point|-sc|--site-code))", 0)
+        )
+
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Powershell_Command_Execute {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $datafield8 = datafield8  # версия модуля
+        $datafield9 = datafield9 # Командлайн без приведения к нижнему регистру
+
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([object.account.name, object.process.cmdline],"|"))
+        $alert.regex_match = coalesce(regex(lower(object.process.cmdline), "^invoke-sharpsccm", 0),
+            regex(lower(object.process.cmdline), "local\s+(class-(instances|properties)|(client|site)-?info\"$|(grep|query)\s+\".*\"|secrets\s+(-m|--method)\s+(wmi|disk)|triage|user-sid)", 0),
+            regex(lower(object.process.cmdline), "get\s+(applications|class(es|-instances|-properties)|collection(s|-members|rules)|deployments|devices|primary-users|naa|secrets|site-(push-settings|info))", 0),
+            regex(lower(object.process.cmdline), "exec\s+(-d|--device|-u|--user|-rid|--resource-id|-mp|--management-point)\s+\S+\s+((-p|--path)\s+\"\S+\"|(-r|--relay-server)\s+\S+)", 0),
+            regex(lower(object.process.cmdline), "invoke\s+(admin-service\s+(-q|--query|-i|--(collection|resource)-id|-r|-d|--delay|-re|--retries|-mp|--management-point|-sc|--site-code)|client-push(\s+(-mp|--management-point|-sc|--site-code|-a|--as-admin|-c|--certificate|-i|--client-id|-t|--target))?|query\s+(\".*\"|-n|--wmi-namespace|-mp|--management-point|-sc|--site-code)|update\s+(-d|--device|-i|--(collection|policy|resource)-(id|type|name)|-u|--user|-mp|--management-point|-sc|--site-code))", 0),
+            regex(lower(object.process.cmdline), "(new|remove)\s+(application\s+(-n|--name|-p|--path|-r|--run-as-user|-s|--show|-mp|--management-point|-sc|--site-code)|(collection(-member)?|deployment)\s+(-mp|--management-point|-sc|--site-code|-n|-t|--(collection|resource|application)-(name|type|id)|-d|--device)|device\s+(-n|--name|-p|--password|-u|--username|-mp|--management-point|-sc|--site-code))", 0)
+        )
+
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Powershell_Pipeline_Execute {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $datafield8 = datafield8  # версия модуля
+        $datafield9 = datafield9 # Командлайн без приведения к нижнему регистру
+
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = regex(lower(object.process.cmdline), "(^invoke-sharpsccm|local|get|exec|invoke|new|remove).{0,100}", 0)
+        $alert.regex_match = coalesce(regex(lower(object.process.cmdline), "^invoke-sharpsccm", 0),
+            regex(lower(object.process.cmdline), "local\s+(class-(instances|properties)|(client|site)-?info\"$|(grep|query)\s+\".*\"|secrets\s+(-m|--method)\s+(wmi|disk)|triage|user-sid)", 0),
+            regex(lower(object.process.cmdline), "get\s+(applications|class(es|-instances|-properties)|collection(s|-members|rules)|deployments|devices|primary-users|naa|secrets|site-(push-settings|info))", 0),
+            regex(lower(object.process.cmdline), "exec\s+(-d|--device|-u|--user|-rid|--resource-id|-mp|--management-point)\s+\S+\s+((-p|--path)\s+\"\S+\"|(-r|--relay-server)\s+\S+)", 0),
+            regex(lower(object.process.cmdline), "invoke\s+(admin-service\s+(-q|--query|-i|--(collection|resource)-id|-r|-d|--delay|-re|--retries|-mp|--management-point|-sc|--site-code)|client-push(\s+(-mp|--management-point|-sc|--site-code|-a|--as-admin|-c|--certificate|-i|--client-id|-t|--target))?|query\s+(\".*\"|-n|--wmi-namespace|-mp|--management-point|-sc|--site-code)|update\s+(-d|--device|-i|--(collection|policy|resource)-(id|type|name)|-u|--user|-mp|--management-point|-sc|--site-code))", 0),
+            regex(lower(object.process.cmdline), "(new|remove)\s+(application\s+(-n|--name|-p|--path|-r|--run-as-user|-s|--show|-mp|--management-point|-sc|--site-code)|(collection(-member)?|deployment)\s+(-mp|--management-point|-sc|--site-code|-n|-t|--(collection|resource|application)-(name|type|id)|-d|--device)|device\s+(-n|--name|-p|--password|-u|--username|-mp|--management-point|-sc|--site-code))", 0)
+        )
+
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Registry_Action {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.path = object.path
+        $object.name = object.name
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+    }
+
+    on Network_Connect {
+        $direction = direction
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $protocol = protocol
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

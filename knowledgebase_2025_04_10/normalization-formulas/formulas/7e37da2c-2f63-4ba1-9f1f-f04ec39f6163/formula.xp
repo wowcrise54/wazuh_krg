@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {DATETIME} {$Computer=HOSTNAME} {object.name="wafd"}:
+        {$time1=STRING} {$time2=STRING} info {$act="run services"|$act="shutdown all services..."}'
+
+action = switch $act
+   case "shutdown all services..." "stop"
+   case "run services" "start"
+endswitch
+
+object = "service"
+status = "success"
+
+time = datetime($time1 + substr($time2, 0, 2) + substr($time2, 3, 2) + substr($time2, 6, 2))
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = "wafd"
+event_src.title = "application_firewall"
+event_src.category = "Application security"
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_WAFD_services_start_stop"

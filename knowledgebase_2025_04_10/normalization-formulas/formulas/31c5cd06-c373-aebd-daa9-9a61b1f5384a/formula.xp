@@ -1,0 +1,56 @@
+JSON = ''
+
+COND = $ApacheKafkaMessage["message"] != null
+        and find_substr($ApacheKafkaMessage["message"], 'WRITE_ENTITY') != null
+
+$stripped = strip($ApacheKafkaMessage["message"], '{', '}')
+$replaced = replace($stripped, ' ', '\"')
+$kv = keyvalue($replaced, ',', ':', '\"')
+
+subject = "account"
+action = "modify"
+object = "resource"
+status = switch $kv["result"]
+   case "0" "success"
+   case "1" "failure"
+   case "2" "success"
+endswitch
+
+subformula "get_name"
+    TEXT = '{UNTIL("name : ")}{datafield3=UNTIL(" ,")}{REST}'
+endsubformula
+
+subformula "get_code"
+    TEXT = '{UNTIL("authScheme")}{UNTIL("code : ")}{datafield4=UNTIL(" ,")}{REST}'
+endsubformula
+
+subject.account.name = $kv["login"]
+subject.account.fullname = $kv["fio"]
+subject.account.group = $kv["org_unit_code"]
+
+$objid = find_substr($kv["message"], "id") + 3
+$objservice = find_substr($kv["message"], "в таблице") + 10
+$objdot = find_substr($kv["message"],".")
+object.type = substr($kv["message"], $objservice, $objdot - $objservice)
+object.id = substr($kv["message"], $objid, $objservice - $objid - 11)
+
+datafield2 = $kv["position"]                                  # Должность, на которую назначен пользователь в организации/подразделении
+submessage("TEXT", "get_name", replace($replaced, "", "\\\\")) # datafield3 - Имя сущности
+submessage("TEXT", "get_code", replace($replaced, "", "\\\\")) # datafield4 - Схема аутентификации
+
+$dot = find_substr($kv["message"], '.')
+reason = substr($kv["message"], 0, $dot)
+
+time = $kv["@timestamp"]
+msgid = $kv["event_type"]
+importance = switch $kv["result"]
+   case "0" "info"
+   case "1" "low"    
+   case "2" "high"
+endswitch
+
+event_src.vendor = "otr"
+event_src.title = "uss"
+event_src.category = "AAA"
+
+id = "PT_OTR_USS_customeventcollector_Changing_an_entity"

@@ -1,0 +1,43 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1136"
+       and $event_category == "Разграничение доступа к устройствам"
+       and (
+        $event_type == "Failure Audit"
+        or $event_type == "Аудит отказов"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+action = "connect"
+object = "device"
+status = "failure"
+
+subformula "message"
+    TEXT = 'Запрет подключения устройства. Категория конфиденциальности: {datafield1=STRING+} Причина запрета: {reason=REST}'
+endsubformula
+
+# datafield1 - категория конфиденциальности
+
+msgid = $event_id
+importance = "high"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Разграничение доступа к устройствам" then
+    event_src.subsys = "device access control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1136_blocked_device_connection"

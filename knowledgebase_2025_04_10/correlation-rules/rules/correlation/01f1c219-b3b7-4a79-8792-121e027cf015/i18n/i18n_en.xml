@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Execution of some SQL commands may indicate that information about the MySQL database users is retrieved, which may indicate attacker activity</Description>
+  <EventDescriptions>
+    <EventDescription id="03b90360-9417-42cd-a906-eae3e8532bf1">User "{subject.account.name}" retrieved the MySQL database user information using an SQL command on host {event_src.host}</EventDescription>
+    <EventDescription id="040b70bc-8cd9-47d5-8bf7-9aa6c8477758">User "{subject.account.name}" retrieved information about their account name in the MySQL database using an SQL command on host {event_src.host}</EventDescription>
+    <EventDescription id="107c585a-254d-444e-836a-0fd3b2d4c406">User "{subject.account.name}" retrieved the list of MySQL database roles and permissions using an SQL command on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

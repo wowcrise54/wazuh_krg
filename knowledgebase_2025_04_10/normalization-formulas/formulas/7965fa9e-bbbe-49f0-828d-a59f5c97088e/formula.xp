@@ -1,0 +1,53 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["action"] == "Accept"
+       and in_list(["Log In", "Log Out"], $kv["operation"])
+
+subject = "account"
+
+if $kv["operation"] == "Log In" then
+    action = "login"
+else
+    action = "logout"
+endif
+
+object = "application"
+
+if $kv["audit_status"] == "Failure" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+if $kv["administrator"] != "localhost" then
+    subject.account.name = $kv["administrator"]
+endif
+
+object.name = $kv["product"]
+
+if maybe_ipv4($kv["machine"]) == null and maybe_ipv6($kv["machine"]) == null then
+    src.hostname = $kv["machine"]
+endif
+
+src.ip = $kv["client_ip"]
+
+datafield4 = coalesce($kv["origin_sic_name"], $kv["originsicname"])  # полное доменное имя
+datafield9 = $hostname                                               # имя устройства с LogExporter
+
+reason = $kv["additional_info"]
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+msgid = $kv["operation"]
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Operation_login_logout"

@@ -1,0 +1,47 @@
+EVENTLOG = 'EventID="23"'
+COND =  $Channel == "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational"
+        and $Provider["Name"] == "Microsoft-Windows-TerminalServices-LocalSessionManager"
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+submessage('TEXT', 'name', $UserData["EventXML"]["User"])
+
+subformula 'name'
+    TEXT = '{$subject.domain=WORDDASH}\\{$subject.name=REST}'
+    subject.account.domain = lower($subject.domain)
+    subject.account.name = lower($subject.name)
+endsubformula
+
+subject.account.session_id = $UserData["EventXML"]["SessionID"]
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    dst.fqdn = lower($Computer)
+    dst.hostname = lower(substr($Computer, 0, $dot_pos))
+else
+    dst.hostname = lower($Computer)
+endif
+
+logon_auth_method = "remote"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.fqdn = dst.fqdn
+event_src.hostname = dst.hostname
+event_src.subsys = lower($Channel)
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Terminal services"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_23_RD_session_logoff_succeeded"

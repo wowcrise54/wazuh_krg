@@ -1,0 +1,37 @@
+!TABULAR = "{subject.name=rule_name},
+            {datafield1=client_name},
+            {datafield2=client_macaddress},
+            {$proto=protocol},
+            {time = dateoccurred}"
+
+COND = $productname == 'ESET Endpoint Security' and $event_descritpiton == 'Соединение запрещено правилом'
+
+subject = "rule"
+action = "deny"
+object = "connection"
+status = "success"
+
+$src = csv($source, ":", "'")
+src.ip = $src[0]
+src.port = $src[1]
+
+$dst = csv($target, ":", "'")
+dst.ip = $dst[0]
+dst.port = $dst[1]
+
+protocol = $proto
+
+$cl_ip = csv($client_ip_address, ":", "'")
+datafield3 = $cl_ip[0]  # client ip address
+
+importance = "medium"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "eset"
+event_src.title = "eset_remote_administrator_server"
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_remote_administrator_server_odbc_connect_on_client_blocked"

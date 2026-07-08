@@ -1,0 +1,26 @@
+TEXT = '{UNTIL("CEF:0")}|AO Kaspersky Lab|{object.name="Kaspersky Anti Targeted Attack Platform"}|5.{$ver=UNTIL("|")}
+        {msgid="heartbeat"}|Heartbeat message|0| {"dvc"|"dvchost"}={event_src.ip=IPV4|$Computer=HOSTNAME}
+        {$kv=KEYVALUE(" ", "=")}'
+
+action = "info"
+object = "application"
+status = "success"
+
+object.version = "5." + $ver
+
+time = datetime($kv["rt"])
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v5_heartbeat"

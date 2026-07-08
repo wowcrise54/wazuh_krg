@@ -1,0 +1,123 @@
+event Possible_Security_Attack:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and subject == "service" 
+        and action == "detect"
+        and object == "attack"
+        and status == "success"
+        and event_src.vendor == "opensource"
+        and event_src.title == "redis"
+        and event_src.category == "Database server"
+        and filter::CheckWL_Specific_Only("Redis_Possible_Security_Attack_Or_Maxmemory_Setting", lower(reason))
+    }
+
+event New_Maxmemory_Smaller:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and action == "alert"
+        and object == "configuration"
+        and status == "success"
+        and find_substr(reason, "maxmemory value set via CONFIG SET") != null
+        and event_src.vendor == "opensource"
+        and event_src.title == "redis"
+        and event_src.category == "Database server"
+        and filter::CheckWL_Specific_Only("Redis_Possible_Security_Attack_Or_Maxmemory_Setting", lower(reason))
+    }    
+
+event Suspicious_Maxmemory_Setting:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and action == "alert" 
+        and object == "configuration"
+        and status == "success"
+        and find_substr(reason, "You specified a maxmemory value") != null
+        and event_src.vendor == "opensource"
+        and event_src.title == "redis"
+        and event_src.category == "Database server"
+        and filter::CheckWL_Specific_Only("Redis_Possible_Security_Attack_Or_Maxmemory_Setting", lower(reason))
+    }     
+    
+rule Redis_Possible_Security_Attack_Or_Maxmemory_Setting: 
+    (Possible_Security_Attack or Suspicious_Maxmemory_Setting or New_Maxmemory_Smaller)
+
+    init {
+        $labels = "w_auto" 
+    }
+
+    on Possible_Security_Attack {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+        
+        $reason = reason
+        
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor 
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(reason)
+    }
+    
+    on New_Maxmemory_Smaller {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+        
+        $reason = reason
+        
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor 
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(reason)
+    }
+    
+    on Suspicious_Maxmemory_Setting {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+        
+        $reason = reason
+        
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor 
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(reason)
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $importance = "medium"
+
+    $category.generic = "Attack"
+
+    if find_substr($reason, "SECURITY ATTACK") != null then
+        $category.high = "Command and Control"
+        $category.low = "Application Layer Protocol: Web Protocols"
+
+        $incident.category = "VulnerabilityExploitation"
+    elif regex($reason, "(maxmemory value set via CONFIG SET|You specified a maxmemory value)", 0) != null then
+        $category.high = "Defense Evasion"
+        $category.low = "Impair Defenses: Disable or Modify Tools"
+
+        $incident.category = "ProtectionMalfunction"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

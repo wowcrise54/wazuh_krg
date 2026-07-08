@@ -1,0 +1,65 @@
+TABULAR = '{chain_id=TransactionId},
+           {datafield2=SequenceId},
+           {time=OccurredAt},
+           FieldName,
+           OldValue,
+           NewValue,
+           {$login=Login},
+           {$workstation=Workstation},
+           {$account=NTAccount},
+           SequenceNumber,
+           Action,
+           {msgid=ObjectType},
+           {$server=Server},
+           ServerIsPrimary'
+
+COND = $ObjectType == "DeviceEventLogLevel"
+       or $ObjectType == "NbgEventLogLevel"
+
+subject = "account"
+action = "modify"
+object = "application"
+status = "success"
+
+object.property = switch $ObjectType
+    case "DeviceEventLogLevel" "device logging level"
+    case "NbgEventLogLevel" "level of generated events"
+endswitch
+
+object.value = switch $OldValue
+    case "None" "do not log"
+    case "All" "log always"
+    case "AccessDenied" "in case access denied"
+endswitch
+
+subject.account.name = lower($login)
+
+$csv_account = csv(lower($account), "\\", "")
+subject.name = $csv_account[1]    # Имя системного пользователя
+subject.domain = $csv_account[0]  # Домен системного пользователя
+
+src.hostname = lower($workstation)
+dst.hostname = lower($server)
+
+# datafield2 - Номер действия в рамках текущей транзакции
+
+object.new_value = switch $NewValue
+    case "None" "do not log"
+    case "All" "log always"
+    case "AccessDenied" "in case access denied"
+endswitch
+
+if lower($workstation) == lower($server) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+importance = "low"
+
+event_src.vendor = "infowatch"
+event_src.title = "device_monitor"
+event_src.hostname = lower($server)
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Device_Monitor_odbc_log_level"

@@ -1,0 +1,41 @@
+EVENTLOG = 'EventID.text="540"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Security"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subject.account.name = lower($Data[0])
+subject.account.domain = lower($Data[1])
+subject.account.session_id = maybe_number16(strip($Data[2], "(0x0,", ")"))
+
+if $Data[13] != "-" then
+    src.ip = $Data[13]
+endif
+dst.hostname = lower($Computer)
+
+logon_type = $Data[3]
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_forwarded_540_Logon_success"

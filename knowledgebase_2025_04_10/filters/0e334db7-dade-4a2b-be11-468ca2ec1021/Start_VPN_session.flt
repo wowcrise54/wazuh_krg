@@ -1,0 +1,16 @@
+filter Start_VPN_session() {
+    filter::NotFromCorrelator()
+    and (
+            (
+            action == "start"
+            and object == "session"
+        ) or (
+             action == "login"
+             and object == "application"
+        )
+    )
+    and (
+        event_src.category == "VPN"
+        or category.low == "VPN"
+    )
+}

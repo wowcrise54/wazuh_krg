@@ -1,0 +1,267 @@
+event Edit_Config_In_Windows: 
+    key:
+        event_src.asset
+    filter {
+        filter::NotFromCorrelator()
+        # C:\Program Files\PostgreSQL\8.4\data\postgresql.conf
+        # C:\Program Files\PostgreSQL\13\data\postgresql.conf
+        # C:\Program Files\PostgreSQL\15\data\postgresql.conf
+        and msgid == "4663"
+        and (
+            (regex(object.fullpath, "\w:\\\\program files( \(x86\))?\\\\postgresql\\\\\w+\\\\data\\\\postgresql\.conf", 0) != null)
+            or (regex(object.fullpath, "\w:\\\\program files( \(x86\))?\\\\postgresql\\\\\w+\\\\data\\\\pg_hba\.conf", 0) != null)
+            or (regex(object.fullpath, "\w:\\\\program files( \(x86\))?\\\\postgresql\\\\\w+\\\\data\\\\pg_ident\.conf", 0) != null)
+        )
+        and (
+            # WriteData (или AddFile)
+            find_substr(subject.account.privileges, "%%4417") != null 
+            or 
+            # AppendData (или AddSubdirectory или CreatePipeInstance)
+            find_substr(subject.account.privileges, "%%4418") != null 
+        )
+        and filter::CheckWL_Process_Access(
+            "PostgreSQL_Update_Configuration",
+            lower(join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|"))
+        )
+    }
+
+
+event Edit_Config_In_Linux:
+    key:
+        event_src.asset
+    filter {
+        filter::NotFromCorrelator()
+        # /etc/postgresql/11/main/
+        # /etc/postgresql/9.1/main/postgresql.conf
+        # /var/lib/postgresql/16/main/postgresql.auto.conf
+        and (
+            filter::FileModify_Linux("/etc/postgresql/.+?/postgresql\.conf")
+            or filter::FileModify_Linux("/var/lib/postgresql/.+?/postgresql\.auto\.conf")
+            or filter::FileModify_Linux("/etc/postgresql/.+?/pg_hba\.conf")
+            or filter::FileModify_Linux("/etc/postgresql/.+?/pg_ident\.conf"))
+        and filter::CheckWL_Linux_File_Operations(
+            "PostgreSQL_Update_Configuration",
+            join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, coalesce(subject.process.meta, subject.process.cmdline)], "|")
+        )
+    }
+
+event Reload_Configuration:
+    key:
+        event_src.asset
+    filter {
+        filter::NotFromCorrelator()
+        and object == "request"
+        and event_src.title == "postgresql"
+        and match(lower(object.query), "select*pg_reload_conf()")
+        and filter::CheckWL_Database_Actions(
+            "PostgreSQL_Update_Configuration",
+            lower(join([coalesce(subject.application.account.name, subject.application.account.id), object.query], "|"))
+        )
+    }
+
+rule PostgreSQL_Update_Configuration: 
+    (
+        ((Edit_Config_In_Linux or Edit_Config_In_Windows) -> Reload_Configuration?)
+        or
+        Reload_Configuration
+    ) timer 5m
+    
+    init {
+        $labels = "w_auto"
+    }
+
+    on Edit_Config_In_Linux {
+        $status = status
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.meta = subject.process.meta
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.chain = subject.process.chain
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.process.chain = object.process.chain
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.id = object.id
+        $object.type = object.type
+        $object.state = object.state
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+
+        $datafield18 = datafield18 # chain with PID for subject
+        $datafield19 = datafield19 # chain with PID for object
+
+        $numfield2 = numfield2  # Owner User ID
+
+        $reason = "config_modified"
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, coalesce(subject.process.meta, subject.process.cmdline)], "|")
+        $alert.context = subject.process.meta
+
+        $labels = $labels + "|CheckWL_Linux_File_Operations"
+    }
+
+    on Edit_Config_In_Windows {
+        $status = status
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.id = object.id
+        $object.type = object.type
+        $object.state = object.state
+
+        $datafield18 = datafield18 # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19 # Цепочка процесса-объекта с идентификаторами
+
+        $reason = "config_modified"
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|"))
+
+        $labels = $labels + "|CheckWL_Process_Access"
+    }
+
+    on Reload_Configuration {
+        $status = status
+
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.id = subject.application.account.name
+
+        $object.path = object.path          # database name
+        $object.query = object.query
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $logon_service = logon_service     # application (driver) name
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        if $reason == null then 
+            $reason = "config_reloaded"
+        else
+            $reason = $reason + "|config_reloaded"
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+
+    $importance = "high"
+    
+    # Если сработал только event Reload_Configuration
+    if $reason == "config_reloaded" then
+        $alert.key = lower(join([coalesce($subject.application.account.name, $subject.application.account.id), $object.query], "|"))
+        
+        $labels = $labels + "|CheckWL_Database_Actions"
+    endif
+
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Manipulation: Stored Data Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, coalesce($subject.application.account.name, $subject.account.name, $subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

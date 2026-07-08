@@ -1,0 +1,25 @@
+JSON = 'category=37'
+
+COND = $data["ID"] == "UPDATE_VERSION"
+
+action = "update"
+object = "system"
+if $data["ErrCode"] == 0 then
+    status = "success"
+else
+    status = "failure"
+endif
+
+datafield1 = $cg_name   # узел безопасности
+datafield2 = $cg_cssid  # идентификатор узла безопасности
+
+time = $time
+msgid = $data["ID"]
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_odbc_update_version"

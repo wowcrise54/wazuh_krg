@@ -1,0 +1,66 @@
+EVENTLOG = ''
+
+!COND = $Provider["Name"] == "Veeam MP"
+        and in_list(["25300", "25500", "31400", "31200", "31600", "31800"], $EventID["text"])
+
+subject = "account"
+
+if in_list(["25300", "31200", "31600"], $EventID["text"]) then
+    action = "create"
+else
+    action = "remove"
+endif
+
+if in_list(["25300", "25500", "31600", "31800"], $EventID["text"]) then
+    object = "resource"
+    
+    if in_list(["25300", "25500"], $EventID["text"]) then
+        object.type = "virtual key"
+    else
+        object.type = "encryption password"
+    endif
+    
+else
+    object = "account"
+endif
+
+status = "success"
+
+# разбираем домен и имя пользователя
+$csv = csv($Data[5], "\\", "'")
+if length($csv) == 2 then
+    subject.account.domain = lower($csv[0])
+    subject.account.name = lower($csv[1])
+else
+    subject.name = lower($csv[0])
+endif
+
+submessage("TEXT", "get_info", $Data[19])
+
+subformula "get_info"
+    !TEXT = '{"User or group "|"Credentials "|"Encryption password "}{$name=UNTIL(" has")|$name=UNTIL(" have")}{REST}'
+    
+    if object == "account" then
+        object.account.name = $name
+    else
+        object.name = $name
+    endif
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "veeam"
+event_src.title = "backup_replication"
+event_src.category = "Backup server"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_Veeam_Backup_Replication_eventlog_credentials_operation"

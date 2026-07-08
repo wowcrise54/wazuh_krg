@@ -1,0 +1,25 @@
+TEXT = ":M={NUMBER} {NUMBER};/E/[INFO]
+        Запущена активация: успех для {$success=NUMBER} элемент(ов) из {$planned=NUMBER}"
+
+action = "apply"
+object = "policy"
+if $success == $planned then
+    status = "success"
+    importance = "low"
+else
+    status = "failure"
+    datafield1 = $success   # количество успешных применений политики
+    importance = "medium"
+endif
+
+object.property = "number of targets"
+object.value = $planned
+
+time = recv_time
+
+event_src.vendor = "elvis_plus"
+event_src.title = "zastava"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Elvis_plus_Zastava_filemonitor_Policy_activation"

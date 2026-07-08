@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        suricata{"["NUMBER"]"?}: {"["NUMBER"]"} <Notice> -- This is Suricata version {object.version=REST}'
+
+action = "start"
+object = "service"
+status = "success"
+
+object.name = "Suricata"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "suricata"
+event_src.category = "IDS/IPS"
+
+id = "PT_Opensource_Suricata_syslog_service_starting"

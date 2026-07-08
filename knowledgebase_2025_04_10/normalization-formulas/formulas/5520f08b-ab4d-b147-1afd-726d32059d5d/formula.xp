@@ -1,0 +1,67 @@
+JSON = ''
+COND = $action == 'DELETE' and $tenant_id != null 
+ 
+subject = "account"
+action = "remove"
+
+if $error != null then
+    status = "failure"
+else 
+    status = "success"
+endif
+
+object.type = $object["type"]
+
+object = switch object.type
+    case "USER" "account"
+    case "TRAFFIC_PROFILE" "profile"
+    case "APPLICATION" "application"
+    case "VIP" "ip_address"
+    case "ACTION" "rule"
+    case "REPORT" "report"
+    case "BACKEND" "node"
+    case "SSL_PRIVATE_KEY" "certificate"
+endswitch
+
+if object == null then
+    object = "resource"
+endif
+
+subject.account.name = $username
+subject.account.id = $user_id
+
+$object_id = csv($object["uri"], "/", "")[2]
+
+if object == "account" then
+    object.account.name = $object["name"]
+    object.account.id = $object_id
+elif in_list(["ip_address", "node"], object) then
+    object.value = $object["name"]
+    object.id = $object_id
+else
+    object.name = $object["name"]
+    object.id = $object_id
+endif
+
+src.ip = $client_ip
+
+reason = $error
+
+datafield3 = $tenant_name # limited environment name
+datafield4 = $tenant_id # limited environment id
+
+time = epoch_to_datetime(number($timestamp))
+
+importance = "info"
+
+if object == "account" then
+    category.high = "Users And Rights Management"
+    category.generic = "Account"
+    category.low = "Manipulation"
+endif
+
+event_src.title = "application_firewall"
+event_src.vendor = "positive_technologies"
+event_src.category = "Application security"
+ 
+id = "PT_Positive_Technologies_Application_Firewall_customeventcollector_Delete_object"

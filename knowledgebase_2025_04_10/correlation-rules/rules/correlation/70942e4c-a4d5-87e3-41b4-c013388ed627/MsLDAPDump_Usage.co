@@ -1,0 +1,127 @@
+query Check_Domain($file_prefix) from Known_Windows_Domains {
+    fullname == $file_prefix
+    or netbios == $file_prefix
+}
+
+event Network_Connect:
+    key:
+        event_src.host, object.process.fullpath, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or 
+            (event_src.title == "sysmon" and msgid == "3")
+        and direction == "egress"
+        and in_list([389, 636, 3269], dst.port)
+        )
+        and filter::CheckWL_Networking("MsLDAPDump_Usage", lower(join([object.account.name, object.process.name, dst.host], "|")))
+    }
+
+event File_Create:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and regex(lower(object.name), "\.(ldapdump|laps|users|groups|adminusers|kerberoast|asreproast|unconstrained|constrained|computers|servers|deprecated_os|domaincontrollers|domaintrusts|mssqlservers|exchangeservers|gpo|admincount)\.\w+$", 0) != null
+        and (
+            exec_query("Check_Domain", [regex(lower(object.name), "^(\w+(\.\w+)+?)\.(ldapdump|laps|users|groups|adminusers|kerberoast|asreproast|unconstrained|constrained|computers|servers|deprecated_os|domaincontrollers|domaintrusts|mssqlservers|exchangeservers|gpo|admincount)\.\w+$", 1)])
+            or (
+                subject.account.domain != null
+                and find_substr(regex(lower(object.name), "^(\w+(\.\w+)+?)\.(ldapdump|laps|users|groups|adminusers|kerberoast|asreproast|unconstrained|constrained|computers|servers|deprecated_os|domaincontrollers|domaintrusts|mssqlservers|exchangeservers|gpo|admincount)\.\w+$", 1), lower(subject.account.domain)) != null
+            )
+        )
+    }
+
+rule MsLDAPDump_Usage: (File_Create[3,] and Network_Connect) timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+        $first_event = true
+    }
+
+    on Network_Connect {
+        $direction = direction
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $protocol = protocol
+        
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $alert.key = lower(join([object.account.name, object.process.name, dst.host], "|"))
+    }
+
+    on File_Create {
+        if $first_event then
+            $subject.account.id = subject.account.id
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.name = subject.account.name
+            $subject.account.session_id = subject.account.session_id
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.value = object.value
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.regex_match = regex(lower(object.name), "^(\w+(\.\w+)+?)\.(ldapdump|laps|users|groups|adminusers|kerberoast|asreproast|unconstrained|constrained|computers|servers|deprecated_os|domaincontrollers|domaintrusts|mssqlservers|exchangeservers|gpo|admincount)\.\w+$", 1)
+
+            $first_event = false
+        endif
+    }
+
+emit {  
+    $correlation_type = "incident"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $alert.context = "Connect to LDAP port: " + string($dst.port) + " → " + "Domain in filename: " + $alert.regex_match
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery: Domain Account"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

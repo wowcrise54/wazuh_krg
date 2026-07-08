@@ -1,0 +1,24 @@
+!TABULAR = "id,
+            {time = start_time},
+            {datafield1 = node_name},
+            {event_src.ip = ip},
+            rule_name,
+            {reason = message}"
+
+!COND = ($rule_name == "Превышение порога для системных ресурсов")
+			
+action = "alert"
+object = "resource"
+status = "success"
+
+object.type = "system"
+
+# datafield1 - имя узла
+
+importance = "medium"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_statewatcher"
+event_src.category = "Network monitoring system"
+
+id = "PT_Infotecs_VipNet_StateWatcher_odbc_Exceed_system_resource"

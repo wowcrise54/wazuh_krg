@@ -1,0 +1,9 @@
+event MWG_aggr:
+    key:
+        event_src.host, src.host, subject.account.name, dst.host, object.storage.path,
+        msgid, importance, object, action, status,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_McAfee_Web_Gateway_syslog_cef_Resource_access"
+
+aggregate MWG_aggregation: MWG_aggr [3,2000] within 10s

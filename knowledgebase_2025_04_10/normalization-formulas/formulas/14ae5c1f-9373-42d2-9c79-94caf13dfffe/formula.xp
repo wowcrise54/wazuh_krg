@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="SSH_TRANS_FILE_FINISH"}{"(l)"|"(s)"|}{"["NUMBER"]"?}:
+        {"CID="UNTIL(";")?}Finished to transfer file.({$tmp=UNTIL(")")}'
+
+$kv = keyvalue($tmp,", ","=","~")
+
+subject = "account"
+action = if lower($kv["ActionType"]) == "upload" then "upload" else "download" endif
+object = "file_object"
+status = "success"
+
+subject.account.name = $kv["UserName"]
+object.storage.fullpath = $kv["FileName"]
+$temp = csv(object.storage.fullpath, '/', '')
+object.storage.name = $temp[length($temp) - 1]
+object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+
+src.ip = $kv["IpAddress"]
+dst.hostname = event_src.hostname
+protocol.layer7 = "sftp"
+
+if (action == "upload") then
+    count.bytes_out = $kv["TransferLength"]
+else
+    count.bytes_in = $kv["TransferLength"]
+endif
+
+#datafield10 - номер инстанса VRF
+datafield10 = $kv["VpnInstanceName"]
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_SSH_trans_file_finish"

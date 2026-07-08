@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Злоумышленники могут отключить UAC в рамках контроля удаленных подключений. Это позволяет высокопривилегированным пользователям подключиться к удаленному узлу с использованием учетной записи из локальной группы администраторов на этом узле</Description>
+  <EventDescriptions>
+    <EventDescription id="0d89625f-e93a-ace8-3d0e-aaef18850f9a">Пользователь {subject.account.name} попытался отключить контроль учетных записей (UAC), создав в реестре запись {object.name}, на узле {event_src.host}</EventDescription>
+    <EventDescription id="116f574e-46e7-27f6-9d86-dd3c8ec0df62">Пользователь {subject.account.name} попытался отключить контроль учетных записей (UAC), создав в реестре запись {alert.regex_match}, на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

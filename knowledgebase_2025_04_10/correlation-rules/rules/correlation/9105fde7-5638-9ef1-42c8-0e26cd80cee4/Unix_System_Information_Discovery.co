@@ -1,0 +1,196 @@
+event Recon_Command:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "start"
+        and object == "process"
+        and subject.account.id != 0
+        and (
+            in_list(["hostname", "hostnamectl", "dnsdomainname", "lsb_release", "uname", "dmesg", "inxi", "lscpu", "lsblk", "fdisk", "df"], object.process.name)
+            or filter::Explicit_FileRead_Linux("\/etc\/([a-z]+-release|issue|version)\\b|\/proc\/(cpuinfo|version|cmdline)\\b")
+            or (
+                object.process.name == "grep"
+                and regex(object.process.cmdline, "grep.{0,30}(fedora|debian|gentoo|mandriva|mandrake|meego|redhat|lsb-|sun-|SUSE|release)[^\/]", 0) != null
+            )
+        )
+        and object.process.cmdline != null
+        and filter::CheckWL_Linux_Process_Creation("Unix_System_Information_Discovery", join([coalesce(subject.account.name, subject.account.id), object.process.cmdline, lower(object.process.cwd)], "|"))
+    }
+
+event File_Read:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and in_list(["open", "openat"], msgid)
+        and object.state == "r"
+        and (
+            in_list(["/etc/issue", "/etc/version", "/proc/cpuinfo", "/proc/version", "/proc/cmdline"], object.fullpath)
+            or match(object.fullpath, "/etc/*-release")
+        )
+        and not in_list(["systemctl", "systemd"], subject.process.name)
+        and filter::CheckWL_Linux_File_Operations("Unix_System_Information_Discovery", join([coalesce(subject.account.name, subject.account.id), coalesce(subject.process.meta, object.fullpath), lower(subject.process.cwd)], "|"))
+    }
+
+rule Unix_System_Information_Discovery: (Recon_Command[1,10] or File_Read[1,10]) timeout_timer 1m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+        $count.subevents = 0
+        $object_process_names = []
+        $object_fullpaths = []
+    }
+
+    on Recon_Command {
+        if $first_event then
+            $first_event = false
+            
+            $action = action  # start
+            $object = object  # process
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.cmdline = object.process.cmdline
+            $object.process.meta = object.process.meta
+            $object.process.cwd = object.process.cwd 
+            $object.process.parent.id = object.process.parent.id
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.asset = event_src.asset
+            $event_src.host = event_src.host
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.rule = event_src.rule
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+
+            $alert.key = join([coalesce(subject.account.name, subject.account.id), object.process.cmdline, lower(object.process.cwd)], "|")
+            $object_process_names = append($object_process_names, object.process.name)
+            $alert.regex_match = regex(object.process.cmdline, "\/etc\/(hostname|hosts|resolv\.conf|.*?-release|issue|version)|\/proc\/(cpuinfo|version|cmdline)|\\b(hostname|hostnamectl|dnsdomainname|lsb_release|uname|dmesg|inxi|lscpu|lsblk|fdisk|df)\\b|grep.{0,30}(fedora|debian|gentoo|mandriva|mandrake|meego|redhat|lsb-|sun-|SUSE|release)[^\/]", 0)
+            $labels = $labels + "|CheckWL_Linux_Process_Creation"
+        else
+			if not in_list($object_process_names, object.process.name) then
+				$object_process_names = append($object_process_names, object.process.name)
+			endif
+        endif
+        
+        $count.subevents = $count.subevents + 1
+    }
+
+    on File_Read {
+        if $first_event then
+            $first_event = false
+            
+            $action = action  # access
+            $object = object  # file_object
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.cmdline = subject.process.cmdline
+            $subject.process.meta = subject.process.meta
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.parent.id = subject.process.parent.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+
+            $object.name = object.name
+            $object.id = object.id
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.type = object.type
+            $object.state = object.state
+
+            $event_src.asset = event_src.asset
+            $event_src.host = event_src.host
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.rule = event_src.rule
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+
+            $alert.key = join([coalesce(subject.account.name, subject.account.id), coalesce(subject.process.meta, object.fullpath), lower(subject.process.cwd)], "|")
+
+            if in_list(["/etc/issue", "/etc/version", "/proc/cpuinfo", "/proc/version", "/proc/cmdline"], object.fullpath) then
+                $alert.context = " | object.fullpath in list"
+            else
+                $alert.regex_match = regex(object.fullpath, "\/etc\/.*-release", 0)
+            endif
+
+            $object_fullpaths = append($object_fullpaths, object.fullpath)
+            $labels = $labels + "|CheckWL_Linux_File_Operations"
+        else
+            if not in_list($object_fullpaths, object.fullpath) then
+                $object_fullpaths = append($object_fullpaths, object.fullpath)
+            endif
+        endif
+        
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+    
+    $importance = "low"
+
+    if length($object_process_names) > 1 then
+        $alert.context = $alert.context + " | processes: " + join($object_process_names, " | ")
+    elif length($object_process_names) == 1 then
+        $alert.context = $alert.context + " | process: " + $object_process_names[0]
+    endif
+
+    if length($object_fullpaths) > 1 then
+        $alert.context = $alert.context + " | files: " + join($object_fullpaths, " | ")
+    elif length($object_fullpaths) == 1 then
+        $alert.context = $alert.context + " | file: " + $object_fullpaths[0]
+    endif
+
+    $alert.context = strip($alert.context, " | ", "")
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "System Information Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

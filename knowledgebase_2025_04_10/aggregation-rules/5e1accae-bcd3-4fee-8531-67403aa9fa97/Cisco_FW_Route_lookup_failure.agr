@@ -1,0 +1,8 @@
+event Route_lookup_failure:
+    key:
+        event_src.host, !dst.host, !src.host, action, object, status, importance,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Cisco_ASA_FWSM_PIX_syslog_110001_A_route_lookup_failure"
+
+aggregate Cisco_FW_Route_lookup_failure: Route_lookup_failure[3,100] within 5m

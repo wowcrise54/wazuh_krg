@@ -1,0 +1,47 @@
+EVENTLOG = 'EventID="6279"'
+
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "system"
+action = "lock"
+object = "account"
+status = "success"
+
+object.account.id = $Data["SubjectUserSid"]
+object.account.domain = lower($Data["SubjectDomainName"])
+
+if $Data["SubjectUserName"] != "-" and $Data["SubjectUserName"] != null then
+    $username = lower($Data["SubjectUserName"])
+    if find_substr($username, '@') != null then
+        object.account.name = csv($username, '@', '')[0]
+    elif find_substr($username, '\\') != null then
+        object.account.name = csv($username, '\\', '')[1]
+    else 
+        object.account.name = $username
+    endif
+endif
+
+logon_auth_method = "remote"
+
+reason = "repeated failed authentication attempts"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "nps"
+event_src.subsys = lower($Channel)
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "AAA"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_6279_NPS_locked_the_user_account"

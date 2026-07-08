@@ -1,0 +1,65 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        KSMG: CEF:0|AO Kaspersky Lab|{subject.application.name="Kaspersky Secure Mail Gateway"}|2.{$ver=UNTIL("|") 
+        msgid="LMS_EV_SCAN_LOGIC_PART_RESULT"}|message part scan result|{$level=WORD}|{$kv=KEYVALUE(" ", "=")}'
+        
+COND = ($kv["outcome"] == "Infected" and $kv["act"] == "Deleted") 
+        or ($kv["outcome"] == "Infected" and $kv["act"] == "Disinfected") 
+        or in_list(["DetectedFileName", "DetectedFileFormat", "DetectedFileSize"], $kv["cs6Label"])
+        or in_list(["DetectedFileName", "DetectedFileFormat", "DetectedFileSize"], $kv["cs5Label"])
+        or $kv["outcome"] == "Encrypted"
+        
+subject = "application"
+
+if $kv["outcome"] == "Infected" and $kv["act"] == "Deleted" then
+    action = "remove"
+    object = "malware"
+    reason = "infected"
+elif $kv["outcome"] == "Infected" and $kv["act"] == "Disinfected" then
+    action = "remove"
+    object = "malware"
+    reason = "infected"
+elif $kv["outcome"] == "Encrypted" then
+    action = "detect"
+    object = "file_object"
+    reason = "encrypted"
+else
+    action = "detect"
+    object = "file_object"
+endif
+
+status = "success"
+
+subject.version = "2." + $ver
+
+object.property = $kv["cs1Label"]
+object.value = $kv["cs1"] 
+object.state = $kv["act"] 
+object.name = $kv["fname"]
+if $kv["cs4"] != null then
+    object.group = $kv["cs4"]
+endif
+object.type = $kv["cs6"]
+
+datafield1 = $kv["cs5"]  # Detected file name mask
+
+reason = lower($kv["outcome"])
+
+importance = switch $level
+    case "Low" "low"
+    case "Medium" "medium"
+    case "High" "high"
+endswitch
+
+event_src.rule = $kv["cs2"]
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_secure_mail_gateway"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KSMG_syslog_v2_message_part_scan_result"

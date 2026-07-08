@@ -1,0 +1,94 @@
+event Symmetric_Key_Access_Manage:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "yandex_cloud"
+        and event_src.subsys == "kms"
+        and action == "modify"
+        and object == "account"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("Yandex_Cloud_Symmetric_Key_Access_Manage", lower(join([src.ip, object.storage.fullpath, datafield5], "|")))
+    }
+
+rule Yandex_Cloud_Symmetric_Key_Access_Manage: Symmetric_Key_Access_Manage
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Symmetric_Key_Access_Manage {
+        $operation = msgid
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+
+        $subject.process.meta = subject.process.meta
+
+        $subject.state = subject.state
+        $subject.type = subject.type
+
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.property = object.property
+        $object.new_value = object.new_value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $logon_auth_method = logon_auth_method
+
+        $datafield1 = datafield1  # Наименование организации
+        $datafield2 = datafield2  # Наименование облака
+        $datafield3 = datafield3  # Наименование каталога
+        $datafield4 = datafield4  # Идентификатор ключа
+        $datafield5 = datafield5  # Наименование ключа
+
+        $chain_id = chain_id
+
+        $alert.key = lower(join([src.ip, object.storage.fullpath, datafield5], "|"))
+        $alert.context = lower(join(remove([subject.account.name, src.ip, object.storage.fullpath, datafield5], null), " | "))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+
+    if ($operation == "SetSymmetricKeyAccessBindings" and not in_list(["", null], $object.new_value))
+       or regex($object.new_value, "(?:^|\|)add\s+", 0) != null then
+        $category.high = "Privilege Escalation"
+        $category.low = "Valid Accounts: Cloud Accounts"
+        $incident.category = "UserCompromising"
+    else
+        $category.high = "Impact"
+        $category.low = "Account Access Removal"
+        $incident.category = "UnauthorizedDataDeletion"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $object.storage.fullpath, $datafield5], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

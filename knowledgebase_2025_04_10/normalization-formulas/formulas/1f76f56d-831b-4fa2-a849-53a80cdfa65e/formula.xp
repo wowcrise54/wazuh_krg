@@ -1,0 +1,31 @@
+EVENTLOG = 'EventID="10001"'
+!COND = $Channel=="Microsoft-Windows-NetworkProfile/Operational" and $Provider["Name"]=="Microsoft-Windows-NetworkProfile"
+
+action = "disable"
+object = "network"
+status = "success"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network device"
+event_src.id = $Provider["Name"]
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+object.name = $Data["Name"]
+$object.id = $Data["Guid"]
+object.id = strip($object.id, "{", "}")
+object.type = $Data["Type"]
+object.state = $Data["State"]
+
+id = "PT_Microsoft_Windows_eventlog_10001_Network_disable"
+importance = "info"

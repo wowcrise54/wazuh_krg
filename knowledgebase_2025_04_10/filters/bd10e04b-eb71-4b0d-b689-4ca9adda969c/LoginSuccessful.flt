@@ -1,0 +1,26 @@
+filter LoginSuccessful() {
+    filter::LoginSuccessful_Windows()
+    or filter::LoginSuccessful_Unix()
+    or (
+        filter::NotFromCorrelator()
+        and (
+            (
+                category.generic == "Access"
+                and category.high == "Authentication"
+            )
+            or (
+                category.high == "Access Management"
+                and category.low == "Communication"
+            )
+        )
+        and action == "login"
+        and status == "success"
+        and not (
+            (
+                event_src.vendor == "microsoft"
+                and event_src.title == "windows"
+            )
+            or filter::OperatingSystem_UNIXLike()
+        )
+    )
+}

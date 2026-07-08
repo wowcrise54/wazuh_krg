@@ -1,0 +1,45 @@
+EVENTLOG = 'EventID.text="18301"'
+
+COND = find_substr($Provider["Name"], "MSSQL$") != null or $Provider["Name"] == 'MSSQLSERVER'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+# разбираем домен и имя пользователя
+$csv = csv($Data[0], "\\", "'")
+if length($csv) == 2 then
+    subject.account.domain = lower($csv[0])
+    subject.account.name = lower($csv[1])
+else
+    subject.account.name = lower($csv[0])
+endif
+
+$first_dot = find_substr($Computer, '.')
+if $first_dot != null then
+    dst.fqdn = lower($Computer)
+    dst.hostname = lower(substr($Computer, 0, $first_dot))
+else
+    dst.hostname = lower($Computer)
+endif
+
+reason = "Could not find a login matching the name provided"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "sql_server"
+event_src.subsys = lower($Channel)
+event_src.fqdn = lower(dst.fqdn)
+event_src.hostname = lower(dst.hostname)
+event_src.category = "Database server"
+
+id = "PT_Microsoft_SQL_Server_eventlog_18301_Login_failed"

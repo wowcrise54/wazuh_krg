@@ -1,0 +1,277 @@
+query CheckCommand($commandline) from Malicious_Commands {
+    regex_match($commandline, column::command_value)
+}
+
+query CheckCommand_Qhandler($commandline) from Malicious_Commands {
+    regex_match($commandline, column::command_value)
+}
+    qhandler {
+        $event_importance = command_importance
+        $event_type = command_type
+        $event_description = command_description
+        $command_value = command_value
+    }
+
+event Run_Malicious_Command_In_Cmd:
+    key:
+        event_src.host, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and exec_query("CheckCommand", [lower(object.process.cmdline)])
+        and filter::CheckWL_Process_Creation("Execute_Malicious_Command", lower(object.process.cmdline))
+    }
+
+event Run_Malicious_Command_In_Powershell_Pipeline:
+    key:
+        event_src.host, object.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and exec_query("CheckCommand", [lower(object.process.cmdline)])
+        and filter::CheckWL_Powershell("Execute_Malicious_Command", lower(object.process.cmdline))
+    }
+
+event Run_Malicious_Command_In_Powershell_Command:
+    key:
+        event_src.host, object.process.id, object.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and exec_query("CheckCommand", [lower(object.process.cmdline)])
+        and filter::CheckWL_Powershell("Execute_Malicious_Command", lower(object.process.cmdline))
+    }
+
+rule Execute_Malicious_Command: (Run_Malicious_Command_In_Cmd+ or Run_Malicious_Command_In_Powershell_Pipeline+ or Run_Malicious_Command_In_Powershell_Command+) timer 1m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on Run_Malicious_Command_In_Cmd {
+        if $first_event then
+            $action = action  # start
+            $object = object  # process
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $object.account.session_id = object.account.session_id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.hash = object.process.hash
+            $object.process.hash.md5 = object.process.hash.md5
+            $object.process.hash.imphash = object.process.hash.imphash
+            $object.process.hash.sha1 = object.process.hash.sha1
+            $object.process.hash.sha256 = object.process.hash.sha256
+            $object.process.version = object.process.version
+            $object.process.cmdline = object.process.cmdline
+            $object.process.guid = object.process.guid
+            $object.process.meta = object.process.meta
+            $object.process.original_name = object.process.original_name
+            $object.process.cwd = object.process.cwd
+            $object.process.chain = object.process.chain 
+    
+            $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+            $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+                $reason = "Service execution"
+            elif $object.process.parent.name == "scheduler.exe" then
+                $reason = "Task execution"
+            else
+                $reason = "User execution"
+            endif
+
+            $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $result = exec_query("CheckCommand_Qhandler", [lower(object.process.cmdline)])
+            if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+                $importance = $result["$event_importance"]
+            else
+                $importance = "medium"
+            endif
+            if in_list(["event", "incident"], lower($result["$event_type"])) then
+                $correlation_type = $result["$event_type"]
+            else
+                $correlation_type = "event"
+            endif
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.regex_match = regex(lower(object.process.cmdline), $result["$command_value"], 0)
+            $alert.context = $result["$event_description"]
+            $labels = $labels + "|CheckWL_Process_Creation"
+
+            $first_event = false
+        endif
+    }
+
+    on Run_Malicious_Command_In_Powershell_Pipeline {
+        if $first_event then
+            $action = action  # execute
+            $object = object  # command
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $object.process.cmdline = object.process.cmdline
+            $object.process.name = object.process.name
+
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            $datafield8 = datafield8  # версия модуля
+
+            $chain_id = chain_id
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $result = exec_query("CheckCommand_Qhandler", [lower(object.process.cmdline)])
+            if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+                $importance = $result["$event_importance"]
+            else
+                $importance = "medium"
+            endif
+            if in_list(["event", "incident"], lower($result["$event_type"])) then
+                $correlation_type = $result["$event_type"]
+            else
+                $correlation_type = "event"
+            endif
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.regex_match = regex(lower(object.process.cmdline), $result["$command_value"], 0)
+            $alert.context = $result["$event_description"]
+            $labels = $labels + "|CheckWL_Powershell"
+
+            $first_event = false
+        endif
+    }
+
+    on Run_Malicious_Command_In_Powershell_Command {
+        if $first_event then
+            $action = action  # execute
+            $object = object  # command
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.session_id = object.account.session_id
+            $object.account.privileges = object.account.privileges
+            $object.account.id = object.account.id
+
+            $object.id = object.id
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+
+            $object.value = object.value
+            $object.process.cmdline = object.process.cmdline
+            $object.process.id = object.process.id
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $result = exec_query("CheckCommand_Qhandler", [lower(object.process.cmdline)])
+            if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+                $importance = $result["$event_importance"]
+            else
+                $importance = "medium"
+            endif
+            if in_list(["event", "incident"], lower($result["$event_type"])) then
+                $correlation_type = $result["$event_type"]
+            else
+                $correlation_type = "event"
+            endif
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.regex_match = regex(lower(object.process.cmdline), $result["$command_value"], 0)
+            $alert.context = $result["$event_description"]
+            $labels = $labels + "|CheckWL_Powershell"
+
+            $first_event = false
+        endif
+    }
+
+emit {
+    $subject = "account"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

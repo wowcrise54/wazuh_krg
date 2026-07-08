@@ -1,0 +1,65 @@
+TABULAR = '{msgid=auditType_actionI18nKey},
+           author_id,
+           author_name,
+           author_type,
+           affectedObjects,
+           changedValues,
+           extraAttributes,
+           timestamp_epochSecond'
+
+COND = in_list([
+            "audit.logging.summary.page.pdf.export",
+            "audit.logging.summary.page.exported.word",
+            "audit.logging.summary.blog.pdf.export",
+            "audit.logging.summary.blog.exported.word"
+       ], $auditType_actionI18nKey)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+
+subject = switch $author_type
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = "download"
+object = "resource"
+status = "success"
+
+if $author_type == "user" then
+    subject.account.fullname = $author_name
+    subject.account.id = $author_id
+endif
+
+submessage("JSON", "parse_json", '{"affectedObjects_json": ' + $affectedObjects + '}')
+
+object.name = $affectedObjects_json[1]["name"]
+object.id = $affectedObjects_json[1]["id"]
+object.group = $affectedObjects_json[0]["name"]
+
+datafield1 = $affectedObjects_json[0]["name"]  # Space Name
+
+if in_list(["page.pdf.export", "page.exported.word"], strip(msgid, "audit.logging.summary.", "")) then
+    object.type = "page"
+    datafield2 = $affectedObjects_json[1]["name"]  # Page Name
+    numfield2 = $affectedObjects_json[1]["id"]  # Page ID
+else
+    object.type = "blog_post"
+    datafield3 = $affectedObjects_json[1]["name"]  # Blog Name
+    numfield3 = $affectedObjects_json[1]["id"]  # Blog ID
+endif
+
+numfield1 = $affectedObjects_json[0]["id"]  # Space ID
+
+src.ip = $source
+
+time = epoch_to_datetime($timestamp_epochSecond)
+importance = "low"
+
+event_src.vendor = "atlassian"
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_odbc_Audit_Export_Page_Blogpost"

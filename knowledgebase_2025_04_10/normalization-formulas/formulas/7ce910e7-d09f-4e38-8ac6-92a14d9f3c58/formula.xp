@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} %%{NUMBER?}
+        {$tmp_subsys=WORD}/{NUMBER}/{msgid="CMDCONFIRM_UNIFORMRECORD"}{"("WORD")"?}{"["NUMBER"]"?}:Record command
+        information. ({$kv=KEYVALUE}'
+
+# Применение команды пользователем и проверка подсказки
+COND = ($kv["UserInput"] == "Y)" or $kv["UserInput"] == "Y") and (find_substr($kv["PromptInfo"],
+       "The current configuration will be written to the device") != null)
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+subject.account.name = $kv["User"]
+
+object.account.name = $kv["User"]
+object.value = strip($kv["Command"], "\"", "\"")  # Команда
+object.process.cmdline = object.value
+
+src.ip = $kv["IP"]
+
+importance = "medium"
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Confirm_config_saving"

@@ -1,0 +1,24 @@
+TEXT = "{'<'NUMBER'>'?} {time = DATETIME}, {NUMBER}, {STRING} {STRING} WARN, {WORD}, {WORD}, {IPV4|IPV6|HOSTNAME|},
+        {event_src.ip = IPV4|event_src.ip = IPV6|$Computer=HOSTNAME}, UDP_SERVER_SHUTDOWN, {msgid = '26071'}, {$csv = CSV(',', '\"')}"
+
+action = "stop"
+object = "system"
+object.type = "UDP-Server"
+status = "success"
+
+src.port = $csv[10]
+
+importance = "high"
+
+event_src.vendor = "rsa"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "authentication_manager"
+event_src.category = "AAA"
+
+id = "PT_RSA_Authentication_manager_syslog_shutdown_udp_server"

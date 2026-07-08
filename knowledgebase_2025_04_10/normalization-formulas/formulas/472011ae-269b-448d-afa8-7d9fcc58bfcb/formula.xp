@@ -1,0 +1,53 @@
+TEXT = "scd_timestamp={STRING+?} ss_server_name={event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} event_name=
+        {msgid='FILE_UNSOLIDIFIED'} evt_id={NUMBER} evt_type={WORDDASH} evt_sink={STRING} seq_no={NUMBER} time_stamp=
+        {$date=NUMBER} server_state={NUMBER} user_name={$user_name=STRING+} file_name={$file_name=STRING+} prog_name=
+        {$temp_process=STRING+} workflow_id={REST}"
+
+subject = "account"
+action = "modify"
+object = "file_object"
+status = "success"
+
+if find_substr($user_name, "\\") != null then
+    $temp_csv = csv($user_name, "\\", "")
+    subject.account.name = $temp_csv[1]
+    subject.account.domain= $temp_csv[0]
+else
+    subject.account.name = $user_name
+endif
+
+subject.process.fullpath = $temp_process
+$csv_temp_process = csv($temp_process, "\\", "")
+subject.process.name = $csv_temp_process[length($csv_temp_process) - 1]
+if length($csv_temp_process) > 1 then
+    subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+endif
+
+object.fullpath = $file_name
+$csv_file_name = csv($file_name, "\\", "")
+object.name = $csv_file_name[length($csv_file_name) - 1]
+if strip($file_name, "", object.name) != '' then
+    object.path = strip($file_name, "", object.name)
+endif
+object.state = "unsolidified"
+
+time = epoch_ms_to_datetime($date)
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solidcore"
+event_src.category = "Host security"
+
+importance = "low"
+
+id = "PT_McAfee_Solidcore_filemonitor_FILE_UNSOLIDIFIED_UPDATE"

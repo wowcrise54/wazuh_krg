@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {msgid="CisACS_04_TACACSAcc"} {WORD} {NUMBER} 0 {$kv=KEYVALUE}'
+
+subject = "account"
+action = switch $kv['Acct-Flags']
+    case "stop" "stop"
+    case "start" "start"
+    case "watchdog" "info"
+endswitch
+object = "session"
+status = "success"
+
+if length($kv['User-Name']) > 0 then
+    subject.name = $kv['User-Name']
+endif
+
+subject.group = $kv['Group-Name']
+
+object.id = $kv['task_id']
+
+if maybe_ipv4(strip($kv["Caller-Id"], "", "/")) != null
+        or maybe_ipv6(strip($kv["Caller-Id"], "", "/")) != null then
+    src.ip = strip($kv["Caller-Id"], "", "/")
+endif
+
+nas_ip=$kv['NAS-IP-Address']
+
+duration = $kv['elapsed_time']
+count.bytes_in = $kv['bytes_in']
+count.bytes_out = $kv['bytes_out']
+count.packets_in = $kv['paks_in']
+count.packets_out = $kv['paks_out']
+
+importance = "info"
+
+event_src.title = "acs"
+event_src.vendor = "cisco"
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_CisACS_04_TACACSAcc"

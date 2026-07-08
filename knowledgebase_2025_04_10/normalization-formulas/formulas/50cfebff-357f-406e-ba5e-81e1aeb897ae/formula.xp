@@ -1,0 +1,27 @@
+TABULAR = 'action,
+           orig,
+           sys_msgs,
+           time'
+
+COND = $action == "ctl"
+       and find_substr($sys_msgs, "interface is not protected by the anti-spoofing feature") != null
+
+action = "info"
+object = "interface"
+status = "success"
+
+$sym1 = find_substr($sys_msgs, "The") + 4
+$sym2 = find_substr($sys_msgs, "interface") - 1
+interface = substr($sys_msgs, $sym1, $sym2 - $sym1)
+
+reason = "interface is not protected by the anti-spoofing feature"
+
+time = $time
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Common_Anti_spoofing"

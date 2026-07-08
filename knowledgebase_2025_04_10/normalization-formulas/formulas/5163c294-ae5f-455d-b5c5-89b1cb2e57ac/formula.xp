@@ -1,0 +1,55 @@
+TABULAR =  "recordid,
+            module_name,
+            severity,
+            event_id,
+            {time = time},
+            {datafield1 = site_code},
+            hostname,
+            {datafield2 = component},
+            params
+            "
+
+COND = $event_id == 30102
+
+subject = "account"
+object = "session"
+object.type = "administrative"
+
+action = "start"
+status = "success"
+
+msgid = string($event_id)
+
+submessage ("TEXT", "add_info", $params)
+subformula "add_info"
+    TEXT = "{$csv=CSV}"
+
+    if find_substr($csv[0], "\\") != null then
+        $subject_name = $csv[0]
+    elif find_substr($csv[1], "\\") != null then
+        $subject_name = $csv[1]
+    elif find_substr($csv[2], "\\") != null then
+        $subject_name = $csv[2]
+    elif find_substr($csv[3], "\\") != null then
+        $subject_name = $csv[3]
+    elif find_substr($csv[4], "\\") != null then
+        $subject_name = $csv[4]
+    endif
+
+    $tmp = find_substr($subject_name, "\\")
+    if $tmp != null then
+        subject.name = lower(strip(substr($subject_name, $tmp, length($subject_name)), "\\", ""))
+        subject.domain = lower(substr($subject_name, 0, $tmp))
+    else
+        subject.name = lower($subject_name)
+    endif
+endsubformula
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "info"
+
+id = "PT_Microsoft_SCCM_odbc_30102_user_started_admin_session"

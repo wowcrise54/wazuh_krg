@@ -1,0 +1,98 @@
+query Check_If_Local_Group_Significant($group_name, $group_id) from Significant_Windows_Groups {
+    name == $group_name
+    or sid == $group_id
+}
+
+query Check_If_AD_Group_Is_Critical($group_id) from AssetGrid_Critical_Domain_Accounts {
+    group_sid == $group_id
+    # Кейс для вложенных групп
+    or (
+        member_type == "DomainGroup"
+        and member_sid == $group_id
+    )
+}
+
+event Critical_Domain_Group_User_Add:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows" 
+        # Security-enabled global and universal groups
+        and in_list(["4728", "4756", "4732", "632", "636"], msgid)
+        and (
+            regex(lower(object.id), "s-1-5-21-.*-(512|518|519|551|552|544)$", 0) != null 
+            or regex(lower(object.id), "s-1-5-.*-(551|552|544|548)$", 0) != null
+            or lower(object.id) == "s-1-5-32-549"
+            or exec_query("Check_If_AD_Group_Is_Critical", [lower(object.id)])
+            or exec_query("Check_If_Local_Group_Significant", [lower(object.name), lower(object.id)])
+        )
+        and filter::CheckWL_Specific_Only("Critical_Domain_Group_User_Add", lower(join([object.name, coalesce(object.account.name, object.account.id)], "|")))
+    }
+    
+rule Critical_Domain_Group_User_Add: Critical_Domain_Group_User_Add
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Critical_Domain_Group_User_Add {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+        $object.account.dn = object.account.dn     
+
+        $object.name = object.name
+        $object.type = object.type
+        $object.domain = object.domain
+        $object.id = object.id
+        $object.state = object.state
+
+        $alert.key = lower(join([object.name, coalesce(object.account.name, object.account.id)], "|"))
+        $alert.context = lower(join([subject.account.name, object.account.dn], " | "))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+
+emit {
+    if regex(lower($object.id), "s-1-5-21-.*-(512|519)$", 0) != null or lower($object.id) == "s-1-5-32-549" then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+    
+    $subject = "account"
+    $action = "modify"
+    $object = "user_group"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

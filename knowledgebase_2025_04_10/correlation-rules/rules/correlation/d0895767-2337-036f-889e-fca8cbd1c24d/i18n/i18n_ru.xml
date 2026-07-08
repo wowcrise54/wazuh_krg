@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Возможное выполнение кода с помощью уязвимости CVE-2024-29510. Это уязвимость форматной строки в Ghostscript версий до 10.03.1, которая позволяет обойти песочницу и выполнять произвольные команды. Уязвимость доступна через такие библиотеки, как ImageMagick</Description>
+  <EventDescriptions>
+    <EventDescription id="3edef870-e9aa-c4c4-0512-07f55b7873b9">Пользователь {subject.account.name} запустил процесс {object.process.name}, воспользовавшись уязвимостью CVE-2024-29510 в Ghostscript, на узле {event_src.host}</EventDescription>
+    <EventDescription id="b3e44cc9-c9bf-3079-5ffa-0bc7283dae59">Пользователь {subject.account.name} запустил процесс {object.process.name} с родительским процессом Ghostscript на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

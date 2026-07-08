@@ -1,0 +1,159 @@
+query MatchCriticalObject($object_name, $action_name, $event_src_title) from Applications_Critical_Data_Values {
+    data_value == $object_name
+    and (action_id == $action_name or action_id == "*")
+    and event_src_title == $event_src_title
+}
+
+event Modify_Data_Critical_1c_Enterprise:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "1c_enterprise"
+        and in_list(["_$Data$_.New", "_$Data$_.Post", "_$Data$_.Update", "_$Data$_.Delete", "_$Data$_.Unpost"], msgid)
+        and object.property != null
+        and exec_query("MatchCriticalObject", [lower(object.property), lower(msgid), event_src.title])
+        and filter::CheckWL_Specific_Only("Enterprise_1C_Manipulate_Critical_Data", lower(object.value))
+    }
+
+event Modify_Data_Critical_Bitrix24:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "bitrix24"
+        and msgid == "FILE_PERMISSION_CHANGED"
+        and object.name != null
+        and exec_query("MatchCriticalObject", [lower(object.name), lower(msgid), event_src.title])
+        and filter::CheckWL_Specific_Only("Enterprise_1C_Manipulate_Critical_Data", lower(object.fullpath))
+    }
+
+rule Enterprise_1C_Manipulate_Critical_Data: Modify_Data_Critical_1c_Enterprise or Modify_Data_Critical_Bitrix24
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Modify_Data_Critical_1c_Enterprise {
+        $object = object
+
+        $subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.session_id = subject.application.account.session_id
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+
+        $object.property = object.property
+        $object.value = object.value
+
+        $datafield2 = datafield2  # TransactionID
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $alert.key = lower(object.value)
+
+        if $subject.account.name != null then
+            $os_account = join(remove([subject.account.name, subject.account.domain], null), "@")
+        endif
+
+        $alert.context = join(remove([subject.application.account.name,
+                                      $os_account,
+                                      src.host,
+                                      object.property,
+                                      reason], null), " | ")
+
+        $reason = reason
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on Modify_Data_Critical_Bitrix24 {
+        $object = object
+
+        $subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.privileges = subject.application.account.privileges
+        $subject.application.account.session_id = subject.application.account.session_id
+
+        $subject.account.fullname = subject.account.fullname  # Application account
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+
+        $subject.process.meta = subject.process.meta
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $datafield1 = datafield1  # Запрос 
+        $datafield2 = datafield2  # Идентификатор сайта 
+
+        $numfield1 = numfield1    # Идентификатор посетителя
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $alert.key = lower(object.fullpath)
+
+        if subject.account.name != null then
+            $os_account = join(remove([subject.account.name, subject.account.domain], null), "@")
+        endif
+
+        $alert.context = join(remove([subject.application.account.name, $os_account, src.host], null), " | ")
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit { 
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Manipulation: Stored Data Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.application.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

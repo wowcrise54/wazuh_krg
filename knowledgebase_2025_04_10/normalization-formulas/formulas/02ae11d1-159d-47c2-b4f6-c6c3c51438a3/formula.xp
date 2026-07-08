@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+        wms[{NUMBER}]: <{msgid=NUMBER}> <WARN> < {WORDDASH}
+        {event_src.ip=IPV4|event_src.ip=IPV6} > |ids| AP({datafield1=MACADDR}@{subject.name=HOSTNAME}):
+        Disconnect Station Attack: An AP detected a disconnect attack of
+        client {dst.mac=MACADDR} and access point (BSSID
+        {datafield2=MACADDR} and SSID {datafield3=STRING+} on CHANNEL {NUMBER} ).
+        SNR of client is {NUMBER}. {REST}'
+
+subject = "system"
+action = "detect"
+object = "attack"
+status = "success"
+
+subject.type = "access point"
+
+object.type = "Disconnect Station"
+
+# datafield1 - detector AP mac
+# datafield2 - AP BSSID
+# datafield3 - AP SSID
+
+importance = "high"
+
+event_src.title = "arubaos"
+event_src.vendor = "aruba_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Wireless"
+
+id = "PT_Aruba_Networks_ArubaOS_syslog_detecting_disconnect_station_attack"

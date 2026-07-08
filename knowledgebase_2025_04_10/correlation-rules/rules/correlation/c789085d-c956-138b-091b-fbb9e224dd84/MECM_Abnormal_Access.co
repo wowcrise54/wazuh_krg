@@ -1,0 +1,149 @@
+# Проверяем режим сбора профиля и работы правила
+query AutoProfile($rule) from Auto_Profile {
+    rule == $rule
+}
+
+# Проверяем, если ли в профиле такой пользователь
+query CheckUsername($title, $username) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+}
+
+# Проверяем, использовал ли пользователь раньше этот адрес
+query CheckHost($title, $username, $src_ip) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_ip == $src_ip
+}
+
+query CheckProfile($title, $username, $src_host, $dst_host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_host == $src_host
+    and dst_host == $dst_host
+}
+
+event Abnormal_Access:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.vendor == "microsoft"
+        and event_src.title == "mecm"
+        and msgid == "30076"
+        # Сверка с профилем
+        and not filter::Check_Profile(
+            event_src.title, # access_type
+            lower(subject.account.name),
+            null,
+            lower(src.host),
+            coalesce(lower(dst.host),lower(event_src.host)),
+            null, # dst_path
+            null # additional_data
+        )
+        and filter::CheckWL_Profiling("MECM_Abnormal_Access", lower(join([src.host, subject.account.name, 
+        event_src.host, event_src.title], "|")))
+    }
+    
+rule MECM_Abnormal_Access: Abnormal_Access
+
+    init {
+        # Если в таблице Auto_Profile нет правила, то считаем, что правило работает в режиме автопрофилирования
+        $auto_profile = coalesce(select_query_first("AutoProfile", ["MECM_Abnormal_Access"], "auto_profiling"), 1)
+        $insert_into_cond = false
+        $ttl_tl = 7862400
+        $labels = "CheckWL_Profiling"
+    }
+
+    on Abnormal_Access {
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+
+        $src.host = src.host
+
+        $dst.host = dst.host
+        
+        $datafield1 = datafield1 # mecm site code
+        $datafield2 = datafield2 # component of mecm (how the event was generated)
+        $datafield5 = datafield5 # module name of mecm 
+
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+        $event_src.host = event_src.host
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+   
+        # Проверяем отличие от профиля
+        
+        if not exec_query("CheckProfile", [$event_src.title, lower($subject.account.name), 
+        lower($src.host), coalesce(lower($dst.host),lower($event_src.host))]) then
+            if not exec_query("CheckUsername", [lower(event_src.title), lower(subject.account.name)]) then
+                $reason = "no_user"
+                $importance = "high"
+                $correlation_type = "incident"
+                $insert_into_cond = true
+            elif not exec_query("CheckHost", [lower(event_src.title), lower(subject.account.name), string(src.host)]) then
+                $reason = "new_address"
+                $importance = "medium"
+                $insert_into_cond = true
+            elif bool($last_changed) then         
+                if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) < div($ttl_tl, 2) then
+                    $importance = "info"
+                    $detect = "drop"
+                else
+                    $insert_into_cond = true
+                endif     
+            else
+                $importance = "info"
+                $detect = "drop"
+            endif
+        else
+            $last_changed = select_query_first("CheckProfile", [$event_src.title, lower($subject.account.name), 
+            lower($src.host), coalesce(lower($dst.host),lower($event_src.host))], "_last_changed")
+            if bool($last_changed) then         
+                    if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then          
+                            $insert_into_cond = true
+                    endif
+                endif
+                $importance = "info"
+                $detect = "drop"
+            
+        endif
+        
+        # Если правило работает в режиме сбора профиля, то emit не нужен
+        
+        if $auto_profile == 2 then
+            $importance = "info"
+            $detect = "drop"
+        endif 
+
+        $alert.key = lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|"))
+        $alert.context = subject.account.name + " connect from " + src.hostname + " to " + dst.hostname
+    }
+
+    insert_into Risk_User_Logon_Correlation_Profile if ($auto_profile !=0 and $insert_into_cond == true) {
+        login = lower($subject.account.name)    
+        access_type = $event_src.title
+        src_host = lower($src.host)
+        dst_host = coalesce(lower($dst.host),lower($event_src.host))
+    }
+
+emit {
+    $correlation_type = coalesce($correlation_type, "event")
+
+    $subject = "account"
+    $action = "start"    
+    $object = "session"  
+    $status = "success"
+
+    $category.generic = "Anomaly"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"
+    
+    $incident.aggregation.key = join([$correlation_name, $src.host, $subject.account.name], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

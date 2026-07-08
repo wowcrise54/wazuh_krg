@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["operation"] == "File Stored" 
+       and $kv["subject"] == "File Operation" 
+       and $kv["action"] == "Accept" 
+       and $kv["product"] == "cpmidu_update_tool"
+
+action = "modify"
+object = "file_object"
+status = "success"
+
+object.name = $kv["additional_info"]
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+msgid = $kv["operation"]
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.hostname = $kv["machine"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_File_stored"

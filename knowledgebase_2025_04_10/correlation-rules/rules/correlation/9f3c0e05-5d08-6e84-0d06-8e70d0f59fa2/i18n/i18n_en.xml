@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A suspicious process infiltrated process werfault.exe, which may indicate the use of the Havoc software that allows to covertly execute PowerShell commands</Description>
+  <EventDescriptions>
+    <EventDescription id="8586e8f1-5d3a-be19-bdac-e482d82988bb">Process {object.process.parent.name} created a remote thread in the address space of process {object.process.name} on host {event_src.host}. This may indicate the use of the Havoc software that allows to covertly execute PowerShell commands.</EventDescription>
+    <EventDescription id="d28ece38-fe01-48a7-84b2-8dfb46bdb805">Process {object.process.parent.name} created a remote thread in the address space of process {object.process.name} on host {event_src.host} to execute the "{object.process.cmdline}" command. This may indicate the use of the Havoc software that allows to covertly execute PowerShell commands.</EventDescription>
+  </EventDescriptions>
+</Localization>

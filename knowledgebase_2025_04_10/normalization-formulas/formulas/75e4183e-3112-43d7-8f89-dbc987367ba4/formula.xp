@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER} {time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} ERAServer {NUMBER} - - Компьютер {$host=HOSTNAME|src.ip=IPV4|src.ip=IPV6} впервые подключен в {REST}'
+
+action = "detect"
+object = "device"
+status = "success"
+
+if $host != null then
+    $dot_pos = find_substr($host, '.')
+    if $dot_pos != null then
+        src.fqdn = lower($host)
+        src.hostname = lower(substr($host, 0, $dot_pos))
+    else
+        src.hostname = lower($host)
+    endif
+endif
+
+importance = "info"
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_security_management_center"
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_security_management_center_syslog_device_detected"

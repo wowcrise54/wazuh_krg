@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}-{NUMBER}-{msgid="725006"}:
+        Device failed SSL handshake with {$otherside="client"|$otherside="server"}
+        {interface=UNTIL(":")}{$otherside_ip=IPV4|$otherside_ip=IPV6|$other_hostname=HOSTNAME}/{$otherside_port=NUMBER}'
+
+action = "initiate"
+object = "session"
+status = "failure"
+
+if $otherside == "client" then
+    src.ip = $otherside_ip
+    src.port = $otherside_port
+    src.hostname = $other_hostname
+else
+    dst.ip = $otherside_ip
+    dst.port = $otherside_port
+    dst.hostname = $other_hostname
+endif
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_725006_SSL_handshake_failed"

@@ -1,0 +1,70 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "OBJECT_SCOPE_CREATE - Creating object scope") != null
+       or find_substr($kv["Category"], "OBJECT_SCOPE_UPDATE - Updating object scope") != null
+       or find_substr($kv["Category"], "OBJECT_SCOPE_DELETE - Deleting object scope") != null
+
+subject = "account"
+object = "rule"
+
+subformula "parse_category"
+    TEXT = 'OBJECT_SCOPE_{$act="CREATE"|$act="UPDATE"|$act="DELETE"} - {"Creating"|"Updating"|"Deleting"} object scope{"s"?} 
+            {$res="succeeded"|$res="failed"}. {$scope_str=REST}'
+    
+    action = switch $act
+        case "CREATE" "create"
+        case "UPDATE" "modify"
+        case "DELETE" "remove"
+    endswitch
+    status = switch $res
+        case "succeeded" "success"
+        case "failed" "failure"
+    endswitch
+    
+    $kv_ids = keyvalue($scope_str, ".", ":", "\"")
+    $bad_values = [null, 'n/a', 'null', '[]']
+    
+    if not in_list($bad_values, $kv_ids["ID(s)"]) then
+        datafield1 = strip($kv_ids["ID(s)"], "[", "]")  # Scope id(s)
+    elif not in_list($bad_values, $kv_ids["ID"]) then
+        datafield1 = $kv_ids["ID"]                      # Scope id
+    endif
+endsubformula
+
+submessage("TEXT","parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+$kv_nr = keyvalue("Name:" + $kv["Name"], ".", ":", "\"")
+if $kv_nr["Name"] != "n/a" then
+    object.name = lower($kv_nr["Name"])
+endif
+
+object.type = "scope"
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+reason = $kv_nr["Due to the following error"]
+
+time = datetime(replace($dt, ".", ","))
+msgid = "OBJECT_SCOPE_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_scope_manipulation"

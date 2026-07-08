@@ -1,0 +1,160 @@
+# Checking the profile collection mode and the rule operation
+query AutoProfile($rule) from Auto_Profile {
+    rule == $rule
+}
+
+# We check if there is such a user in the profile
+query CheckUsername($title, $username) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+}
+
+# Check if the user has used this address before
+query CheckHost($title, $username, $src_host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_host == $src_host
+}
+
+query CheckProfile($title, $username, $src_ip, $src_host, $event_src_host)
+from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_ip == $src_ip
+    and src_host == $src_host
+    and dst_host == $event_src_host
+}
+
+event Anomaly_Logon:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "citrix"
+        and event_src.title == "netscaler"
+        and find_substr(object.process.cmdline, "login") != null
+        and status == "success"
+        and (
+            subject.account.name != null
+            or subject.name != null
+        )
+        and src.host != null
+        and not filter::Check_Profile(
+            event_src.title, 
+            lower(subject.account.name),
+            string(src.ip),
+            string(src.host),
+            lower(event_src.host),
+            null,
+            null
+        )
+        and filter::CheckWL_Profiling("Citrix_NS_ADC_Abnormal_Access", lower(join([src.host, subject.account.name, 
+        event_src.host], "|")))
+    }
+    
+rule Citrix_NS_ADC_Abnormal_Access: Anomaly_Logon
+
+    init {       
+        # If there is no rule in the Auto_Profile table, then we consider that the rule works in auto-profiling mode
+        $auto_profile = coalesce(select_query_first("AutoProfile", ["Application_Abnormal_Access"], "auto_profiling"), 1)
+        $insert_into_cond = false
+        $ttl_tl = 7862400
+        $labels = "CheckWL_Profiling"
+    }
+    
+    on Anomaly_Logon {
+        if subject.name != null and subject.account.name == null then
+            $subject.account.name = subject.name
+            $subject.account.domain = subject.domain
+            $subject.account.id = subject.id
+        endif
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.geo.org = src.geo.org
+        $src.geo.country = src.geo.country
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        # Checking the difference from the profile
+        
+        if not exec_query("CheckProfile", [$event_src.title, lower($subject.account.name), 
+        string($src.ip), lower($src.host), lower($event_src.host)]) then
+            if not exec_query("CheckUsername", [lower(event_src.title), lower(subject.account.name)]) then
+                $reason = "no_user"
+                $importance = "medium"
+                $insert_into_cond = true
+            elif not exec_query("CheckHost", [lower(event_src.title), lower(subject.account.name), string(src.host)]) then
+                $reason = "new_address"
+                $importance = "medium"
+                $insert_into_cond = true
+            else
+                $importance = "info"
+                $detect = "drop"
+            endif
+        else
+            $last_changed = select_query_first("CheckProfile", [$event_src.title, lower($subject.account.name), 
+            string($src.ip), lower($src.host), lower($event_src.host)], "_last_changed")
+            if bool($last_changed) then         
+                if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then
+                    $insert_into_cond = true
+                endif
+            endif
+            $importance = "info"
+            $detect = "drop"
+        endif
+        
+        # If the rule works in profile collection mode, then emit is not needed.
+        if $auto_profile == 2 then
+            $importance = "info"
+            $detect = "drop"
+        endif 
+
+        $alert.key = lower(join([src.host, subject.account.name, event_src.host], "|"))
+        $alert.context = $reason
+    }
+
+    insert_into Risk_User_Logon_Correlation_Profile if ($auto_profile !=0 and $insert_into_cond == true) {
+        login = lower($subject.account.name)
+        access_type = $event_src.title
+        src_ip = string($src.ip)
+        src_host = lower($src.host)
+        dst_host = lower($event_src.host)
+    }
+   
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "application"
+    $status = "success"
+        
+    $category.generic = "Anomaly"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host, $subject.account.name], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

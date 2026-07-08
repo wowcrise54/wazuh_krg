@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+    MID {object.id=NUMBER} SPF: {subject.name=WORD} identity {object.value=STRING} {object.state=WORD} {$spf_version=REST}'
+
+subject = "application"
+action = "check"
+object = "message"
+
+if object.state == "Pass" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+if find_substr($spf_version,"spf") != null then
+    submessage("TEXT", "SPLIT1", $spf_version)
+endif
+
+subject.type = "Sender Policy Framework"
+subformula "SPLIT1"
+    TEXT = '({$clear_version=STRING} {REST}'
+    subject.version = strip($clear_version,"v=",")")
+endsubformula
+
+object.type = "email"
+object.property = "sender"
+
+importance = "medium"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_spoofing_email"

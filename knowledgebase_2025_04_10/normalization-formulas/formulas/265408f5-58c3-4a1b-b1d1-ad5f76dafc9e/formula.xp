@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="TELNETFAILED"|msgid="LOGINFAILED"}{"(l)"?}
+        {"["NUMBER"]"?}: {"Failed to login."|"Login through telnet failed"|"Failed to login through telnet."} 
+        ({$kv=UNTIL(")")}{REST}'
+          
+$delimiter = find_substr($kv, ",")
+if $delimiter == null then
+    $kv = keyvalue($kv, " ", "=", "")
+else
+    $kv = keyvalue($kv, ", ", "=", "")
+endif
+
+if $kv['UserName'] != null then
+    subject = "account"
+endif
+action = "login"
+object = "system"
+status = "failure"
+
+subject.account.name = coalesce($kv['UserName'], $kv['username'])
+
+src.ip = coalesce($kv['Ip'], $kv['ip'])
+dst.hostname = event_src.hostname
+
+if msgid == "TELNETFAILED" or find_substr($kv['AccessType'], "TELNET") != null then
+    protocol.layer7 = "telnet"
+endif
+
+datafield1 = coalesce($kv['Times'], $kv['times'])   # количество попыток входа
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Login_failure"

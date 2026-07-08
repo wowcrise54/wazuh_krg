@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A user changed a system setting or registry key responsible for booting the system or starting a process, service, or driver in safe mode. This allows attackers to disable endpoint protection and avoid detection.</Description>
+  <EventDescriptions>
+    <EventDescription id="14ab4124-101d-9e9a-6a21-52223da16e65">User {subject.account.name} changed the value of the key parameter of the registry branch responsible for the list of processes started in safe mode on host {event_src.host}</EventDescription>
+    <EventDescription id="54ef44e1-3042-a997-49fe-cf29b5149bfe">User {subject.account.name} executed a command to boot the system in safe mode with command prompt on host {event_src.host}</EventDescription>
+    <EventDescription id="7322b08b-5c21-0293-88f0-e81e7fe24ef5">User {subject.account.name} executed a command to start a domain controller in restore mode on host {event_src.host}</EventDescription>
+    <EventDescription id="7e18d2ad-c5a2-94f5-8fdb-e5daef601893">User {subject.account.name} executed a command to boot the system in safe mode with networking on host {event_src.host}</EventDescription>
+    <EventDescription id="8498a506-0594-ec2f-ba04-9cd7b3869ccb">User {subject.account.name} executed a command to boot the system in safe mode on host {event_src.host}</EventDescription>
+    <EventDescription id="b8727520-fc2c-34a4-3592-49d8c238b989">User {subject.account.name} changed the value of the key parameter of the registry branch responsible for the list of processes started in safe mode with networking on host {event_src.host}</EventDescription>
+    <EventDescription id="c35e480a-e021-f271-69e7-22127da35849">User {subject.account.name} changed the registry value that enables the autorun of a process in safe mode on host {event_src.host}</EventDescription>
+    <EventDescription id="c293df22-eaa5-73ce-5ddf-1a044c582aad">User {subject.account.name} executed a command to boot the system with advanced boot options on host {event_src.host}</EventDescription>
+    <EventDescription id="fdba5154-e4cd-4bb4-1faf-37dfd98ed078">User {subject.account.name} changed the registry value that enables the one-time autorun of a process in safe mode on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

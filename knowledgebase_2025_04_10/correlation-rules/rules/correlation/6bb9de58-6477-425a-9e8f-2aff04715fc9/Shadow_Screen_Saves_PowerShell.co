@@ -1,0 +1,105 @@
+event Take_Info_By_PowerShell_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and event_src.title == "windows"
+        and regex(lower(join([object.process.cmdline, object.process.parent.cmdline], " | ")), '(new-object|add-type).*(drawing\.bitmap|system\.windows\.forms,\s+system\.drawing)', 0) != null
+        and filter::CheckWL_Powershell("Shadow_Screen_Saves_PowerShell", lower(object.process.cmdline))
+    }
+
+rule Shadow_Screen_Saves_PowerShell: Take_Info_By_PowerShell_Pipeline[20,] timer 1m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on Take_Info_By_PowerShell_Pipeline {
+
+        if $first_event then
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+
+            $object.account.id = object.account.id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.session_id = object.account.session_id
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.guid = object.process.guid
+            $object.process.hash = object.process.hash
+            $object.process.hash.md5 = object.process.hash.md5
+            $object.process.hash.imphash = object.process.hash.imphash
+            $object.process.hash.sha1 = object.process.hash.sha1
+            $object.process.hash.sha256 = object.process.hash.sha256
+            $object.process.version = object.process.version
+            $object.process.cmdline = object.process.cmdline
+            $object.process.meta = object.process.meta
+            $object.process.original_name = object.process.original_name
+            $object.process.cwd = object.process.cwd
+
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            $datafield8 = datafield8  # версия модуля
+
+            $chain_id = chain_id
+
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.regex_match = regex(lower(join([object.process.cmdline, object.process.parent.cmdline], " | ")), '(new-object|add-type).*(drawing\.bitmap|system\.windows\.forms,\s+system\.drawing)', 0)
+            $alert.context = "regex match: " + $alert.regex_match
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $first_event = false
+            $labels = $labels + "|CheckWL_Powershell"
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "low"
+    
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Screen Capture"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $object.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

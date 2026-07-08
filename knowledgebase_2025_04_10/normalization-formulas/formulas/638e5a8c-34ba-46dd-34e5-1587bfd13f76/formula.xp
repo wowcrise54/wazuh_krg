@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {"EFROS_CI"|event_src.ip=IPV4|event_src.ip=IPV6|$ev_src_host=HOSTNAME}
+        Выполнено принудительное отключение пользователя \'{object.account.name=UNTIL("\'")} от сервера'
+
+action = "terminate"
+object = "session"
+status = "success"
+
+importance = "low"
+
+event_src.vendor = "gazinformservice"
+event_src.title = "efros_config_inspector"
+
+if find_substr($ev_src_host, ".") != null then
+    event_src.fqdn = $ev_src_host
+    event_src.hostname = substr($ev_src_host, 0, find_substr($ev_src_host, "."))
+else
+    event_src.hostname = $ev_src_host
+endif
+
+event_src.category = "Network security"
+
+id = "PT_Gazinformservice_Efros_Config_Inspector_syslog_session_terminated"

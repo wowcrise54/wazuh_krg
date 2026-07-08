@@ -1,0 +1,34 @@
+!TEXT = '{msgid="30"}, {$mm=WORD}/{$dd=WORD}/{$yy=WORD}, {$csv=CSV}'
+
+action = "receive"
+object = "request"
+status = "success"
+
+src.ip = $csv[2]
+if $csv[3] != "" then
+    $srchostname = $csv[3]
+endif
+
+$dot_pos = find_substr($srchostname, '.')
+
+if $dot_pos != null then
+    src.fqdn = lower($srchostname)
+    src.hostname = lower(substr($srchostname, 0, $dot_pos))
+else
+    src.hostname = lower($srchostname)
+endif
+
+reason = $csv[1]
+
+# Full year notation (FIXME before 2100):
+$yyyy = "20" + $yy
+# Gluing the date and time (from csv) to ISO8601:
+time = datetime($yyyy + "-" + $mm + "-" + $dd + "T" + $csv[0])
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "DHCP server"
+
+id = "PT_Microsoft_Windows_filemonitor_30_DNS_update_request"

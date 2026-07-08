@@ -1,0 +1,56 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           {subject.account.domain=user_domain},
+           {subject.account.name=user_name}
+           "
+
+COND = string($event_id) == "1417"
+       and $event_category == "Управление"
+       and $event_type == "Аудит успехов"
+
+submessage("TEXT", "message", $event_message)
+
+action = "info"
+object = "account"
+status = "success"
+
+subformula "message"
+    TEXT = 'Пользователь добавлен в базу данных системы защиты. \n Пользователь: {$username=STRING}
+    \n База данных: {object.storage.id=STRING+}\n Данные: {$data=REST}'
+            
+    if find_substr($username, "\\") != null then
+        $domain_name = csv($username, "\\", "`")
+        object.account.name = $domain_name[1]
+        object.account.domain = $domain_name[0]
+    else
+        object.account.name = $username
+    endif
+    
+    datafield1 = if $data != "-" then datafield1 else null endif
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Управление" then
+    event_src.subsys = "management"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1417_user_added_to_sec_db"

@@ -1,0 +1,61 @@
+TEXT = "{'<'NUMBER'>'} {NUMBER} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys='vnetids_loader'} {NUMBER} ALERTS [{msgid=WORD}@{NUMBER} {$kv=UNTIL(']')}"
+
+$kv = keyvalue($kv, ' ', '=', '\"')
+
+action = "detect"
+
+if $kv['class'] == "trojan-activity" then
+    object = "malware"
+
+    object.type = "trojan"
+
+    importance = "high"
+
+    category.high = "Information Security"
+    category.generic = "Malware"
+    category.low = "Detection"
+
+    id = "PT_Infotecs_VipNet_IDS_3_4_syslog_rfc_5424_trojan_activity"
+else
+    object = "alert"
+
+    if $kv['class'] == "bad-unknown" then
+        object.type = "Not classified"
+    else
+        object.type = $kv['class']
+    endif
+
+    importance = "low"
+
+    category.high = "Information Security"
+    category.generic = "Attacks & Recon"
+    category.low = "IDS/IPS Alert"
+
+    id = "PT_Infotecs_VipNet_IDS_3_4_syslog_rfc_5424_alert_detected"
+endif
+
+status = "success"
+
+object.name = $kv['desc']
+
+src.ip = $kv['srcip']
+src.port = $kv['srcport']
+dst.ip = $kv['dstip']
+dst.port = $kv['dstport']
+
+protocol = $kv['proto']
+
+datafield1 = $kv['aggrcnt']  # aggregation count
+
+event_src.id = $kv['sensorid']
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"

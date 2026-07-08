@@ -1,0 +1,34 @@
+TEXT = "<{NUMBER}>{DATETIME} {STRING} {$date=NUMBER} {$Computer=STRING} {NUMBER} {NUMBER} {'snaecctl'?}{''?}[{NUMBER?}] [{NUMBER}]
+        {'a new'?} rule `{object.name=STRING} was {$action_taken='renamed'|$action_taken='removed'|$action_taken='added'} {'to `'?} {object.new_value=STRING?}"
+        
+if $action_taken == 'added' then
+    action = "create"
+    importance = "info"
+elif $action_taken == 'removed' then
+    action = "remove"
+    importance = "medium"
+elif $action_taken == 'renamed' then
+    action = "rename"
+    importance = "info"
+endif
+        
+object = "rule"
+status = "success"
+
+object.name = strip(object.name, "", "`")
+object.new_value = strip(object.new_value, "", "`")
+
+time = epoch_to_datetime($date)
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "secretnet_lsp"
+event_src.category = "Host security"
+
+id = "PT_Securitycode_SecretNet_LSP_syslog_rule_actions"

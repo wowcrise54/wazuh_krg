@@ -1,0 +1,43 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{WORDDASH|STRING} vault[{NUMBER}]: {$json=REST}' 
+COND = find_substr($json, "auth/token/renew-self") != null 
+       and find_substr($json, "\"operation\":\"update\"") != null
+
+       submessage("JSON","json_in_syslog_token_renew_self", $json)
+
+subformula 'json_in_syslog_token_renew_self'
+    JSON = ''
+    
+    if $error != null then
+        status = "failure"
+        reason = $error
+    else
+        status = "success"
+    endif
+    
+    object.application.account.name = $auth["display_name"]
+    object.application.account.privileges = join($auth["policies"], ", ")
+    
+    object.property = "token policies"
+    object.type = "token"
+    object.value = join($auth["token_policies"], ", ")
+    
+    src.ip = $request["remote_address"]
+    src.port = $request["remote_port"]
+    
+    datafield1 = $auth["token_type"] # Token type
+endsubformula
+
+action = "update"
+object = "virtual_key"
+
+importance = "low"
+
+category.high = "Access Management"
+category.generic = "Virtual Key"
+category.low = "State"
+
+event_src.vendor = "hashicorp"
+event_src.title = "vault"
+event_src.category = "Application security"
+
+id = "PT_Hashicorp_Vault_syslog_Token_renew_self"

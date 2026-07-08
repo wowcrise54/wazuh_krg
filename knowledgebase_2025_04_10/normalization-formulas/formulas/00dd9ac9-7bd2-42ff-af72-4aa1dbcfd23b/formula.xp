@@ -1,0 +1,217 @@
+JSON = ''
+
+COND = in_list(["yandex.cloud.audit.organizationmanager.CreateMembership",
+                "yandex.cloud.audit.organizationmanager.DeleteMembership"], $event_type)
+
+subject = "account"
+action = "modify"
+object = "resource"
+
+status = switch $event_status
+    case "DONE" "success"
+    case "STARTED" "ongoing"
+    case "ERROR" "failure"
+    case "CANCELLED" "failure"
+endswitch
+
+subformula "item_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $next = bool($array[$current + 1])   
+endsubformula
+
+subject.account.id = $authentication["subject_id"]
+
+$at_sign = find_substr($authentication["subject_name"], "@")
+if $at_sign != null then
+    $account = substr($authentication["subject_name"], 0, $at_sign)
+    subject.account.name = $account
+    subject.account.domain = strip($authentication["subject_name"], $account + "@", "")
+else
+    subject.account.name = $authentication["subject_name"]
+endif
+
+subject.account.group = $authentication["federation_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+object.storage.fullpath = $organization
+
+object.id = $request_parameters["organization_id"]
+object.type = "organization"
+
+object.property = "organization members"
+
+$array = $details["subjects"]
+$current = -1
+submessage("TEXT", "item_handler", "")
+if bool($item) then
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+if $next then
+    submessage("TEXT", "item_handler", "")
+    $values = append($values, join(remove([strip("type: " + $item["subject_type"], "type: ", ""),
+                                           strip("id: " + $item["subject_id"], "id: ", ""),
+                                           strip("name: " + $item["subject_name"], "name: ", "")], ""), ", "))
+endif
+
+object.new_value = lower(join($values, "|"))
+
+$remote_address = coalesce(ipv4($request_metadata["remote_address"]), ipv6($request_metadata["remote_address"]))
+if $remote_address != null then
+    src.ip = $remote_address
+else
+    logon_service = $request_metadata["remote_address"]
+endif
+
+datafield1 = $organization  # Наименование организации
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = strip($event_type, "yandex.cloud.audit.organizationmanager.", "")
+importance = "low"
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = $event_source
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_Organization_Manager_Membership_Manage"

@@ -1,0 +1,32 @@
+TABULAR = 'id,
+           subsys,
+           severity,
+           {time = msgtime},
+           {msgid = msgid},
+           data            
+           '
+
+COND = $msgid == "LOG_MSG_ID_TPND_ACTIVATE_STARTED"
+
+subject = "account"
+action = "enable"
+object = "node"
+status = "ongoing"
+
+submessage ("TEXT", "parse_data", $data)
+
+subformula "parse_data"
+    TEXT = '{$csv=REST}'
+    $csv = csv($csv, "%", "'")
+    subject.name = $csv[2]
+    object.name = $csv[0]
+endsubformula
+
+importance = "low"
+
+event_src.vendor = "elvis_plus"
+event_src.title = "zastava"
+event_src.category = "VPN"
+event_src.subsys = lower($subsys)
+
+id = "PT_Elvis_plus_Zastava_odbc_LOG_MSG_ID_TPND_ACTIVATE_STARTED"

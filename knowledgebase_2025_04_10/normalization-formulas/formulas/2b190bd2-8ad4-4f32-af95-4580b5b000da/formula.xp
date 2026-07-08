@@ -1,0 +1,47 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VM_NOT_RESPONDING",  # 126
+           "VM_FAILURE"  # 66
+       ], $event_class)
+
+action = "info"
+object = "virtual_machine"
+status = "success"
+
+subformula "parse_body"
+    # VM_NOT_RESPONDING
+    TEXT = "VM {$vm_name=STRING+} is not responding."
+endsubformula
+
+subformula "parse_body"
+    # VM_FAILURE
+    TEXT = "VM {$vm_name=STRING+} cannot be found on Host {$vds_name=REST}"
+    
+    $vds_name = strip($vds_name, "", ".")
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+object.name = $vm_name
+
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $vds_name  # VDS (Host) Name
+
+reason = $raw_message
+
+msgid = $event_class
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_VM_Messages"

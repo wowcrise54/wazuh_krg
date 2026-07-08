@@ -1,0 +1,72 @@
+event VM_Metadata_Contains_Sensitive_Value:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and event_src.subsys == "nova"
+        and msgid == "vm-create-or-update-metadata"
+        and status == "success"
+        and regex(body, "\"response_body\":\s*{\"metadata\":\s*{(?:\".*?\":\s*\".*?\",\s*)*\"(?:secret|key|password|pass|token|oauth)\":\s*\".*?\"", 0) != null
+        and filter::CheckWL_Specific_Only("VK_Cloud_VM_Metadata_Contains_Sensitive_Value", lower(join([subject.account.id, datafield6, event_src.host], "|")))
+    }
+
+rule VK_Cloud_VM_Metadata_Contains_Sensitive_Value: VM_Metadata_Contains_Sensitive_Value
+
+    init {
+        $labels = "CheckWL_Specific_Only"
+    }
+
+    on VM_Metadata_Contains_Sensitive_Value {
+        $subject = subject
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.contact = subject.account.contact
+
+        $subject.process.meta = subject.process.meta
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.type = object.type
+
+        $datafield1 = datafield1  # Method
+        $datafield2 = datafield2  # URL
+        $datafield6 = datafield6  # An identifier for the owner of the image, usually the project/tenant ID
+        $datafield9 = datafield9  # Visibility for image
+
+        $alert.key = lower(join([subject.account.id, datafield6, event_src.host], "|"))
+        $alert.regex_match = regex(body, "\"response_body\":\s*{\"metadata\":\s*{(?:\".*?\":\s*\".*?\",\s*)*\"(?:secret|key|password|pass|token|oauth)\":\s*\".*?\"", 0)
+        $alert.context = join(remove([subject.account.name, msgid], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $action = "modify"
+    $object = "virtual_machine"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Modify Cloud Compute Infrastructure"
+
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

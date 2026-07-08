@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {UNTIL(" - - ")}
+        The following event has occurred: Event type: {STRING} (8); Computer: {STRING}
+        ({$evsrcip=UNTIL(";")} Date_Time: {UNTIL(";")} Source: {UNTIL(";")} Action: {UNTIL(";")}
+        Name: {UNTIL(";")} Info: {STRING} {$ver=UNTIL(";")} Reason: {UNTIL(";")} User name: {UNTIL(";")}
+        User SID: {STRING} Process name: {$path_raw=UNTIL(";")} Process Id: {object.process.id=NUMBER};
+        Event id: {msgid="19"}'
+
+action = "start"
+object = "service"
+status = "success"
+
+object.process.version = strip(strip($ver, 'Version: ', ''), 'Версия: ', '')
+$path_raw = strip($path_raw, "", ";")
+$csv_path = csv($path_raw, "\\", "'")
+object.process.name = $csv_path[length($csv_path) - 1]
+if strip($path_raw, "", object.process.name) != '' then
+    object.process.path = strip($path_raw, "", object.process.name)
+endif
+object.process.fullpath = object.process.path + object.process.name
+
+$intf_list = strip($evsrcip, '', ')')  # снятие скобок
+$csv = csv($intf_list, ", ", "\'")      # разделение на список интерфейсов
+interface = $intf_list                 
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.vendor = "smart_line"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "devicelock"
+event_src.ip = maybe_ipv4($csv[0])
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_syslog_Start_Devicelock"

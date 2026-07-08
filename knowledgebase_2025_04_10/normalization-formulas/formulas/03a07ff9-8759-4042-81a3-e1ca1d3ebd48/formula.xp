@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        snort{"["NUMBER"]"?}: FATAL ERROR: Snort log identifier invalid: {$object_value_raw=STRING} It must be between {NUMBER} and {NUMBER}.'
+
+action = "alert"
+object = "service"
+status = "success"
+
+object.value = strip($object_value_raw, "", ".")
+object.property = "log identifier"
+
+reason = "invalid log identifier"
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "snort"
+event_src.category = "IDS/IPS"
+
+id = "PT_Opensource_Snort_syslog_invalid_identifier_in_arguments"

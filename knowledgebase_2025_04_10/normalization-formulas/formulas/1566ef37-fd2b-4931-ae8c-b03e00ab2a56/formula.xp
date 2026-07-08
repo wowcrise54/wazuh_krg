@@ -1,0 +1,111 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_CREATE_SNAPSHOT",  # 45
+           "USER_CREATE_SNAPSHOT_FINISHED_SUCCESS",  # 68
+           "USER_CREATE_SNAPSHOT_FINISHED_FAILURE",  # 69
+           "USER_FAILED_CREATE_SNAPSHOT",  # 117
+           "USER_CREATE_LIVE_SNAPSHOT_FINISHED_FAILURE",  # 170
+           "USER_CREATE_LIVE_SNAPSHOT_NO_MEMORY_FAILURE"  # 173
+       ], $event_class)
+
+
+subject = "account"
+action = "backup"
+object = "virtual_machine"
+if $event_class == "USER_CREATE_SNAPSHOT" then
+    status = "ongoing"
+elif $event_class == "USER_CREATE_SNAPSHOT_FINISHED_SUCCESS" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # USER_CREATE_SNAPSHOT
+    # USER_CREATE_SNAPSHOT_FINISHED_SUCCESS
+    TEXT = "Snapshot {$snapshot_name=STRING+} creation for VM {$vm_name=STRING+} {'was initiated by'|'has been completed.'} {$user=REST}"
+    
+    $user = strip($user, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_CREATE_SNAPSHOT_FINISHED_FAILURE
+    TEXT = "Failed to complete snapshot {$snapshot_name=STRING+} creation for VM {$vm_name=REST}"
+    
+    $vm_name = strip($vm_name, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_CREATE_SNAPSHOT
+    TEXT = "Failed to create Snapshot {$snapshot_name=STRING+} for VM {$vm_name=STRING+} (User: {$user=REST}"
+    
+    $user = strip($user, "", ").")
+endsubformula
+
+subformula "parse_body"
+    # USER_CREATE_LIVE_SNAPSHOT_FINISHED_FAILURE
+    TEXT = "Failed to create live snapshot {$snapshot_name=STRING+} for VM {$vm_error=STRING+} VM restart is recommended. Note that using the created snapshot might cause data inconsistency."
+    
+    $vm_error_list = csv($vm_error, " due to: ", "")
+    $vm_name = $vm_error_list[0]
+    $reason_raw = $vm_error_list[1]
+    $vm_name = strip($vm_name, "", ".")
+    
+    reason = strip($reason_raw, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_CREATE_LIVE_SNAPSHOT_NO_MEMORY_FAILURE
+    TEXT = "{reason='Failed to save memory as part of Snapshot'} {$snapshot_name=STRING+} for VM {$vm_name=STRING+} (User: {$user=REST}"
+    
+    $user = strip($user, "", ").")
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+if $user == "" then
+    $user = null
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+$snapshot_name = strip($snapshot_name, "'", "'")
+$vm_name = strip($vm_name, "'", "'")
+
+object.name = $vm_name
+object.property = "snapshot_name"
+object.value = $snapshot_name
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_VM_Snapshot_Backup"

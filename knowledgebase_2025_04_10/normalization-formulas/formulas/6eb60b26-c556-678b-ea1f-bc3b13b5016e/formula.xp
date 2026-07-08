@@ -1,0 +1,72 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|}
+        {HOSTNAME}{"["?}{NUMBER?}{"]"?}: {":"NUMBER"["NUMBER"]:"?} pam_unix({logon_service=WORDDASH}:auth): authentication {$st="success"|$st="failure"};
+        logname={STRING?} uid={subject.account.id=NUMBER} euid={subject.account.privileges=NUMBER} tty={STRING}
+        ruser={$usern_2=STRING?} rhost={HOSTNAME?} 
+        {"user="?}{$usern_1=HOSTNAME?}{"@"?}{$userd_1=HOSTNAME?}'
+
+subject = "account"
+
+if find_substr(logon_service, "su") != null then
+    action = "elevate"
+    object = "account"
+    
+    subject.account.name = $usern_2
+    
+    object.account.name = $usern_1
+    object.account.domain = $userd_1
+    
+    src.ip = event_src.ip
+    src.hostname = $Computer
+
+    category.generic = "Account"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+else
+    action = "login"
+    object = "system"
+    
+    subject.account.name = $usern_1
+    subject.account.domain = $userd_1
+    
+    category.generic = "Operating System"
+    category.high = "Access Management"
+    category.low = "Communication"
+endif
+
+if $st == "success" then
+    status = "success"
+elif $st == "failure" then
+    status = "failure"
+endif
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+logon_auth_method = switch logon_service
+    case "su-l" "local"
+    case "su" "local"
+    case "sudo" "local"
+    case "sudo-i" "local"
+    case "login" "local"
+    case "remote" "remote"
+    case "lightdm" "local" 
+    case "lightdm-greeter" "local" 
+    case "sshd" "remote"
+    case "rlogin" "remote"
+    case "rexec" "remote"
+endswitch
+
+importance = "info"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_common_syslog_pam_unix_auth"

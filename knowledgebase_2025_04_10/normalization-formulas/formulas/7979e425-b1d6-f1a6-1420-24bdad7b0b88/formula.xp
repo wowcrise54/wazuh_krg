@@ -1,0 +1,39 @@
+JSON = 'ENTITY_TYPE'
+COND = ($ENTITY_TYPE == "ProtectedDocument"
+        and in_list(["create", "update", "delete", "import", "export"], $OPERATION))
+
+subject = "account"
+action = switch $OPERATION 
+    case "create" "create"
+    case "delete" "remove"
+    case "update" "modify"
+    case "import" "download"
+    case "export" "upload"
+endswitch
+object = "resource"
+status = "success"
+
+subject.account.id = $USER_ID
+subject.account.name = $user_or_token['USERNAME']
+subject.account.fullname = $user_or_token['DISPLAY_NAME']   
+subject.account.contact = $user_or_token['EMAIL']
+
+object.type = $ENTITY_TYPE
+object.name = $ENTITY_DISPLAY_NAME
+object.id = $ENTITY_ID
+object.group = coalesce($PROPERTY_CHANGES['new']['catalog'][0]['DISPLAY_NAME'], 
+                        $PROPERTY_CHANGES['old']['catalog'][0]['DISPLAY_NAME'])                  
+
+datafield1 = $PROPERTY_CHANGES['new']['NOTE']       # Protected objects description(new)
+datafield2 = $PROPERTY_CHANGES['old']['NOTE']       # Protected objects description(old)
+
+time = $CHANGE_DATE
+msgid = $ENTITY_TYPE
+importance = "low"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_9_customeventcollector_Protected_object_actions"

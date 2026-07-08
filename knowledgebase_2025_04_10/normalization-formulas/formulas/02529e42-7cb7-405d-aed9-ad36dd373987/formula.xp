@@ -1,0 +1,49 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {STRING?}
+{time=DATETIME}{$version_dependent_header=UNTIL(" [")}{$raw_status="ACCEPTED"|$raw_status="DENIED"} BUILD_{$act="CREATE"|$act="DELETE"}] {$message=UNTIL(" for")} {"client :"?} {$user=UNTIL("/")|$user=UNTIL(".")} {src.ip=IPV4|src.ip=IPV6|}{REST}'
+
+subject = "account"
+action = switch $act
+    case "CREATE" "create"
+    case "DELETE" "remove"
+endswitch
+object = "resource"
+status = switch $raw_status
+    case "ACCEPTED" "success"
+    case "DENIED" "failure"
+endswitch
+
+subformula "parse_v"
+    TEXT = ',{NUMBER}'
+endsubformula
+
+subformula "parse_v"
+    TEXT = '[{chain_id=UNTIL("]")}'
+endsubformula
+
+submessage("TEXT", "parse_v", $version_dependent_header)
+
+subject.account.name = strip($user, "", " ")
+
+object.type = "build"
+$list = csv($message, ":", "'")
+if length($list) > 1 then
+    object.id = $list[length($list)-1]  # Build ID
+    object.name = strip($message, "", ":" + object.id)
+else
+    object.name = $message
+endif
+
+importance = "medium"
+
+event_src.vendor = "jfrog"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "artifactory"
+event_src.category = "Other"
+
+id = "PT_JFrog_Artifactory_syslog_AF_Access_Build"

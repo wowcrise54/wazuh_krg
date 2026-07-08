@@ -1,0 +1,141 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL("]")} INFO - {$class=STRING} - {$tag=WORD}: {$raw_message=REST}'
+COND = in_list([
+           "build_add_to_queue", "build_remove_from_queue",
+           "build_cancel", "build_remove"
+       ], $tag)
+
+subject = "account"
+object = "process"
+
+subformula "parse_user"
+    TEXT = "'{$user_name=UNTIL('\\'')} {'('$user_fullname=UNTIL(')')?} {'{'}id={$user_id=NUMBER}{'}'}"
+endsubformula
+
+subformula "parse_user"
+    # since version 2023
+    TEXT = "user with id={$user_id=NUMBER}"
+endsubformula
+
+subformula "parse_build_type_info"
+    TEXT = "id={$build_type_id=LITERAL*}, internal id=bt{$build_type_int_id=NUMBER}"
+endsubformula
+
+subformula "parse_build_type_info"
+    TEXT = "id={$build_type_id=LITERAL*}/bt{$build_type_int_id=NUMBER}"
+endsubformula
+
+subformula "parse_build_type"
+    TEXT = "{$bt_fullname=UNTIL(' {')} {$build_type_info=UNTIL('}')}"
+    
+    submessage("TEXT", "parse_build_type_info", $build_type_info)
+    
+    $build_type_list = csv($bt_fullname, " / ", "'")
+    $build_type_name = $build_type_list[length($build_type_list)-1]
+    $project_fullpath = strip($bt_fullname, "", " / " + $build_type_name)
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\" with comment \"')} {$comment=REST}"
+    
+    reason = strip($comment, '', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\"')}"
+endsubformula
+
+subformula "by_comment"
+    TEXT = "with comment {$comment=REST}"
+    
+    reason = strip($comment, '"', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "{REST}"
+endsubformula
+
+subformula "queue"
+    TEXT = "Build {UNTIL('{id=')}{$build_id=NUMBER}{'}'} was {$act='added to'|$act='canceled in the build'} queue {$by_comment=REST}"
+    
+    action = "execute"
+    
+    status = switch $act
+        case "added to" "ongoing"
+        case "canceled in the build" "failure"
+    endswitch
+endsubformula
+
+subformula "cancel"
+    TEXT = "Build \"#{$build_number=UNTIL(' {')} {$build_info=UNTIL('}\" was canceled ')} {$by_comment=REST}"
+    
+    action = "execute"
+    status = "failure"
+    
+    $kv_build_info = keyvalue($build_info, ",", "=")
+    $build_id = $kv_build_info["build id"]
+    $build_type_id = $kv_build_info["buildTypeId"]
+endsubformula
+
+subformula "remove"
+    TEXT = "Build {$build_type=STRING+} #{$build_number=LITERAL*} was removed {$by_comment=REST}"
+    
+    action = "remove"
+    status = "success"
+    
+    submessage("TEXT", "parse_build_type", strip($build_type, '"', '"'))
+endsubformula
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+switch $tag
+    case "build_add_to_queue" submessage("TEXT", "queue", $raw_message)
+    case "build_remove_from_queue" submessage("TEXT", "queue", $raw_message)
+    case "build_cancel" submessage("TEXT", "cancel", $raw_message)
+    case "build_remove" submessage("TEXT", "remove", $raw_message)
+endswitch
+
+submessage("TEXT", "by_comment", $by_comment)
+submessage("TEXT", "parse_user", $user)
+subject.account.fullname = $user_fullname
+subject.account.name = $user_name
+subject.account.id = $user_id
+
+object.type = "build"
+object.process.id = $build_id
+object.process.name = $build_type_name
+object.process.path = strip($bt_fullname, "", " " + $build_type_name)
+object.process.fullpath = $bt_fullname
+
+if $build_number != null then
+    object.property = "build_number"
+    object.value = strip($build_number, "", " ")
+endif
+
+datafield1 = $project_fullpath  # Project Fullpath
+datafield4 = $build_type_id  # Build Type ID
+
+numfield4 = $build_type_int_id  # Build Type Internal ID
+
+time = replace($time, ".", ",")
+msgid = $tag
+importance = "low"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Activities_Build_Management"

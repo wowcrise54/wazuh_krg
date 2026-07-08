@@ -1,0 +1,76 @@
+event Registry_SAM_Modification:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and match(lower(object.path), "*\\sam\\sam\\domains\\account\\users\\*\\")
+        and lower(object.name) == "f"
+        and lower(subject.process.fullpath) != "c:\\windows\\system32\\lsass.exe"
+        and not match(lower(object.path), "*\\sam\\sam\\domains\\account\\users\\000001f4\\")
+        and filter::CheckWL_Registry_Actions("RID_Hijacking_Persistence", lower(join([subject.process.name, object.path], "|")))
+    }
+
+rule RID_Hijacking_Persistence: Registry_SAM_Modification
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Registry_SAM_Modification {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.fullpath = object.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(join([subject.process.name, object.path], "|"))
+        $alert.regex_match = regex(lower(object.path), "\\\\sam\\\\sam\\\\domains\\\\account\\\\users\\\\\S+\\\\", 0)
+        $alert.context = subject.process.name
+        $labels = $labels + "|CheckWL_Registry_Actions"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "modify"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

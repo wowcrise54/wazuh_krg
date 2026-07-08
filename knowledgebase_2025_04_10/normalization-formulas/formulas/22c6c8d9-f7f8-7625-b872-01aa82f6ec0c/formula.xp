@@ -1,0 +1,62 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "LicenseSettings" and $change["type"] != "LinkChangeJSON"
+
+if $authorType == "User" then
+    subject = "account"
+
+    subject.account.id = $author
+    subject.account.name = $authorPresentation
+
+elif $authorType == "Service" then
+    subject = "service"
+
+    subject.id = $author
+    subject.name = $authorPresentation
+endif
+
+if $type == "Create" then
+    action = "create"
+
+    object.name = $change["licenseName"]
+    object.property = "key"
+    object.value = $change["licenseKey"]
+
+elif $type == "Remove" then
+    action = "remove"
+
+    object.name = $change["service"]["removed"]["presentation"]
+
+elif $type == "Update" and $change["type"] == "PrimitiveChangeJSON" then
+    if $change["fieldName"] == "licenseName" then
+        action = "rename"
+
+        object.new_value = $change["newValue"]
+    else
+        action = "modify"
+
+        object.property = $change["fieldName"]
+        object.new_value = $change["newValue"]
+    endif
+endif
+
+object = "virtual_key"
+status = "success"
+
+subject.account.id = $author
+subject.account.name = $authorPresentation
+
+object.id = $targetId
+object.type = "license"
+
+chain_id = $id
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "low"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_License_Settings_Manage"

@@ -1,0 +1,142 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_ADD_VM_TEMPLATE",  # 48
+           "USER_ADD_VM_TEMPLATE_FINISHED_SUCCESS",  # 51
+           "USER_ADD_VM_TEMPLATE_FINISHED_FAILURE",  # 52
+           "USER_ADD_VM_TEMPLATE_SUCCESS",  # 29
+           "USER_ADD_VM_TEMPLATE_FAILURE",  # 36
+           "USER_FAILED_ADD_VM_TEMPLATE",  # 108
+           "USER_UPDATE_VM_TEMPLATE",  # 49
+           "USER_FAILED_UPDATE_VM_TEMPLATE",  # 109
+           "USER_REMOVE_VM_TEMPLATE",  # 50
+           "USER_REMOVE_VM_TEMPLATE_FINISHED",  # 251
+           "USER_FAILED_REMOVE_VM_TEMPLATE"  # 110
+       ], $event_class)
+
+subject = "account"
+
+if find_substr($event_class, "UPDATE_VM_TEMPLATE") != null then
+    action = "modify"
+elif find_substr($event_class, "REMOVE_VM_TEMPLATE") != null then
+    action = "remove"
+else
+    action = "create"
+endif
+
+object = "resource"
+
+if in_list([
+    "USER_ADD_VM_TEMPLATE_FINISHED_SUCCESS", "USER_ADD_VM_TEMPLATE_SUCCESS",
+    "USER_UPDATE_VM_TEMPLATE", "USER_REMOVE_VM_TEMPLATE_FINISHED"
+    ], $event_class) then
+    status = "success"
+elif in_list(["USER_ADD_VM_TEMPLATE", "USER_REMOVE_VM_TEMPLATE"], $event_class) then
+    status = "ongoing"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # USER_ADD_VM_TEMPLATE
+    # USER_ADD_VM_TEMPLATE_FINISHED_SUCCESS
+    TEXT = "Creation of Template {$vm_template_name=STRING+} from VM {$vm_name=STRING+} {'was initiated by'|'has been completed.'} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_VM_TEMPLATE_FINISHED_FAILURE
+    TEXT = "Failed to complete creation of Template {$vm_template_name=STRING+} from VM {$vm_name=REST}"
+    
+    $vm_name = strip($vm_name, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_VM_TEMPLATE_SUCCESS
+    TEXT = "Template {$vm_template_name=STRING+} was created successfully."
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_VM_TEMPLATE_FAILURE
+    TEXT = "Failed creating Template {$vm_template_name=STRING+}"
+    
+    $vm_template_name = strip($vm_template_name, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_ADD_VM_TEMPLATE
+    TEXT = "Failed to initiate creation of Template {$vm_template_name=STRING+} from VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_UPDATE_VM_TEMPLATE
+    TEXT = "Template {$vm_template_name=STRING+} configuration was updated by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_UPDATE_VM_TEMPLATE
+    # USER_FAILED_REMOVE_VM_TEMPLATE
+    TEXT = "Failed to {'update'|'initiate removal of'} Template {$vm_template_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_VM_TEMPLATE
+    # USER_REMOVE_VM_TEMPLATE_FINISHED
+    TEXT = "Removal of Template {$vm_template_name=STRING+} {'was initiated by'|'has been completed.'} {$user=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+if in_list(["USER_ADD_VM_TEMPLATE", "USER_UPDATE_VM_TEMPLATE", "USER_REMOVE_VM_TEMPLATE"], $event_class) then
+    $user = strip($user, "", ".")
+elif in_list([
+    "USER_FAILED_ADD_VM_TEMPLATE", "USER_FAILED_UPDATE_VM_TEMPLATE",
+    "USER_FAILED_REMOVE_VM_TEMPLATE"
+    ], $event_class) then
+    $user = strip($user, "", ").")
+endif
+
+if $user == "" then
+    $user = null
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = "vm_template"
+object.name = $vm_template_name
+if $vm_name != null then
+    object.property = "vm_name"
+    object.value = $vm_name
+endif
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_VM_Template"

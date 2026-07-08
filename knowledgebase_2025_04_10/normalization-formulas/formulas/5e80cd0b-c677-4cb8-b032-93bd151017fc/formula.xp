@@ -1,0 +1,76 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER} {time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} ERAServer {NUMBER} - - LEEF:1.0|
+        ESET|RemoteAdministrator|{UNTIL("|")} {$tmp_subsys="Web scanner"|$tmp_subsys="File scanner"}
+        {$st=UNTIL("|")} cat={msgid="ESET Threat Event"} {$kv=KEYVALUE("\t", "=")}'
+
+action = "detect"
+object = "malware"
+status = "success"
+
+object.storage.fullpath = lower($kv["objectUri"])
+$proc_name_path = csv(object.storage.fullpath, "/", "`")
+object.storage.name = $proc_name_path[length($proc_name_path) - 1]
+object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+
+object.name = $kv["threatName"]
+object.type = $kv["threatType"]
+object.hash = $kv["hash"]
+object.property = "threat level"
+object.value = $kv["sev"]
+
+if find_substr($st, "cleaned") != null then
+    object.state = "cured"
+elif find_substr($st, "deleted") != null or find_substr($st, "terminated download") != null then
+    object.state = "removed"
+endif
+
+if find_substr($kv["accountName"], "\\") != null then
+    $csv_object_domain_name = csv($kv["accountName"], "\\", "'")
+    object.account.domain = $csv_object_domain_name[0]
+    object.account.name = $csv_object_domain_name[1]
+else
+    object.account.name = $kv["accountName"]
+endif
+
+object.process.fullpath = $kv["processName"]
+$proc_name_path = csv(object.process.fullpath, "\\", "`")
+object.process.name = $proc_name_path[length($proc_name_path) - 1]
+object.process.path = strip(object.process.fullpath, "", object.process.name)
+
+src.ip = $kv["src"]
+$dot_pos = find_substr($kv["deviceName"], '.')
+if $dot_pos != null then
+    src.fqdn = lower($kv["deviceName"])
+    src.hostname = lower(substr($kv["deviceName"], 0, $dot_pos))
+else
+    src.hostname = lower($kv["deviceName"])
+endif
+
+datafield2 = $kv["scannerID"]         # name of scan technology
+
+reason = strip($kv["circumstances"], "", ".")
+
+if number(object.value) <= 4 then
+    importance = "low"
+elif number(object.value) > 4 and number(object.value) <= 7 then
+    importance = "medium"
+elif number(object.value) > 7 then
+    importance = "high"
+endif
+
+category.high = "Information Security"
+category.generic = "Malware"
+category.low = "Mitigation"
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_security_management_center"
+event_src.category = "Host security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_ESET_Eset_security_management_center_syslog_malware_mitigation"

@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {"%"?}10{$tmp_subsys="BGP"}/{NUMBER}/{msgid="BGP_STATE_CHANGED"}: BGP.:
+        {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME} {"state has"|"State is"}
+        changed from {WORD} to {object.state=WORD} {$res=REST}'
+
+object = "session"
+
+if object.state == "IDLE" then
+    action = "stop"
+else
+    action = "start"
+endif
+
+status = "success"
+
+if find_substr($res, 'for a notification received:') != null then
+    submessage('TEXT', 'reason', $res)
+endif
+
+subformula "reason"
+    TEXT = "for a notification received: {$reas = REST}"
+    reason = strip ($reas, '', '. \\u0000')
+endsubformula
+
+protocol = "BGP"
+
+importance = "info"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "vsr"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_HPE_VSR_syslog_BGP_state_changed"

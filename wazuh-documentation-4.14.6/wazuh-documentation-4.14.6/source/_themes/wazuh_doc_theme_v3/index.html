@@ -1,0 +1,60 @@
+{#
+    wazuh_doc_theme_v3/index.html
+    ~~~~~~~~~~~~~~~~~
+
+    Index template for Wazuh Documentation Sphinx theme v3.0.
+    
+-#}
+
+{% if is_latest_release and theme_breadcrumb_root_title == 'Documentation' %}
+
+  {%- extends "!wazuh_doc_theme_v3/template-parts/body.html" -%}
+  
+  {#- Change the header -#}
+  {%- block header %}
+  <header id="header" class="fixed-top">
+    <nav>
+      {% include "template-parts/header.html" %}
+    </nav>
+  </header>
+  <div id="large-search-box">
+    <div class="container">
+      <div class="inner-container">
+        <div class="h2 title">
+          Documentation <span class="text-bold">Index</span>
+        </div>
+        {% include "template-parts/search-box.html" %}
+      </div>
+    </div>
+  </div>
+  {% endblock %}
+  
+  {%- block main_column -%}
+  <div class="container loading">
+  {{ super () }}
+  </div>
+  {%- endblock main_column -%}
+  
+  {#- Remove blocks: left-sidebar, edit-repo and light_box_display -#}
+  {%- block sidebar1 -%}{%- endblock sidebar1 -%}
+  {%- block light_box_display %}{%- endblock light_box_display -%}  
+
+{%- else -%}
+  {%- if theme_breadcrumb_root_title != 'Documentation' -%}
+    {%- extends "!wazuh_doc_theme_v3/template-parts/body.html" -%}
+    {{ super () }}
+    
+  {%- else -%}
+<html>
+  <head>
+    <title>Wazuh documentation</title>
+    <link rel="canonical" href="https://documentation.wazuh.com/current/index.html">
+  </head>
+  <body data-release="{{ version }}">
+    {% set index_redirect_js = get_js_by_page(pagename+'-redirect')[0] %}
+    <script id="documentation_options" data-url_root="{{ pathto('', 1) }}" src="{{ pathto('_static/js/documentation_options.js', 1) }}"></script>
+    <script src="{{ pathto( index_redirect_js, 1) }}"></script>
+  </body>
+</html>
+  {%- endif %}
+{%- endif %}

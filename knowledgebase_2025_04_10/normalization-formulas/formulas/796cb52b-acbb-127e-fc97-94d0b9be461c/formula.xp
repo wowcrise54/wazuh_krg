@@ -1,0 +1,31 @@
+# INFO  [Native-Transport-Requests-1] 2024-02-01 02:31:50.234 FileAuditLogger.java:51 - user:cassandra|host:localhost/127.0.0.1:244|source:/127.0.0.1|port:4242|timestamp:1706743910192|type:BATCH|category:DML|ks:excelsior|operation:BEGIN BATCH INSERT INTO cycling.cyclist_racer (id , firstname ) VALUES (27b26700-8a3f-11ee-af1d-63a8b87672cf, 'marlow'); INSERT INTO excelsior.cyclist_racer (id , lastname ) VALUES (27b26700-8a3f-11ee-af1d-63a8b87672cf, 'marlown'); APPLY BATCH;
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}
+        {dst.port=NUMBER?}|source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|
+        timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type'] == 'BATCH')
+
+subject = "account"
+action = "execute"
+object = "thread"
+status = "success"
+
+object.query = $kv['operation']
+
+datafield1 = $kv['category'] # Категория CQL-запроса
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Batch"

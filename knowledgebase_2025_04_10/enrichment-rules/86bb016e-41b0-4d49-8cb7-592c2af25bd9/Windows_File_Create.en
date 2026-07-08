@@ -1,0 +1,184 @@
+query Check_all_process_chains($host, $parent_proc_id, $parent_proc_name) from Process_Chains{
+    host == $host
+    and proc_id == $parent_proc_id
+    and proc_name == $parent_proc_name
+}
+    qhandler {
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $first_cmdline = first_cmdline
+        $object_session_id = object_session_id
+    }
+    
+query Archive_unpack($host, $path, $type) from Windows_File_Created {
+    host == $host
+    and archive_wout_ext == $path
+    and type == $type
+}
+    qhandler {
+        $archive_name = filename
+        $subj_proc_names = subj_proc_names
+        $subj_proc_info = subj_proc_info
+        $subj_proc_cmdline = subj_proc_cmdline
+    }
+
+event File_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and regex(lower(object.name), "\.(exe|dll|sys|scr|zip|7z|rar)$", 0) != null
+        and not filter::CheckWL_WhiteListRegex(
+            "Windows_File_Create",
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower(object.fullpath)
+        )
+    }
+    
+enrichment Windows_File_Create
+
+    enrich File_Created:
+        enrich_fields {
+            if regex(lower(object.name), "\.(exe|dll|sys|scr)$", 0) != null then
+                $type = "executable"
+                $archive_wout_ext = null
+            else
+                $type = "archive"
+                $archive_wout_ext = regex(lower(object.fullpath), "(.*)\.(zip|7z|rar)$", 1)
+            endif
+            $result_check_all = exec_query("Check_all_process_chains", [lower(event_src.host), number(subject.process.id), lower(subject.process.name)])
+            if $result_check_all["$chain_proc_names"] != null then
+                subject.account.session_id = $result_check_all["$object_session_id"]
+                $subj_proc_names = $result_check_all["$chain_proc_names"]
+                
+                if length($subj_proc_names) > 600 then
+                    $parents = strip($result_check_all["$chain_proc_names"], lower(subject.process.name), "")
+                    if substr($parents, 1, 1) == "←" then
+                        $prefix = " ← "
+                        $postfix = ""
+                        $parents = substr($parents, 3, 600)
+                    elif substr($parents, 0, 15) == " (file creator:" then
+                        if substr($parents, 0, 31) == " (file creator: is executor) ← " then
+                            $prefix = " (file creator: is executor) ← "
+                            $parents = substr($parents, 31, 600)
+                        else
+                            $prefix = " (file creator: "
+                            $parents = substr($parents, 16, 600)
+                            $postfix = ")"
+                        endif
+                    endif
+                    
+                    $arrow_number = find_substr($parents, " ← ")
+                    if $arrow_number != null then
+                        $parents = substr($parents, 0, $arrow_number)
+                    endif
+                    
+                    $number_creator_name = find_substr($parents, " (file creator:")
+                    
+                    if $number_creator_name != null then
+                        $parents = substr($parents, 0, $number_creator_name)
+                    endif
+                    
+                    $subj_proc_names = lower(subject.process.name) + $prefix + $parents + $postfix  + " ← ..."
+                    if length($subj_proc_names) > 600 then
+                        $subj_proc_names = substr($subj_proc_names, 0, 500)
+                    endif
+                endif 
+  
+                $subj_proc_info = $result_check_all["$chain_proc_info"]
+                
+                if length($subj_proc_info) > 780 then
+                    $s_name = if find_substr(subject.process.name, " ") != null then '"' + lower(subject.process.name) + '"' else lower(subject.process.name) endif
+                    $subj = $s_name + " (" + string(subject.process.id) + ") [" + string(subject.account.session_id) + "]"
+                    $parents_info = strip($result_check_all["$chain_proc_info"], $subj , "")
+                    if substr($parents_info, 1, 1) == "←" then
+                        $prefix = " ← "
+                        $postfix = ""
+                        $parents_info = substr($parents_info, 3, 780)
+                    elif substr($parents_info, 0, 8) == " (file (" then
+                        $prefix = " (file (" + lower(subject.process.fullpath) + ") creator: "
+                        $parents_info = strip($parents_info, $prefix, "")
+                        if substr($parents_info, 0, 15) == "is executor) ← " then 
+                            $prefix = $prefix + "is executor) ← "
+                            $parents_info = strip($parents_info, "is executor) ← ", "")
+                        else
+                            $postfix = ")"
+                        endif
+                    endif
+                    
+                    $arrow_number_info = find_substr($parents_info, " ← ")
+                    if $arrow_number != null then
+                        $parents_info = substr($parents_info, 0, $arrow_number_info)
+                    endif
+                    
+                    $number_creator_info = find_substr($parents_info, ") creator: ")
+                    
+                    if $number_creator_info != null then
+                        $parents_info = substr($parents_info, 0, find_substr($parents_info, "] (file (") + 1)
+                    endif
+                    
+                    $subj_proc_info = $subj + $prefix + $parents_info + $postfix  + " ← ..."
+                    if length($subj_proc_info) > 780 then
+                        $subj_proc_info = substr($subj_proc_info, 0, 600)
+                    endif
+                endif 
+                
+                $subj_proc_cmdline = $result_check_all["$first_cmdline"]
+                if length($subj_proc_cmdline) > 900 then
+                    $subj_proc_cmdline = substr($result_check_all["$first_cmdline"], 0, 900)
+                endif 
+            else
+                $subj_proc_names = subject.process.name
+                $subj_proc_info = subject.process.name + " (" + subject.process.id + ") []"
+                $subj_proc_cmdline = null
+            endif
+            
+            if (in_list(["7zg.exe", "winrar.exe"], lower(subject.process.name)) and regex(lower($subj_proc_cmdline), "(7zg|winrar).exe[\s\"]+([eux])\s", 1) != null) or (lower(subject.process.name) == "explorer.exe") then
+                $temp_path = strip(lower(object.path), "", "\\")
+                $result_unpack = exec_query("Archive_unpack", [lower(event_src.host), $temp_path, "archive"])
+                if $result_unpack["$subj_proc_names"] != null then
+                    
+                    $unpack_proc_names = $result_unpack["$subj_proc_names"]
+                    $arrow = if find_substr($unpack_proc_names, " ← ") != null then true else false endif
+                    if $arrow and length($unpack_proc_names) > 400 then
+                        $unpack_proc_names = substr($unpack_proc_names, 0, find_substr($unpack_proc_names, " ← ")) + " ← ... "
+                    endif
+                    
+                    $subj_proc_names = $subj_proc_names + " (unarchived: " + $result_unpack["$archive_name"] + " ← " + $unpack_proc_names + ")"
+
+                    $unpack_proc_info = $result_unpack["$subj_proc_info"]
+                    if $arrow and length($unpack_proc_info) > 500 then
+                        $unpack_proc_info = substr($unpack_proc_info, 0, find_substr($unpack_proc_info, " ← ")) + " ← ... "
+                    endif
+                    
+                    $subj_proc_info = $subj_proc_info + " (unarchived: " + $result_unpack["$archive_name"] + " ← " + $unpack_proc_info + ")"
+                    
+                    
+                    $unpack_proc_cmdline = $result_unpack["$subj_proc_cmdline"]
+                    if $arrow and length($unpack_proc_cmdline) > 580 then
+                        $unpack_proc_cmdline = substr($unpack_proc_cmdline, 0, find_substr($unpack_proc_cmdline, " ← ")) + " ← ... "
+                    endif
+                    
+                    $subj_proc_cmdline = $subj_proc_cmdline + " (unarchived: " + $result_unpack["$archive_name"] + " ← " + $unpack_proc_cmdline + ")"
+                endif
+            endif
+                
+            subject.process.chain = $subj_proc_names
+            datafield18 = $subj_proc_info
+        }
+    
+insert_into Windows_File_Created if length(object.fullpath) < 4000 and length(subject.process.fullpath) < 4000 {
+    host = lower(event_src.host)
+    filename = lower(object.fullpath)
+    process_path = lower(subject.process.fullpath)
+    process_name = lower(subject.process.name)
+    process_id = number(subject.process.id)
+    session = number(subject.account.session_id)
+    type = $type
+    archive_wout_ext = $archive_wout_ext
+    subj_proc_names = $subj_proc_names
+    subj_proc_info = $subj_proc_info
+    subj_proc_cmdline = $subj_proc_cmdline
+}

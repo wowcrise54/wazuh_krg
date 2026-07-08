@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Multiple second authentication factor requests in Multifactor. This may indicate an attempt by attackers, who obtained the user's credentials, to push the user to confirm the login.</Description>
+  <EventDescriptions>
+    <EventDescription id="05a79498-bf43-39c8-f326-c147dafec6dd">{count.subevents} second authentication factor requests from host {external_src.ip} were sent to user {subject.account.contact}</EventDescription>
+    <EventDescription id="2c7a53c1-e0e0-6aba-7db7-a8d69eb2c838">User {subject.account.contact} confirmed login after {count.subevents} second authentication factor requests from host {external_src.ip}</EventDescription>
+    <EventDescription id="c09281bb-6e44-c6cc-a4f2-5616e616669a">User {subject.account.contact} confirmed login after {count.subevents} second authentication factor requests from host {external_src.ip}. Internal address {assigned_src_ip} was obtained.</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,20 @@
+!TEXT = "{time=DATETIME} {UNTIL(']')} INFO {msgid='Umbraco.Core.UmbracoApplicationBase'} -
+         Application shutdown. Details: {reason=REST}"
+
+action = "stop"
+object = "service"
+status = "ongoing"
+
+object.name = "Umbraco CMS"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+event_src.title = "umbraco_cms"
+event_src.category = "Other"
+
+id = "PT_Opensource_Umbraco_CMS_filemonitor_Stop_services"

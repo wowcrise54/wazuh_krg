@@ -1,0 +1,28 @@
+!TEXT = '{time=DATETIME} {UNTIL("]")} INFO {msgid="Umbraco.Core.Security.BackOfficeSignInManager"} -
+         Event Id: {NUMBER}, state: Login attempt {$temp_status=WORD} for username
+         {$subject_mail=UNTIL(" from IP address")} {src.ip=IPV6|src.ip=IPV4}'
+
+subject = "account"
+action = "login"
+object = "application"
+
+status = switch $temp_status
+    case "succeeded" "success"
+    case "failed" "failure"
+endswitch
+
+$subject_mail = csv($subject_mail, '@', '"')
+subject.account.name = $subject_mail[0]
+subject.account.domain = $subject_mail[1]
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "opensource"
+event_src.title = "umbraco_cms"
+event_src.category = "Other"
+
+id = "PT_Opensource_Umbraco_CMS_filemonitor_Authentication"

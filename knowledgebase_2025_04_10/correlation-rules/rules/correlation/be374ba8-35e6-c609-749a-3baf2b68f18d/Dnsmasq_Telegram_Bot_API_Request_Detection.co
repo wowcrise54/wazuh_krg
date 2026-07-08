@@ -1,0 +1,72 @@
+query Check_Malicious_Domains($request) from Malicious_Domains {
+    regex_match($request, column::pattern)
+    and description == "Telegram API"
+}
+
+event Telegram_Bot_API_Request:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "dnsmasq"
+        and object == "request"
+        and action == "send"
+        and object.type != null
+        and object.type != "forward"
+        # api.telegram.org
+        and exec_query("Check_Malicious_Domains", [object.value])
+        and filter::CheckWL_Networking("Dnsmasq_Telegram_Bot_API_Request_Detection", lower(join([src.ip, object.value], "|")))
+    }     
+    
+rule Dnsmasq_Telegram_Bot_API_Request_Detection: Telegram_Bot_API_Request
+
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+    }
+
+    on Telegram_Bot_API_Request {
+        $object.property = object.property
+        $object.type = object.type
+        $object.value = object.value
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(join([src.ip, object.value], "|"))
+        $alert.context = "Telegram Bot API Request"
+    }
+    
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "host"
+    $action = "send"
+    $object = "request"
+    $status = "success"
+    
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Web Service: Bidirectional Communication"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

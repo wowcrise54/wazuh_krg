@@ -1,0 +1,90 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{$Computer=HOSTNAME}CEF:
+        {NUMBER}|infotecs|{WORD}|{UNTIL("|")}{$code=NUMBER}|{$msg=UNTIL("|")}
+        {NUMBER}|{$kv=KEYVALUE(" ", "=", "~")}'
+        
+$deny = [1,2,3,4,7,8,9,13,14,15,16,17,18,19,22,23,24,30,31,32,33,34,37,39,
+26,70,80,81,82,83,84,85,86,87,88,89,90,91,92,93,95,97,99,101,103,104,105,111,
+112,113,116,117,118,119,120,121,122,129,130,131,132,133,134,135,136,139]
+$allow = [40,41,44,45,60,61,62,63,64,65]
+if in_list($deny, $code) == true then
+    subject = "rule"
+    action = "deny"
+    object = "packet"
+    reason = $msg
+elif in_list($allow, $code) == true then
+    subject = "rule"
+    action = "allow"
+    object = "packet"
+else
+    subject = "system"
+    action = "send"
+    object = "alert"
+endif    
+status = "success"
+
+if lower($kv["msg"]) != "no-name filter" then
+    subject.name = $kv["msg"]
+elif find_substr($msg, "antispoofing") != null then
+    subject.name = "antispoofing filter"
+endif
+
+if find_substr($kv["cs3"], "yes") != null and subject != "system" then
+    object.type = "broadcast packet"
+elif find_substr($kv["cs4"], "yes") != null and subject != "system" then
+    object.type = "forward packet"
+elif find_substr($kv["cs5"], "yes") != null and subject != "system" then   
+    object.type = "encrypted packet"    
+elif subject == "system" then
+    object.type = "системное событие"
+    object.value = $msg
+else    
+    object.type = "local packet"
+endif  
+    
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+
+subformula "parse_src_hostname"
+    TEXT = '{WORD},{src.hostname = REST}'   
+endsubformula
+
+submessage("TEXT","parse_src_hostname",$kv["shost"])
+
+subformula "parse_dst_hostname"
+    TEXT = '{WORD},{dst.hostname = REST}'   
+endsubformula
+
+submessage("TEXT","parse_dst_hostname",$kv["dhost"])
+    
+if $kv["deviceDirection"] == "1" then
+    direction = "egress"
+    interface = $kv["deviceOutboundInterface"]
+elif $kv["deviceDirection"] == "0" then
+    direction = "ingress"
+    interface = $kv["deviceInboundInterface"]
+endif
+protocol = $kv["proto"]  
+
+importance = "low"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.rule = subject.name
+event_src.ip = $kv["dvc"]
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_xfirewall"
+event_src.category = "Network device"
+
+id = "PT_Infotecs_xFirewall_CEF_connection_detect"        

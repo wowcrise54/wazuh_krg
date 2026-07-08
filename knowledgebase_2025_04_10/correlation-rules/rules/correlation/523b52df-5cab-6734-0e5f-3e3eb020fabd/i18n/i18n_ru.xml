@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Множественные запросы второго фактора аутентификации в приложении Multifactor. Это может означать, что злоумышленники получили учетные данные пользователя и пытаются подтолкнуть его к подтверждению входа</Description>
+  <EventDescriptions>
+    <EventDescription id="05a79498-bf43-39c8-f326-c147dafec6dd">Обнаружено {count.subevents} запросов второго фактора аутентификации с узла {external_src.ip}, отправленных пользователю {subject.account.contact}</EventDescription>
+    <EventDescription id="2c7a53c1-e0e0-6aba-7db7-a8d69eb2c838">Пользователь {subject.account.contact} подтвердил вход после {count.subevents} запросов второго фактора аутентификации с узла {external_src.ip}</EventDescription>
+    <EventDescription id="c09281bb-6e44-c6cc-a4f2-5616e616669a">Пользователь {subject.account.contact} подтвердил вход после {count.subevents} запросов второго фактора аутентификации с узла {external_src.ip}. Получен внутренний адрес {assigned_src_ip}</EventDescription>
+  </EventDescriptions>
+</Localization>

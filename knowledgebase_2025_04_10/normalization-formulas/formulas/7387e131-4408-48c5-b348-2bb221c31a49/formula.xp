@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} %{msgid="NFM-5-FEATURE_ENABLED"|msgid="NFM-5-FEATURE_DISABLED"}:
+        {object.name=WORD} {$act="Enabled"|$act="Disabled"}.'
+
+action = switch $act
+    case "Enabled" "start"
+    case "Disabled" "stop"
+endswitch
+
+object = "service"
+status = "success"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.title = "nexus"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_NFM_5_FEATURE"

@@ -1,0 +1,25 @@
+EVENTLOG = 'EventID="5124"'
+!COND = $Channel=="Security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+object.type = "certificate_services"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+object.property = "security setting"
+object.value = $Data["NewSecuritySettings"]
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+event_src.category = "Certification authority"
+
+subject.name = lower($Data["SubjectUserName"])
+subject.domain = lower($Data["SubjectDomainName"])
+
+id = "PT_Microsoft_Certification_Authority_eventlog_5124_Security_setting_updated_on_OCSP_Responder_Service"
+importance = "info"

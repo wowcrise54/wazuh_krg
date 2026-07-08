@@ -1,0 +1,37 @@
+query GetPpid($host, $pid) from Solaris_Ppids {
+    host == $host
+    and pid == $pid
+}
+    qhandler {
+        $parent_pid = parent_pid
+    }
+
+event Fork_process:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "solaris"
+        and action == "start"
+        and object == "process"
+    }
+
+event Exec_command:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "solaris"
+        and action == "execute"
+        and object == "command"
+    }
+
+enrichment Solaris_ppid_from_fork
+
+    enrich Fork_process:
+        insert_into Solaris_Ppids {
+            column::host = event_src.host
+            column::pid = object.process.id
+            column::parent_pid = object.process.parent.id
+        }
+        
+    enrich Exec_command:
+        enrich_fields {
+            object.process.parent.id = exec_query("GetPpid", [event_src.host, object.process.id])["$parent_pid"]
+        }

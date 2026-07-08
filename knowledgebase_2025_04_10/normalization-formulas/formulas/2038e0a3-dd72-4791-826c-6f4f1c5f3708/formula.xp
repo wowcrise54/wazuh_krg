@@ -1,0 +1,72 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {$sys_time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} %%{NUMBER?}
+        {$tmp_subsys=WORD}/{NUMBER}/{msgid="FIREWALLATCK"}{"("WORD")"?}{"["NUMBER"]"?}: {$kv=KEYVALUE(",", "=", "\\"")}'
+
+subject = "host"
+action = "detect"
+object = "attack"
+status = "success"
+
+object.type = $kv["AttackType"]
+object.state = $kv["Action"]
+object.type = $kv["AttackType"]
+
+$src_list = csv($kv["src"], " ", "")        # Переменная списка source ip и ports
+src.ip = csv($src_list[0], ":", "")[0]      # Выделение src ip из списка адресов
+src.port = csv($src_list[0], ":", "")[1]    # Выделение src port из списка адресов
+$dst_list = csv($kv["dst"], " ", "")        # Переменная списка destination ip и ports
+dst.ip = csv($dst_list[0], ":", "")[0]      # Выделение dst ip из списка адресов
+dst.port = csv($dst_list[0], ":", "")[1]    # Выделение dst port из списка адресов
+
+interface = strip($kv["receive interface"], " ", " ")
+protocol = lower($kv["proto"])
+count.packets = $kv["total packets"]
+
+$csv_begin_time = csv($kv["begin time"], "-", "")  # Приведение к формату ISO
+$month_begin_time = switch $csv_begin_time[1]
+    case "1" "Jan"
+    case "2" "Feb"
+    case "3" "Mar"
+    case "4" "Apr"
+    case "5" "May"
+    case "6" "Jun"
+    case "7" "Jul"
+    case "8" "Aug"
+    case "9" "Sep"
+    case "10" "Oct"
+    case "11" "Nov"
+    case "12" "Dec"
+endswitch
+start_time = $csv_begin_time[0] + " " + $month_begin_time + " " + $csv_begin_time[2]  # Вычисление времени начала атаки
+
+# Заполнение поля оставшимися source ip и ports с разделением пайпами
+datafield1 = strip(join(remove($src_list, $src_list[0]), "|"), "|", "|")
+# Заполнение поля оставшимися destination ip и ports с разделением пайпами
+datafield2 = strip(join(remove($dst_list, $dst_list[0]), "|"), "|", "|")
+
+$csv_end_time = csv($kv["end time"], "-", "")  # Приведение к формату ISO
+$month_end_time = switch $csv_end_time[1]
+    case "1" "Jan"
+    case "2" "Feb"
+    case "3" "Mar"
+    case "4" "Apr"
+    case "5" "May"
+    case "6" "Jun"
+    case "7" "Jul"
+    case "8" "Aug"
+    case "9" "Sep"
+    case "10" "Oct"
+    case "11" "Nov"
+    case "12" "Dec"
+endswitch
+$end_att_time = $csv_end_time[0] + " " + $month_end_time + " " + $csv_end_time[2]  # Вычисление времени конца начала атаки
+
+# Временем события является время начала атаки, или конца, или из заголовка syslog
+time = coalesce(start_time, $end_att_time, $sys_time)
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Firewall_attack"

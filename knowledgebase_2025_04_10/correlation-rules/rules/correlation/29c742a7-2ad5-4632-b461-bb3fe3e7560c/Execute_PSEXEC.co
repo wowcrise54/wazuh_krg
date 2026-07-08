@@ -1,0 +1,245 @@
+event PSEXEC_Process:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            # psexec
+            match(lower(object.process.name), "psexec*") 
+            or match(lower(object.process.meta), "*sysinternals*psexec*")
+            # winexec
+            or match(lower(object.process.name), "winexec*")
+            # csexec 
+            or match(lower(object.process.name), "csexec*")
+            or match(lower(object.process.meta), "*csexec*")
+            # paexec
+            or match(lower(object.process.name), "paexec*")
+            or match(lower(object.process.meta), "*paexec*application*")
+        )
+        and filter::CheckWL_Process_Creation("Execute_PSEXEC", lower(join([event_src.host, object.process.name, object.process.cmdline], "|")))
+    }
+
+event Process_Started_By_PSEXEC:
+    key:
+        event_src.host, object.process.parent.id, object.process.parent.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        # Additional check of parent process to reduce number of instances
+        and (
+            match(lower(object.process.parent.name), "psexe*")
+            or match(lower(object.process.parent.name), "winexe*")
+            or match(lower(object.process.parent.name), "csexe*")
+            or match(lower(object.process.parent.name), "paexe*")
+        )
+    }
+
+event PSEXEC_Service:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["7045", "4697"], msgid)
+        and event_src.title == "windows"
+        and (
+            match(lower(object.name), "psexe*")
+            or match(lower(object.name), "winexe*")
+            or match(lower(object.name), "csexe*")
+            or match(lower(object.name), "paexe*")
+            or match(lower(object.process.cmdline), "%comspec%*__output*")
+        )
+        and filter::CheckWL_Specific_Only("Execute_PSEXEC", lower(join([event_src.host, object.name, coalesce(object.process.fullpath,object.process.cmdline)], "|")))
+    }
+
+rule Execute_PSEXEC: (PSEXEC_Process and Process_Started_By_PSEXEC?) timer 15s or PSEXEC_Service
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on PSEXEC_Process {
+        $subject = subject  # account
+        $action = action    # start
+        $object = object    # process
+        $status = status    # success
+
+        if $object.process.name == null then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+
+            $subject.process.parent.id = subject.process.parent.id
+
+            $object.account.session_id = object.account.session_id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+            
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.hash = object.process.hash
+            $object.process.hash.md5 = object.process.hash.md5
+            $object.process.hash.imphash = object.process.hash.imphash
+            $object.process.hash.sha1 = object.process.hash.sha1
+            $object.process.hash.sha256 = object.process.hash.sha256
+            $object.process.version = object.process.version
+            $object.process.cmdline = object.process.cmdline
+            $object.process.guid = object.process.guid
+            $object.process.meta = object.process.meta
+            $object.process.original_name = object.process.original_name
+            $object.process.cwd = object.process.cwd
+            $object.process.chain = object.process.chain 
+
+            $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+            $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        endif
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $reason = regex(object.process.name, "(?i)psexec|paexec|csexec|winexec|gopsexec", 0)
+
+        if regex(object.process.cmdline, "(?i)((-|\/)(s|i)\\b.*?){2}", 0) != null then  # psexec.exe -i -s
+            $category.high = "Privilege Escalation"
+            $category.low = "Create or Modify System Process: Windows Service"
+
+            $incident.category = "PermissionViolation"
+        endif
+        
+        $alert.key = lower(join([event_src.host, object.process.name, object.process.cmdline], "|"))
+        $alert.context = join(remove([$subject.account.name, coalesce(object.process.meta, object.process.name)], null), " | ")
+
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Process_Started_By_PSEXEC {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+
+        $subject.process.parent.id = subject.process.parent.id
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        $datafield11 = join(["Process: " + $object.process.name, "Privilege: " + $object.account.name], " | ")  # Критерий для локализации
+
+        if lower(object.account.name) == "system" then  # psexec.exe -i -s
+            $category.high = "Privilege Escalation"
+            $category.low = "Create or Modify System Process: Windows Service"
+
+            $incident.category = "PermissionViolation"
+        endif
+    }
+
+    on PSEXEC_Service {
+        $subject = subject  # account
+        $action = action    # create
+        $object = object    # service
+        $status = status    # success
+
+        $subject.account.id = subject.account.id
+
+        $subject.process.id = subject.process.id
+        
+        $subject.process.parent.id = subject.process.parent.id
+        
+        $object.process.cmdline = object.process.cmdline
+        $object.process.fullpath = object.process.fullpath
+
+        $object.name = object.name
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        
+        $alert.key = lower(join([event_src.host, object.name, coalesce(object.process.fullpath,object.process.cmdline)], "|"))
+        $alert.context = subject.account.name
+        
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $category.generic = "Attack"
+    if $category.high == null then
+        $category.high = "Execution"
+        $category.low = "System Services: Service Execution"
+
+        $incident.category = "HackToolsDetection"
+    endif
+    
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$Computer=STRING} {event_src.subsys="wabengine"}
+        {"["subject.process.id=NUMBER"]"?}: [wabauth] {$temp_kv=UNTIL("infos=")}"diagnostic [\'{UNTIL("\'")}-
+        {datafield1=UNTIL("- ")} authentication failed: {$reas_1="The"|$reas_1="Bad"} {$reas_2="REST API key"}
+        {"\\""datafield2=UNTIL("\\"") $reas_3="is not allowed for the IP"?} {REST}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+$kv = keyvalue($temp_kv, " ", "=", "\"")
+
+subject.account.name = $kv["user"]
+
+src.ip = $kv["client_ip"]
+
+logon_auth_method = "local"
+
+# datafield1 - Тип проверки подлинности
+# datafield2 - Имя ключа rest api
+
+reason = join(remove([$reas_1, $reas_2, $reas_3], null), " ")
+
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_syslog_login_wab_restapi_failure"

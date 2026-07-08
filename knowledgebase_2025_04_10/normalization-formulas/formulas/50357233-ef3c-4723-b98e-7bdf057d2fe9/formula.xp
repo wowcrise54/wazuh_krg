@@ -1,0 +1,57 @@
+EVENTLOG = ''
+
+COND = (
+            $Channel == "Kaspersky Endpoint Security"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "204"
+        )
+        or
+        (
+            $Channel == "Kaspersky Event Log"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "4660"
+            and find_substr($Data[0], "Срок действия лицензии скоро истекает") != null
+        )
+
+subject = "system"
+action = "info"
+object = "resource"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+submessage("TEXT", "license", $kv["Результат\\Описание"])
+
+subject.name = $kv["Программа\\Название"]
+
+object.name = $kv["Объект\\Название"]
+object.path = strip($kv["Объект"], "'", object.name)
+object.type = "license"
+
+subformula "license"
+    TEXT = 'Срок действия лицензии скоро истекает. Осталось дней: {object.value=NUMBER}'
+    object.property = "days left"
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+
+msgid = switch $EventID["text"]
+    case "4660" $kv["Тип события"]
+    case "204" $EventID["text"]
+endswitch
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_204_license_expires_soon"

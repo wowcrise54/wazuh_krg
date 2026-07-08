@@ -1,0 +1,55 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = ($kv["product"] != "Endpoint Security Console"
+        and $kv["subject"] == "Object Manipulation"
+        and in_list(["Modify Object", "Set Object", "Rename Object", "Modify Rule"], $kv["operation"]))
+
+if $kv["administrator"] != "localhost" then
+    subject = "account"
+    subject.account.name = $kv["administrator"]
+    subject.account.session_id = $kv["session_uid"]
+    subject.process.name = $kv["session_name"]
+endif
+action = "modify"
+object = "resource"
+status = "success"
+
+if $kv["operation"] == "Set Object" then
+    object.type = $kv["objectname"]
+else
+    object.name = $kv["objectname"]
+    object.type = $kv["objecttype"]
+endif
+
+if csv($kv["fieldschanges"], " ", "")[0] != null then
+    object.property = "fields changes"
+    object.new_value = $kv["fieldschanges"]
+endif
+
+if $kv["client_ip"] != "0.0.0.0" and $kv["client_ip"] != "127.0.0.1" and $kv["client_ip"] != "::" then
+    src.ip = $kv["client_ip"]
+endif
+
+datafield4 = coalesce($kv["origin_sic_name"], $kv["originsicname"])  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+datafield9 = $hostname                                               # имя устройства с LogExporter
+
+if $kv["operation"] == "Rename object" then
+    reason = "rename"
+endif
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+msgid = $kv["operation"]
+importance = "low"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+if $kv["origin"] != $kv["client_ip"] then
+    event_src.ip = $kv["origin"]
+endif
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Configuration_Modify_object"

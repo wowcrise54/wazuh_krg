@@ -1,0 +1,5 @@
+filter AD_LDAP_Query() {
+    msgid == "1644"
+    and event_src.vendor == "microsoft"
+    and event_src.title == "windows"
+}

@@ -1,0 +1,36 @@
+JSON = ""
+
+COND = (coalesce($ENTITY_TYPE, $entity_type) == "Config")
+        and (in_list(["draft", "commit", "rollback"], coalesce($OPERATION, $operation)))
+
+subject = "account"
+if $OPERATION != null then $action_raw = $OPERATION else $action_raw = $operation endif
+if $action_raw == "draft" then
+    action = "modify"
+    importance = "low"
+elif $action_raw == "commit" then
+    action = "apply"
+    importance = "medium"
+else
+    action = "rollback"
+    importance = "info"
+endif
+object = "configuration"
+status = "success"
+
+subject.account.id = coalesce($user_or_token['USER_ID'], $user_id)
+subject.account.name = coalesce($user_or_token['USERNAME'], $user_login)
+subject.account.fullname = coalesce($user_or_token['DISPLAY_NAME'], $user_fullname)
+subject.account.contact = coalesce($user_or_token['EMAIL'], $user_email)
+
+object.id = coalesce($ENTITY_ID, $entity_id)
+object.name = coalesce($ENTITY_DISPLAY_NAME, $entity_display_name)
+
+time = coalesce($CHANGE_DATE + $user_or_token['TIMEZONE'], $change_date)
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_Config_draft_commit_rollback"

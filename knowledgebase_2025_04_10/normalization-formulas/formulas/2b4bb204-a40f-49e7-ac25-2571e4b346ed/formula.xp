@@ -1,0 +1,88 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = in_list([
+           "VmConnectedEvent",
+           "VmDisconnectedEvent"
+       ], $event_class)
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+action = "info"
+object = "virtual_machine"
+status = "success"
+
+subformula "connect_vm"
+    # VmConnectedEvent
+    TEXT = '[Virtual machine {$vm_name=STRING+} is connected]'
+    
+    object.state = "connected"
+endsubformula
+
+subformula "disconnect_vm"
+    # VmDisconnectedEvent
+    TEXT = '[{$vm_name=STRING+} on host {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=STRING+} is disconnected]'
+    
+    object.state = "disconnected"
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+switch $event_class
+    case "VmConnectedEvent" 
+        submessage("TEXT", "connect_vm", $raw_message)
+    case "VmDisconnectedEvent"
+        submessage("TEXT", "disconnect_vm", $raw_message)
+endswitch
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+
+if coalesce(ipv4($host_name), ipv6($host_name)) != null then
+    dst.ip = coalesce(ipv4($host_name), ipv6($host_name))
+else
+    dst.hostname = $host_name
+endif
+
+datafield1 = coalesce($datacenter_name, $def_dc_name)  # Datacenter Name
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $host_name  # Host Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_VM_Connection"

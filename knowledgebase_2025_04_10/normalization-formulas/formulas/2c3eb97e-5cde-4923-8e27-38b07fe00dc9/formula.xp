@@ -1,0 +1,58 @@
+!TEXT = '{"<"NUMBER">"}{":"?} CEF{":"}0|{"Stonesoft"|"McAfee"}|Firewall|5.3.{NUMBER}|{msgid="70018"}|Connection_Allowed|{NUMBER}|
+        {"spt="src.port=NUMBER?} deviceExternalId={event_src.id=STRING} node{NUMBER} {$kv=KEYVALUE(" ", "=")}'
+
+subject = "rule"
+action = "allow"
+object = "connection"
+status = "success"
+
+subject.id = $kv["cs1"]
+
+if maybe_ipv4($kv["src"]) != null or maybe_ipv6($kv["src"]) != null then
+    src.ip = $kv["src"]
+else
+    src.hostname = $kv["src"]
+endif
+if maybe_ipv4($kv["dst"]) != null or maybe_ipv6($kv["dst"]) != null then
+    dst.ip = $kv["dst"]
+else
+    dst.hostname = $kv["dst"]
+endif
+dst.port = $kv["dpt"]
+
+if $kv["sourceTranslatedAddress"] != $kv["src"] then
+    assigned_src_ip = $kv["sourceTranslatedAddress"]
+    assigned_src_port = $kv["sourceTranslatedPort"]
+endif
+
+if $kv["destinationTranslatedAddress"] != $kv["dst"] then
+    assigned_dst_ip = $kv["destinationTranslatedAddress"]
+    assigned_dst_port = $kv["destinationTranslatedPort"]
+endif
+
+interface = $kv["deviceInboundInterface"]
+
+protocol = $kv["proto"]
+
+datafield8 = lower($kv["app"])             # Имя объекта
+
+time = $kv["rt"]
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.subsys = lower($kv["deviceFacility"])
+if maybe_ipv4($kv["dvc"]) != null or maybe_ipv6($kv["dvc"]) != null then
+    event_src.ip = $kv["dvc"]
+endif
+if maybe_ipv4($kv["dvchost"]) == null and maybe_ipv6($kv["dvchost"]) == null then
+    event_src.hostname = $kv["dvchost"]
+endif
+event_src.vendor = "forcepoint"
+event_src.title = "stonesoft_ngfw"
+event_src.category = "Firewall"
+
+id = "PT_Forcepoint_Stonesoft_NGFW_syslog_CEF_Events_Connection_allowed"

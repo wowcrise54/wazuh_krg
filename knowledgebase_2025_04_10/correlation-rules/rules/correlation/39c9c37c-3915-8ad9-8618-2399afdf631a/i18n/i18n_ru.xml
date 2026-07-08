@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля в системе хранения данных Artifactory. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="0f9822eb-a9f2-2766-737d-83ef98095900">Попытки распыления пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Количество попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="2e84e4d4-a8f0-ba41-55de-6b0fa2f327ac">Успешное распыление пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Подобран пароль для пользователя {subject.account.name}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="add9cd81-136e-f465-a69f-cb101c4c3614">Успешное распыление пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Подобран пароль для следующих пользователей: {datafield2}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+  </EventDescriptions>
+</Localization>

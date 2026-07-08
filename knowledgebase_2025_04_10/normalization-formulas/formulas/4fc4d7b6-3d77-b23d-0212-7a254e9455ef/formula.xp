@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.fqdn=HOSTNAME} {$product_name=UNTIL("|")}
+        {NUMBER}.{NUMBER}.{NUMBER}.{NUMBER} -               
+        {msgid="KLSRV_RUNTIME_ERROR"}
+        {"[event@"?}{NUMBER?} {$raw_kv=UNTIL("]")?} {reason=REST}' 
+
+action = "alert"
+object = "application"
+status = "success"
+
+$kv_extra = keyvalue($raw_kv, " ", "=", "\"")
+
+datafield1 = $kv_extra["gn"]    # имя группы администрирования, в которую входит узел-источник
+
+reason = $kv_extra["etdn"]
+
+importance = "medium"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $product_name
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+if $kv_extra["hip"] != "127.0.0.1" then
+    event_src.ip = $kv_extra["hip"]
+endif
+if $kv_extra["hdn"] != "<Administration Server>" then
+    event_src.hostname = lower($kv_extra["hdn"])
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_plain_KLSRV_RUNTIME_ERROR"

@@ -1,0 +1,208 @@
+# Правило обогащения для отслеживания корреляций по IOC's от Cybsi
+# IOC's category:hash, ip, domain
+# ----------------------------------------------------------------------------------------------------------
+
+# Hash
+# Простой поиск по хешу
+query Tracker_hash($hash) from repListHashes {
+    (hash_md5 == $hash and hash_md5 != null)
+    or (hash_sha1 == $hash and hash_sha1 != null)
+    or (hash_sha256 == $hash and hash_sha256 != null)
+}
+
+# ----------------------------------------------------------------------------------------------------------
+# Ip
+# Простой поиск по IP
+query Tracker_ip($ip, $src.ip, $dst.ip, $external_src.ip, $external_dst.ip) from repListIP {
+    ip == $ip
+    or ip == $src.ip
+    or ip == $dst.ip
+    or ip == $external_src.ip
+    or ip == $external_dst.ip
+}
+
+# ----------------------------------------------------------------------------------------------------------
+# Fqdn
+# Прострой поиск по fqdn & ip (cmdline & dns logs)
+query Tracker_ip_cmdline($ip) from repListIP {
+    ip == $ip   
+}
+
+query Tracker_fqdn_cmdline($fqdn) from repListMasks {
+    mask == $fqdn   
+}
+
+# ----------------------------------------------------------------------------------------------------------
+# Events enrichment IOC_Cybsi_Events_Enrichment Hash
+event enrich_hash:
+    filter {
+        filter::NotFromCorrelator()
+        and find_substr(lower(alert.ioc_provider),"ioc:cybsi_hash") == null
+        and (
+                # Исключить Sysmon 7, если нагрузка будет высокой
+                (
+                    object.hash != null and exec_query("Tracker_hash", [lower(object.hash)])
+                    and not (match(lower(msgid),"scan_machine.*"))
+                )
+            or 
+                (object.process.hash != null and exec_query("Tracker_hash", [lower(object.process.hash)]))
+            or 
+                (object.process.hash.sha256 != null and exec_query("Tracker_hash", [lower(object.process.hash.sha256)]))
+            or 
+                (object.process.hash.sha1 != null and exec_query("Tracker_hash", [lower(object.process.hash.sha1)]))
+            or 
+                (object.process.hash.md5 != null and exec_query("Tracker_hash", [lower(object.process.hash.md5)]))
+            or 
+                (object.process.hash.imphash != null and exec_query("Tracker_hash", [lower(object.process.hash.imphash)]))
+        )
+    }
+    
+# ----------------------------------------------------------------------------------------------------------
+# Ip
+event enrich_ip:
+    filter {
+        filter::NotFromCorrelator()
+        and find_substr(lower(alert.ioc_provider),"ioc:cybsi_ip") == null
+        and (
+            src.ip != null 
+            or dst.ip != null
+            or external_src.ip != null
+            or external_dst.ip != null
+            or event_src.ip != null
+        )        
+        and exec_query("Tracker_ip",[event_src.ip, src.ip, dst.ip, external_src.ip, external_dst.ip])         
+    }
+    
+# ----------------------------------------------------------------------------------------------------------
+# FQDN
+event enrich_fqdn:
+    filter {
+        filter::NotFromCorrelator()
+        # TODO: Подумать, в каких еще событиях встречается fqdn в отдельном поле
+        and find_substr(lower(alert.ioc_provider),"ioc:cybsi_fqdn") == null
+        and (
+                (
+                    event_src.title == "sysmon"
+                    and msgid == "22"
+                    and object.query != null
+                    and exec_query("Tracker_fqdn_cmdline",[lower(object.query)])
+                )
+                or (
+                    external_dst.fqdn != null
+                    and exec_query("Tracker_fqdn_cmdline",[lower(external_dst.fqdn)])
+                ) 
+                or (
+                    external_src.fqdn != null
+                    and exec_query("Tracker_fqdn_cmdline",[lower(external_src.fqdn)])
+                )        
+        )
+                          
+    }    
+    
+# ----------------------------------------------------------------------------------------------------------    
+# IP or FQDN in Commandline
+event enrich_commandline:
+    filter {
+        filter::NotFromCorrelator()
+        and find_substr(lower(labels),"ioc:cybsi_commandline") == null
+        and (
+            (event_src.title == "windows" and msgid == "4688") or
+            (event_src.title == "sysmon" and msgid == "1") or
+            (event_src.title == "unix_like" and action == "start" and object == "process")
+        )
+        and object.process.cmdline != null
+        and (  
+            exec_query("Tracker_fqdn_cmdline",[regex(lower(object.process.cmdline), "(https?:\/\/|@)([a-z0-9-\.]+)(\/|:|\\b)", 2)])
+            or exec_query("Tracker_ip_cmdline",[regex(lower(object.process.cmdline),"\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b",0)])
+        )
+    }
+
+# ----------------------------------------------------------------------------------------------------------
+# Enrichment
+# ----------------------------------------------------------------------------------------------------------
+enrichment IOC_Cybsi_Events_Enrichment
+    enrich enrich_hash:
+        enrich_fields {
+            # sha256 is a priority, will override all other values
+            alert.ioc_provider = "Cybsi | ioc:cybsi_hash"
+
+            $result = select_query_first("Tracker_hash", [lower(object.hash)], "id")
+            if $result != null then
+                alert.ioc_value = lower(object.hash)
+            endif
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash)], "id")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash)
+            endif
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash.imphash)], "id")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash.imphash)
+            endif
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash.md5)], "hash_md5")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash.md5)
+            endif
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash.sha1)], "hash_sha1")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash.sha1)
+            endif
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash.sha256)], "hash_sha256")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash.sha256)
+            endif
+            
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        }
+    
+    enrich enrich_ip:
+        enrich_fields {
+            alert.ioc_value = select_query_first("Tracker_ip", [event_src.ip, src.ip, dst.ip, external_src.ip, external_dst.ip], "ip")
+            alert.ioc_provider = "Cybsi | ioc:cybsi_ip"
+            
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        }
+
+    enrich enrich_fqdn:
+        enrich_fields {
+            if msgid == "22" and event_src.title == "sysmon" then
+                alert.ioc_value = select_query_first("Tracker_fqdn_cmdline", [lower(object.query)], "mask")
+            elif external_dst.fqdn != null then
+                alert.ioc_value = select_query_first("Tracker_fqdn_cmdline", [lower(external_dst.fqdn)], "mask")
+            elif external_src.fqdn != null then
+                alert.ioc_value = select_query_first("Tracker_fqdn_cmdline", [lower(external_src.fqdn)], "mask")
+            endif
+
+            alert.ioc_provider = "Cybsi | ioc:cybsi_fqdn"
+            
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        }
+
+    enrich enrich_commandline:
+        enrich_fields {
+            alert.ioc_value = coalesce(select_query_first("Tracker_fqdn_cmdline",[regex(lower(object.process.cmdline), "(https?:\/\/|@)([a-z0-9-\.]+)(\/|:|\\b)", 2)], "mask"), select_query_first("Tracker_ip_cmdline",[regex(lower(object.process.cmdline),"\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b", 0)], "ip"))
+            alert.ioc_provider = "Cybsi | ioc:cybsi_commandline"
+            
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch 
+       } 
+ 

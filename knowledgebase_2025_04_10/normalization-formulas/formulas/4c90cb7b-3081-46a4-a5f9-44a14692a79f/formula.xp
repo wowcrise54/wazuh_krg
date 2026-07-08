@@ -1,0 +1,42 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {src.ip=remote_computer},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "664010762" or string($zntf_status) == "664010758" or string($zntf_status) == "664011143" or string($zntf_status) == "664010765" or string($zntf_status) == "1737752726"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+submessage("TEXT", "SPLIT", $zntf_user)
+
+msgid = string($zntf_status)
+
+if msgid == "664010762" then
+    object.property = "zgate transfer"
+elif msgid == "664010765" then
+    object.property = "zgate filtration"
+elif msgid == "664010758" then
+    object.property = "logging or run scripts of zgate"
+elif msgid == "664011143" then
+    object.property = "web-proxy zgate"
+elif msgid == "1737752726" then
+    object.property = "zgate license management"
+endif
+
+subformula "SPLIT"
+    # Извлечение subject.domain и subject.name из $zntf_user
+    TEXT = '{$csv = CSV("\\\\", "\'")}'
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+endsubformula
+
+importance = "info"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_change_settings"

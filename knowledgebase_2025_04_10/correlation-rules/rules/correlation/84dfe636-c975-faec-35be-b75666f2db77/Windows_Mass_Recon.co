@@ -1,0 +1,144 @@
+event Recon_Rules:
+    key:
+        event_src.host, subject.account.id, subject.account.session_id
+    filter {
+        (in_list([
+            "Delegated_Accounts_Recon",
+            "File_Directory_Discovery",
+            "Domain_Controllers_Discovery",
+            "Search_Stored_Credentials",
+            "Permission_Groups_Discovery",
+            "System_Network_Connections_Discovery",
+            "System_Network_Configuration_Discovery",
+            "Password_Policy_Discovery",
+            "LAPS_Enumeration",
+            "Network_Share_Discovery",
+            "Domain_Trust_Discovery",
+            "Account_Discovery",
+            "Process_Discovery",
+            "Software_Discovery",
+            "AppLocker_Policies_Discovery",
+            "Enumerating_Delegated_Credentials",
+            "Security_State_Discovery",
+            "System_Service_Discovery",
+            "PowerView_Recon",
+            "Shares_Discovery"
+        ], correlation_name)
+            or match(lower(correlation_name), "*sharphound*")
+            and correlation_type != "subrule"
+        )
+        and filter::CheckWL_Specific_Only("Windows_Mass_Recon", alert.key)
+    }
+
+rule Windows_Mass_Recon: Recon_Rules[4,] with different correlation_name timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $first_event = true
+        $count.subevents = 0
+    }
+
+    on Recon_Rules {
+        if $first_event then
+            $subject = subject
+            $action = action
+            $object = object
+            $status = status
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            
+            $object.account.session_id = object.account.session_id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.hash = object.process.hash
+            $object.process.hash.md5 = object.process.hash.md5
+            $object.process.hash.sha1 = object.process.hash.sha1
+            $object.process.hash.sha256 = object.process.hash.sha256
+            $object.process.version = object.process.version
+            $object.process.cmdline = object.process.cmdline
+            $object.process.guid = object.process.guid
+            $object.process.meta = object.process.meta
+            $object.process.original_name = object.process.original_name
+            $object.process.cwd = object.process.cwd
+            $object.process.chain = object.process.chain
+            
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            $datafield18 = datafield18 # Цепочка процесса-субъекта с идентификаторами
+            $datafield19 = datafield19 # Цепочка процесса-объекта с идентификаторами
+
+            # src
+            $src.host = src.host
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.asset = src.asset
+            $src.port = src.port
+
+            # dst
+            $dst.host = dst.host
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.asset = dst.asset
+            $dst.port = dst.port
+
+            # event src host
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            # other
+            $alert.key = alert.key
+
+            $reason = reason
+
+            $first_event = false
+        endif
+
+        $context = $context + correlation_name + ": [" + alert.context + "] "
+        $regex_match = $regex_match + correlation_name + ": [" + alert.regex_match + "] "
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $alert.context = $context
+    $alert.regex_match = $regex_match
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "System Information Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "NetworkScan"
+    $incident.aggregation.timeout = 2h
+}

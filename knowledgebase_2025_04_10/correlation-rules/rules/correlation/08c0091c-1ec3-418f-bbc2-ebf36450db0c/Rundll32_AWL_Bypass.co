@@ -1,0 +1,247 @@
+event Known_DLL_Functions:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows("rundll32.exe")
+        and (
+                match(lower(object.process.cmdline), "*registerocx*")
+                or match(lower(object.process.cmdline), "*routethecall*")
+                or match(lower(object.process.cmdline), "*openurl*")
+                or match(lower(object.process.cmdline), "*fileprotocolhandler*")
+                or match(lower(object.process.cmdline), "*launchinfsection*")
+                or match(lower(object.process.cmdline), "*control_rundll*")
+                or match(lower(object.process.cmdline), "*shellexec_rundll*")
+                or match(lower(object.process.cmdline), "*printhtml*")
+                or match(lower(object.process.cmdline), "*setupinfobjectinstallaction*")
+                or match(lower(object.process.cmdline), "*installhinfsection*")
+                or match(lower(object.process.cmdline), "*launchapplication*")
+                or match(lower(object.process.cmdline), "*shopenverbapplication*")
+                or match(lower(object.process.cmdline), "*execute *")
+                
+                # Print Nightmare (force all other users/admins of workstation/server to install printers)
+                or match(lower(object.process.cmdline), "*printuientry /in*")
+            )
+        and filter::CheckWL_Process_Creation("Rundll32_AWL_Bypass", lower(object.process.cmdline))
+    } 
+
+event Malicious_Cmdline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows("rundll32.exe")
+        and object.process.cmdline != null
+        and (
+            # Исполнение javascript, vbscript или cscript через rundll32.exe
+            match(lower(object.process.cmdline), "script*mshtml*runhtmlapplication")
+            
+            # Удаленный хост в командной строке
+            or (regex(lower(object.process.cmdline), "(http|ftp|\\\\\\\\)", 0) != null
+                and not match(lower(object.process.cmdline), "*monitorprintjobstatus*"))
+            
+            # Альтернативные потоки данных
+            or regex(lower(object.process.cmdline), "\.[a-z]{2,4}:.*?\.(dll|ocx|cpl)\\b", 0) != null
+            
+            # Hijacked COM object
+            or regex(lower(object.process.cmdline), "\s(-|\/)(sta|localserver)\s", 0) != null
+            
+            # Исполнение файлов  .sys через rundll32.exe
+            or regex(lower(object.process.cmdline), "\.sys\\b", 0) != null
+
+            # Вероятно, не системный DLL-файл
+            or regex(lower(object.process.cmdline), "\.dll$", 0) != null
+        )
+        and filter::CheckWL_Process_Creation("Rundll32_AWL_Bypass", lower(object.process.cmdline))
+    }
+   
+rule Rundll32_AWL_Bypass: Known_DLL_Functions or Malicious_Cmdline
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Known_DLL_Functions {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+            $reason = "Service execution"
+        elif $object.process.parent.name == "scheduler.exe" then
+            $reason = "Task execution"
+        else
+            $reason = "User execution"
+        endif
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "registerocx|routethecall|openurl|fileprotocolhandler|launchinfsection|control_rundll|shellexec_rundll|printhtml|setupinfobjectinstallaction|installhinfsection|launchapplication|shopenverbapplication|execute", 0)        
+        $alert.context = "Suspicious function called: " + $alert.regex_match
+    }
+
+    on Malicious_Cmdline {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield1 = regex(lower(object.process.cmdline), "(http|ftp|\\\\\\\\)[a-z0-9\-\.:_\\\/]+", 0) # Link in commandline
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+            $reason = "Service execution"
+        elif $object.process.parent.name == "scheduler.exe" then
+            $reason = "Task execution"
+        else
+            $reason = "User execution"
+        endif
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "script.*?mshtml.*?runhtmlapplication|(http|ftp|\\\\\\\\)[a-z0-9\-\.\/:\_]+|\.[a-z]{2,4}:.*?(dll|ocx|cpl)|\s(-|\/)(sta|localserver)\s|\.sys\\b", 0)
+        if find_substr($alert.regex_match, "runhtmlapplication") != null then
+            $alert.context = "Script executed with RunDll32 | regex_match:" + $alert.regex_match
+        elif find_substr($alert.regex_match, "http") != null or find_substr($alert.regex_match, "ftp") != null or find_substr($alert.regex_match, "\\\\") != null then
+            $alert.context = "Remote file executed with RunDll32: " + $datafield1
+        elif find_substr($alert.regex_match, "sta") != null or find_substr($alert.regex_match, "localserver") != null then
+            $alert.context = "Hijacked COM object executed with RunDll32 | regex_match:" + $alert.regex_match   
+        elif find_substr($alert.regex_match, ".sys") != null then
+            $alert.context = "Sys file executed with RunDll32 | regex_match:" + $alert.regex_match
+        elif find_substr($alert.regex_match, ":") != null then
+            $alert.context = "File fron ADS executed with RunDll32 | regex_match:" + $alert.regex_match
+        else
+            $alert.regex_match = "Non-system DLL executed with RunDll32: " + regex(lower(object.process.cmdline), "[a-z0-9._]+\.dll", 0)
+            $alert.context = $alert.regex_match
+        endif
+    }
+    
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    $importance = "medium"
+
+    $C2_host = regex(lower($object.process.cmdline),"(http(s)?://|ftp://|\\\\\\\\)(.*?)/", 3)
+    if $C2_host != null then
+        $port_raw = regex($C2_host,":(\d+)$", 1)
+        $dst.port = strip($port_raw, ":", "")
+        $dst.host = strip($C2_host, "", ":" + $port_raw)
+        
+        if maybe_ipv4($dst.host) != null or maybe_ipv6($dst.host) != null then
+            $dst.ip = $dst.host
+        else
+            $maybe_dot_pos = find_substr($dst.host, '.')
+            if $maybe_dot_pos != null then
+                $dst.fqdn = $dst.host
+                $dst.hostname = substr($dst.host, 0, $maybe_dot_pos)
+            else
+                $dst.hostname = $dst.host
+            endif
+        endif
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "System Binary Proxy Execution: Rundll32"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

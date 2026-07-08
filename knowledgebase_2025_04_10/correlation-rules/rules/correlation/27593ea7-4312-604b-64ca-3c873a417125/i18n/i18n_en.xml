@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to a critical server. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="1b952f5b-497b-df27-50a9-9cce621bf211">User {subject.account.name} from host {src.host} logged in to a critical server and accessed new shared network resource "{object.storage.path}" on host {event_src.host}. The network resource is missing from the collected profile.</EventDescription>
+    <EventDescription id="462aacec-a10e-dd33-9d17-2bd1da9d7b81">User {subject.account.name} from host {src.host} used new logon type {logon_type} ({datafield6}) to log in to a critical server on host {event_src.host}. The logon type is missing from the collected profile.</EventDescription>
+    <EventDescription id="5b3a3453-054f-216f-2617-02539640289e">User {subject.account.name} from host {src.host} logged in to a critical server and accessed a new object in shared network resource "{object.storage.name}" on host {event_src.host}. The object is missing from the collected profile.</EventDescription>
+    <EventDescription id="9be79db2-03c9-dd5a-ee5b-798a47fbc7bc">User {subject.account.name} from new host {src.host} logged in to a critical server on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="b068bafe-5ec8-5b95-efec-1c0963fd65f7">New user {subject.account.name} from host {src.host} logged in to a critical server on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

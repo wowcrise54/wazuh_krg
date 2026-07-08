@@ -1,0 +1,57 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0314012293"
+
+action = "detect"
+object = "session"
+status = "success"
+
+object.account.name = $kv["user"]
+
+$dot_pos = find_substr($kv["hostname"], '.')
+
+if $dot_pos != null then
+    dst.fqdn = $kv["hostname"]
+    dst.hostname = substr($kv["hostname"], 0, $dot_pos)
+else
+    dst.hostname = $kv["hostname"]
+endif
+
+src.ip = $kv["srcip"]
+src.port = $kv["srcport"]
+if $kv["srccountry"] != "Reserved" then src.geo.country = $kv["srccountry"] endif
+dst.ip = $kv["dstip"]
+dst.port = $kv["dstport"]
+if $kv["dstcountry"] != "Reserved" then dst.geo.country = $kv["dstcountry"] endif
+protocol = $kv["proto"]
+protocol.layer7 = $kv["service"]
+count.bytes_out = $kv["sentbyte"]
+count.bytes_in = $kv["rcvdbyte"]
+
+datafield1 = $kv["vd"]  # Virtual domain name
+
+# datafield4 - uri
+if dst.hostname != null then
+    datafield4 = $kv["service"] + "://" + dst.hostname + $kv["url"]
+endif
+if ($kv["url"] != null and dst.hostname == null) then
+    datafield4 = $kv["service"] + "://" + dst.ip + $kv["url"]
+endif
+
+datafield9 = join([$kv["type"], $kv["subtype"], $kv["eventtype"]], "|")  # Event type
+datafield11 = $kv["action"]                                              # Action
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "low"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["devid"]
+event_src.rule = $kv["policyid"]
+event_src.category = "Firewall"
+
+id = "PT_Fortinet_Fortigate_syslog_12293_LOG_ID_WEB_CONTENT_SEARCH"

@@ -1,0 +1,31 @@
+EVENTLOG = 'Channel="Application"'
+!COND = $EventID["text"] == "1091" and $Provider["Name"] == "KSHSecurityService"
+
+subject = "application"
+action = "info"
+object = "update"
+status = "success"
+
+submessage("TEXT","SPLIT",$Data[0])
+
+object.property = "product name"
+object.type = "signature database"
+
+subformula "SPLIT"
+    # Извлечение subject.name, object.value и object.version из $Data[0]
+    TEXT='{subject.name=UNTIL("\r\n")} Базы {object.value=UNTIL(" устарели.")}
+    Дата выпуска баз: {object.version=UNTIL(".")}'
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "low"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_sharepoint_server"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Security_for_SharePoint_Server_eventlog_1091_bases_are_out_of_date"

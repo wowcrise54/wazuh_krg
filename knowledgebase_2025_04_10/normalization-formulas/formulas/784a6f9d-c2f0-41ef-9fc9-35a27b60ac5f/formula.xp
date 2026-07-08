@@ -1,0 +1,100 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$Computer=STRING} {event_src.subsys="sshproxy"}
+        {"["subject.process.id=NUMBER"]"?}: [SSH Session] {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = in_list(["NOTIFY_PATTERN_DETECTED",
+                "KILL_PATTERN_DETECTED",
+                "WARNING_PATTERN_DETECTED",
+                "NOTIFY_COMMAND_DETECTED",
+                "KILL_COMMAND_DETECTED",
+                "WARNING_COMMAND_DETECTED"],
+               $kv["type"])
+
+subject = "account"
+action = "execute"
+object = "command"
+
+if in_list(["KILL_PATTERN_DETECTED", "KILL_COMMAND_DETECTED"], $kv["type"]) then
+    status = "failure"
+
+    importance = "medium"
+else
+    status = "success"
+
+    importance = "low"
+endif
+
+if find_substr($kv["account"], "\\") != null then
+    $temp_acc_1 = csv($kv["account"], "\\", "")
+    subject.account.name = $temp_acc_1[length($temp_acc_1) - 1]
+    subject.account.domain = $temp_acc_1[0]
+elif find_substr($kv["account"], "@") != null then
+    $temp_acc_2 = csv($kv["account"], "@", "")
+    subject.account.name = $temp_acc_2[0]
+    subject.account.domain = $temp_acc_2[1]
+else
+    subject.account.name = $kv["account"]
+endif
+
+subject.account.session_id = $kv["session_id"]
+
+if $kv["pattern"] != null then
+    object.property = "pattern"
+elif $kv["command"] != null then
+    object.property = "command"
+endif
+
+object.type = substr($kv["type"], 0, find_substr($kv["type"], "_"))
+object.value = coalesce($kv["pattern"], $kv["command"])
+
+object.account.name = subject.account.name
+object.account.domain = subject.account.domain
+object.account.session_id = subject.account.session_id
+
+object.process.cmdline = object.value
+
+src.ip = $kv["client_ip"]
+dst.ip = $kv["target_ip"]
+protocol.layer7 = "ssh"
+
+if $kv["client_ip"] == $kv["target_ip"] then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+logon_service = $kv["service"]
+
+# datafield3 - имя пользователя WAB
+# datafield4 - домен пользователя WAB
+if find_substr($kv["user"], "\\") != null then
+    $temp_acc_3 = csv($kv["user"], "\\", "")
+    datafield3 = $temp_acc_3[length($temp_acc_3) - 1]
+    datafield4 = $temp_acc_3[0]
+elif find_substr($kv["user"], "@") != null then
+    $temp_acc_4 = csv($kv["user"], "@", "")
+    datafield3 = $temp_acc_4[0]
+    datafield4 = $temp_acc_4[1]
+else
+    datafield3 = $kv["user"]
+endif
+
+datafield5 = $kv["device"]  # Наименование устройства в WAB
+
+msgid = $kv["type"]
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_syslog_pattern_detected"

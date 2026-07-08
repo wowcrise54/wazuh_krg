@@ -1,0 +1,133 @@
+query Check_If_Host_Is_DC_By_Dst($host, $ip) from List_Servers {
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            asset_ip == $ip
+            and asset_ip != null
+        )
+        or (
+            (
+                host == $ip
+                or host == $host
+            )
+            and host != null
+        )
+    )
+}
+
+query Check_If_Host_Is_DC_AssetGrid($fqdn, $ip, $asset) from AssetGrid_Servers {
+    (
+        asset_id == $asset
+        and asset_id != null
+    ) or (
+        asset_fqdn == $fqdn
+        and asset_fqdn != null
+    ) or (
+        asset_ip == $ip
+        and asset_ip != null
+    )
+}
+
+event Server_Attacker: # Подключение cервера к атакующему
+    key:
+        event_src.host, dst.ip
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["3", "5156"], msgid)
+        and in_list(["sysmon", "windows"], event_src.title)
+        and dst.port == 445
+        and src.host != dst.host
+        and lower(object.process.name) == "system"
+        and object.process.id == "4" 
+        and direction == "egress" 
+        and not filter::Loopback_Address(dst.ip)
+        and not (
+            match(lower(select_query_first("Check_If_Host_Is_DC_By_Dst", [lower(dst.host), dst.ip], "roles")), "*domain controller*")
+            or match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [lower(dst.host), dst.ip, lower(dst.asset)], "roles"), "*\"Domain Controller\"*")
+        )
+    }
+
+# В событии в dst.host/dst.ip указывается Listener, event id 514/515 - хороший индикатор Coerce-атак, но эти события появляются только при использовании пайпа netdfs   
+event Events_DFS:   
+    key:
+        event_src.host, dst.ip
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["514", "515"], msgid)
+        and event_src.title == "windows"
+        and lower(event_src.subsys) == "microsoft-windows-dfsn-server/admin"
+    }
+
+rule Subrule_Egress_System: (Server_Attacker+ and Events_DFS?) timer 90s
+    
+    init {
+        $count.subevents = 0
+    }
+
+    on Server_Attacker {
+
+        if $count.subevents == 0 then
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.mac = src.mac
+            $src.port = src.port
+            $src.asset = src.asset
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            # Здесь определяется Listener
+            if $dst.ip == null then
+                $dst.ip = dst.ip
+                $dst.port = dst.port
+                $dst.host = dst.host
+                $dst.fqdn = dst.fqdn
+                $dst.asset = dst.asset
+            endif
+        endif
+
+        $count.subevents = $count.subevents + 1
+    }
+    
+    on Events_DFS {
+    
+        # Здесь также определяется Listener, но данное событие - более точный индикатор
+        if $dst.ip != dst.ip then
+            $dst.ip = dst.ip
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.asset = dst.asset
+        endif
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "info"
+    
+    $alert.key = lower(join([$event_src.host, $dst.ip], "|"))    
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Forced Authentication"
+}

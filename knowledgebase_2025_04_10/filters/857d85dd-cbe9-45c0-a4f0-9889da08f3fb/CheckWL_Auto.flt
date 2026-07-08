@@ -1,0 +1,6 @@
+filter CheckWL_Auto(string $rule_name, string $specific_value) {
+    table::Common_whitelist_auto {
+        column::rule == $rule_name
+        and column::specific_value == $specific_value
+    }
+}

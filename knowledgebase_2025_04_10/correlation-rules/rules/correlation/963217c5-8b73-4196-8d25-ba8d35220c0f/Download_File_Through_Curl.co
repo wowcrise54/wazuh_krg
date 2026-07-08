@@ -1,0 +1,278 @@
+event Run_Command_Download:
+    key:
+        event_src.host, object.process.name, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows("curl.exe")
+        and (
+            regex(lower(object.process.cmdline), "(https?|s?ftp|smb|dict|scp):", 0) != null
+            and (
+                regex(object.process.cmdline, "\s-((\w{0,4})O(\w{0,4}))\s", 0) != null
+                or regex(object.process.cmdline, "\s-((\w{0,4})o)\s", 0) != null
+                or find_substr(lower(object.process.cmdline), "--output") != null
+                or find_substr(lower(object.process.cmdline), "--remote-name") != null
+                or find_substr(lower(object.process.cmdline), "--remote-name-all") != null
+                )
+        )
+        and filter::CheckWL_Process_Creation("Download_File_Through_Curl", lower(object.process.cmdline))           
+} 
+
+event Network_Connection:
+    key:
+        event_src.host, object.process.name, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or (event_src.title == "sysmon" and msgid == "3")
+        )
+        and object.process.name == "curl.exe"
+        and direction == "egress"
+        and not filter::Loopback_Address(dst.ip)
+    }
+
+event Create_File:
+    key:
+        event_src.host, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "11"
+        and status == "success"
+    }
+
+event Download_Via_Redirect:
+    key:
+        event_src.host, object.process.parent.name, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("curl.exe","http|ftp|smb|dict|scp")
+        and filter::CheckWL_Process_Creation("Download_File_Through_Curl", lower(object.process.cmdline))           
+}
+
+rule Download_File_Through_Curl: ((Run_Command_Download and Network_Connection? and Create_File?) or 
+                                 (Download_Via_Redirect and Create_File)) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Run_Command_Download {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.process.cmdline)
+                
+        if regex(lower($alert.key), "(http(s)?|ftp|smb|dict|scp)://(\S+)", 0) != null then
+            $alert.regex_match = regex(lower($alert.key), "(http(s)?|ftp|smb|dict|scp)://(\S+)", 0)
+            $alert.context = "URL: " + $alert.regex_match
+        endif
+    }
+
+    on Network_Connection {
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+        
+        $datafield1 = dst.host
+        $datafield2 = dst.fqdn
+        $datafield3 = dst.hostname
+        $datafield4 = dst.ip
+        $datafield5 = dst.port
+        $dst.asset = dst.asset
+        
+        $direction = direction
+    }
+
+    on Create_File {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+    }
+
+    on Download_Via_Redirect {        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.process.cmdline)
+              
+        if regex(lower($alert.key), "(http(s)?|ftp|smb|dict|scp)://(\S+)", 0) != null then
+            $alert.regex_match = regex(lower($alert.key), "(http(s)?|ftp|smb|dict|scp)://(\S+)", 0)
+            $alert.context = "URL: " + $alert.regex_match
+        endif
+    }
+  
+emit {
+    if regex(lower($alert.key), "(ftp|smb|dict|scp)://(\S+)", 0) != null then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    if $object.name != null then
+        $alert.context = "Download file: " + $object.name + " | " + $alert.context
+    endif
+    
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Ingress Tool Transfer"
+    
+    $C2_host = regex(lower($object.process.cmdline), "(http(s)?|ftp|smb|dict|scp)://([^;]*?)(/|\\\\)", 3)
+    if $datafield1 != null then         # Если поймали сетевой коннект от curl
+        $dst.host = $datafield1
+        $dst.fqdn = $datafield2
+        $dst.hostname = $datafield3
+        $dst.ip = $datafield4
+        $dst.port = $datafield5
+        if $C2_host != null then
+            $port_raw = regex($C2_host,":(\d+)$", 1)
+            $datafield5 = strip($port_raw, ":", "")                             # dst.port из cmdline
+            $datafield1 = strip($C2_host, "", ":" + $port_raw)                  # dst.host из cmdline
+            
+            if maybe_ipv4($datafield1) != null or maybe_ipv6($datafield1) != null then
+                $datafield4 = $datafield1                                       # dst.ip из cmdline
+            else
+                $datafield4 = null
+                $maybe_dot_pos = find_substr($datafield1, '.')
+                if $maybe_dot_pos != null then
+                    $datafield2 = $datafield1                                  # dst.fqdn из cmdline
+                    $datafield3 = substr($datafield1, 0, $maybe_dot_pos)       # dst.hostname из cmdline
+                else
+                    $datafield3 = $datafield1
+                endif
+            endif
+        endif   
+    elif $C2_host != null then
+        $port_raw = regex($C2_host,":(\d+)$", 1)
+        $dst.port = strip($port_raw, ":", "")
+        $dst.host = strip($C2_host, "", ":" + $port_raw)
+        
+        if maybe_ipv4($dst.host) != null or maybe_ipv6($dst.host) != null then
+            $dst.ip = $dst.host
+        else
+            $maybe_dot_pos = find_substr($dst.host, '.')
+            if $maybe_dot_pos != null then
+                $dst.fqdn = $dst.host
+                $dst.hostname = substr($dst.host, 0, $maybe_dot_pos)
+            else
+                $dst.hostname = $dst.host
+            endif
+        endif
+    endif
+        
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

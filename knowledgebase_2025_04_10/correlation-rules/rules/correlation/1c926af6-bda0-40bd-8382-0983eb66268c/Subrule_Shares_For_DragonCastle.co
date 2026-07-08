@@ -1,0 +1,84 @@
+event Access_To_Shares: 
+    key:
+        event_src.host, subject.account.id, src.ip, dst.host
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and in_list(["\\svcctl", "\\winreg"], lower(object.storage.fullpath))
+        and (
+            lower(subject.account.id) != "s-1-5-18"
+            or lower(subject.account.name) != "system"
+        )
+        and not match(lower(subject.account.name), "*$")
+    }
+
+event Access_To_DLL: 
+    key:
+        event_src.host, subject.account.id, src.ip, dst.host
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and match(lower(object.storage.name), "*.dll")
+        and (
+            lower(subject.account.id) != "s-1-5-18"
+            or lower(subject.account.name) != "system"
+        )
+        and not match(lower(subject.account.name), "*$")
+    }
+
+rule Subrule_Shares_For_DragonCastle: (Access_To_Shares[2] with different object.storage.fullpath and Access_To_DLL) within 5s
+
+    on Access_To_Shares {
+    
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.host = dst.host
+        $dst.asset = dst.asset
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+    
+    on Access_To_DLL {
+    
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        $src.ip = src.ip
+        $src.host = src.host
+        $src.port = src.port
+        
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+        
+        $object.type = object.type
+        
+        $datafield9 = datafield9
+    }
+    
+emit {
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $correlation_type = "subrule"
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: SMB/Windows Admin Shares"
+}    

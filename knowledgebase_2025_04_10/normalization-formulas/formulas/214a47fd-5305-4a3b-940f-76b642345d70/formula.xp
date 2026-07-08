@@ -1,0 +1,33 @@
+EVENTLOG = 'EventID="4865"'
+COND = lower($Channel)=="security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "success"
+
+object.type = "Trusted forest"
+object.name = $Data["ForestRoot"]
+subject.name = lower($Data["SubjectUserName"])
+subject.domain = lower($Data["SubjectDomainName"]) 
+datafield1 = maybe_number16($Data["SubjectLogonId"])  # Идентификатор входа субъекта
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_4865_A_trusted_forest_information_entry_was_added"

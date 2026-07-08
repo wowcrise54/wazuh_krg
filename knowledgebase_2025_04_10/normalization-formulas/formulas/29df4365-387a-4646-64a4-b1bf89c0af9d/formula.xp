@@ -1,0 +1,87 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "ProjectTeam"
+
+subject = "account"
+
+action = switch $type
+    case "Create" "create"
+    case "Update" "modify"
+    case "Remove" "remove"
+endswitch
+
+object = "user_group"
+status = "success"
+
+subject.account.id = $author
+subject.account.name = $authorPresentation
+
+object.id = $targetId
+object.name = $targetPresentation
+object.type = "project team"
+
+if $type == "Create" then
+    object.property = $change["projectRoles"]["fieldType"]
+    object.value = $change["projectRoles"]["added"]["presentation"]
+
+    datafield1 = $change["project"]["added"]["presentation"]  # Project name
+    datafield2 = $change["project"]["added"]["id"]            # Project ID
+    datafield3 = $change["projectRoles"]["added"]["id"]       # Project role ID
+    datafield4 = $change["aliases.id"]                        # Aliases ID
+
+elif $type == "Remove" then
+    object.property = $change["projectRoles"]["fieldType"]
+
+    $csv_roles = csv($change["projectRoles"]["removed"]["presentation"], ",", "")
+    object.value = join($csv_roles, "|")
+
+    datafield1 = $change["project"]["removed"]["presentation"]  # Project name
+
+    $csv_own_users = csv($change["ownUsers"]["removed"]["presentation"], " ,", "")
+    datafield5 = join($csv_own_users, "|")  # ownUsers
+
+    $csv_users = csv($change["users"]["removed"]["presentation"], " ,", "")
+    datafield6 = join($csv_users, "|")  # Users
+
+    $csv_users = csv($change["groups"]["removed"]["presentation"], ",", "")
+    datafield7 = join($csv_users, "|")  # User Groups
+
+elif $type == "Update" and $change["type"] == "LinkChangeJSON" then
+    object.property = join([$change["operation"], $change["fieldName"]], " ")
+
+    if $change["presentation"] != null then
+        $value = $change["presentation"]
+
+        datafield8 = $change["id"]  # ID subresource
+    else
+        $value = $change["id"]
+    endif
+
+    switch $change["operation"]
+        case "added"
+            object.new_value = $value
+        case "removed"
+            object.value = $value
+    endswitch
+
+elif $type == "Update" and $change["type"] == "PrimitiveChangeJSON" then
+    object.property = $change["fieldName"]
+    object.value = $change["oldValue"]
+    object.new_value = $change["newValue"]
+endif
+
+chain_id = $id
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "low"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_Project_Team_Manage"

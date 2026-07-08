@@ -1,0 +1,49 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME|} grafana[{NUMBER}]: {$json=REST}'
+
+COND = find_substr($json, "/api/ruler/grafana/api/") != null 
+       and find_substr($json, "POST") != null
+       and find_substr($json, "rules/") != null 
+       and find_substr($json, "alerting/list") != null
+       and find_substr($json, ":Groupname") == null
+
+subject = "account"
+action = "modify"
+object = "rule"
+
+subformula 'json_in_syslog_alert_consumer_revoked_or_modified'
+    JSON = ''
+    
+    if $status == 202 then
+        status = "success"
+    else
+        status = "failure"
+    endif
+    
+    subject.account.name = $uname
+    subject.account.id = $userId
+    
+    $rule_path = csv($path, "/", "")
+    object.fullpath = $path
+    object.name = $rule_path[length($rule_path) - 1]
+    object.path = substr($path, 0, length($path) - length(object.name))
+    object.query = $referer
+    
+    src.ip = $remote_addr
+endsubformula
+
+submessage("JSON","json_in_syslog_alert_consumer_revoked_or_modified", $json)
+
+importance = "low"
+
+event_src.vendor = "grafanalabs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "grafana"
+event_src.category = "Application security"
+
+id = "PT_GrafanaLabs_Grafana_syslog_alert_consumer_revoked_or_modified"

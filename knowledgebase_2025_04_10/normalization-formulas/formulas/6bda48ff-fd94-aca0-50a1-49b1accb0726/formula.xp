@@ -1,0 +1,63 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {$event_src_ip=IPV4|$event_src_ip=IPV6|$event_src_host=HOSTNAME|} youtrack.log:
+    {$mday_raw=WORD}/{$month_raw=WORD}/{$year_raw=NUMBER} {$hours_raw=UNTIL(",")}{NUMBER}
+    ERROR [{LITERAL*}] [{LITERAL*}] [{$user_identificator=LITERAL*}]
+    Query string has invalid syntax at
+    {$query_method="GET"|$query_method="POST"|$query_method="DELETE"|$query_method="PUT"}
+    {$request_raw=STRING} requested by {$rest_part=REST}'
+
+subject = "account"
+action = "validate"
+object = "request"
+status = "failure"
+
+if $user_identificator != null and $user_identificator != "@" then
+    $user_identificator_csv = csv($user_identificator, "@", "\'")
+    $address = $user_identificator_csv[length($user_identificator_csv)-1]
+    $user = strip($user_identificator, "", "@" + $address)
+    if $address != "null" then
+        src.ip = $address
+    endif
+
+    $user_csv = csv($user, "@", "\'")
+    if length($user_csv) > 1 then
+        subject.account.domain = $user_csv[length($user_csv)-1]
+        subject.account.name = strip($user, "", "@" + subject.account.domain)
+    else
+        subject.account.name = $user
+    endif
+    subject.account.id = "synthetic:" + $user
+endif
+
+$rest_part_csv = csv($rest_part, "\\n", "'")
+subject.process.meta = $rest_part_csv[0]
+
+object.query = $query_method + " " + $request_raw
+
+$exception_text = $rest_part_csv[1]
+$exception_csv = csv($exception_text, ":", "")
+reason = strip($exception_text, $exception_csv[0] + ": ", ".")
+
+$dot_pos = find_substr($event_src_host, '.')
+
+if $dot_pos != null then
+    $event_src_fqdn = lower($event_src_host)
+    $event_src_hostname = lower(substr($event_src_host, 0, $dot_pos))
+else
+    $event_src_hostname = lower($event_src_host)
+endif
+dst.ip = $event_src_ip
+dst.hostname = $event_src_hostname
+dst.fqdn = $event_src_fqdn
+
+time = $month_raw + "/" + $mday_raw + "/" + string(2000 + $year_raw) + " " + $hours_raw
+importance = "low"
+
+event_src.ip = $event_src_ip
+event_src.hostname = $event_src_hostname
+event_src.fqdn = $event_src_fqdn
+
+event_src.vendor = "jetbrains"
+event_src.title = "youtrack"
+event_src.category = "Other"
+
+id = "PT_JetBrains_Youtrack_syslog_query_string_has_invalid_syntax"

@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"}CEF:0|NetIQ|AA|6.{NUMBER}.{NUMBER}.{NUMBER}|{msgid="104"}|User logon session was ended|2|
+        ep={src.hostname=WORD} ep_addr={src.ip=IPV4|src.ip=IPV6} session_id={subject.account.session_id=WORD}  
+        tenant_name={datafield2=WORD} user_name={$temp_subject=STRING}'
+
+subject = "account"
+action = "terminate"
+object = "session"
+status = "success"
+
+$temp_csv = csv($temp_subject, "\\\\", "`")  
+subject.account.domain = $temp_csv[0]
+subject.account.name = $temp_csv[1]
+
+# datafield2 - tenant name
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "netiq"
+event_src.title = "advanced_authentication"
+event_src.category = "AAA"
+
+id = "PT_NetIQ_AA_syslog_User_logon_session_was_ended"

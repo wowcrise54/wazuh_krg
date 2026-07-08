@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {$subsys=WORDDASH} - - -{STRING?}
+        DHCP server [Transaction ID {chain_id=WORD}]: {reason="received DHCPRELEASE with wrong address"}.'
+
+action = "unassign"
+object = "ip_address"
+status = "failure"
+
+importance = "info"
+
+event_src.vendor = "kerio_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kerio_control"
+event_src.subsys = lower($subsys) 
+event_src.category = "Network security"
+
+id = "PT_Kerio_Technologies_Kerio_Control_syslog_client_request_declined"

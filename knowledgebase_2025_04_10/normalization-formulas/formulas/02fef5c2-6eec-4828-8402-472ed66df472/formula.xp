@@ -1,0 +1,58 @@
+JSON = 'doc_type = "files"'
+
+COND = $flow_id != null and $data != null and $data['ts_end'] != null
+
+action = "detect"
+object = "file_object"
+status = "success"
+
+object.name = $data['filename']
+object.type = $data['mime']
+if $data['filepath'] != "" then
+    object.path = $data['filepath']
+endif
+object.property = "size"
+object.value = $data['size']
+
+object.hash.md5 = $data['md5']
+object.hash.sha256 = $data["sha256"]
+
+src.ip = coalesce($data['src']['ip'], $data['src']['ip6'])
+src.fqdn = $data['src']['dns']
+src.port = $data['src']['port']
+src.mac = $data['src']['mac']
+src.geo.country = $data['src']['geo']['country']
+src.geo.city = $data['src']['geo']['city']
+src.geo.org = $data['src']['geo']['org']
+src.geo.asn = $data['src']['geo']['asn']
+
+dst.ip = coalesce($data['dst']['ip'], $data['dst']['ip6'])
+dst.fqdn = $data['dst']['dns']
+dst.port = $data['dst']['port']
+dst.mac = $data['dst']['mac']
+dst.geo.country = $data['dst']['geo']['country']
+dst.geo.city = $data['dst']['geo']['city']
+dst.geo.org = $data['dst']['geo']['org']
+dst.geo.asn = $data['dst']['geo']['asn']
+
+protocol = lower($data['proto'])
+if $data['app_proto'] != "" then
+    protocol.layer7 = $data['app_proto']     # Протокол прикладного уровня
+endif
+# Имена ключей to_server/to_client подстраиваются под значение True:
+if $data['to_server'] == True then
+    direction = "egress"
+elif $data['to_client'] == True then
+    direction = "ingress"
+endif
+
+datafield2 = $flow_id                   # Идентификатор потока
+
+time = $data['ts_end']
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "nad"
+event_src.category = "DPI"
+
+id = "PT_Positive_Technologies_NAD_filemonitor_files"

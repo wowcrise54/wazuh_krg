@@ -1,0 +1,116 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} api_json.log: {$json=REST}'
+COND = (
+    (
+        find_substr($json, '"method":"POST"') != null
+        or find_substr($json, '"method":"DELETE"') != null
+    )
+    and find_substr($json, '"route":"/api/:version/runners"') != null
+)
+
+object = "application"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+switch $method
+    case "POST"
+        action = "enable"
+        external_link = "https://docs.gitlab.com/ee/api/runners.html#register-a-new-runner"
+    case "DELETE"
+        action = "disable"
+        external_link = "https://docs.gitlab.com/ee/api/runners.html#delete-a-runner-by-authentication-token"
+endswitch
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+$value_0 = $params[0]["value"]
+$value_1 = $params[1]["value"]
+$value_2 = $params[2]["value"]
+$value_3 = $params[3]["value"]
+$value_4 = $params[4]["value"]
+$value_5 = $params[5]["value"]
+$value_6 = $params[6]["value"]
+
+switch $params[0]["key"]
+    case "info" $params_info = $value_0
+    case "tag_list" $tag_list = $value_0
+endswitch
+switch $params[1]["key"]
+    case "info" $params_info = $value_1
+    case "tag_list" $tag_list = $value_1
+endswitch
+switch $params[2]["key"]
+    case "info" $params_info = $value_2
+    case "tag_list" $tag_list = $value_2
+endswitch
+switch $params[3]["key"]
+    case "info" $params_info = $value_3
+    case "tag_list" $tag_list = $value_3
+endswitch
+switch $params[4]["key"]
+    case "info" $params_info = $value_4
+    case "tag_list" $tag_list = $value_4
+endswitch
+switch $params[5]["key"]
+    case "info" $params_info = $value_5
+    case "tag_list" $tag_list = $value_5
+endswitch
+switch $params[6]["key"]
+    case "info" $params_info = $value_6
+    case "tag_list" $tag_list = $value_6
+endswitch
+
+object.type = "runner:" + $params_info["platform"] + ":" + $params_info["executor"] + ":" + $params_info["shell"]
+
+if substr($['meta.client_id'], 0, 7) == "runner/" then
+    object.id = strip($['meta.client_id'], "runner/", "")
+endif
+
+object.name = $params_info["name"]
+object.version = $params_info["version"]
+object.property = "tag_list"
+object.value = $tag_list
+
+object.process.meta = $ua
+
+src.ip = $['meta.remote_ip']
+
+$project_list = csv($['meta.project'], "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($['meta.project'], "", "/" + $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = $project_namespace_fullpath  # Namespace Fullpath
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+category.generic = "Executable Module"
+category.high = "Generic Application Management"
+category.low = "Control"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "api"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_API_JSON_Runner"

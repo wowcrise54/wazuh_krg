@@ -1,0 +1,26 @@
+Filter:
+    Name:
+        ru: "Фильтрация передаваемого поля"
+        en: "Filtering the transmitted field"
+    Description:
+        ru: "Очистка передаваемого поля от лишних символов"
+        en: "Clearing the transmitted field from extra characters"
+    UseAsEventName: False
+Args:
+    field_value:
+        Type: string
+        Name:
+            en: "The value of the transmitted field"
+            ru: "Значение передаваемого поля"
+    field_regex:
+        Type: string
+        Name:
+            en: "Regular expression to search in the corresponding field"
+            ru: "Регулярное выражение для поиска в соотвествующем поле"
+    regex_group_number:
+        Type: number
+        Name:
+            en: "Regular expression group"
+            ru: "Группа регулярного выражения"
+ObjectId: PT-RF-86
+Origin: PT

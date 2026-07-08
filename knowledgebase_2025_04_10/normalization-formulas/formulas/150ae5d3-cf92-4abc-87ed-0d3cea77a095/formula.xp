@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {UNTIL("Info: ")}
+MID {object.id=NUMBER} Custom Log Entry: Message has attachment'
+
+action = "info"
+object = "message"
+status = "success"
+
+reason = "message has attachment"
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_message_has_attachment"

@@ -1,0 +1,66 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{DATETIME?}{$Computer=STRING}{UNTIL("idps - - ")}
+        CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|idps|{UNTIL("|")}
+        {$severity=WORDDASH}|rt={$temp_time=NUMBER} deviceExternalId=
+        {event_src.id=STRING}{$kv=KEYVALUE(" ","=")}'
+
+if $kv["act"] == "alert" or $kv["act"] == "accept" then
+    subject = "rule"
+    action = "detect"
+    object = "alert"
+else
+    subject = "rule"
+    action = "deny"
+    object = "connection"
+    object.state = $kv["act"]
+endif
+
+status = "success"
+
+if number($kv["cs1"]) != null then
+    subject.id = $kv["cs1"]
+elif number($kv["cs1"]) == null then
+    subject.name = $kv["cs1"]
+endif   
+
+if find_substr($kv["msg"],"[") != null then
+    object.name = replace($kv["msg"],"","\[[0-9]\] ")
+else    
+    object.name = $kv["msg"]
+endif
+object.type = $kv["cat"]
+
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+
+if $kv["app"] != "failed" then
+    protocol.layer7 = $kv["app"]
+endif
+protocol = $kv["proto"]
+
+count.bytes_in = $kv["in"]
+count.bytes_out = $kv["out"]
+
+time = epoch_ms_to_datetime($temp_time)
+
+if number($severity) <= 4 or lower($severity) == "low" then
+    importance = "low"
+elif (number($severity) > 4 and number($severity) <= 6) or lower($severity) == "medium" then
+    importance = "medium"
+else
+    importance = "high"
+endif
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_idps_event"

@@ -1,0 +1,27 @@
+TEXT = "<{NUMBER?}>{time=DATETIME} {$Computer=STRING} multifactor-{event_src.subsys=WORD}[{NUMBER}]: 
+        [{STRING} WRN] Can't find User-Password in message 
+        id={object.process.id=NUMBER} from {src.ip=IPV4}:{src.port=NUMBER}"
+        
+subject = "application"
+action = "validate"
+object = "message"
+status = "success"
+
+datafield18 = "failure" # Validation result
+
+reason = "no user-password in message"
+
+importance = "info"
+
+event_src.vendor = "multifactor"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_syslog_No_password_in_message"

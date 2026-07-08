@@ -1,0 +1,52 @@
+EVENTLOG = ''
+
+COND = (
+            $Channel == "Kaspersky Endpoint Security"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "402"
+        )
+        or
+        (
+            $Channel == "Kaspersky Event Log"
+            and $Provider["Name"] == "klnagent"
+            and $EventID["text"] == "1"
+            and find_substr($Data[0], "Программа помещена в группу с ограничениями") != null
+        )
+
+action = "info"
+object = "application"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+object.property = "threat level"
+object.value = $kv["Результат\\Степень угрозы"]
+object.id = $kv["Программа\\ID процесса"]
+object.name = $kv["Программа\\Название"]
+object.path = $kv["Программа\\Путь"]
+object.group = $kv["Объект\\Название"]
+
+datafield1 = substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' ('))     # Имя пользователя
+
+time = $TimeCreated["SystemTime"]
+
+msgid = switch $EventID["text"]
+    case "1" "Программа помещена в группу с ограничениями"
+    case "402" $EventID["text"]
+endswitch
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_402_application_moved_to_restricted_group"

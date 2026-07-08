@@ -1,0 +1,41 @@
+EVENTLOG = 'EventID.text="16410"'
+
+COND = (
+         $Channel == "ViPNet Administrator KCA"
+         and $Provider["Name"] == "Key and Certification Authority"
+         and $Keywords == '0x80000000000000'
+       )
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.application.account.name = $Data[0] 
+
+object.application.account.id = $Data[1]
+object.application.account.name = $Data[2]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_kca"
+event_src.subsys = lower($Channel)
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_KCA_eventlog_16410_compromise_of_user_key"

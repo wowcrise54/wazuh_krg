@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="CPU_RESET"}({WORD}){"["NUMBER"]"?}: The CANbus
+        node of LPU board[{object.id=NUMBER}] detects that {reason = "CPU was reset"}, the barcode is: {object.value=UNTIL(".")}'
+
+action = "restart"
+object = "device"
+status = "success"
+
+object.type = "line processing unit"
+object.property = "physical id"
+
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_The_CANbus_detects_CPU_is_reset"

@@ -1,0 +1,50 @@
+TABULAR = '{subject.account.name=user_name},
+           subsystem,
+           action,
+           status'
+
+COND = $action == 30110
+
+$kv = keyvalue($data, ' ', '=', '"')
+
+subject = "account"
+action = "info"
+object = "application"
+if $status == "delayed" then
+    status = "success"
+elif $status == "ongoing" then
+    status = "ongoing"
+else
+    drop
+endif
+
+object.property = "station ID"
+object.value = $kv['"SID"']
+object.name = $kv['"SID"']
+
+if $src_host != "" then
+    submessage("TEXT", "get_address_port", $src_host)
+endif
+
+subformula "get_address_port"
+    TEXT = '{UNTIL("//")} {"["?} {event_src.ip=IPV4|event_src.ip=IPV6|
+             $Computer=HOSTNAME} {"] :"?}  {REST}'
+endsubformula
+
+time = string($createtime)
+msgid = $action
+importance = "info"
+
+event_src.vendor = "drweb"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "security_suite"
+event_src.subsys = lower($subsystem)
+event_src.category = "Anti-virus"
+
+id = "PT_DrWeb_Security_Suite_odbc_event_update_delayed"

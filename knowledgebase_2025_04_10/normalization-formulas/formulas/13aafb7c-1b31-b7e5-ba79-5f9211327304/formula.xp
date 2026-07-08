@@ -1,0 +1,120 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} audit_json.log: {$json=REST}'
+COND = find_substr($json, '"entity_type":"Project"') != null
+       and find_substr($json, '"target_type":"ApprovalProjectRule"') != null
+
+subject = "account"
+object = "resource"
+status = "success"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_custom_message"
+    TEXT = 'Removed {$type="User"|$type="Group"} {$obj_fullname=STRING+} from approval group on {STRING+?} rule'
+    
+    action = "modify"
+    
+    switch $type
+        case "User"
+            object.property = "removed_user"
+            msgid = $entity_type + "::" + $target_type + "#remove_user"
+        case "Group"
+            object.property = "removed_group"
+            msgid = $entity_type + "::" + $target_type + "#remove_group"
+    endswitch
+    
+    object.value = $obj_fullname
+endsubformula
+
+subformula "parse_custom_message"
+    TEXT = 'Added {$type="User"|$type="Group"} {$obj_fullname=STRING+} to approval group on {STRING+?} rule'
+    
+    action = "modify"
+    
+    switch $type
+        case "User"
+            object.property = "added_user"
+            msgid = $entity_type + "::" + $target_type + "#add_user"
+        case "Group"
+            object.property = "added_group"
+            msgid = $entity_type + "::" + $target_type + "#add_group"
+    endswitch
+    
+    object.new_value = $obj_fullname
+endsubformula
+
+subformula "parse_custom_message"
+    TEXT = 'Added approval rule with number of required approvals of {NUMBER}'
+    
+    action = "create"
+    
+    msgid = $entity_type + "::" + $target_type + "#create"
+endsubformula
+
+subformula "parse_custom_message"
+    TEXT = 'Deleted approval rule'
+    
+    action = "remove"
+    
+    msgid = $entity_type + "::" + $target_type + "#remove"
+endsubformula
+
+subformula "parse_custom_message"
+    TEXT = '{REST}'
+    
+    action = "info"
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+if $custom_message != null then
+    submessage("TEXT", "parse_custom_message", $custom_message)
+endif
+
+subject.account.fullname = $author_name
+subject.account.id = $author_id
+
+object.type = "approval_project_rule"
+object.name = $target_details
+object.id = $target_id
+
+if $change != null then
+    action = "modify"
+
+    object.property = replace($change, "_", " ")
+    object.value = $from
+    object.new_value = $to
+    
+    msgid = $entity_type + "::" + $target_type + "#change"
+endif
+
+src.ip = $ip_address
+
+$project_list = csv($entity_path, "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($entity_path, "", $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = strip($project_namespace_fullpath, "", "/")  # Namespace Fullpath
+
+numfield1 = $entity_id  # Project ID
+
+chain_id = $correlation_id
+
+time = $time
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "audit"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Audit_JSON_Approval_Project_Rule"

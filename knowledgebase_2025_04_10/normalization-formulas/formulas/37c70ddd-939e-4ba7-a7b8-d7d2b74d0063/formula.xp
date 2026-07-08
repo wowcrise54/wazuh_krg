@@ -1,0 +1,102 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "PACKETS"
+
+subject = "rule"
+
+if $permit == 1 then
+    action = "allow"
+    importance = "info"
+else
+    action = "deny"
+    importance = "high"
+endif
+
+object = "packet"
+status = "success"
+
+subject.id = $rule_id
+
+if $user_name != "" then
+    object.account.name = $user_name
+endif
+if $process_name != "" then
+    $csv_process = csv($process_name, "\\", "")
+    object.process.name = $csv_process[length($csv_process) - 1]
+    object.process.path = strip($process_name, "", object.process.name)
+    if object.process.path != "" then
+        object.process.fullpath = object.process.path + object.process.name
+    else
+        object.process.path = null
+    endif
+endif
+
+if $direction == 0 then
+    direction = "ingress"
+    if $address_type == 1 then
+        src.mac = $remote_address
+        dst.mac = $local_address
+    elif in_list([2, 23], $address_type) then
+        src.ip = $remote_address
+        dst.ip = $local_address
+    else
+        src.hostname = $remote_address
+        dst.hostname = $local_address
+    endif
+    if $dns_name != "" then
+        src.hostname = $dns_name
+    endif
+    if $remote_port != 0 then
+        src.port = $remote_port
+    endif
+    if $local_port != 0 then
+        dst.port = $local_port
+    endif
+else
+    direction = "egress"
+    if $address_type == 1 then
+        src.mac = $local_address
+        dst.mac = $remote_address
+    elif in_list([2, 23], $address_type) then
+        src.ip = $local_address
+        dst.ip = $remote_address
+    else
+        src.hostname = $local_address
+        dst.hostname = $remote_address
+    endif
+    if $dns_name != "" then
+        dst.hostname = $dns_name
+    endif
+    if $local_port != 0 then
+        src.port = $local_port
+    endif
+    if $remote_port != 0 then
+        dst.port = $remote_port
+    endif
+endif
+
+if $latest_protocol_id == 7 then
+    protocol = "TCP"
+else
+    protocol = "UDP"
+endif
+count.bytes = $bytes
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "confident"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_packets_packet_detected"

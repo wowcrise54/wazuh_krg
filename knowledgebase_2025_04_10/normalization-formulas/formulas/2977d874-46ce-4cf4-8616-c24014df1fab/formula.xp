@@ -1,0 +1,96 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} production_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"method":"POST"') != null
+    and find_substr($json, '"controller":"Projects::TreeController"') != null
+    and find_substr($json, '"action":"create_dir"') != null
+)
+
+subject = "account"
+action = "create"
+object = "file_object"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+object.type = "dir"
+
+$s_dir_name = find_substr($json, '{"key":"dir_name","value":"')
+$e_dir_name = find_substr(substr($json, $s_dir_name, length($json)), '"}')
+$dir_name = substr($json, $s_dir_name + 27, $e_dir_name - 27)
+$dir_name = if length($dir_name) != 0 then $dir_name else null endif
+
+object.name = $dir_name
+
+$s_original_branch = find_substr($json, '{"key":"original_branch","value":"')
+$e_original_branch = find_substr(substr($json, $s_original_branch, length($json)), '"}')
+$original_branch = substr($json, $s_original_branch + 34, $e_original_branch - 34)
+$original_branch = if length($original_branch) != 0 then $original_branch else null endif
+
+object.group = $original_branch  # Source Branch
+
+$s_id = find_substr($json, '{"key":"id","value":"')
+$e_id = find_substr(substr($json, $s_id, length($json)), '"}')
+$id = substr($json, $s_id + 21, $e_id - 21)
+$id = if length($id) != 0 then $id else null endif
+
+object.path = strip($id, $original_branch, "") + "/"
+object.fullpath = object.path + object.name
+object.property = "branch/fullpath"
+object.new_value = $id + "/" + $dir_name
+
+src.ip = $remote_ip
+
+$s_project_id = find_substr($json, '{"key":"project_id","value":"')
+$e_project_id = find_substr(substr($json, $s_project_id, length($json)), '"}')
+$project_id = substr($json, $s_project_id + 29, $e_project_id - 29)
+datafield1 = if length($project_id) != 0 then $project_id else null endif  # Project Slug
+
+$s_namespace_id = find_substr($json, '{"key":"namespace_id","value":"')
+$e_namespace_id = find_substr(substr($json, $s_namespace_id, length($json)), '"}')
+$namespace_id = substr($json, $s_namespace_id + 31, $e_namespace_id - 31)
+datafield2 = if length($namespace_id) != 0 then $namespace_id else null endif  # Namespace Fullpath
+
+$s_branch_name = find_substr($json, '{"key":"branch_name","value":"')
+$e_branch_name = find_substr(substr($json, $s_branch_name, length($json)), '"}')
+$branch_name = substr($json, $s_branch_name + 30, $e_branch_name - 30)
+datafield3 = if length($branch_name) != 0 then $branch_name else null endif  # Target Branch Name
+
+$s_commit_message = find_substr($json, '{"key":"commit_message","value":"')
+$e_commit_message = find_substr(substr($json, $s_commit_message, length($json)), '"}')
+$commit_message = substr($json, $s_commit_message + 33, $e_commit_message - 33)
+datafield4 = if length($commit_message) != 0 then $commit_message else null endif  # Commit Title
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "production"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Production_Repo_Dirs_Management"

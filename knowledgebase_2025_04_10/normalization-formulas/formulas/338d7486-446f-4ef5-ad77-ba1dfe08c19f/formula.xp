@@ -1,0 +1,42 @@
+EVENTLOG = 'EventID="5139"'
+
+COND = lower($Channel)=="security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "ds_object"
+status = "success"
+
+subject.account.name = lower($Data["SubjectUserName"])
+subject.account.domain = lower($Data["SubjectDomainName"])
+subject.account.id = $Data["SubjectUserSid"]
+subject.account.session_id = maybe_number16($Data["SubjectLogonId"])
+
+object.path = $Data["OldObjectDN"]
+object.type = $Data["ObjectClass"]
+object.property = "path"
+object.new_value = $Data["NewObjectDN"]
+
+chain_id = strip($Data["OpCorrelationID"], "{", "}")
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "medium"
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "active_directory"
+event_src.subsys = lower($Channel)
+if find_substr($Computer, '.') != null then
+    event_src.fqdn = lower($Computer)
+    event_src.hostname = lower(csv($Computer, ".", "")[0])
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_5139_A_directory_service_object_was_moved"

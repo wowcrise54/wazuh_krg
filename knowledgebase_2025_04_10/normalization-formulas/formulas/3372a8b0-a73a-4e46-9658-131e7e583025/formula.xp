@@ -1,0 +1,50 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {"."NUMBER?}{event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="TFTPC_FILE_TRANSFER"}
+        {"(l)"|"(s)"|}{"["NUMBER"]"?}:{"CID="UNTIL(";")?}TFTP file transfer end.
+        ({$tmp=REST}'
+
+$kv = keyvalue($tmp,", ","=","~")
+
+action = "deliver"
+object = "file_object"
+if ($kv["TransSize"] == "Succeeded") then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.storage.fullpath = $kv["LocalFilename"]
+$temp = csv(object.storage.fullpath, '/', '')
+object.storage.name = $temp[length($temp) - 1]
+$tmp_loc_path= strip(object.storage.fullpath, '', object.storage.name)
+if ($tmp_loc_path != "") then
+    object.storage.path = $tmp_loc_path
+endif
+
+object.fullpath = $kv["RemoteFilename"]
+$temp = csv(object.fullpath, '/', '')
+object.name = $temp[length($temp) - 1]
+$tmp_rem_path = strip(object.fullpath, '', object.name)
+if ($tmp_rem_path != "") then
+    object.path = $tmp_rem_path
+endif
+
+dst.ip = $kv["IPAddress"]
+dst.hostname = event_src.hostname
+protocol.layer7 = "tftp"
+count.bytes = strip($kv["FileSize"],'','bytes')
+count.bytes_out = strip($kv["TransSize"],'','bytes')
+
+duration = strip($kv["TransTime"],'','second(s)')
+
+reason = "Fail " + lower($kv["RetCode"])
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_TFTPC_file_transfer"

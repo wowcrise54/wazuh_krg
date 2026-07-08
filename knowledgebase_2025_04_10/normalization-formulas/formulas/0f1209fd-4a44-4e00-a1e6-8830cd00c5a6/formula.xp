@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        Category: {NUMBER},{$tmp_subsys="Symantec Endpoint Protection"},{"\\""?}Event Description:
+        Сканирование Задержан: Угрозы: {datafield6=NUMBER}   Просканировано: {datafield7=NUMBER}
+        Пропущенные файлы/папки/диски: {datafield8=NUMBER} Пропущенные надежные файлы: {datafield9=NUMBER}
+        {"\\""?},Event time: {time=DATETIME},{"\\""?}Group Name: {datafield10=UNTIL("\\"")|datafield10=REST}'
+
+action = "info"
+object = "service"
+status = "success"
+
+object.type = "scan"
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)
+# datafield6 - количество угроз
+# datafield7 - количество просканированных объекты
+# datafield8 - пропущенные объекты
+# datafield9 - пропущено файлов
+# datafield10 - Group name
+
+importance = if datafield6 != "0" then "low" else "info" endif
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_Scanning_info"

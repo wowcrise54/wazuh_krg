@@ -1,0 +1,28 @@
+EVENTLOG = 'EventID="50024"'
+COND = $Channel=="Microsoft-Windows-Dhcp-Client/Operational" and $Provider["Name"]=="Microsoft-Windows-Dhcp-Client"
+
+action = "info"
+object = "ip_address"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+src.mac = $Data["HWAddress"]
+datafield1 = $Data["InterfaceId"]
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_50024_Ask_receive_timeout"
+importance = "info"

@@ -1,0 +1,187 @@
+query CheckSysmonConfigHash($hash) from Sysmon_Config {
+    hash == $hash
+}
+
+event Sysmon_Config_State_Changed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "16"
+        and event_src.title == "sysmon"
+        and ((object.hash.sha256 != null and not exec_query("CheckSysmonConfigHash", [lower(object.hash.sha256)]))
+            or (object.hash.sha1 != null and not exec_query("CheckSysmonConfigHash", [lower(object.hash.sha1)]))
+        )
+        and filter::CheckWL_Specific_Only("Disable_Sysmon", lower(join([event_src.host, lower(coalesce(object.hash.sha256, object.hash.sha1))], "|")))
+    }
+
+event Sysmon_Uninstall:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "16"
+        and event_src.title == "sysmon"
+        and regex(lower(subject.process.cmdline), "-u(\s+force)?", 0) != null
+        and filter::CheckWL_Specific_Only("Disable_Sysmon", lower(join([event_src.host, subject.process.cmdline], "|")))
+    }
+
+
+event Remove_Rules_From_Registry:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "12"
+        and event_src.title == "sysmon"
+        and find_substr(lower(object.fullpath), "\\services\\sysmondrv\\parameters\\rules") != null
+        and action == "remove"
+        and filter::CheckWL_Registry_Actions("Disable_Sysmon", lower(join([subject.process.name, object.fullpath], "|")))
+    }
+
+rule Disable_Sysmon: Sysmon_Config_State_Changed or Sysmon_Uninstall or Remove_Rules_From_Registry 
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Sysmon_Config_State_Changed {
+        $action = action  # modify
+        $object = object  # configuration
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.hash = object.hash
+        $object.hash.md5 = object.hash.md5
+        $object.hash.imphash = object.hash.imphash
+        $object.hash.sha256 = object.hash.sha256
+        $object.hash.sha1 = object.hash.sha1
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([event_src.host, lower(coalesce(object.hash.sha256, object.hash.sha1))], "|"))
+        $alert.context = "config hash not in list"
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Sysmon_Uninstall {
+        $action = action  # modify
+        $object = object  # configuration
+
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id                    # заполняется
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.hash.md5 = subject.process.hash.md5
+        $subject.process.hash.imphash = subject.process.hash.imphash
+        $subject.process.hash.sha1 = subject.process.hash.sha1
+        $subject.process.hash.sha256 = subject.process.hash.sha256
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline          # заполняется
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+        
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.parent.name = subject.process.parent.name
+        $subject.process.parent.path = subject.process.parent.path
+        $subject.process.parent.fullpath = subject.process.parent.fullpath
+        $subject.process.parent.cmdline = subject.process.parent.cmdline
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([event_src.host, subject.process.cmdline], "|"))
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Remove_Rules_From_Registry {
+        $action = action  # remove
+        $object = object  # reg_object
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.type = object.type
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(join([subject.process.name, object.fullpath], "|"))
+        $alert.context = "deleted registry with sysmon config: \\services\\sysmondrv\\parameters\\rules"
+
+        $labels = $labels + "|CheckWL_Registry_Actions"
+    }
+
+emit {
+    $subject = "account"
+    $status = "success"
+
+    # Если идёт явное отключение sysmon или очистка правил через реестр, то это инцидент.
+    if $subject.process.cmdline != null or $action == "remove" then
+        $correlation_type = "incident"    
+    else
+        $correlation_type = "event"    
+    endif
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host)], "|")
+    $incident.severity = $importance
+    $incident.category = "ServiceMalfunction"
+    $incident.aggregation.timeout = 2h
+}

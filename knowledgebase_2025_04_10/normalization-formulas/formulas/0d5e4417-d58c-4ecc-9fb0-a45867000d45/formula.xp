@@ -1,0 +1,26 @@
+!TABULAR = "audit_log_id_kf,
+            {time=change_date},
+            {subject.name=user_login},
+            {datafield1=user_fullname}"
+
+!COND = ($entity_type == "User" and $operation == "update")
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+object.id = $entity_id
+
+# datafield1 - отображаемое имя пользователя-субъекта
+datafield2 = $user_email            # Почтовый адрес пользователя-субъекта
+datafield3 = $entity_display_name   # Отображаемое имя пользователя-объекта
+
+importance = "low"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_6_odbc_Audit_User_modified"

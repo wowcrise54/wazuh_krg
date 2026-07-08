@@ -1,0 +1,161 @@
+event SSH_Login:
+    key:
+        event_src.host, subject.account.id, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "login"
+        and logon_auth_method == "remote"
+        and status == "success"
+        and (
+            (
+                category.generic == "Operating System"
+                and category.high == "Access Management"
+                and category.low == "Communication"
+            )
+            or (
+                category.generic == "Access"
+                and category.high == "Authentication"
+                and category.low == "Remote"
+            )
+        )
+    }
+
+event Syscall_Execve_Run_Local_Recon:
+    key:
+        event_src.host, subject.account.id, subject.account.session_id
+    filter {
+        in_list([
+            "Unix_Internet_Connection_Discovery", # "ping", "telnet", "nc", "netcat", "traceroute"
+            "Unix_Local_Account_Discovery", # "who", "w", "w.procps", "logins", group|passwd|shadow|gshadow
+            "Unix_Password_Policy_Discovery", # "/etc/pam.d/common-password", "/etc/pam.d/common-auth", "/etc/login.defs"
+            "Unix_Process_Discovery", # "ps", "pstree", "top", "atop", "htop", "lsof", "pgrep", "pidof"
+            "Unix_Security_Software_Discovery", # "aa-status", "apparmor_status"
+            "Unix_Software_Discovery", # "yum", "apt", "snap", "dnf", "flatpak", "rpm"
+            "Unix_Suspicious_Command", # "strings", "screen", "chmod +rwx|777", ""openssl", "crontab"
+            "Unix_System_Information_Discovery", # "hostname", "hostnamectl", "dnsdomainname", "lsb_release", "uname", "dmesg", "inxi", "lscpu", "lsblk", "fdisk", "df"
+            "Unix_System_Network_Configuration_Discovery", # "ip", "ifconfig", "netstat", "arp", "tcpdump", "nmcli", "nslookup", "ss"
+            "Unix_System_Service_Discovery", # "service --status-all", "chkconfig --list", "initctl list", "chkservice", "systemctl"
+            "Unix_System_User_Discovery" # "groups", "whoami", "id", "pwd", "lastlog", "last", "logname"
+        ], correlation_name)
+        and filter::CheckWL_Linux_Process_Creation("Unix_Local_Mass_Recon", join([alert.key, lower(object.process.cwd)], "|"))
+    }
+
+rule Unix_Local_Mass_Recon: (SSH_Login? and Syscall_Execve_Run_Local_Recon[4,]) with different correlation_name timer 2m
+
+    init {
+        $labels = "CheckWL_Linux_Process_Creation"
+        $first_event = true
+        $count.subevents = 0
+        $ssh = null
+    }
+    
+    on SSH_Login {
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+        
+        $ssh = "ssh"
+
+        $host = "[" + src.host + "]"     
+    }
+
+    on Syscall_Execve_Run_Local_Recon {
+        if $first_event then
+            $first_event = false
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            $subject.type = subject.type
+            
+            $subject_info = coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ")"
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+
+            $object.process.name = object.process.name
+            $object.process.id = object.process.id
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.cmdline = object.process.cmdline
+            $object.process.meta = object.process.meta
+            $object.process.cwd = object.process.cwd
+            $object.process.parent.id = object.process.parent.id
+
+            $logon_service = logon_service
+
+            $datafield1 = datafield1
+            $datafield2 = datafield2
+            $datafield3 = datafield3
+            $datafield4 = datafield4
+            $datafield5 = datafield5
+        
+            $numfield2 = numfield2
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+                
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.key = join([alert.key, lower(object.process.cwd)], "|")
+        endif
+        
+        $context = $context + correlation_name + ": [" + alert.context + "] "
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $reason = $ssh
+
+    if $reason == "ssh" then
+        $importance = "medium"
+    else
+        $importance = "low"
+    endif
+
+    $alert.context = join([$host, $subject_info, $context], " → ")
+    
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "System Information Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

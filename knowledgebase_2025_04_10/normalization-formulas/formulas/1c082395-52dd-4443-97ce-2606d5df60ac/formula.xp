@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {$subsys=WORDDASH} - - -
+        {STRING?} {subject.account.name=WORDDASH} - UPDATE UsersData SET Rights {"="} {object.new_value=NUMBER}
+        WHERE UUID={object.account.id=WORDDASH} {"["}Name: {object.account.name=WORDDASH}, Original values: Rights=
+        {object.value=NUMBER}]'
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+object.property = "access rights"
+
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.title = "kerio_control"
+event_src.subsys = lower($subsys)
+event_src.vendor = "kerio_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network security"
+
+id = "PT_Kerio_Technologies_Kerio_Control_syslog_change_user_access_mode"

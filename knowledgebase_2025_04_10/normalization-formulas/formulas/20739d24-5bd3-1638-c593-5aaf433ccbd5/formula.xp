@@ -1,0 +1,43 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME} {$Computer=HOSTNAME} [{$time_date=DATETIME},{$time_rest=NUMBER}] WARN 
+        [RequestSendThread controllerId={datafield4=NUMBER}] Controller 2's connection to broker 
+        {$hostname=UNTIL(':')}{dst.port=NUMBER} (id: {datafield3=NUMBER} rack: {datafield2=WORD}) was unsuccessful ({datafield1=UNTIL(')')}"
+
+action = "open"
+object = "connection"
+status = "failure"
+
+if $hostname == "localhost" then
+    dst.hostname = $Computer
+else
+    dst.hostname = $hostname
+endif
+
+if datafield2 == "null" then
+    datafield2 = null  # rack value
+endif
+
+# datafield1 module created event
+# datafield2 rack
+# datafield3 broker id
+# datafield4 controller id
+ 
+time = epoch_ms_to_datetime(datetime_to_epoch_ms($time_date) + $time_rest)
+
+importance = "info"
+
+category.high = "Network Interaction Management"
+category.generic = "Connection"
+category.low = "Communication"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache_kafka"
+event_src.category = "Other"
+
+id = "PT_Opensource_ASF_Apache_Kafka_syslog_connection_to_broker_unsuccessful"

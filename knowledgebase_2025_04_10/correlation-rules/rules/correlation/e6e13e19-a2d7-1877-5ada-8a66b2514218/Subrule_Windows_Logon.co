@@ -1,0 +1,122 @@
+event User_Login:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and in_list(["4624", "4625"], msgid)
+        and src.ip != null
+        and not filter::Loopback_Address(src.ip)
+        and in_list([3, 7, 10], logon_type)
+        and not filter::ComputerAccount_Windows(subject.account.name)        
+        and filter::CheckWL_Windows_Login("Subrule_Windows_Logon", join([lower(subject.account.name), src.ip, logon_type], "|"))
+    }
+
+event Network_Connect:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                msgid == "3"
+                and event_src.title == "sysmon"
+                and (
+                    in_list(["system", "network service"], coalesce(lower(subject.account.name), lower(object.account.name)))
+                    or in_list(["s-1-5-18", "s-1-5-20"], coalesce(lower(subject.account.id),lower(object.account.id)))
+        )
+            )
+            or (
+                # Svchost.exe для RDP, System для SMB
+                msgid == "5156"
+                and event_src.title == "windows"
+                and in_list(["svchost.exe", "system"], lower(object.process.name))
+            )
+        )
+        and in_list([3389, 445], dst.port)
+        and direction == "ingress"
+        and src.ip != dst.ip
+        and protocol == "tcp"
+        and not filter::Loopback_Address(src.ip)
+    }
+
+rule Subrule_Windows_Logon: ((User_Login and Network_Connect?) with different src.host) timer 1m
+
+    init {
+        $labels = "CheckWL_Windows_Login"
+    }
+
+    on User_Login {
+        $status = status 
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+
+        $logon_type = logon_type
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+        
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([lower(subject.account.name), src.ip, logon_type], "|")
+        $alert.context = src.host
+    
+        if in_list([7,10], logon_type) then
+            $reason = "RDP"
+        else
+            $reason = "SMB"
+        endif
+    }
+
+    on Network_Connect {
+        $direction = direction
+        $protocol = protocol
+
+        $datafield8 = src.host
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"
+}

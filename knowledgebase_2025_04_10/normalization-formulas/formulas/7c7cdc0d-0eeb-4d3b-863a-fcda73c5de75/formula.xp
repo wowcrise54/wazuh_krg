@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} {"ethpm["NUMBER"]:"?} %{msgid="RADIUS-5-RADIUS_MONITOR_STATUS"}: Radius server
+        {datafield1=IPV4} with auth-port {src.port=NUMBER} and acct-port {NUMBER} is
+        {reason="now being monitored"|reason="not monitored now"} {REST}'
+
+action = "configure"
+object = "system"
+status = "success"
+
+# datafield1 - ip radius server
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_RADIUS_MONITOR_STATUS"

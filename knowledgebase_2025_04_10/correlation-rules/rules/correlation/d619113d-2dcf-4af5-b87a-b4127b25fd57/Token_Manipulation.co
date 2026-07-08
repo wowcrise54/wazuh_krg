@@ -1,0 +1,90 @@
+event Start_Process_With_Impersonated_Token:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and object.account.id != null
+        and subject.account.id != object.account.id
+        and filter::CheckWL_Process_Creation("Token_Manipulation", join([lower(subject.account.id), lower(object.account.id), lower(object.process.name)], "|"))
+    }
+
+rule Token_Manipulation: Start_Process_With_Impersonated_Token
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Start_Process_With_Impersonated_Token {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+    
+        $alert.key = join([lower(subject.account.id), lower(object.account.id), lower(object.process.name)], "|")
+        $alert.context = subject.account.name + " → " + object.account.name
+
+        if lower($object.process.parent.name) == "trustedinstaller.exe" then
+            $reason = "TrustedInstaller permissions"
+            $alert.context = $alert.context + " (" + $reason + ")"
+        endif
+    }
+
+emit {
+    if $object.process.name == "winlogon.exe" then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Access Token Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

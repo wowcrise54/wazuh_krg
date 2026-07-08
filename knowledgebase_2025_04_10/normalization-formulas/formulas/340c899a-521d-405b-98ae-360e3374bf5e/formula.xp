@@ -1,0 +1,28 @@
+TEXT = '{time=DATETIME} [{WORD}] info: Изменение {"параметров даты и времени"|$time_zone="часового пояса"}: {"{"} {$raw_kv=STRING+}'
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+if $time_zone != null then 
+    object.type = "timezone" 
+    object.property = "new timezone"
+    object.value = $kv['"zone"']
+else 
+    object.type = "date and time"
+    object.property = "new time"
+    object.value = $kv['"date_string"']
+endif
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_change_date_time"

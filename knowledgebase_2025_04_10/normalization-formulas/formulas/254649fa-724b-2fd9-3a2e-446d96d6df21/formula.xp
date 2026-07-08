@@ -1,0 +1,55 @@
+# INFO  [Native-Transport-Requests-1] 2024-01-29 16:59:33.263 FileAuditLogger.java:51 - user:cassandra|host:localhost/127.0.0.1:7000|source:/127.0.0.1|port:52746|timestamp:1706536771536|type:CREATE_INDEX|category:DDL|ks:cycling|operation:CREATE INDEX ON cycling.cyclist_name (lastname);
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type']=='CREATE_INDEX')
+
+submessage('TEXT', 'parse_query', lower($kv['operation']))
+
+subject = "account"
+action = "create"
+object = "db_object"
+status = "success"
+
+subformula "parse_query"
+    TEXT = 'create index {"if not exists"?} {$index_name=WORD?} on {$ks_name=UNTIL(".")?}{$table_name=WORD} 
+    ({$temp=UNTIL("(")?}{$column_name=WORD}){REST}'
+endsubformula
+
+if $kv['scope'] != null then  
+    object.name = $kv['scope']
+else
+    if $index_name != null then
+        object.name = $index_name
+    else
+        object.name = $table_name + "_" + $column_name + "_" + "idx"
+    endif
+endif
+
+if $kv['ks'] != null then  
+    $ks_name = $kv['ks']
+    object.path = $ks_name + "." + $table_name
+else
+    object.path = $ks_name + "." + $table_name
+endif
+
+object.property = "index"
+object.query = $kv['operation']
+
+datafield1 = $kv['category'] # Категория CQL-запроса
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Create_index"

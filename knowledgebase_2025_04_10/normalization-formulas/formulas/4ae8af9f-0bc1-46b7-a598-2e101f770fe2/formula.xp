@@ -1,0 +1,46 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+         CEF:{NUMBER}|Cyber-Ark|Vault|10.{NUMBER}.{NUMBER}|{msgid="8"}|Logoff|
+         {NUMBER}| {$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+subject.account.name = $kv["suser"]
+
+if maybe_ipv4($kv["shost"]) != null or maybe_ipv6($kv["shost"]) != null then
+    if $kv["shost"] != "0.0.0.0" and $kv["shost"] != "::" then
+        src.ip = $kv["shost"]
+    endif
+else
+    src.hostname = $kv["shost"]
+endif
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+if $kv["dvc"] != null then
+    event_src.ip = $kv["dvc"]
+    if event_src.ip == src.ip then
+        logon_auth_method = "local"
+    else
+        logon_auth_method = "remote"
+    endif
+endif
+
+event_src.vendor = "cyberark"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "enterprise_password_vault"
+event_src.category = "Other"
+
+id = "PT_CyberArk_Enterprise_Password_Vault_syslog_CEF_8_Logoff"

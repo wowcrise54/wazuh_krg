@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}{$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}{":"?}
+        mgd{NUMBER?} {"UI_COMMIT"} [junos@2636.{STRING} username=\"{$uname = STRING} command=\"commit\" {REST}'
+
+subject.name = strip($uname, '', '\"')
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+		
+subject = "account"
+object = "configuration"
+action = "apply"
+status = "ongoing"	
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+importance = "low"
+
+id = "PT_Juniper_Junos_syslog_ui_commit_structured"

@@ -1,0 +1,44 @@
+# Service entered the state
+
+EVENTLOG = 'EventID.text="7036"'
+!COND = $Channel=="System" and $Provider["Name"]=="Service Control Manager"
+
+$action = lower($Data["param2"])
+if in_list(["running", "работает"], $action) then
+    action = "start"
+elif in_list(["stopped", "остановлена"], $action) then
+    action = "stop"
+elif in_list(["suspended", "приостановлена"], $action) then
+    action = "stop"
+    object.state = "suspended"
+elif in_list(["resumed", "возобновлена"], $action) then
+    action = "start"
+    object.state = "resumed"
+endif
+object = "application"
+status = "success"
+
+object.name = $Data["param1"]
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+category.generic = "Application"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_7036_Basic_Service_Operations"

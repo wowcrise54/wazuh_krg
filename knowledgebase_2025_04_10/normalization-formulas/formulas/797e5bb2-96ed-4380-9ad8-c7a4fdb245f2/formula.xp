@@ -1,0 +1,30 @@
+!TEXT = '{"<"NUMBER">"?} {DATETIME} {$Computer=HOSTNAME} {WORD+}:
+        [{time=DATETIME}] V2 [{WORD}][{WORD}] {"<"msgid=WORDDASH">"}
+        ConsoleProcessRequest: C2S_AUTH_PERFORM, <{object.name=WORD+}>
+        user [{subject.account.name=WORD}] has logged in'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+dst.hostname = $Computer
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_remote_administrator_server"
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_remote_administrator_server_User_Login_Success_on_administration_console"

@@ -1,0 +1,66 @@
+TABULAR = '__policy_id_tag,
+          action,
+          has_accounting,
+          {$dir=i/f_dir},
+          {$ifname=i/f_name},
+          {event_src.ip=orig},
+          {reason=message_info},
+          origin_sic_name,
+          proto,
+          {time=time}'
+
+COND = $product == "VPN-1 & FireWall-1"
+       and (
+            $action == "drop"
+            or $action == "detect"
+           )
+       and $rule == null
+       and $match_id == null
+       and $TCP_packet_out_of_state == null
+
+if $action == "drop" then
+    action = "deny"
+else
+    action = "allow"
+endif
+
+object = "packet"
+status = "success"
+
+src.ip = $src
+src.port = $s_port
+dst.ip = $dst
+dst.port = $service
+
+if $dir == "inbound" then
+    direction = "ingress"
+else
+    direction = "egress"
+endif
+
+protocol = $proto
+
+if $dir == "inbound" then
+    datafield2 = $ifname       # имя интерфейса устройства, ingress интерфейс
+elif $dir == "egress" then
+    datafield4 = $ifname       # имя интерфейса устройства, egress интерфейса
+endif
+datafield5 = $ICMP             # icmp общее имя
+datafield6 = $ICMP_Code        # icmp тип
+datafield7 = $ICMP_Type        # icmp код
+datafield8 = $origin_sic_name  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+reason = $message_info
+
+importance = "medium"
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+event_src.subsys = lower($product)
+
+id = "PT_Checkpoint_Gaia_opseclog_VPN_and_Firewall_FW_drop_connection"

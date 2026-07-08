@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The rule detects local privilege escalation via a buffer overflow. Attackers using the CVE-2023-4911 vulnerability can start SUID programs to execute code with elevated privileges</Description>
+  <EventDescriptions>
+    <EventDescription id="7a1df803-79bf-8054-a04b-57edf9961d3d">Local elevation of privileges by the user {subject.account.name} through the launch of a malicious utility {subject.process.name}, which caused buffer overflows and the start of the process {object.process.name} on the node {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

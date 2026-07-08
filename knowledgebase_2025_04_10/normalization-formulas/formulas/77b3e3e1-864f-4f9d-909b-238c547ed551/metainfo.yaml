@@ -1,0 +1,12 @@
+EventDescriptions:
+- Criteria: 'id = "PT_Checkpoint_Gaia_syslog_LogExporter_Smart_defense_attack" and action = "detect" and src.host != null and src.port != null and dst.host != null and dst.port != null'
+  LocalizationId: 4639bc27-efbb-420b-9515-3237a3e15255
+- Criteria: 'id = "PT_Checkpoint_Gaia_syslog_LogExporter_Smart_defense_attack" and action = "deny" and (src.host = null or src.port = null or dst.host = null or dst.port = null)'
+  LocalizationId: 63f38406-affd-46b0-a6a7-05a5493627f2
+- Criteria: 'id = "PT_Checkpoint_Gaia_syslog_LogExporter_Smart_defense_attack" and action = "deny" and src.host != null and src.port != null and dst.host != null and dst.port != null'
+  LocalizationId: ad278646-36ba-44bd-9177-651cdc401679
+- Criteria: 'id = "PT_Checkpoint_Gaia_syslog_LogExporter_Smart_defense_attack" and action = "detect" and (src.host = null or src.port = null or dst.host = null or dst.port = null)'
+  LocalizationId: e0b04b24-be84-4a97-a579-b5d8a86c5243
+PtkbId: 77b3e3e1-864f-4f9d-909b-238c547ed551
+ObjectId: PT-NF-6157
+Origin: PT

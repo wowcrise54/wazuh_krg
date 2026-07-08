@@ -1,0 +1,54 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and in_list(["Add new plan", "Modify existing plan", "Delete existing plan"], $msgid) == true
+
+subformula "get_data"
+    TEXT = '{UNTIL("Plan : [")}{object.name=UNTIL("]\\";")}
+            {REST}'
+endsubformula
+
+subformula "get_data"
+    TEXT = '{UNTIL("Plan deleted : \'")}{object.name=UNTIL(" :")}
+            {REST}'
+endsubformula
+
+subject = "account"
+
+if $msgid == "Add new plan" then
+    action = "create"
+
+    submessage("TEXT", "get_data", $data)
+
+elif $msgid == "Delete existing plan" then
+    action = "remove"
+
+    submessage("TEXT", "get_data", $data)
+else
+    action = "modify"
+endif
+
+object = "resource"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+object.type = "backup plan"
+
+datafield1 = $display_user_name  # отображаемое имя пользователя
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "medium"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_backup_plan_operation"

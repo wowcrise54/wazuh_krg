@@ -1,0 +1,20 @@
+filter LoginSuccessful_Unix() {
+    filter::NotFromCorrelator()
+    and (
+        (
+            category.generic == "Access"
+            and category.high == "Authentication"
+        )
+        or (
+            category.high == "Access Management"
+            and category.low == "Communication"
+        )
+    )
+    and action == "login"
+    and status == "success"
+    and filter::OperatingSystem_UNIXLike()
+    and (
+        subject.name != null
+        or subject.id != null
+    )
+}

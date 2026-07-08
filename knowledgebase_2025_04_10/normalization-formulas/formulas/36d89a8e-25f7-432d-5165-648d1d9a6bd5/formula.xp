@@ -1,0 +1,134 @@
+JSON = 'source="nova"'
+
+COND = (
+        in_list(["create-vm", "update-vm", "delete-vm", "vm-create-or-update-metadata", "vm-delete-metadata"], $action)
+        or (
+            $action == "vm-action"
+            and $request_body["changePassword"] != null 
+        )
+       )
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+if in_list(["create-vm", "update-vm", "delete-vm", "vm-create-or-update-metadata", "vm-delete-metadata"], $action) then
+    action = switch $action
+        case "create-vm" "create"
+        case "update-vm" "modify"
+        case "vm-create-or-update-metadata" "modify"
+        case "vm-delete-metadata" "modify"
+        case "delete-vm" "remove"
+    endswitch
+
+    msgid = $action
+
+elif $request_body["changePassword"] != null then
+    action = "modify"
+
+    msgid = "vm-change-password"
+endif
+
+object = "virtual_machine"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subformula "item_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $is_next = bool($array[$current + 1])
+
+    # The source type uuid of the block device mapped to different fields
+    if $item["source_type"] == "image" and datafield3 == null then
+        datafield3 = $item["uuid"]
+
+    elif $item["source_type"] == "volume" and datafield4 == null then
+        datafield4 = $item["uuid"]
+
+    elif $item["source_type"] == "snapshot" and datafield5 == null then
+        datafield5 = $item["uuid"]
+    endif
+endsubformula
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["server"]
+
+if $properties["id"] != null then
+    object.id = $properties["id"]
+else
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[3]
+endif
+
+if $properties["name"] != null then
+    if $properties["name"] != "" then
+        object.name = $properties["name"]
+    endif
+else
+    if $request_body["server"]["name"] != "" then
+       object.name = $request_body["server"]["name"]
+    endif
+endif
+
+if $request_body["changePassword"] != null then
+    object.property = "administrative password"
+endif
+
+object.state = $properties["status"]
+
+datafield1 = $method  # Method
+datafield2 = $uri     # URL
+
+$array = $request_body["server"]["block_device_mapping_v2"]
+$current = -1
+submessage("TEXT", "item_handler", "")
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "item_handler", "")
+endif
+
+datafield6 = $properties["tenant_id"]  # The UUID of the tenant in a multi-tenancy cloud
+
+if $properties["description"] != "" then
+    datafield9 = $properties["description"]  # A human-readable description for the resource
+endif
+
+if $success == "no" then
+    $message_path = coalesce($response_body["itemNotFound"], $response_body["badRequest"],
+                             $response_body["computeFault"], $response_body["conflictingRequest"])
+
+    reason = coalesce($message_path["message"], $response_body["message"])
+endif
+
+time = $timestamp
+importance = "low"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Nova_VM_operations"

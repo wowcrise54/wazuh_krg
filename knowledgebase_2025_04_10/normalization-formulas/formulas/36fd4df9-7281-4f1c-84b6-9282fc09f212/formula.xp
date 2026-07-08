@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} {msgid="CISE_Profiler"}
+        {NUMBER} {NUMBER} 0 {UNTIL(" occurred, ")}{$kv=KEYVALUE(",", "=")}'
+
+action = "detect"
+object = "device"
+status = "success"
+
+if $kv['EndpointSourceEvent'] == "RADIUS Probe" or $kv['EndpointSourceEvent'] == "GUEST Portal" then
+    src.ip = $kv['EndpointIPAddress']
+elif $kv['EndpointSourceEvent'] == "Active Directory Probe" then
+    src.ip = $kv['EndpointNADAddress']
+else
+    drop
+endif
+
+src.mac = $kv['EndpointMacAddress']                              # mac найденного устройства
+
+datafield1 = $kv['OperatingSystem']                              # ОС найденного устройства
+datafield2 = strip($kv['PortalUser.PhoneNumber'], "", "\\")      # номер телефона пользователя
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "ise"
+event_src.subsys = lower($kv['EndpointSourceEvent'])   # источник информации
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_CISE_Profiler"

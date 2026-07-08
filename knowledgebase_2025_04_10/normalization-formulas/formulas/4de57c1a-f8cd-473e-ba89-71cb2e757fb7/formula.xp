@@ -1,0 +1,24 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?} {UNTIL("Сайт:")} {"Сайт"?} {datafield1=UNTIL(",Сервер")}:
+        {datafield2=UNTIL(",")} Разовое резервное копирование успешно завершено.
+        Файл резервной копии находится в следующей папке сервера {datafield7=UNTIL(":")} {$path=REST}'
+
+action = "backup"
+object = "database"
+status = "success"
+
+object.path = strip($path, '', '.')
+
+# datafield1 - Site Name
+# datafield2 - Server name
+# datafield7 - Server with backup
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip2, $ip1)
+event_src.hostname = coalesce($host2, $host1)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_backup_completed_ru_ru"

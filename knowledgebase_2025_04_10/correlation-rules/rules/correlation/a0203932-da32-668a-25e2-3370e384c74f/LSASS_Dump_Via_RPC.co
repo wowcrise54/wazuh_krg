@@ -1,0 +1,122 @@
+event AccessProccess:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        correlation_name == "LSASS_Memory_Access_SubRule"
+        and filter::CheckWL_Process_Access("LSASS_Dump_Via_RPC", alert.key)
+    }
+
+event RPC_Suspicious_Server:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        correlation_name == "Suspicious_RPC_Server"
+    }
+
+rule LSASS_Dump_Via_RPC: (RPC_Suspicious_Server -> AccessProccess) timer 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Access" 
+    }
+
+    on AccessProccess {
+        $object.property = object.property
+        $object.value = object.value
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.chain = object.process.chain
+
+        $datafield5 = datafield5            # Идентификатор потока субъекта
+        $datafield9 = datafield9            # Цепочка вызовов процесса
+        $datafield18 = datafield18          # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19          # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = alert.key
+    }
+
+    on RPC_Suspicious_Server {
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.meta = object.process.meta
+        $subject.process.original_name = object.process.original_name
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.imphash = object.process.hash.imphash
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+        $subject.process.chain = object.process.chain
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $alert.context = alert.key
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "access"
+    $object = "process"
+    $status = "success"
+
+    $labels = $labels + "|lsass_cache_to_correlation"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

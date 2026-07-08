@@ -1,0 +1,114 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME} PTAF
+        {"ATTACK"|"attack"|$type="VULNERABILITY"} tag.type={$event_type=STRING+} Data: {$kv=KEYVALUE(";","=")}'
+
+subject = "rule"
+action = "detect"
+status = "success"
+
+if $type == "VULNERABILITY" then
+    object = "vulnerability"
+    msgid = "weakness"
+else
+    if find_substr($event_type, "tool") != null then
+        object = "application"
+        object.type = "hack tool"
+        msgid = "tool"
+    elif find_substr($event_type, "attack") != null or find_substr($event_type, "weakness") != null then
+        object = "attack"
+        
+        category.high = "Information Security"
+        category.generic = "Attacks & Recon"
+        category.low = "Network Attack"
+        
+        msgid = switch $event_type
+            case "attack" "attack"
+            case "weakness" "attempt"
+        endswitch
+    elif find_substr($event_type, "system") != null then
+        object = "alert"
+        msgid = "system"
+    elif find_substr($event_type, "acl") != null then
+        object = "alert"
+        msgid = "acl"
+    endif
+endif
+
+subject.name = $kv["tag.name"]
+object.path = $kv["path"]
+
+# for rules
+if msgid == "acl" then
+    if subject.name == "Authentication Failed" or subject.name == "Successful Authentication" then
+        subject = "account"
+        action = "login"
+        object = "application"
+        status = if subject.name == "Successful Authentication" then "success" else "failure" endif
+        
+        $subject_name_and_path = csv($kv["username"], "\\\\", "'")
+        subject.account.name = lower($subject_name_and_path[length($subject_name_and_path) - 1])
+        if length($subject_name_and_path) > 1 then
+            subject.account.domain = lower($subject_name_and_path[length($subject_name_and_path) - 2])
+        endif        
+        subject.name = null
+        
+        category.generic = "Application"
+        category.high = "Access Management"
+        category.low = "Communication"
+    endif
+endif
+
+if $kv["param.name"] != "[]" or $kv["param.name"] != "null" then 
+    if not in_list(["[\\\"\\\",\\\"\\\",\\\"\\\"]", "[\\\"\\\"]", "[\\\"\\\",\\\"\\\"]", "[]"], $kv["param.name"]) then
+        $object.property = replace(strip($kv["param.name"], "[\\\"", "\\\"]"), "", "\\\\\"")
+        object.property = replace($object.property, "", "\\\\")
+    else
+        object.property = $kv["param.name"]
+    endif
+    if not in_list(["[\\\"\\\",\\\"\\\",\\\"\\\"]", "[\\\"\\\"]", "[\\\"\\\",\\\"\\\"]", "[]"], $kv["param.value"]) then
+        $object.value = replace(strip($kv["param.value"], "[\\\"", "\\\"]"), "", "\\\\\"")
+        object.value = replace($object.value, "", "\\\\")
+    else
+        object.value = $kv["param.value"]
+    endif
+endif
+
+if $kv["src.ip"] != "0.0.0.0" then
+    src.ip = $kv["src.ip"]
+endif
+
+src.port = $kv["src.port"]
+src.geo.city = $kv["geo.city"]
+src.geo.country = $kv["geo.country"]
+
+dst.ip = $kv["dst.ip"]
+dst.port = $kv["dst.port"]
+
+datafield1 = $kv["method"]          # Метод HTTP протокола
+datafield2 = $kv["module"]          # Модуль, обнаруживший событие
+datafield3 = $kv["policy"]          # Политика, по которой обнаружено событие
+datafield4 = $kv["rules"]           # Правило, по которому обнаружено событие
+datafield5 = $kv["username"]        # Учетная запись клиента на защищаемом ресурсе
+datafield6 = $kv["client.cookie"]   # Cookie клиента
+datafield7 = $kv["client.browser"]  # Браузер клиента
+datafield8 = $kv["client.os"]       # ОС клиента
+datafield9 = $kv["task"]            # ID задачи на анализ лога модулем Forensics
+
+reason = strip($kv["event.msg"], "", ".")
+
+importance = $kv["event.severity"]
+
+event_src.vendor = "positive_technologies"
+event_src.title = "application_firewall"
+event_src.category = "Application security"
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($hostname)
+        event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+    else
+        event_src.hostname = lower($hostname)
+    endif
+endif
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_Critical_events_detected"

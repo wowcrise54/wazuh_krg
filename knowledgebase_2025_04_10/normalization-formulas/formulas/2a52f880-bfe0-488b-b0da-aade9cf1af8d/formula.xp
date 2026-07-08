@@ -1,0 +1,35 @@
+EVENTLOG = 'EventID="4913"'
+COND = lower($Channel)=="security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "policy"
+status = "success"
+
+object.property = $Data["ObjectType"]
+subject.name = lower($Data["SubjectUserName"])
+subject.domain = lower($Data["SubjectDomainName"])
+datafield1 = maybe_number16($Data["SubjectLogonId"])
+datafield2 = $Data ["ProcessName"]                    # Имя процесса
+datafield3 = $Data["HandleId"]                        # Хэндл процесса
+datafield4 = maybe_number16($Data["ProcessId"])       # Идентификатор процесса
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_4913_Central_Access_Policy_on_the_object_was_changed"

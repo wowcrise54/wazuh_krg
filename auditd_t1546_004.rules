@@ -1,0 +1,21 @@
+## System-wide shell startup files (actor/process attribution).
+-w /etc/profile -p wa -k shell_config
+-w /etc/profile.d/ -p wa -k shell_config
+-w /etc/bash.bashrc -p wa -k shell_config
+-w /etc/bashrc -p wa -k shell_config
+-w /etc/zsh/ -p wa -k shell_config
+-w /etc/fish/ -p wa -k shell_config
+
+## TIOCSTI is ioctl request 0x5412. Add b32 on systems that execute 32-bit code.
+-a always,exit -F arch=b64 -S ioctl -F a1=0x5412 -k tiocsti
+-a always,exit -F arch=b32 -S ioctl -F a1=0x5412 -k tiocsti
+
+## User dotfiles cannot be expressed with auditd wildcards. Add explicit watches
+## for high-value accounts, for example:
+## -w /home/USER/.bashrc -p wa -k shell_config
+## -w /root/.bashrc -p wa -k shell_config
+
+## PT-CR-3003 requires process ancestry or service-identity enrichment. An EDR,
+## eBPF policy, or locally tailored audit rule must tag suspicious commands
+## launched by the Erlang SSH daemon with key "erlang_ssh_rce". Do not deploy a
+## global execve audit rule solely for this purpose; it can generate heavy load.

@@ -1,0 +1,42 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and in_list(["Delete a Mount Path", "Add a Mount Path"], $msgid) == true
+
+subformula "get_data"
+    TEXT = '{UNTIL("Library: ")}{object.name=UNTIL("\\";")}
+            {UNTIL("Mount Path: [")}{src.hostname=UNTIL("] ")}{object.path=UNTIL("\\";")}
+            {REST}'
+endsubformula
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+submessage("TEXT", "get_data", $data)
+
+datafield1 = $display_user_name  # отображаемое имя пользователя
+
+reason = switch $msgid
+    case "Add a Mount Path" "mount path added"
+    case "Delete a Mount Path" "mount path deleted"
+endswitch
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "low"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_mount_path_operations"

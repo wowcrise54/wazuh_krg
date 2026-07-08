@@ -1,0 +1,14 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{event_src.hostname=HOSTNAME} SYSLOG - LOGGING -
+        {"#"|"%"|} Logging started.'
+
+action = "configure"
+object = "port"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "small_business_solution"
+event_src.category = "Network device"
+
+id = "PT_Cisco_SBS_syslog_logging_enable"

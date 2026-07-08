@@ -1,0 +1,80 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} confluence_audit: {$json=REST}"
+COND = (
+    find_substr($json, '"actionI18nKey":"audit.logging.summary.page.hierarchy.start.copy"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.page.hierarchy.finish.copy"') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = switch $author["type"]
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = "copy"
+object = "resource"
+
+if $auditType["actionI18nKey"] == "audit.logging.summary.page.hierarchy.start.copy" then
+    status = "ongoing"
+else
+    status = "success"
+endif
+
+if $author["type"] == "user" then
+    subject.account.fullname = $author["name"]
+    subject.account.id = $author["id"]
+endif
+
+object.type = "page"
+
+$s_source_page = find_substr($json, '"nameI18nKey":"audit.logging.extra.attribute.key.page.hierarchy.copy.source.page","value":"')
+$e_source_page = find_substr(substr($json, $s_source_page, length($json)), '"}')
+$source_page = substr($json, $s_source_page+91, $e_source_page-91)
+
+object.name = if length($source_page) != 0 then $source_page else null endif
+
+$s_source_space = find_substr($json, '"nameI18nKey":"audit.logging.extra.attribute.key.page.hierarchy.copy.source.space","value":"')
+$e_source_space = find_substr(substr($json, $s_source_space, length($json)), '"}')
+$source_space = substr($json, $s_source_space+92, $e_source_space-92)
+
+object.group = if length($source_space) != 0 then $source_space else null endif
+
+$s_target_parent_page = find_substr($json, '"nameI18nKey":"audit.logging.extra.attribute.key.page.hierarchy.copy.target.parent.page","value":"')
+$e_target_parent_page = find_substr(substr($json, $s_target_parent_page, length($json)), '"}')
+$target_parent_page = substr($json, $s_target_parent_page+98, $e_target_parent_page-98)
+$target_parent_page = if length($target_parent_page) != 0 then $target_parent_page else null endif
+
+$s_target_space = find_substr($json, '"nameI18nKey":"audit.logging.extra.attribute.key.page.hierarchy.copy.target.space","value":"')
+$e_target_space = find_substr(substr($json, $s_target_space, length($json)), '"}')
+$target_space = substr($json, $s_target_space+92, $e_target_space-92)
+$target_space = if length($target_space) != 0 then $target_space else null endif
+
+object.property = "Space|Parent Page"
+object.value = object.group + " | ?"
+object.new_value = $target_space + " | " + $target_parent_page
+
+src.ip = $source
+
+datafield1 = object.group  # Space Name
+datafield2 = object.name  # Page Name
+
+msgid = $auditType["actionI18nKey"]
+time = epoch_to_datetime($timestamp["epochSecond"])
+importance = "low"
+
+event_src.vendor = "atlassian"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_syslog_Audit_Page_Hierarchy_Copy"

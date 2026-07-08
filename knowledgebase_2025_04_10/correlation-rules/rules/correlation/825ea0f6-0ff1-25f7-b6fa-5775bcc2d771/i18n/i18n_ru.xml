@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Повышение привилегий с помощью техники GodPotato позволяет злоумышленнику с привилегией ImpersonatePrivilege повысить свои права до пользователя System. После этого злоумышленник может извлечь со компрометированного узла учетные данные к различным сервисам локальных пользователей, а в некоторых случаях и других пользователей, получавших доступ к данному узлу. Использование этих данных позволит злоумышленнику горизонтально переместиться (Lateral Movement) на другие узлы инфраструктуры.</Description>
+  <EventDescriptions>
+    <EventDescription id="af785c3e-6f54-930c-f5f6-3929e5f96308">Возможное использование техники GodPotato для повышения привилегий до системных на узле {event_src.host}</EventDescription>
+    <EventDescription id="c29919be-e148-61f7-b1f5-5960b512c4e7">Пользователь {subject.account.name} использовал технику GodPotato (исполняемый файл {object.process.parent.name}), чтобы запустить процесс {object.process.name} с системными привилегиями на узле {event_src.host}</EventDescription>
+    <EventDescription id="e167768b-d76c-9d56-c399-2a01fa96d4dc">Пользователь {subject.account.name} неудачно использовал технику GodPotato (исполняемый файл {subject.process.name}), чтобы повысить привилегии до системных на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

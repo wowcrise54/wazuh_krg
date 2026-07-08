@@ -1,0 +1,46 @@
+EVENTLOG = 'EventID="59"'
+COND = $Channel=="Microsoft-Windows-Bits-Client/Operational" and $Provider["Name"]=="Microsoft-Windows-Bits-Client"
+
+action = "start"
+object = "task"
+status = "success"
+
+object.name = $Data["name"]
+object.fullpath = $Data["url"]
+object.property = "file size"
+object.value = $Data["fileLength"]
+count.bytes_in = $Data["bytesTransferred"]
+
+$temp_dst = csv($Data['url'], "/", "")[2]
+
+$dot_pos = find_substr($temp_dst, '.')
+
+if $dot_pos != null then
+    dst.fqdn = lower($temp_dst)
+    dst.hostname = lower(substr($temp_dst, 0, $dot_pos))
+else
+    dst.hostname = lower($temp_dst)
+endif
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+category.generic = "Task"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_59_BITS_task_started"

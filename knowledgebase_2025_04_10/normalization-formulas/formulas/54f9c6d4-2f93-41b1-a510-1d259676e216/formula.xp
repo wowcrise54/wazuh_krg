@@ -1,0 +1,44 @@
+EVENTLOG = 'EventID="551"'
+!COND = $Provider["Name"] == "Microsoft-Windows-SMBServer" 
+
+action = "open"
+object = "session"
+status = "failure"
+
+object.account.id = $Security['UserID']
+object.account.session_id = maybe_number16($UserData['EventData']['SessionId']) 
+if $UserData['EventData']['UserName'] != null then
+    $user_csv = csv($UserData['EventData']['UserName'], '\\', '')
+    if length($user_csv) > 1 then
+        object.account.domain = lower($user_csv[0])
+        object.account.name = lower($user_csv[1])
+    else
+        object.account.name = lower($UserData['EventData']['UserName'])
+    endif
+endif
+
+src.ip = maybe_ipv4(strip($UserData['EventData']['ClientName'], '\\\\', '')) 
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    dst.fqdn = lower($Computer)
+    dst.hostname = lower(substr($Computer, 0, $dot_pos))
+else
+    dst.hostname = lower($Computer)
+endif
+
+direction = "ingress"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows_smb_server"
+event_src.subsys = lower($Channel)
+event_src.fqdn = dst.fqdn
+event_src.hostname = dst.hostname
+event_src.category = "File service"
+
+id = "PT_Microsoft_Windows_SMBServer_eventlog_551_session_authentication_failed"

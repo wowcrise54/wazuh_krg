@@ -1,0 +1,48 @@
+TABULAR = "DBMS,
+           {$type=type},
+           failure_reason,
+           {time=event_time},
+           {protocol=interface},
+           session_id,
+           user,
+           {datafield1=auth_type},
+           {$source=client_address},
+           {src.port=client_port},
+           client_hostname,
+           client_name,
+           roles
+           "
+
+COND = $DBMS == "ClickHouse" and in_list(["loginfailure", "loginsuccess"], lower($type))
+
+subject = "account"
+action = "login"
+object = "application"
+status = if $type == "LoginSuccess" then "success" else "failure" endif
+
+subject.account.name = if $user != "" then lower($user) else null endif
+subject.account.session_id = if $session_id != "" then $session_id else null endif
+subject.account.privileges = lower(join(csv(strip($roles, '[', ']'), ",", "'"), "|"))
+
+src.ip = strip($source, '::ffff:', '')
+src.hostname = if $client_hostname != "" then lower($client_hostname) else null endif
+
+logon_service = if $client_name != "" then $client_name else null endif
+
+reason = if $failure_reason != "" then $failure_reason else null endif
+
+# datafield1 - тип аутентификации
+datafield2 = lower(join(csv(strip($profiles, '[', ']'), ",", "'"), "|"))  # различные применяемые настройки на пользователей и роли
+
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "yandex"
+event_src.title = "clickhouse"
+event_src.category = "Database server"
+event_src.ip = recv_ipv4
+
+id = "PT_Yandex_Clickhouse_odbc_user_login"

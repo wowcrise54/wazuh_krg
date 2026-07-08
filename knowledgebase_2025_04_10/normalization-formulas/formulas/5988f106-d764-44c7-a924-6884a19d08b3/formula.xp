@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {"."NUMBER?}{event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="hwIfMonitorOutputRateRising_clear"}({WORD}){"["NUMBER"]"?}:
+        {"VS=Admin-VS"?}{"CID="UNTIL(";")?}
+        Interface output flow bandwidth usage was restored to the trap threshold.
+        ({$kv=UNTIL(")")}'
+
+$kv = keyvalue($kv, ',', '=', '"')
+
+action = "info"
+object = "interface"
+status = "success"
+
+object.name = $kv["InterfaceName"]
+object.id = $kv["Interface"]
+object.property = "bandwidth used"
+object.value = $kv["BandWidthUsage"]
+
+#numfield3 - пороговое значение для исходящего трафика в процентах
+numfield3 = $kv["TrapThreshold"]
+
+importance = "info"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_DEVM_hwIfMonitorOutputRateRising_clear"

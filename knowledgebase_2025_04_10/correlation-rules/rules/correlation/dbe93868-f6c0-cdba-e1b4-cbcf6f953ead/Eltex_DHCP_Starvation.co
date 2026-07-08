@@ -1,0 +1,120 @@
+event DHCP_Snooping:
+    key:
+        event_src.host, interface
+    filter {   
+        filter::NotFromCorrelator()
+        and event_src.vendor == "eltex"
+        and subject == "system"
+        and action == "deny"
+        and object == "packet"
+        and subject.name == "DHCP snooping" 
+        and filter::CheckWL_Specific_Only("Eltex_DHCP_Starvation", lower(join([event_src.host, object.type], "|")))
+    }    
+        
+event DHCP_Cache_Overflow:
+    key:
+        event_src.host
+    filter {   
+        filter::NotFromCorrelator()
+        and event_src.vendor == "eltex"
+        and action == "alert"
+        and object == "table"
+        and object.type == "DHCP snooping cache"
+    }
+    
+rule Eltex_DHCP_Starvation: (DHCP_Snooping* or DHCP_Cache_Overflow*) timer 15m
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $count_total = 0
+    }
+    
+    on DHCP_Snooping {
+        if $count_total == 0 then
+            $subject.name = subject.name
+
+            $object.type = object.type
+            
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.mac = src.mac
+            $src.port = src.port
+            $src.asset = src.asset
+            
+            $dst.host = dst.host
+            $dst.ip = dst.ip
+            $dst.hostname = dst.hostname
+            $dst.mac = dst.mac
+            $dst.fqdn = dst.fqdn
+            $dst.asset = dst.asset
+            
+            $first_event = False
+            $interface = interface                        
+        endif    
+        $count_total = $count_total + 1
+        
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([event_src.host, object.type], "|"))
+    }
+    
+    on DHCP_Cache_Overflow {
+        $status = "success"
+
+        $alert.key = lower(join([event_src.host, object.type], "|"))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    if $status == "success" then
+        $correlation_type = "incident"
+        
+        $importance = "high"
+        
+        $alert.context = join(["Dos attack of DHCP snooping cache was success for:", $event_src.host], " ")
+
+        $category.generic = "Attack"
+        $category.high = "Impact"
+        $category.low = "Network Denial of Service"
+
+        $incident.category = "DoSDDoS"
+    else
+        $correlation_type = "event"
+        
+        $status = "failure"
+
+        $importance = "low"
+
+        $category.generic = "Attack"
+        $category.high = "Credential Access"
+        $category.low = "Adversary-in-the-Middle: DHCP Spoofing"
+
+        $incident.category = "DOSAttack"
+    endif    
+       
+    $action = "initiate"
+    $object = "attack"
+    
+    $datafield1 = string($count_total)  # Count of block DHCP packets
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

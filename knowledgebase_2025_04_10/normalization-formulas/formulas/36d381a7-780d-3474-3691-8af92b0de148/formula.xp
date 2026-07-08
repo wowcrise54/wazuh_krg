@@ -1,0 +1,45 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "OrganizationRole"
+
+subject = "account"
+
+action = switch $type
+    case "Create" "grant"
+    case "Remove" "revoke"
+endswitch
+
+object = "resource"
+status = "success"
+
+subject.account.id = $author
+subject.account.name = $authorPresentation
+
+$owner_array = coalesce($change["owner"]["added"], $change["owner"]["removed"])
+$org_array = coalesce($change["organization"]["added"], $change["organization"]["removed"])
+$role_array = coalesce($change["role"]["added"], $change["role"]["removed"])
+
+object.id = $owner_array["id"]
+object.name = $owner_array["presentation"]
+object.type = "group or user"
+
+object.property = "role"
+object.value = $role_array["presentation"]
+
+chain_id = $id
+
+datafield1 = $targetPresentation         # Grant
+datafield2 = $org_array["presentation"]  # Organization name
+datafield3 = $targetId                   # Grant ID
+datafield4 = $role_array["id"]           # Role ID
+datafield5 = $org_array["id"]            # Organization ID
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "low"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_Organization_Role_Manage"

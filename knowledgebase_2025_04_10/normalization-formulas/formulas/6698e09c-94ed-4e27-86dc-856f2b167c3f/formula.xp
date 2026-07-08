@@ -1,0 +1,123 @@
+TABULAR = '{chain_id=TransactionId},
+           {datafield2=SequenceId},
+           {time=OccurredAt},
+           {$selector=ObjectSelector},
+           FieldName,
+           {$login=Login},
+           {$workstation=Workstation},
+           {$account=NTAccount},
+           SequenceNumber,
+           {$temp_action=Action},
+           {msgid=ObjectType},
+           {$server=Server},
+           ServerIsPrimary'
+
+COND = $ObjectType == "NetworkAppServers"
+
+subject = "account"
+
+if $temp_action == "Insert" or $temp_action == "Update" then
+    if substr($NewValue, 0, 2) == "!~" then
+        $new_address_action = "include"
+        $new_address_type = "address with port"
+        $new_addresses = strip($NewValue, "!~", "")
+    elif substr($NewValue, 0, 2) == "#!" then
+        $new_address_action = "include"
+        $new_address_type = "addresses range"
+        $new_addresses = strip($NewValue, "#!", "")
+    elif substr($NewValue, 0, 1) == "~" then
+        $new_address_action = "exclude"
+        $new_address_type = "address with port"
+        $new_addresses = strip($NewValue, "~", "")
+    elif substr($NewValue, 0, 1) == "#" then
+        $new_address_action = "exclude"
+        $new_address_type = "addresses range"
+        $new_addresses = strip($NewValue, "#", "")
+    elif substr($NewValue, 0, 1) == "*" then
+        $new_address_action = "exclude"
+        $new_address_type = "domain"
+        $new_addresses = strip($NewValue, "*", "")
+    endif
+endif
+
+if $temp_action == "Delete" or $temp_action == "Update" then
+    if substr($OldValue, 0, 2) == "!~" then
+        $old_address_action = "include"
+        $old_address_type = "address with port"
+        $old_addresses = strip($OldValue, "!~", "")
+    elif substr($OldValue, 0, 2) == "#!" then
+        $old_address_action = "include"
+        $old_address_type = "addresses range"
+        $old_addresses = strip($OldValue, "#!", "")
+    elif substr($OldValue, 0, 1) == "~" then
+        $old_address_action = "exclude"
+        $old_address_type = "address with port"
+        $old_addresses = strip($OldValue, "~", "")
+    elif substr($OldValue, 0, 1) == "#" then
+        $old_address_action = "exclude"
+        $old_address_type = "addresses range"
+        $old_addresses = strip($OldValue, "#", "")
+    elif substr($OldValue, 0, 1) == "*" then
+        $old_address_action = "exclude"
+        $old_address_type = "domain"
+        $old_addresses = strip($OldValue, "*", "")
+    endif
+endif
+
+if $temp_action == "Insert" then
+    action = "create"
+
+    object.property = $new_address_type 
+    object.type = $new_address_action
+    object.value = $new_addresses
+
+    importance = "medium"
+elif $temp_action == "Update" then
+    action = "modify"
+
+    object.property = $old_address_type 
+    object.type = $old_address_action
+    object.value = $old_addresses
+
+    object.new_value = "rule type:" + $new_address_action + "|" + $new_address_type + ":" + $new_addresses
+
+    importance = "medium"
+elif $temp_action =="Delete" then
+    action = "remove"
+
+    object.property = $old_address_type 
+    object.type = $old_address_action
+    object.value = $old_addresses
+
+    importance = "high"
+endif
+
+object = "rule"
+status = "success"
+
+subject.account.name = lower($login)
+
+$csv_account = csv(lower($account), "\\", "")
+subject.name = $csv_account[1]    # Имя системного пользователя
+subject.domain = $csv_account[0]  # Домен системного пользователя
+
+$symb_selector = find_substr($selector, "/") + 1
+object.name = substr($selector, $symb_selector, length($selector) - $symb_selector)
+
+src.hostname = lower($workstation)
+dst.hostname = lower($server)
+
+# datafield2 - Номер действия в рамках текущей транзакции
+
+if lower($workstation) == lower($server) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+event_src.vendor = "infowatch"
+event_src.title = "device_monitor"
+event_src.hostname = lower($server)
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Device_Monitor_odbc_network_app_servers"

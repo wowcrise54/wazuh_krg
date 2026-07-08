@@ -1,0 +1,15 @@
+filter FileModify_Linux(string $fullpath) {
+    filter::OperatingSystem_UNIXLike()
+    and object == "file_object"
+    and
+        (
+        in_list(["modify", "create", "remove"], action)
+        or (
+            action == "access"
+            and in_list(['w', 'rw'], object.state)
+        )
+    )
+    and not in_list(["chmod", "fchmod", "fchmodat", "chown", "chown32", "fchown", "fchown32", "lchown", "lchown32", "fchownat"], msgid)
+    and not in_list(["setxattr", "lsetxattr", "fsetxattr", "removexattr", "lremovexattr", "fremovexattr"], msgid)
+    and regex(object.fullpath, $fullpath, 0) != null
+}

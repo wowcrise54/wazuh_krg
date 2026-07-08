@@ -1,0 +1,86 @@
+event User_Enum:
+    key:
+        event_src.host, subject.process.name, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4798"
+        and object == "user_group"
+        and not filter::SystemAccount_Windows(subject.account.id)
+        and not match(lower(subject.process.path), "?:\\windows\\system32\\*")
+        and filter::CheckWL_Specific_Only("Multiple_Users_Enum", lower(join([event_src.host, subject.process.name, subject.account.id], "|")))
+    }
+
+rule Multiple_Users_Enum: User_Enum[5,] with different object.account.name timer 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $account_names = []
+        $account_domains = []
+        $account_sids = []
+        $count_users_enumerated = 0
+    }
+    
+    on User_Enum {
+    
+        if $count_users_enumerated == 0 then 
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id
+            
+            $subject.process.name = subject.process.name
+            $subject.process.id = subject.process.id
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            
+            $object.type = object.type
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            
+            $alert.key = lower(join([event_src.host, subject.process.name, subject.account.id], "|"))
+        endif
+        
+        if not in_list($account_names, object.account.name) then
+            $account_names = append($account_names, object.account.name)
+            $account_domains = append($account_domains, object.account.domain)
+            $account_sids = append($account_sids, object.account.id)
+        endif
+        
+        $count_users_enumerated = $count_users_enumerated + 1
+    }
+    
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "view"
+    $object = "user_group"
+    $status = "success"
+
+    $importance = "low"
+
+    $datafield1 = "usernames enumerated: " + join($account_names, "|")
+    $datafield2 = "domains enumerated: " + join($account_domains, "|")
+    $datafield3 = "users' sids: " + join($account_sids, "|")
+    $datafield4 = "count: " + string($count_users_enumerated)
+    
+    $alert.context = join(["username of attacker: " + $subject.account.name, "host attacked: " + $event_src.host, "users enumerated: " + string($count_users_enumerated)], " | " )
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery: Local Account"
+
+    $incident.aggregation.key = lower(join([$event_src.host, $subject.process.name, $subject.account.id], "|"))
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}    
+    

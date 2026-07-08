@@ -1,0 +1,31 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "OpsMgr Connector" and $number == 20038
+
+msgid = $number
+
+object = "service"
+action = "alert"
+status = "success"
+subject = "host"
+
+importance = "high"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_20038_the_health_service_not_healthy"

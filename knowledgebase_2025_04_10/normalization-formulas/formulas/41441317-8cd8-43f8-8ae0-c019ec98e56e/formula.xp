@@ -1,0 +1,34 @@
+JSON = ""
+
+COND = $entity_type == "QueryFolder"
+        and in_list(["update", "move", "create", "privileges_create"], $operation)
+
+subject = "account"
+action = switch $operation
+    case "update" "modify"
+    case "move" "move"
+    case "create" "create"
+    case "privileges_create" "grant"
+endswitch
+object = "resource"
+status = "success"
+
+subject.account.id = $user_id
+subject.account.name = $user_login
+subject.account.fullname = $user_fullname
+subject.account.contact = $user_email
+
+object.id = $entity_id
+object.name = $entity_display_name
+object.type = $entity_type
+  
+time = $change_date
+
+importance = "info"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_Query_Folder"

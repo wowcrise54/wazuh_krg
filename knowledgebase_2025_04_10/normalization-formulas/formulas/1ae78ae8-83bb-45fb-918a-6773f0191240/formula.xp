@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"}{NUMBER} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        sshd{NUMBER?} - {"%AUTH-5-SSHD_LOGIN_ATTEMPTS_THRESHOLD"|"SSHD_LOGIN_ATTEMPTS_THRESHOLD"|"%-SSHD_LOGIN_ATTEMPTS_THRESHOLD"}
+		[junos@2636.{STRING} {$kv=UNTIL("]")} {REST}'
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+subject = "account"
+action = "detect"
+object = "alert"
+status = "success"
+
+$kv = keyvalue($kv, " ", "=", "\"")
+subject.name = $kv["username"]
+
+protocol = "ssh"
+
+reason = "The maximum amount of unsuccessful authentication attempts is exceeded"
+
+importance = "medium"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_ssh_login_attempts_threshold_structured"

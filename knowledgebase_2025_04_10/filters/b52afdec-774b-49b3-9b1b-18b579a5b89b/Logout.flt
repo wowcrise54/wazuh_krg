@@ -1,0 +1,20 @@
+filter Logout() {
+    filter::Logout_Windows()
+    or filter::Logout_Unix()
+    or (
+        filter::NotFromCorrelator()
+        and (
+            category.high == "Access Management"
+            and category.low == "Communication"
+        )
+        and status == "success"
+        and action == "logout"
+        and not (
+            (
+                event_src.vendor == "microsoft"
+                and event_src.title == "windows"
+            )
+            or filter::OperatingSystem_UNIXLike()
+        )
+    )
+}

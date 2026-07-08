@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?} *{time=DATETIME}: {$Computer=HOSTNAME}
+        %{msgid="SYS-5-CONFIG_I"}: Configured from console by {subject.name=STRING}on vty{NUMBER} ({src.ip=IPV4})'
+
+subject = "account"
+action = "configure"
+object = "system"
+status = "success"
+
+importance = "medium"
+
+event_src.category = "Network device"
+event_src.title = "rgos"
+event_src.vendor = "ruijie_networks_oem"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_Ruijie_networks_oem_Rgos_syslog_SYS_5_CONFIG_I"

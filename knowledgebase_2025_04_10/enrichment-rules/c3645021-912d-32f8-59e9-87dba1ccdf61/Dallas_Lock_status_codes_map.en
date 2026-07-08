@@ -1,0 +1,21 @@
+query Get_component_description($code) from Dallas_Lock_Status_Codes {
+    column::code == $code
+}
+
+event Dallas_Lock_component_event:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "confident"
+        and event_src.title == "ucc_dallas_lock"
+        and msgid != null
+    }
+
+enrichment Dallas_Lock_Status_Codes_map
+
+    enrich Dallas_Lock_component_event:
+        enrich_fields {
+            $description = select_query_first("Get_component_description", [object.state], "description")
+            if $description != null then
+                object.state = $description
+            endif
+        }

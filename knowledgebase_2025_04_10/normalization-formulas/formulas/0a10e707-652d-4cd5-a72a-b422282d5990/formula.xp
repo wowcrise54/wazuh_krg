@@ -1,0 +1,19 @@
+!EVENTLOG = 'EventID.text="10050"'
+!COND = $Channel=="Application" and $Provider["Name"]=="Windows Server Update Services"
+
+action = "info"
+object = "service"
+status = "success"
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+
+event_src.vendor = "microsoft"
+event_src.title = "wsus"
+event_src.category = "Other"
+
+id = "PT_Microsoft_WSUS_eventlog_10050_The_WSUS_server_is_not_having_problems_with_email_notifications"
+importance = "info"

@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"} {time=DATETIME} {$Computer=HOSTNAME} {object.process.name=WORD}
+        {STRING}  ({subject.account.privileges=WORD}) /: {subject.process.cmdline=REST}'
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+importance = "low"
+
+category.high = "Command"
+category.generic = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "factor_ts"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dionis_dps"
+event_src.category = "IDS/IPS"
+
+id = "PT_Factor_TS_Dionis_DPS_syslog_command_execute"

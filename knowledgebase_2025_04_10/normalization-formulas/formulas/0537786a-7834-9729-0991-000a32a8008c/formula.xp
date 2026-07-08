@@ -1,0 +1,76 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        percona-audit: {$json_message=REST}'
+
+COND = find_substr($json_message, "\"audit_record\"") != null
+       and find_substr($json_message, "\"name\":\"Query\"") != null
+       and find_substr($json_message, "\"command_class\":\"error\"") != null
+       and find_substr($json_message, "\"record\"") != null
+       and find_substr($json_message, "\"timestamp\"") != null
+       and find_substr($json_message, "\"connection_id\"") != null
+
+submessage("JSON", "parse_json", $json_message)
+
+subject = "account"
+action = "info"
+object = "application"
+status = "failure"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+$square_bracket = find_substr($audit_record["user"], "[")
+$user = substr($audit_record["user"], 0, $square_bracket)
+subject.account.id = $user
+subject.account.name = $user
+
+subject.account.session_id = $audit_record["connection_id"]
+
+object.query = $audit_record["sqltext"]
+
+if $audit_record["host"] == "localhost" then
+    src.hostname = $Computer
+
+elif not in_list(["", null], $audit_record["host"]) then
+    $first_dot = find_substr($audit_record["host"], '.')
+
+    if $first_dot != null then
+        src.fqdn = lower($audit_record["host"])
+        src.hostname = lower(substr($audit_record["host"], 0, $first_dot))
+    else
+        src.hostname = lower($audit_record["host"])
+    endif
+endif
+
+if $audit_record["ip"] == "::1" then
+    src.ip = event_src.ip
+
+elif not in_list(["", null], $audit_record["ip"]) then
+    src.ip = $audit_record["ip"]
+endif
+
+dst.hostname = $Computer
+dst.ip = event_src.ip
+
+if $audit_record["db"] != "" then
+    datafield1 = $audit_record["db"]  # имя БД
+endif
+
+reason = $audit_record["status"]
+
+time = $audit_record["timestamp"]
+msgid = $audit_record["command_class"]
+importance = "low"
+
+event_src.title = "mysql"
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Database server"
+
+id = "PT_Oracle_MySQL_syslog_error"

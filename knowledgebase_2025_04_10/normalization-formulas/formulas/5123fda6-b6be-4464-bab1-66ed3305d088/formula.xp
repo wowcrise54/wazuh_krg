@@ -1,0 +1,41 @@
+!TABULAR = 'GLOBAL_ID,
+            MESSAGE_TEXT,
+           {time=EVENT_TIME},
+           DRIVER_NAME,
+           MESSAGE_ID'
+
+COND = $DRIVER_NAME == "Бастион-DominationDVR" and
+       in_list([1, 3, 6, 9, 12, 13], $MESSAGE_ID) == true and
+       $MESSAGE_TEXT != ""
+
+if in_list([3, 12], $MESSAGE_ID) == true then
+    action = "alert"
+    importance = "medium"
+else
+    action = "info"
+    importance = "info"
+endif
+
+object = "device"
+status = "success"
+
+object.name = $SOURCE_DEVICE_NAME
+object.type = $DEVICE_TYPE_NAME
+
+$temp = string($CAMERA_ID)
+reason = replace($MESSAGE_TEXT, $temp, "%cs")  # %cs - имя камеры
+
+msgid = $MESSAGE_ID
+
+event_src.vendor = "es_prom"
+event_src.title = "bastion"
+event_src.category = "Physical security"
+event_src.subsys = "bastion-dominationdvr"
+
+if $WORKSTATION_NAME == "Локальный компьютер" then
+    event_src.hostname = "localhost"
+else
+    event_src.hostname = $WORKSTATION_NAME
+endif
+
+id = "PT_es_prom_bastion_odbc_domination_dvr"

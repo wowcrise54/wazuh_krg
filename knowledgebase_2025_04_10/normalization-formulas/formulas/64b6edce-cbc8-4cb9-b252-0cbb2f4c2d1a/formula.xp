@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        Category: {NUMBER},{$tmp_subsys="Symantec AntiVirus"},{"\\""?}{"Event Description: "?}
+        [Отправка сведений о расширенном эвристическом обнаружении вирусов] 
+        {$raw_status="Файл отправлен в Symantec для анализа"|"Не удалось отправить файл в Symantec"}.
+        Файл: \' {$path_raw=UNTIL("\',")|$path_raw=UNTIL("\'.")} {"Размер (байты):" $objvalue=WORD?} {"Ошибка сети:"reason=UNTIL(",Event time:")?}{".\\",Event time:"?}{time=DATETIME}{",Group Name:"?} {$raw_group=REST?}'
+
+action = "send"
+object = "file"
+status = if $raw_status != null then "success" else "failure" endif
+
+object.property = "size"
+object.value = $objvalue
+
+$path_raw = strip($path_raw, "","\'")
+$csv_path = csv($path_raw, "\\","\'")
+object.name = $csv_path[length($csv_path) - 1]
+object.path = strip($path_raw, "", object.name)
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+
+datafield10 = strip($raw_group, "", "\"")          # Group name
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_send_file_to_symantec_en_ru"

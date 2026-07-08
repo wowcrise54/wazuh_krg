@@ -1,0 +1,16 @@
+!TEXT = "{time=DATETIME} {UNTIL(']')} INFO {msgid='Umbraco.Core.Persistence.Database'} -
+         New table '{object.name=WORDDASH}' was created"
+
+action = "create"
+object = "db_object"
+status = "success"
+
+object.type = "table"
+
+importance = "info"
+
+event_src.vendor = "opensource"
+event_src.title = "umbraco_cms"
+event_src.category = "Other"
+
+id = "PT_Opensource_Umbraco_CMS_filemonitor_New_table_created"

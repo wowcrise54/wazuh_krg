@@ -1,0 +1,91 @@
+query SAP_Check_Fm($fm) from SAP_ABAP_Fms_No_Auth {
+    fm == $fm
+}
+
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid
+    and (
+             group == "Production"
+             or group == "Test"
+             or group == "Development"
+        )
+}
+
+event Exec_Rfc:
+    key:
+        event_src.host, event_src.id, src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and msgid == "AUK"
+        and src.host != null
+        and exec_query("SAP_Check_Fm", [object.name])
+        and exec_query("SAP_Check_Groups", [event_src.id])
+    }
+
+rule SAPASABAP_Gathering_Info: (Exec_Rfc[2,] with different object.name) timer 10m
+
+    init {
+        $first_event = true
+    }
+
+    on Exec_Rfc {
+        if $first_event then
+            if subject.account.id != null then
+                $subject.account.id = subject.account.id
+            endif
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+        
+            $event_src.id = event_src.id
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $first_event = false
+        endif
+
+        if subject.account.id != null and not in_list($account_list, subject.account.id) then
+            $account_list = append($account_list, subject.account.id)
+        endif
+
+        $modules_list = append($modules_list, object.name)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    if $account_list != null then
+        $subject = "account"
+
+        $datafield2 = join($account_list, "|")  # Перечень аккаунтов
+    endif
+
+    $action = "start"
+    $object = "module"
+    $status = "success"
+
+    $object.name = join($modules_list, "|")
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Software Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

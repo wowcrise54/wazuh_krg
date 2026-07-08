@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} 
+        {"%%"?}{WORD+}/{NUMBER}/{msgid="TRAPLOG"}{"(l)"?}{"["NUMBER"]"?}:OID {STRING} configure changed. (EventIndex={NUMBER|"**"}, 
+        CommandSource={NUMBER|"**"}, ConfigSource={NUMBER|"**"}, ConfigDestination={NUMBER|"**"})'
+
+action = "modify"
+object = "configuration"
+status = "success"
+
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Configure_changed"

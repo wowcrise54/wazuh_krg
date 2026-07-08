@@ -1,0 +1,27 @@
+!JSON = "EventCode=4932"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+action = "sync"
+object = "ds_object"
+status = "success"
+
+object.name = $InsertionStrings[2]
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "low"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Directory service"
+event_src.title = "active_directory"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_4932_Synchronization_of_replica_of_AD_naming_context_begun"

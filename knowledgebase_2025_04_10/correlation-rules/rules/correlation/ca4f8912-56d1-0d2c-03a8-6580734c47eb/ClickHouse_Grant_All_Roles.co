@@ -1,0 +1,69 @@
+event Grant_All:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "clickhouse"
+        and category.high == "Users And Rights Management"
+        and category.low == "Manipulation"
+        and action == "grant"
+        and find_substr(lower(object.query), "grant all") != null
+        and filter::CheckWL_Database_Actions("ClickHouse_Grant_All_Roles", lower(object.query))
+    }
+
+rule ClickHouse_Grant_All_Roles: Grant_All
+
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Grant_All {
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.type = object.type
+        $object.query = object.query
+    
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.ip = event_src.ip
+
+        $alert.key = lower(object.query)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "grant"
+    $object = "account"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation" 
+    $incident.aggregation.timeout = 2h
+}

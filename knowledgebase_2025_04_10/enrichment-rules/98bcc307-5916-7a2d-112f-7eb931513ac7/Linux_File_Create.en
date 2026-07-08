@@ -1,0 +1,71 @@
+query Get_Linux_Process_Chain($host, $proc_id, $proc_name) from Linux_Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and proc_name == $proc_name
+} qhandler {
+    $chain_proc_names = column::chain_proc_names
+    $chain_proc_info = column::chain_proc_info
+    $first_cmdline = column::first_cmdline
+}
+    
+event File_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Linux()
+        and in_list(["regular_file", "executable_file", "symlink"], object.type)
+        # Запрос к списку с критичными узлами
+        and table::Critical_Linux_Hosts_For_Process_Chains {
+            column::host == lower(event_src.host)
+        }
+        and not filter::CheckWL_WhiteListRegex(
+            "Linux_File_Create",
+            lower(event_src.host),
+            lower(subject.account.id),
+            lower(object.fullpath)
+        )
+    }
+
+
+enrichment Linux_File_Create
+    enrich File_Created:
+        enrich_fields {
+            $type = object.type
+            
+            $result_check_all = exec_query("Get_Linux_Process_Chain", [lower(event_src.host), number(subject.process.id), subject.process.name])
+            
+            if $result_check_all["$chain_proc_names"] != null then
+                $subj_proc_names = $result_check_all["$chain_proc_names"]
+                
+                if length($subj_proc_names) > 600 then
+                    $subj_proc_names = substr($result_check_all["$chain_proc_names"], 0, find_substr($result_check_all["$chain_proc_names"], " ← ")) + " ← ..."
+                endif
+  
+                $subj_proc_info = $result_check_all["$chain_proc_info"]
+                
+                if length($subj_proc_info) > 780 then
+                    $subj_proc_info = substr($result_check_all["$chain_proc_info"], 0, find_substr($result_check_all["$chain_proc_info"], " ← ")) + " ← ..."
+                endif 
+                
+                $subj_proc_cmdline = $result_check_all["$first_cmdline"]
+            else
+                $subj_proc_names = subject.process.name
+                $subj_proc_info = subject.process.name + " (" + subject.process.id + ") ← (" + subject.process.parent.id + ")"
+                if subject.process.meta != null then
+                    $subj_proc_cmdline = subject.process.meta
+                else
+                    $subj_proc_cmdline = "<unknown>"
+                endif
+            endif
+        }
+    
+        insert_into Linux_File_Created if length(object.fullpath) < 4000 and length(subject.process.fullpath) < 4000 {
+            column::host = lower(event_src.host)
+            column::filename = object.fullpath
+            column::process_path = subject.process.fullpath
+            column::type = $type
+            column::subj_proc_names = $subj_proc_names
+            column::subj_proc_info = $subj_proc_info
+            column::subj_proc_cmdline = $subj_proc_cmdline
+        }

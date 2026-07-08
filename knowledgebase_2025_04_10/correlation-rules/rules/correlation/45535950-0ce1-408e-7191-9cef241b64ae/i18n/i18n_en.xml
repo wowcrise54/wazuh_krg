@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to a Positive Technologies application using IAM. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="28fecd6c-a359-0c7e-51b1-4ae207bd3ad4">User {subject.account.name} from new host {src.host} logged in to application {object.name} using IAM on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="714e191e-48cd-bb04-ddac-89f950a74bc4">User {subject.account.name} from host {src.host} logged in to a new instance of application {object.name} using IAM on host {event_src.host}. The instance is missing from the collected profile.</EventDescription>
+    <EventDescription id="92f5d9b9-dfb4-c15d-5ab2-548cad173ea1">New user {subject.account.name} from host {src.host} logged in to application {object.name} using IAM on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

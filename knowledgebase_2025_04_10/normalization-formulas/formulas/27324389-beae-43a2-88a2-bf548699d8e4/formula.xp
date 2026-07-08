@@ -1,0 +1,91 @@
+TABULAR = "{chain_id=audit_id}, action_int, resource_type_int, unix_time"
+COND = $action_int == 1
+       and $resource_type_int == 42
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+subformula "parse_json"
+    JSON = ''
+    
+    $property = ""
+    $value = ""
+    $n_value = ""
+    
+    $authentication_type = ['INTERNAL', 'LDAP']
+    if $['authentication.authentication_type'] != null then
+        $property = $property + "|authentication_type"
+        $value = $value + " | " + $authentication_type[number($['authentication.authentication_type'][2])]
+        $n_value = $n_value + " | " + $authentication_type[number($['authentication.authentication_type'][1])]
+    endif
+    
+    $passwd_check_rules = ['NONE', '', '', '', '', '', '', '', 'NOSIMPLE', 'NOSIMPLE+CASE',
+                           'NOSIMPLE+DIGITS', 'NOSIMPLE+DIGITS+CASE', 'NOSIMPLE+SPECIAL',
+                           'NOSIMPLE+SPECIAL+CASE', 'NOSIMPLE+SPECIAL+DIGITS', 
+                           'NOSIMPLE+SPECIAL+DIGITS+CASE']
+    if $['authentication.passwd_check_rules'] != null then
+        $property = $property + "|passwd_check_rules"
+        $value = $value + " | " + $passwd_check_rules[number($['authentication.passwd_check_rules'][2])]
+        $n_value = $n_value + " | " + $passwd_check_rules[number($['authentication.passwd_check_rules'][1])]
+    endif
+    
+    if $['authentication.passwd_min_length'] != null then
+        $property = $property + "|passwd_min_length"
+        $value = $value + " | " + $['authentication.passwd_min_length'][2]
+        $n_value = $n_value + " | " + $['authentication.passwd_min_length'][1]
+    endif
+    
+    if $['authentication.http_auth_enabled'] != null then
+        $property = $property + "|http_auth_enabled"
+        $value = $value + " | " + $['authentication.http_auth_enabled'][2]
+        $n_value = $n_value + " | " + $['authentication.http_auth_enabled'][1]
+    endif
+    
+    if $['authentication.saml_auth_enabled'] != null then
+        $property = $property + "|saml_auth_enabled"
+        $value = $value + " | " + $['authentication.saml_auth_enabled'][2]
+        $n_value = $n_value + " | " + $['authentication.saml_auth_enabled'][1]
+    endif
+    
+    if $['authentication.ldap_configured'] != null then
+        $property = $property + "|ldap_configured"
+        $value = $value + " | " + $['authentication.ldap_configured'][2]
+        $n_value = $n_value + " | " + $['authentication.ldap_configured'][1]
+    endif
+    
+    $property = strip($property, "|", "")
+    $value = strip($value, " | ", "")
+    $n_value = strip($n_value, " | ", "")
+endsubformula
+
+subject.account.name = $user_alias
+subject.account.id = $user_id
+subject.account.privileges = switch $user_role_type
+    case 1 "User"
+    case 2 "Admin"
+    case 3 "Super admin"
+endswitch
+
+src.ip = $ip
+
+if not in_list(["", "0"], $details) then
+    if (substr($details, 0, 2) == '{"') and (substr($details, -1, 1) == '}') and (find_substr($details, '"authentication.') != null) then
+        submessage("JSON", "parse_json", $details)
+        object.property = if $property != "" then $property else null endif
+        object.value = if $value != "" then $value else null endif
+        object.new_value = if $n_value != "" then $n_value else null endif
+    endif
+    datafield1 = replace($details, "'", '"')  # additional info about action
+endif
+
+time = epoch_to_datetime($unix_time)
+msgid = "ACTION_UPDATE"
+importance = "medium"
+
+event_src.vendor = "zabbix"
+event_src.title = "zabbix"
+event_src.category = "Network monitoring system"
+
+id = "PT_Zabbix_Zabbix_odbc_Auth_settings"

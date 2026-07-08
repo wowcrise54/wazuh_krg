@@ -1,0 +1,24 @@
+id = "PT_Cisco_IOS_XR_syslog_ROUTING_EIGRP_NBRCHANGE"
+
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {STRING?} {WORD}/{WORD}/{WORD}/{WORD}: {time=DATETIME}{":"?}
+        {WORDDASH?}{"[" NUMBER "]" ?}{":"?} %{msgid="ROUTING-EIGRP-5-NBRCHANGE"}: {protocol="EIGRP"}-{WORD}:
+        {WORDDASH} {datafield1=WORD}: Neighbor {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}
+        ({$interface_tmp=STRING} is {$state=WORD}: {reason=WORDDASH+}'
+
+action = switch $state
+    case "up"   "start"
+    case "down" "stop"
+endswitch
+
+object = "session"
+status = "success"
+
+interface = strip($interface_tmp, "", ")")
+
+# datafield1 - Process ID
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "ios_xr"
+event_src.category = "Network device"

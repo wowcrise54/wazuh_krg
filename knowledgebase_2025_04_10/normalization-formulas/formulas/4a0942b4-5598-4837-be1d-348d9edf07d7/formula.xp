@@ -1,0 +1,34 @@
+!JSON = 'event.originator.module.name="Requests"'
+!COND =  $event["actionType"]=="Requests:messageCreated"
+
+subject = "account"
+action = "send"
+object = "request"
+status = "success"
+
+subject.name = $userLogin
+
+object.id = $event["affected"]["id"]["displayName"]
+
+src.ip = $userIp
+
+reason = "message in request"
+
+time = $datetime
+importance = "info"
+
+$dot_pos = find_substr($systemIp, '.')
+if maybe_ipv4($systemIp) != null then
+   event_src.ip = $systemIp
+elif $dot_pos != null then
+   event_src.fqdn = $systemIp
+   event_src.hostname = substr($systemIp, 0, $dot_pos)
+else
+   event_src.hostname = $systemIp
+endif
+
+event_src.title = "fcsp"
+event_src.vendor = "positive_technologies"
+event_src.category = "Other"
+
+id = "PT_Positive_Technologies_Operators_Participants_Portal_filemonitor_Requests_message_send"

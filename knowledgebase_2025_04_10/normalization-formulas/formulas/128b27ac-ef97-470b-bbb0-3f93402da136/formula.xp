@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|}
+        {WORDDASH}{"["?}{NUMBER?}{"]"?}: pam_rhosts({logon_service=WORDDASH}:auth): {$st="allowed"|$st="denied"} access
+        to {WORDDASH}@{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} as {subject.account.name=LITERAL+}'
+
+subject = "account"
+action = "login"
+object = "system"
+if $st == "allowed" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+logon_auth_method = switch logon_service
+    case "su-l" "local"
+    case "su" "local"
+    case "sudo" "local"
+    case "sudo-i" "local"
+    case "login" "local"
+    case "remote" "remote"
+    case "lightdm" "local" 
+    case "lightdm-greeter" "local" 
+    case "sshd" "remote"
+    case "rlogin" "remote"
+    case "rexec" "remote"
+endswitch
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_common_syslog_pam_rhosts_auth_access"

@@ -1,0 +1,58 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="firewall"}: msg_id="{msgid="3000-0149"}"
+         {"fqdn_dst_match="?}{STRING?} {$temp_status="Allow"|$temp_status="Deny"} {WORDDASH} {WORDDASH} {NUMBER}
+         {$pt1=WORD} {NUMBER} {NUMBER} {src.ip=IPV4|src.ip=IPV6} {dst.ip=IPV4|dst.ip=IPV6}
+         {src.port=NUMBER?} {dst.port=NUMBER?} {"offset"?} {NUMBER?} {$maybe_lost_key=WORD?} {NUMBER?} {WORD?} {NUMBER?}
+         {$msg=STRING*} ({datafield1=UNTIL(")")}'
+
+if find_substr($msg, "=") == 0 then
+    $msg = $maybe_lost_key + $msg
+endif
+
+$kv = keyvalue($msg, " ", "=", '"')
+
+if find_substr($msg, "=") == 0 then
+    $msg = $maybe_lost_key + $msg
+endif
+
+$kv = keyvalue($msg, " ", "=", '"')
+
+subject = "application"
+action = "access"
+object = "resource"
+switch $temp_status
+    case "Allow"
+        status = "success"
+        importance = "info"
+    case "Deny"
+        status = "failure"
+        importance = "medium"
+endswitch
+
+subject.id = $kv["app_id"]
+subject.type = $kv["cat_name"]
+subject.name = $kv["app_name"]
+
+protocol = upper($pt1)
+
+# datafield1 - Proxy policy name
+$dog = find_substr($kv["src_user"], "@")
+if $dog != null then
+    datafield2 = substr($kv["src_user"], 0, $dog)                # имя пользователя под которым запущено приложение
+    datafield3 = strip($kv["src_user"], subject.name + "@", "")  # домен пользователя под которым запущено приложение
+else
+    datafield2 = $kv["src_user"]
+endif
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_30000149_Application_Control_Traffic_identified"

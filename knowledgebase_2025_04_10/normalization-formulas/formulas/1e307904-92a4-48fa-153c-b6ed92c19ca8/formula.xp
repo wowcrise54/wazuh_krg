@@ -1,0 +1,48 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VDS_BROKER_COMMAND_FAILURE",  # 10,802
+           "IRS_BROKER_COMMAND_FAILURE"  # 10,803
+       ], $event_class)
+
+action = "execute"
+object = "command"
+status = "failure"
+
+subformula "parse_body"
+    # VDS_BROKER_COMMAND_FAILURE
+    TEXT = "VDSM {$vds_name=STRING+} command {$command_name=STRING+} failed: {$message=REST}"
+endsubformula
+
+subformula "parse_body"
+    # IRS_BROKER_COMMAND_FAILURE
+    TEXT = "VDSM command {$command_name=STRING+} failed: {$message=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+object.name = $command_name
+
+reason = $message
+
+datafield6 = $vds_name  # VDS (Host) Name
+
+msgid = $event_class
+importance = "low"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_VDSM_Command"

@@ -1,0 +1,124 @@
+TEXT = "{'<'NUMBER'>'?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$ev_src_host=HOSTNAME} {WORDDASH?}
+        time: {NUMBER} {'\\\\n'?}dn: uid={$name=UNTIL(',')} \ncn=users
+        {$kv=UNTIL('result:')} {$result=WORDDASH} 
+        {'\\\\n'?}changetype: add {$sv=REST}"    
+
+subject = "account"
+action = "create"
+object = "account"
+if $result == "0" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+$kv = replace($kv, ' ', '\\\\n')
+$sv = replace($sv, ' ', '\\\\n')
+$kv = keyvalue($kv, ' ', ':', '')
+if $kv["#modifiersName"] == null then
+    $sv = keyvalue($sv, ' ', ':', '')
+    subject.account.name = csv(csv($sv["modifiersname"], ",", "")[0], "=", "")[1]
+else
+    subject.account.name = csv(csv($kv["#modifiersName"], ",", "")[0], "=", "")[1]
+endif
+
+object.account.name = $name
+object.account.dn = $kv["#dsEntryDN"]
+object.account.fullname = $kv["#cn"]
+object.storage.fullpath = $kv["#homeDirectory"]
+object.account.contact = $kv["#mail"]
+object.account.id = $kv["#gidNumber"]
+
+$create_date = strip($kv["#createTimestamp"], '' , 'Z')
+$modify_date = strip($kv["#modifyTimestamp"], '' , 'Z')
+datafield1 = csv(csv($kv["#rbtadp"], ",", "")[0], "=", "")[1]   # Отдел пользователя в организации
+datafield2 = $kv["#krbPrincipalName"]                           # Псевдоним учётной записи
+datafield3 = datetime($create_date)                             # Create Timestamp
+datafield4 = datetime($modify_date)                             # Modify Timestamp
+
+reason = switch $result
+    case "1" "LDAP_OPERATIONS_ERROR"
+    case "2" "LDAP_PROTOCOL_ERROR"
+    case "3" "LDAP_TIMELIMIT_EXCEEDED"
+    case "4" "LDAP_SIZELIMIT_EXCEEDED"
+    case "5" "LDAP_COMPARE_FALSE"
+    case "6" "LDAP_COMPARE_TRUE"
+    case "7" "LDAP_AUTH_METHOD_NOT_SUPPORTED"      
+    case "8" "LDAP_STRONG_AUTH_REQUIRED"
+    case "9" "LDAP_PARTIAL_RESULTS"
+    case "10" "LDAP_REFERRAL [a]"
+    case "11" "LDAP_ADMINLIMIT_EXCEEDED"
+    case "12" "LDAP_UNAVAILABLE_CRITICAL_EXTENSION"
+    case "13" "LDAP_CONFIDENTIALITY_REQUIRED"
+    case "14" "LDAP_SASL_BIND_IN_PROGRESS"
+    case "16" "LDAP_NO_SUCH_ATTRIBUTE"
+    case "17" "LDAP_UNDEFINED_TYPE"
+    case "18" "LDAP_INAPPROPRIATE_MATCHING"
+    case "19" "LDAP_CONSTRAINT_VIOLATION"
+    case "20" "LDAP_TYPE_OR_VALUE_EXISTS"
+    case "21" "LDAP_INVALID_SYNTAX"
+    case "32" "LDAP_NO_SUCH_OBJECT"
+    case "33" "LDAP_ALIAS_PROBLEM"
+    case "34" "LDAP_INVALID_DN_SYNTAX"
+    case "35" "LDAP_IS_LEAF [b]"
+    case "36" "LDAP_ALIAS_DEREF_PROBLEM"
+    case "48" "LDAP_INAPPROPRIATE_AUTH"
+    case "49" "LDAP_INVALID_CREDENTIALS"
+    case "50" "LDAP_INSUFFICIENT_ACCESS"
+    case "51" "LDAP_BUSY"
+    case "52" "LDAP_UNAVAILABLE"
+    case "53" "LDAP_UNWILLING_TO_PERFORM"
+    case "54" "LDAP_LOOP_DETECT"
+    case "60" "LDAP_SORT_CONTROL_MISSING"
+    case "61" "LDAP_INDEX_RANGE_ERROR"
+    case "64" "LDAP_NAMING_VIOLATION"
+    case "65" "LDAP_OBJECT_CLASS_VIOLATION"
+    case "66" "LDAP_NOT_ALLOWED_ON_NONLEAF"
+    case "67" "LDAP_NOT_ALLOWED_ON_RDN"
+    case "68" "LDAP_ALREADY_EXISTS"
+    case "69" "LDAP_NO_OBJECT_CLASS_MODS"
+    case "70" "LDAP_RESULTS_TOO_LARGE [c]"
+    case "71" "LDAP_AFFECTS_MULTIPLE_DSAS"
+    case "76" "LDAP_VIRTUAL_LIST_VIEW_ERROR"
+    case "80" "LDAP_OTHER"
+    case "81" "LDAP_SERVER_DOWN"
+    case "82" "LDAP_LOCAL_ERROR"
+    case "83" "LDAP_ENCODING_ERROR"
+    case "84" "LDAP_DECODING_ERROR"
+    case "85" "LDAP_TIMEOUT"
+    case "86" "LDAP_AUTH_UNKNOWN"
+    case "87" "LDAP_FILTER_ERROR"
+    case "88" "LDAP_USER_CANCELLED"
+    case "89" "LDAP_PARAM_ERROR"
+    case "90" "LDAP_NO_MEMORY"
+    case "91" "LDAP_CONNECT_ERROR"
+    case "92" "LDAP_NOT_SUPPORTED"
+    case "93" "LDAP_CONTROL_NOT_FOUND"
+    case "94" "LDAP_MORE_RESULTS_TO_RETURN"
+    case "95" "LDAP_MORE_RESULTS_TO_RETURN"
+    case "96" "LDAP_CLIENT_LOOP"
+    case "97" "LDAP_REFERRAL_LIMIT_EXCEEDED"
+    case "118" "LDAP_CANCELLED"
+endswitch
+
+importance = switch status
+    case "success" "info"
+    case "failure" "low"
+endswitch
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "freeipa"
+event_src.title = "freeipa"
+event_src.category = "Directory service"
+
+if find_substr($ev_src_host, ".") != null then
+    event_src.fqdn = $ev_src_host
+    event_src.hostname = substr($ev_src_host, 0, find_substr($ev_src_host, "."))
+else
+    event_src.hostname = $ev_src_host
+endif
+
+id = "PT_FreeIPA_FreeIPA_syslog_User_created_1"

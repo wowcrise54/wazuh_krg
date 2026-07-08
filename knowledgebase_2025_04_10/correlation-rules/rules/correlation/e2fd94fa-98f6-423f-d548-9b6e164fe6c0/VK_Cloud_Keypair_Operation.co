@@ -1,0 +1,78 @@
+event Keypair_Operation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and event_src.subsys == "nova"
+        and in_list(["keypair-create", "keypair-delete"], msgid)
+        and status == "success"
+        and not table::Applications_Significant_Users {
+            column::user == subject.account.id
+            and column::event_src_title == event_src.title
+        }
+        and filter::CheckWL_Specific_Only("VK_Cloud_Keypair_Operation", lower(join([subject.account.id, event_src.host], "|")))
+    }
+
+rule VK_Cloud_Keypair_Operation: Keypair_Operation
+
+    init {
+        $labels = "CheckWL_Specific_Only"
+    }
+
+    on Keypair_Operation {
+        $subject = subject
+        $action = action
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.contact = subject.account.contact
+
+        $subject.process.meta = subject.process.meta
+
+        $object.id = object.id
+        $object.type = object.type
+
+        $datafield1 = datafield1  # Method
+        $datafield2 = datafield2  # URL
+
+        $alert.key = lower(join([subject.account.id, event_src.host], "|"))
+        $alert.context = join(remove([subject.account.name, object.id], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $object = "virtual_key"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+
+    if $action == "create" then
+        $category.high = "Initial Access"
+        $category.low = "Valid Accounts: Cloud Accounts"
+        $incident.category = "HostOrSoftCompromising"
+    else
+        $category.high = "Impact"
+        $category.low = "Account Access Removal"
+        $incident.category = "UnauthorizedDataDeletion"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

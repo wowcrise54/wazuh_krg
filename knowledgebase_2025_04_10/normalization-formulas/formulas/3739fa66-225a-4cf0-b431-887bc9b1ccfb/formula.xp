@@ -1,0 +1,27 @@
+JSON = "EventCode=5501"
+COND = $Logfile=="DNS Server" and $SourceName=="Microsoft-Windows-DNS-Server-Service"
+
+action = "validate"
+object = "message"
+status = "failure"
+
+src.ip = $InsertionStrings[0]
+
+time = $TimeGenerated
+msgid = $EventCode
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "DNS server"
+
+id = "PT_Microsoft_Windows_wmi_5501_dns_server_encountered_bad_packet"

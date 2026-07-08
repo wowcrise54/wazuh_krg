@@ -1,0 +1,46 @@
+TEXT = "LEEF:1.0|KasperskyLab|SecurityCenter|{UNTIL('|')}{msgid='KLAUD_EV_OBJECTPROPMODIFIED'}|{STRING}{$kv=KEYVALUE('\t','=', '')}"
+
+subject = "account"
+if $kv['EVC_EV_AUDIT_OBJ_TYPE'] == "17" then
+    object = "account"
+    object.account.name = $kv['EVC_EV_CHANGED_OBJ_NAME']
+else
+    object = "resource"
+    object.name = $kv['EVC_EV_CHANGED_OBJ_NAME']
+endif
+action = "modify"
+status = "success"
+
+subject.account.domain = lower(substr($kv['usrName'], 0, find_substr($kv['usrName'], '\\')))
+subject.account.name = lower(strip($kv['usrName'], subject.account.domain + '\\', ''))
+
+object.type = $kv['EVC_EV_AUDIT_OBJ_TYPE']
+object.property = $kv['EVC_EV_CHANGED_PROP_NAME']
+object.value = $kv['EVC_EV_OLD_PROP_VAL']
+object.new_value = $kv['EVC_EV_NEW_PROP_VAL']
+
+datafield1 = $kv['EVC_EV_GROUP_NAME']    # имя группы администрирования, в которую входит узел-источник
+
+time = $kv['devTime']
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $kv['EVC_EV_KL_PRODUCT_NAME']
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+if $kv['src'] != "127.0.0.1" then
+    event_src.ip = $kv['src']
+endif
+event_src.hostname = lower($kv['EVC_EV_DISP_HOST_NAME'])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_LEEF_KLAUD_EV_OBJECTPROPMODIFIED"

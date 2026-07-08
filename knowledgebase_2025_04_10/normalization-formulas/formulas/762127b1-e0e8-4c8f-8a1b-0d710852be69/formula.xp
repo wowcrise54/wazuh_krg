@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+        Session {object.id=WORD} user: {datafield1=STRING} expired'
+
+action = "stop"
+object = "session"
+status = "success"
+
+reason = "session is expired"
+
+# datafield1 - username
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_session_expired"

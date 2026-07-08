@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?} 
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="LOGOUT"}{"(l)"?}{"["NUMBER"]"?}:- {NUMBER} -
+        {subject.account.name=WORD}({src.ip=IPV4}) in {WORDDASH} logout'
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+dst.hostname = event_src.hostname
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Logout"

@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        {$tmp_subsys="SNTP"} [SNTP]: sntp_client {STRING} {NUMBER} %% NOTE 
+        SNTP: Received KoD packet from {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} - Kiss Code = {object.value=STRING?}'
+
+action = "receive"
+object = "packet"
+status = "success"
+
+object.type = "kiss of death"
+object.property = if object.value != null then "kiss code" else null endif
+
+dst.hostname = $Computer
+
+importance = "info"
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "dell"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "n1548"
+event_src.category = "Network device"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Dell_N1548_syslog_SNTP_KoD"

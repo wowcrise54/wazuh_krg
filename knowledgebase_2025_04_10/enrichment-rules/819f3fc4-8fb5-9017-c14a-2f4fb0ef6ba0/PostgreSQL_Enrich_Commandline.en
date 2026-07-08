@@ -1,0 +1,14 @@
+event Event:
+    filter {
+        filter::NotFromCorrelator()
+        and object == "request"
+        and event_src.title == "postgresql"
+        and regex(lower(object.query), "copy\s+\S+\s+from\s+program\s+'(.+)'", 0) != null
+    }
+
+enrichment PostgreSQL_Enrich_Commandline
+    
+    enrich Event:
+        enrich_fields {
+            object.process.cmdline = regex(lower(object.query), "copy\s+\S+\s+from\s+program\s+'(.+)'", 1)
+        }

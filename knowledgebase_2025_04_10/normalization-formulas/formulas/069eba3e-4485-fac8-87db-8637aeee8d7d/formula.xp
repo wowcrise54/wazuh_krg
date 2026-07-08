@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {$temp_time1 = DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{$temp_time2 = DATETIME|}{":"?} {WORD":"?}
+        %{msgid="WEBUI-6-INSTALL_OPERATION_INFO"} {UNTIL("User")}: {subject.account.name=UNTIL(",")} Install Operation: {object.process.cmdline=REST}'
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+if in_list(["127.0.0.1", "0.0.0.0", "::1"], $origin_id_ip) == true then
+    $origin_id_ip = null
+endif
+
+time = coalesce($temp_time2, $temp_time1)
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "ios"
+if number($hostname) == null then
+    event_src.hostname = coalesce($hostname, $origin_id_hostname)
+    event_src.ip = coalesce($ip, $origin_id_ip)
+endif
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_syslog_WEBUI_6_INSTALL_OPERATION_INFO"

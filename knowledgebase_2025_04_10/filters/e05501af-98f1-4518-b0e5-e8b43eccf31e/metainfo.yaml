@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        ru: "Поля события выполнения команд с помощью PowerShell есть в списке исключений"
+        en: "Event fields are present in a list of exclusions (PowerShell command execution)"
+    Description:
+        ru: "Значения полей корреляционного события совпадают со значениями из списка исключений. Макрос применим только к событиям типа \"Выполнение команд с помощью PowerShell\""
+        en: "Correlated event field values match values from a list of exclusions. The macro is only applicable to events of the \"Command execution using PowerShell\" type."
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "correlated event field value"
+            ru: "значение поля корреляционного события"
+    rule_name:
+        Type: string
+        Name:
+            ru: "название правила корреляции"
+            en: "correlation rule name"
+ObjectId: PT-RF-50
+Origin: PT

@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|Log|Log|
+        {WORD}|{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "Anti Virus"
+       and $kv["msg"] == "Error occurred"
+
+action = "alert"
+object = "application"
+status = "success"
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+reason = strip($kv["reason"], '', '"')
+
+$cp_severity = $kv["cp_severity"]
+if ($cp_severity != null) then
+    importance = switch lower($cp_severity)
+        case "informational" "info"
+        case "low" "low"
+        case "medium" "medium"
+        case "high" "high"
+        case "critical" "high"
+    endswitch
+else
+    importance = "medium"
+endif
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Common_Antivirus_Error"

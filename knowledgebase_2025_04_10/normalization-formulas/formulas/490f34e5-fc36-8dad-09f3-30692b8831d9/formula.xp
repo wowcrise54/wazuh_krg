@@ -1,0 +1,39 @@
+TEXT = "{'<'NUMBER'>'?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {WORDDASH?}
+        {datafield1=WORDDASH} {subject.account.name=WORDDASH} {object.process.id=NUMBER} [{DATETIME}] 
+        total {numfield1=NUMBER} {WORDDASH}
+        {$client=IPV4|$client=IPV6|$client_host=HOSTNAME} {$f1=REST}"
+
+subject = "account"
+action = "print"
+object = "file_object"
+status = "success"
+
+$result_list = csv($f1, " ", "")
+object.property = "job name"
+object.value = $result_list[0]
+
+if ($client != "127.0.0.1" or $client != "0.0.0.0") then
+    src.ip = maybe_ipv4($client)
+endif
+
+if $client_host != "localhost" then
+    src.hostname = $client_host
+endif
+
+# datafield1 - Название принтера
+# numfield1 - Количество распечатанных страниц
+
+importance = "info"
+
+event_src.vendor = "cups"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "cups"
+event_src.category = "Other"
+
+id = "PT_CUPS_CUPS_syslog_File_print"

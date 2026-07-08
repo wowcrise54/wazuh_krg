@@ -1,0 +1,8 @@
+filter ComputerAccount_Windows(string $name) {
+    event_src.vendor == "microsoft"
+    and event_src.title == "windows"
+    and ( 
+            match($name,"*$")
+            or $name == "system" 
+    )
+}

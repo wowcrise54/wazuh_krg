@@ -1,0 +1,36 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME|} grafana[{NUMBER}]: {$json=REST}'
+
+COND = find_substr($json,"User auth token revoked") != null
+
+action = "revoke"
+object = "virtual_key"
+status = "success"
+
+subformula 'json_in_syslog_token_revoked'
+    JSON = ''
+    
+    object.account.id = $userID
+    
+    object.process.meta = $userAgent
+    
+    object.id = $tokenID
+        
+    src.ip = $clientIP
+endsubformula
+
+submessage("JSON","json_in_syslog_token_revoked", $json)
+
+importance = "info"
+
+event_src.vendor = "grafanalabs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "grafana"
+event_src.category = "Application security"
+
+id = "PT_GrafanaLabs_Grafana_syslog_token_revoked"

@@ -1,0 +1,119 @@
+event Syscall_Execve_Run_Ldso:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::ProcessStart_Linux()
+        and regex(object.process.fullpath, "lib(32|64)?\/ld\S*\.so(\.\d)?$", 0) != null
+        and filter::CheckWL_Linux_Process_Creation("Unix_Run_Process_Via_Ldso",
+            lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+
+event Unix_Start_Process:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::ProcessStart_Linux()
+        and event_src.subsys == "auditd"
+    }
+
+rule Unix_Run_Process_Via_Ldso: Syscall_Execve_Run_Ldso and Unix_Start_Process within 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+        $context = ""
+    }
+
+    on Syscall_Execve_Run_Ldso {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        if subject != null then
+            $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+        else
+            $prefix = "[sys] "
+        endif
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.group = object.account.group 
+        $object.account.domain = object.account.domain
+        
+        $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "
+        
+        $context = $context + "[" + string(object.process.id) + "] " + object.process.fullpath
+
+        $alert.key = lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|"))
+        $alert.regex_match = regex(lower(object.process.fullpath), "^\S*\/lib(64)?\/\S*ld\S*\.so(\.\d)?", 0)
+    }
+
+    on Unix_Start_Process {       
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+
+        $context = $context + " → " + "[" + string(object.process.id) + "] " + object.process.fullpath
+                
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $alert.context = $prefix + $context
+
+    $category.generic = "Attack"
+    if number($subject.account.privileges) == 0 then
+        $category.high = "Privilege Escalation"
+    else
+        $category.high = "Persistence"
+    endif
+    $category.low = "Hijack Execution Flow: Dynamic Linker Hijacking"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

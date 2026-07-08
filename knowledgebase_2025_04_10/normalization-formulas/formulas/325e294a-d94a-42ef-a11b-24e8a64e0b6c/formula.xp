@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {event_src.id=WORD} ({time=DATETIME}) iked[{NUMBER}]: msg_id="{msgid="0203-0021"}"
+        ({src.ip=IPV4|src.ip=IPV6}<->{dst.ip=IPV4|dst.ip=IPV6}) Remote gateway
+        \'{$int1=STRING} with IP {STRING} did not send DPD R_U_THERE_ACK message.
+        {datafield2=NUMBER} retries left'
+
+action = "info"
+object = "session"
+status = "success"
+
+object.type = "VPN tunnel"
+
+interface = strip($int1, '', '\'')  # Remote interface BOVPN
+
+# datafield2 - оставшееся количество попыток
+
+importance = "medium"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.subsys = "vpn-gateway"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_02030021_DPD_R_U_THERE_ACK_not_received"

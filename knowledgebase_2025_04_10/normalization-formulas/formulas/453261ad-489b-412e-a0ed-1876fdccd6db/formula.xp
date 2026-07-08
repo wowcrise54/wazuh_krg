@@ -1,0 +1,42 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and find_substr($msgid, "Storage Validation") != null
+
+subformula "get_data"
+    TEXT = '{UNTIL("Library: ")}{object.name=UNTIL("\\";")}
+            {UNTIL("messageText=\\"")}{reason=UNTIL(".\\"")}
+            {REST}'
+endsubformula
+
+subformula "get_object_type"
+    TEXT = '{UNTIL("(")}{object.type=UNTIL(")")}{REST}'
+endsubformula
+
+subject = "account"
+action = "check"
+object = "resource"
+status = "failure"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+submessage("TEXT", "get_data", $data)
+submessage("TEXT", "get_object_type", $msgid)
+
+datafield1 = $display_user_name  # отображаемое имя пользователя
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "low"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_storage_validation"

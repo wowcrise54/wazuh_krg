@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?} CEF:0|Imperva Inc.|SecureSphere|{NUMBER}{"."}{NUMBER?}{"."}{NUMBER}|Policy changed|
+        Policy {$policy_name=STRING+} changed|{$severity=WORDDASH}|suser={$sname=STRING}
+        rt={time=DATETIME} cat={STRING} session={datafield1=STRING*} requestIP={src.ip=IPV4|src.ip=IPV6|}'
+
+if $sname != "System" then
+    subject = "account"
+    subject.name = $sname
+else
+    subject = "system"
+endif
+action = "modify"
+object = "policy"
+status = "success"
+
+object.name = strip($policy_name, '"', '"')
+
+# datafield1 - session id
+
+importance = lower($severity)
+
+event_src.vendor = "imperva"
+event_src.title = "securesphere"
+event_src.category = "Application security"
+
+id = "PT_Imperva_SecureSphere_syslog_Policy_changed"

@@ -1,0 +1,33 @@
+EVENTLOG = 'EventID.text="1004"'
+COND =  $Channel == "Directory Service"
+        and $Provider["Name"] == "Microsoft-Windows-ActiveDirectory_DomainService"
+
+action = "stop"
+object = "service"
+status = "success"
+
+object.name = 'Microsoft Active Directory Domain'
+object.process.id = $Execution['ProcessID']
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1004_domain_services_was_shut_down_successfully"

@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+    {datafield1="postgres"}{"["object.process.id=NUMBER"]"}: {"["WORDDASH"]"}{DATETIME}{WORD}
+    {"["NUMBER"]"}{STRING}LOG:{msgid="connection authorized"}:{"user="subject.account.name=STRING}
+    {"database="object.name=STRING}{"SSL enabled""("$ssl_1=UNTIL(")")?}'
+
+subject = "account"
+action = "connect"
+object = "database"
+status = "success"
+
+# datafield1 - Название процесса в InfoWatch
+
+if $ssl_1 != null then
+    $ssl_2 = keyvalue($ssl_1, ",", "=")
+    protocol = $ssl_2["protocol"]     # SSL protocol
+    datafield2 = $ssl_2["cipher"]       # SSL cipher
+    datafield3 = $ssl_2["compression"]  # SSL compression
+endif
+
+importance = "info"
+
+event_src.vendor = "infowatch"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "traffic_monitor"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_syslog_Connection_authorized"

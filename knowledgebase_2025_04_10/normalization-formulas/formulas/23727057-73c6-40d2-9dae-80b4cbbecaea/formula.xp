@@ -1,0 +1,45 @@
+id = "PT_Post_Modern_Technology_Medialog_odbc_Database_modification"
+
+!TABULAR = "{time = date_change},
+            {event_src.hostname = host_name},
+            {msgid = action},
+            {object.name = table_name},
+            rec_id,
+            user_id,
+            external_user_id,
+            log,
+            unixtime"
+
+!COND = in_list(["I", "U", "D"], $action)
+
+subject = "account"
+subject.id = string($user_id)
+
+action = "modify"
+
+object = "db_object"
+object.type = "table"
+object.property = "Record ID"
+object.value = string($rec_id)
+
+status = "success"
+
+if $action == "I" then
+    reason = "record was created"
+    importance = "low"
+elif $action == "U" then
+    reason = "record was modified"
+    importance = "low"
+else
+    reason = "record was removed"
+    importance = "medium"
+endif
+
+if $external_user_id != 0 then
+    # Auxiliary user ID, may be useful in correlation rules:
+    datafield1 = string($external_user_id)
+endif
+
+event_src.category = "Application server"
+event_src.title = "medialog"
+event_src.vendor = "post_modern_technology"

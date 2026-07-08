@@ -1,0 +1,21 @@
+id = "PT_Huawei_3Com_syslog_Interface_turns_into_state"
+
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"."NUMBER"."NUMBER?} {"+"NUMBER":"NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {"%%"?}{WORD+}/{NUMBER}/{msgid=WORD+}{"(l)"?}{"["NUMBER"]"?}:
+        {$ifname=STRING} turns into {$state="UP"|$state="DOWN"} state'
+
+action = lower($state)
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+interface = strip($ifname, "", ":")
+
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "3com"
+event_src.category = "Network device"

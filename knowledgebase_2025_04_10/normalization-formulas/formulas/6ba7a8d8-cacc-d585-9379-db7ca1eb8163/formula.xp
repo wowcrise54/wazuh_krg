@@ -1,0 +1,52 @@
+TEXT = "<{NUMBER?}>{time=DATETIME} {$Computer=STRING} 
+        multifactor-{event_src.subsys=WORD}[{NUMBER}]: [{STRING} INF] User 
+        '{$tempuser=UNTIL('\\'')} is not member of '{object.account.group=UNTIL('\\'')} 
+        {'2FA group'?} {$domain=STRING+}"
+                
+subject = "application"
+action = "info"
+object = "ds_object"
+status = "success"
+
+if find_substr($tempuser, '@') != null then
+    $temp_csv = csv(lower($tempuser), "@", "`")
+    object.account.name = $temp_csv[0]
+    object.account.domain = $temp_csv[1]
+elif find_substr($tempuser, '\\') != null then
+    $temp_csv2 = csv(lower($tempuser), "\\", "`")
+    object.account.name = $temp_csv2[1]
+    object.account.domain = $temp_csv2[0]
+else 
+    object.account.name = lower($tempuser)
+endif
+
+object.account.id = "synthetic:" + $tempuser
+
+if find_substr($domain, 'DC=') != null then
+    $cut_quotas = strip($domain, "'", "'") 
+    $csv_cn = csv($cut_quotas, "DC=", "")
+    object.account.domain = strip($csv_cn[1], "", ",")  + "." + $csv_cn[2]
+    if $csv_cn[3] != null then
+        object.account.domain = strip($csv_cn[1], "", ",") + "." + strip($csv_cn[2], "", ",")  + "." + $csv_cn[3]
+    endif
+    object.account.id = "synthetic:" + object.account.domain + "\\" + object.account.name
+endif
+
+object.account.group = lower(object.account.group)
+
+reason = "A user is not member of MFA group"
+
+importance = "low"
+
+event_src.vendor = "multifactor"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_syslog_Is_not_Member_of_Group"

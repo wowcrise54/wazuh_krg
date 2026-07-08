@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} sudo[{NUMBER}]:
+        {event_src.subsys="pam_vas"}: Authentication {"<succeeded>"|"<succeeded passwordless>"}
+        for <Active Directory> user:< {UNTIL(">")} account: <{$username=NTUSER}> service:
+        <{subject.process.name="sudo"|subject.process.name="sudo-i"}> reason: <{reason=UNTIL(">")}'
+
+subject = "account"
+action = "elevate"
+object = "account"
+status = "success"
+
+subject.account.domain = lower(csv($username,"\\","*")[0])
+subject.account.name = lower(csv($username,"\\","*")[1])
+
+object.account.domain = subject.account.domain
+object.account.name = subject.account.name
+
+src.ip = event_src.ip
+src.hostname = $Computer
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+logon_auth_method = "local"
+
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_common_syslog_sudo_ad_used"

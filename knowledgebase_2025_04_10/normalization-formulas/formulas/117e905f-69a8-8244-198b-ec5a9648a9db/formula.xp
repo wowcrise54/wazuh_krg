@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{WORDDASH}|{$kv=KEYVALUE(" ", "=", "~")}'
+                
+COND = $tmp_subsys == "Zero Phishing"
+       and $kv["src"] != null
+
+subject = "account"
+action = "initiate"
+object = "attack"
+status = "success"
+
+subject.application.name = $kv["requestClientApplication"]
+subject.account.id = $kv["user_sid"]
+subject.account.name = $kv["suser"]
+subject.account.contact = $kv["user_name"]
+
+object.path = $kv["request"]
+
+src.ip = $kv["src"]
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+$cp_severity = $kv["cp_severity"]
+if ($cp_severity != null) then
+    importance = switch lower($cp_severity)
+        case "unknown" "info"
+        case "very low" "info"
+        case "very-low" "info"
+        case "low" "low"
+        case "medium" "medium"
+        case "high" "high"
+        case "very high" "high"
+        case "very-high" "high"
+        case "critical" "high"
+    endswitch
+else
+    importance = "low"
+endif
+
+event_src.ip = $kv["origin"]
+event_src.vendor = "checkpoint"
+event_src.title = "threat_emulation"
+event_src.category = "Host security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Endpoint_Security_Client_syslog_Log_Exporter_CEF_Threat_Emulation_Phishing_detected"

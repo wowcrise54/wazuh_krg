@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}localhost
+        ideco-sip-conntrack-drop{"["?}{NUMBER}{"]"?}
+        - - Shutdown.'
+        
+action = "stop"
+object = "service"
+status = "success"    
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "ideco"
+event_src.title = "ngfw"
+event_src.category = "Network device"    
+
+id = "PT_Ideco_IdecoNGFW_syslog_ideco_sip_conntrack_drop_stop"   

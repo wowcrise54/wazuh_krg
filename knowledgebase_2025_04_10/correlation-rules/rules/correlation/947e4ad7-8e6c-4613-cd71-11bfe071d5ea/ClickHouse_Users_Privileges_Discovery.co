@@ -1,0 +1,69 @@
+event Priv_Discovery:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "clickhouse"
+        and category.generic == "Data Query"
+        and (
+                find_substr(lower(object.query), "show grants") != null
+            or (
+                object.type == "select"
+                and find_substr(datafield2, "system.grants") != null
+                )
+            )
+        and filter::CheckWL_Database_Actions("ClickHouse_Users_Privileges_Discovery", lower(object.query))
+    }
+
+rule ClickHouse_Users_Privileges_Discovery: Priv_Discovery
+
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Priv_Discovery {
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+
+        $object.type = object.type
+        $object.query = object.query
+    
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+            
+        $logon_service = logon_service
+
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.ip = event_src.ip
+
+        $alert.key = lower(object.query)
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+    
+    $importance = "low"
+    
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity" 
+    $incident.aggregation.timeout = 2h
+}

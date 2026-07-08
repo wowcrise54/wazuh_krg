@@ -1,0 +1,55 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$Computer=STRING} {event_src.subsys="wabengine"}
+        {"["subject.process.id=NUMBER"]"?}: [wabaudit] {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["type"] == "Restriction"
+       and $kv["action"] == "add"
+
+subject = "account"
+action = "create"
+object = "rule"
+status = "success"
+
+if find_substr($kv["user"], "\\") != null then
+    $temp_acc_1 = csv($kv["user"], "\\", "")
+    subject.account.name = $temp_acc_1[length($temp_acc_1) - 1]
+    subject.account.domain = $temp_acc_1[0]
+
+    logon_auth_method = "remote"
+elif find_substr($kv["user"], "@") != null then
+    $temp_acc_2 = csv($kv["user"], "@", "")
+    subject.account.name = $temp_acc_2[0]
+    subject.account.domain = $temp_acc_2[1]
+
+    logon_auth_method = "remote"
+else
+    subject.account.name = $kv["user"]
+
+    logon_auth_method = "local"
+endif
+
+$infos = keyvalue($kv["infos"], ", ", " ", "")
+object.group = strip(coalesce($infos["groups"], $infos["Groups"]), "[", "]") 
+object.property = "data"
+object.value = strip(coalesce($infos["data"], $infos["Data"]), "[", "]")
+
+object.type = $kv["type"]
+
+src.ip = $kv["client_ip"]
+
+datafield4 = strip(coalesce($infos["action"], $infos["Action"]), "[", "]")            # Действие правила
+datafield6 = strip(coalesce($infos["subprotocol"], $infos["Subprotocol"]), "[", "]")  # Подпротокол
+
+importance = "info"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_syslog_add_rule_restriction"

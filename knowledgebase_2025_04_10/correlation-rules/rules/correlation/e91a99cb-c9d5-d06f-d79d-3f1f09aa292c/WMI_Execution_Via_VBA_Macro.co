@@ -1,0 +1,102 @@
+event Office_File_With_Macros:
+    key:
+        event_src.host, subject.process.id, subject.account.name, object.account.session_id
+    filter {
+        correlation_name == "Office_File_With_Macros"
+        and object.property != null
+    }
+
+event Execute_Via_Wmiprvse:
+    key:
+        event_src.host, subject.process.id, subject.account.name, object.account.session_id
+    filter {
+        correlation_name == "Execute_Via_Wmiprvse"
+        and filter::CheckWL_Specific_Only("WMI_Execution_Via_VBA_Macro", alert.key)
+    }
+
+rule WMI_Execution_Via_VBA_Macro: Office_File_With_Macros and Execute_Via_Wmiprvse within 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Office_File_With_Macros {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.hash = object.hash
+        $object.property = object.property
+        $object.value = object.value
+        $object.version = object.version
+    }
+
+    on Execute_Via_Wmiprvse {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        $subject.process.chain = subject.process.chain
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $reason = reason
+        
+        $alert.context = alert.context
+        $alert.key = alert.key        
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "start"
+    $object = "module"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Phishing: Spearphishing Attachment"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "Phishing"
+    $incident.aggregation.timeout = 2h
+}

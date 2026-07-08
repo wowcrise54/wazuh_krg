@@ -1,0 +1,84 @@
+event Start_Exploit_Process:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::ProcessStart_Windows_any()
+        and not filter::SystemAccount_Windows(subject.account.id)
+        and object.process.name != null
+        and lower(object.process.path) != "c:\\windows\\system32\\"
+    }
+
+event Pipe_Created:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "17"
+        and (
+                match(lower(object.name), "*\\pipe\\*") 
+                or match(lower(object.name), "winsock2\\catalogchangelistener*")
+            ) 
+        and filter::CheckWL_Process_Creation("Subrule_Pwned_Pipe", join([lower(subject.process.fullpath),lower(object.name)], "|"))
+    }
+    
+rule Subrule_Pwned_Pipe: (Start_Exploit_Process and Pipe_Created) within 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Start_Exploit_Process {        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.id
+        $object.process.parent.name = object.process.name
+        $object.process.parent.path = object.process.path
+        $object.process.parent.fullpath = object.process.fullpath
+        $object.process.parent.guid = object.process.guid
+        $object.process.parent.cmdline = object.process.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+    on Pipe_Created {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = "\\" + object.name
+        $object.type = object.type
+        
+        $alert.key = join([lower(subject.process.fullpath),lower(object.name)], "|")
+    }
+
+emit {
+    $correlation_type = "subrule"
+    
+    $subject = "process"
+    $action = "create"
+    $object = "resource"
+    $status = "success"
+
+    $importance = "info"
+    
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+}

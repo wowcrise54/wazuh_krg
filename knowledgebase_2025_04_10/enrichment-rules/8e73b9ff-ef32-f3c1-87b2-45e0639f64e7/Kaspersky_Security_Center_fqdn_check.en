@@ -1,0 +1,22 @@
+query Check_Domain($check_fullname_domain) from Known_Windows_Domains {
+    column::fullname == $check_fullname_domain
+}
+
+event KSC_event:
+    filter {
+        filter::NotFromCorrelator()
+        and id == "PT_Kaspersky_Security_Center_odbc_Additional_info_hosts"
+        and find_substr(event_src.fqdn, "mshome.net") != null
+    }
+
+enrichment Kaspersky_Security_Center_fqdn_check
+
+    enrich KSC_event:
+        enrich_fields {
+            $domain_check = exec_query("Check_Domain", ["mshome.net"])
+            if not $domain_check then
+                datafield11 = event_src.fqdn
+                event_src.fqdn = lower(event_src.hostname)
+                event_src.host = event_src.fqdn
+            endif
+        }

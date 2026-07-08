@@ -1,0 +1,44 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME|} grafana[{NUMBER}]: {$json=REST}'
+
+COND = find_substr($json, "alerting/notifications/receivers/new") != null 
+       and find_substr($json, "POST") != null
+       
+subject = "account"
+action = "modify"
+object = "rule"
+
+subformula 'json_in_syslog_alert_consumer_added'
+    JSON = ''
+    
+    if $status == 202 then
+        status = "success"
+    else
+        status = "failure"
+    endif
+    
+    subject.account.name = $uname
+    subject.account.id = $userId
+    
+    object.path = $path
+    object.query = $referer
+    object.type = "Alert reciever"
+    
+    src.ip = $remote_addr
+endsubformula
+       
+submessage("JSON","json_in_syslog_alert_consumer_added", $json)
+
+importance = "low"
+
+event_src.vendor = "grafanalabs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "grafana"
+event_src.category = "Application security"
+
+id = "PT_GrafanaLabs_Grafana_syslog_alert_consumer_added"

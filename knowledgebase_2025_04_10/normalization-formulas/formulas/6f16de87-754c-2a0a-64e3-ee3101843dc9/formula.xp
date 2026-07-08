@@ -1,0 +1,52 @@
+JSON = 'ENTITY_TYPE'
+COND = ($ENTITY_TYPE == "Fingerprint"
+        and in_list(["compile_create", "compile_update", "delete"], $OPERATION))
+
+subject = "account"
+action = switch $OPERATION 
+    case "compile_create" "create"
+    case "compile_update" "modify"
+    case "delete" "remove"
+endswitch
+object = "resource"
+status = "success"
+
+subject.account.id = $USER_ID
+subject.account.name = $user_or_token['USERNAME']
+subject.account.fullname = $user_or_token['DISPLAY_NAME']   
+subject.account.contact = $user_or_token['EMAIL']
+
+object.name = $ENTITY_DISPLAY_NAME
+object.id = $ENTITY_ID
+object.type = $ENTITY_TYPE
+
+if $PROPERTY_CHANGES['new']['category'][0]['DISPLAY_NAME'] != null then
+    $group_name = 'new'
+else
+    $group_name = 'old'
+endif
+object.group = join(remove([$PROPERTY_CHANGES[$group_name]['category'][0]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][1]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][2]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][3]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][4]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][5]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][6]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][7]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][8]['DISPLAY_NAME'],
+                            $PROPERTY_CHANGES[$group_name]['category'][9]['DISPLAY_NAME']], null),' | ')
+if object.group == "" then object.group = null endif
+
+datafield1 = $PROPERTY_CHANGES['new']['FILE_PATH']       # file path(new)
+datafield2 = $PROPERTY_CHANGES['old']['FILE_PATH']       # file path(old)
+
+time = $CHANGE_DATE
+msgid = $ENTITY_TYPE
+importance = "low"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_9_customeventcollector_Fingerprint_actions"

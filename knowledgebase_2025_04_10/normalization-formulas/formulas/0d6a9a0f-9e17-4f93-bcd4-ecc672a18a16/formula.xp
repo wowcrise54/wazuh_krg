@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$event_src_ip=IPV4|$event_src_ip=IPV6|event_src.hostname=HOSTNAME|}
+        %%10WMAC/{NUMBER}/{msgid="WMAC_CLIENT_JOIN_WLAN"}(l): {"-DevIP="?}{$dev_ip=IPV4|$dev_ip=IPV6}{";"?} Client
+        {$src_mac=STRING} successfully joins WLAN {datafield1=UNTIL(",")} on APID {datafield2=NUMBER}
+        with BSSID {$dst_mac=STRING}'
+
+action = "connect"
+object = "host"
+status = "success"
+
+object.type = "wlan client"
+
+src.mac = maybe_macaddr(replace($src_mac,'.','-',0))
+$dst_mac1 = strip($dst_mac,'','.')
+dst.mac = maybe_macaddr(replace($dst_mac1,'.','-',0))
+
+# datafield1 - SSID
+# datafield2 - APID
+
+importance = "info"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "comware_software"
+event_src.ip = coalesce($event_src_ip, $dev_ip)
+event_src.category = "Network device"
+
+id = "PT_Hewlett_Packard_Enterprise_Comware_Software_syslog_wmac_client_join_wlan"

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля в приложении OpenVPN. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="59c83d86-ba9f-118d-6b9e-395d0bb53ab5">Успешное распыление пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Подобран пароль для пользователя {subject.account.name}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="808008c2-0ad8-dc9d-cdc3-677863bf8945">Попытки распыления пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Количество попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="cb435eeb-2685-3ea2-d468-02a68bf4f0ec">Успешное распыление пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Подобран пароль для следующих пользователей: {datafield2}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+  </EventDescriptions>
+</Localization>

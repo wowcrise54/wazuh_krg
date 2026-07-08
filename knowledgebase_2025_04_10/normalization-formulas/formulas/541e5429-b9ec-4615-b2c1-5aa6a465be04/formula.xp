@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+    {$tmp="DCID"|$tmp="ICID"} {datafield1=NUMBER} TLS failed: {$reason=REST}'
+
+action = "modify"
+object = "session"
+status = "failure"
+
+protocol = "SMTP"
+
+reason = strip($reason,"(",")")
+
+# datafield1 - smtp connection id
+datafield2 = switch $tmp                # type of smtp connection
+    case "DCID" "delivery smtp"
+    case "ICID" "injection smtp"
+endswitch
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_tls_connection_failed_in_smtp"

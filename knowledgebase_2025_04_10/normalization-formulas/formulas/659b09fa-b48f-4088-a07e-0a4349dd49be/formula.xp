@@ -1,0 +1,52 @@
+EVENTLOG = 'EventID="21"'
+COND =  $Channel == "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational"
+        and $Provider["Name"] == "Microsoft-Windows-TerminalServices-LocalSessionManager"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subformula 'name'
+    TEXT = '{$subject.domain=WORDDASH}\\{$subject.name=REST}'
+    subject.account.domain = lower($subject.domain)
+    subject.account.name = lower($subject.name)
+endsubformula
+
+submessage('TEXT', 'name', $UserData["EventXML"]["User"])
+
+subject.account.session_id = $UserData["EventXML"]["SessionID"]
+
+if (lower($UserData["EventXML"]["Address"]) == "local" or lower($UserData["EventXML"]["Address"]) == "локальные") then #Адрес исходной сети «LOCAL» просто указывает на локальный вход в систему и НЕ указывает на удаленный вход RDP
+    logon_auth_method = "local"
+else
+    src.ip = maybe_ipv4($UserData["EventXML"]["Address"])
+    logon_auth_method = "remote"
+endif
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    dst.fqdn = lower($Computer)
+    dst.hostname = lower(substr($Computer, 0, $dot_pos))
+else
+    dst.hostname = lower($Computer)
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.fqdn = dst.fqdn
+event_src.hostname = dst.hostname
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Terminal services"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_21_RD_session_logon_succeeded"

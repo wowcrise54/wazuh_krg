@@ -1,0 +1,57 @@
+JSON = ''
+COND = $SLGTYPE.SUBID == "4" and $SLGTYPE.AREA == "AU"
+
+action = "start"
+object = "transaction"
+status = "failure"
+
+if $SLGUSER != "" then
+    subject = "account"
+    subject.account.name = $SLGUSER
+endif
+
+submessage("TEXT", "parameters_formula", $SLGDATA)
+
+subformula "parameters_formula"
+    TEXT = "{$str=REST}"
+    object.name = substr($str, 0, length($str) - 2)
+    $reason_value = substr($str, -1, 1)
+    reason = switch $reason_value
+        case "0" "Cause unknown"
+        case "1" "Error in call parameters when calling the kernel function"
+        case "2" "Transaction does not exist"
+        case "3" "Transaktion & is locked (in transaction SM01)"
+        case "4" "Transaction is an area menu and therefore cannot be executed"
+        case "5" "Parameter transaction is an area menu and therefore cannot be executed"
+        case "6" "User is not authorized for this transaction"
+    endswitch
+
+endsubformula
+
+if maybe_ipv4($SLGLTRM2) == null && $SLGLTRM2 != "" then
+    src.hostname = $SLGLTRM2
+elif maybe_ipv4($SLGLTRM2) != null then
+    src.ip = $SLGLTRM2
+endif
+
+if $SLGMAND != "" then
+    datafield1 = $SLGMAND                                                               # Client or mandant
+endif
+datafield2 = $SLGPROC.UNIXPID + $SLGPROC.TASKTNO + $SLGPROC.SLGTTYP + $SLGPROC.SLGMODE  # Other information
+if $SLGTC != "" then
+    datafield3 = $SLGTC                                                                 # Transaction code
+endif
+if $SLGREPNA != "" then
+    datafield4 = $SLGREPNA                                                              # Report name
+endif
+
+time = $SLGDATTIM.DATE + $SLGDATTIM.TIME
+msgid = $SLGTYPE.AREA + $SLGTYPE.SUBID
+importance = "low"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_ABAP_filemonitor_Start_of_transaction_failed"

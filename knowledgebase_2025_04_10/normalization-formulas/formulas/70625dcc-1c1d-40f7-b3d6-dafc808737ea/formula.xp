@@ -1,0 +1,68 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {DATETIME}
+       {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+       PT_SIEM: [ID {NUMBER} {STRING} {$rest=UNTIL("</record>")}{REST}'
+       
+COND = (
+        find_substr($rest, 'event="crontab-modify"') != null or 
+        find_substr($rest, 'event="crontab-crontab created"') != null or
+        find_substr($rest, 'event="crontab-crontab deleted"') != null
+       )
+
+$rest = $rest + "</record>"
+
+subformula "parse_xml"
+   XML = 'record'
+endsubformula
+
+submessage("XML", "parse_xml", $rest)
+
+$text_args_dict = keyvalue(replace($text, "", "<text>"),"</text>","=","")
+
+subject = "account"
+action = switch $record["@event"]
+    case "crontab-modify" "modify"
+    case "crontab-crontab created" "create"
+    case "crontab-crontab deleted" "remove"
+endswitch
+object = "task" 
+if find_substr($record/return/@errval, "failure") != null then
+    status = "failure"
+elif find_substr($record/return/@errval, "success") != null then
+    status = "success"
+endif
+
+subject.account.name = $record/subject/@ruid
+subject.account.group = $record/subject/@rgid
+subject.account.privileges = $record/subject/@uid
+
+object.fullpath = $record["path"]["!"]
+$path_csv = csv(object.fullpath, "/", "")
+
+object.type = "crontab"
+object.name = $path_csv[length($path_csv)-1]
+if strip(object.fullpath, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+datafield1 = $record/subject/@sid                   # id сессии субъекта
+datafield2 = $record/subject/@pid                   # id процесса-субъекта
+
+if status == "failure" then
+    reason = $record/return/@retval
+endif
+
+time = datetime($record["@iso8601"])
+importance = "low"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_cron_operations_xml"

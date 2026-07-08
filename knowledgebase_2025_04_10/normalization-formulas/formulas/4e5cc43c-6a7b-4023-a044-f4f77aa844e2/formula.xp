@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME}
+        View - {NUMBER} [View@{NUMBER} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["EventType"] == "AGENT_RECONNECTED"
+
+subject = "account"
+action = "connect"
+object = "virtual_machine"
+status = "success"
+
+$csv = csv($kv["UserDisplayName"], "\\\\", "'")
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+subject.id = $kv["UserSID"]
+object.name = $kv["MachineName"]
+object.id = $kv["MachineId"]
+
+msgid = $kv["EventType"]
+importance = "low"
+
+event_src.vendor = "vmware"
+event_src.title = "horizon"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_Horizon_View_syslog_User_reconnected_to_VM"

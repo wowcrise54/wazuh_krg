@@ -1,0 +1,75 @@
+event Process_Start:
+    key:
+        event_src.host, object.process.name, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+    }
+
+event AutoElevate_Process_Run:
+    key:
+        event_src.host, object.process.parent.name, object.process.parent.id
+    filter {
+        lower(correlation_name) == "subrule_autoelevate_process_run"
+    }
+
+rule Subrule_AutoElevate_Process_Parent_Run: (Process_Start and AutoElevate_Process_Run) within 1m
+
+on Process_Start {
+    $object.process.parent.id = object.process.parent.id
+    $object.process.parent.name = object.process.parent.name
+    $object.process.parent.path = object.process.parent.path
+    $object.process.parent.fullpath = object.process.parent.fullpath
+    $object.process.parent.cmdline = object.process.parent.cmdline
+    }
+
+on AutoElevate_Process_Run {
+    $subject.account.name = subject.account.name
+    $subject.account.domain = subject.account.domain
+    $subject.account.session_id = subject.account.session_id
+    $subject.account.id = subject.account.id
+    $subject.account.privileges = subject.account.privileges
+
+    $object.account.session_id = object.account.session_id
+    $object.account.name = object.account.name
+    $object.account.domain = object.account.domain
+    $object.account.id = object.account.id
+
+    $object.process.id = object.process.id
+    $object.process.name = object.process.name
+    $object.process.path = object.process.path
+    $object.process.fullpath = object.process.fullpath
+    $object.process.cmdline = object.process.cmdline
+    $object.process.chain = object.process.chain 
+
+    $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+    $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+    $event_src.host = event_src.host
+    $event_src.fqdn = event_src.fqdn
+    $event_src.hostname = event_src.hostname
+    $event_src.ip = event_src.ip
+    $event_src.asset = event_src.asset
+    $event_src.vendor = event_src.vendor
+    $event_src.title = event_src.title
+    $event_src.subsys = event_src.subsys
+    $event_src.category = event_src.category
+
+    $alert.key = alert.key
+    $alert.context = alert.context
+}
+
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Anomaly"
+    $category.high = "Privilege Escalation"
+    $category.low = "Abuse Elevation Control Mechanism: Bypass User Account Control"
+}

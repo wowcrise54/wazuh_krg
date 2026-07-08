@@ -1,0 +1,23 @@
+TEXT = '{time=DATETIME} {STRING} ({WORD}) {WORD+} {msgid="ewf4"} {WORD}
+        The synchronization operation of the search component: {WORDDASH} associated to the search application: {subject.name=WORD+}
+        on server: {$subj_path=HOSTNAME} has failed. The component version is not compatible with the search database: {object.name=WORDDASH}
+        on server: {$obj_path=HOSTNAME} The possible cause for this failure is {$tmp_reason=CSV(".","\'")}'
+
+subject = "application"
+action = "sync"
+object = "database"
+status = "failure"
+
+src.hostname = lower($subj_path)
+dst.hostname = lower(strip($obj_path,"","."))
+
+reason = $tmp_reason[0]
+datafield1 = $tmp_reason[length($tmp_reason) - 1]
+
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Search_synchronization_problem"

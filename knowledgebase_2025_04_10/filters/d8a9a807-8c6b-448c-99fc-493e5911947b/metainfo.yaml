@@ -1,0 +1,31 @@
+Filter:
+    Name:
+        ru: "Проверка частных исключений на присутствие в списке, разрешающем новые срабатывания правил корреляции"
+        en: "Check for the presence of the particular exclusions on the list that allows new triggerings of correlation rules"
+    Description:
+        ru: "Проверка частных исключений из ключевой информации скоррелированного события на присутствие в списке, разрешающем новые срабатывания правил корреляции для указанных значений, используя прямое сравнение значений"
+        en: "A check for the presence of the particular exclusions from correlated event key information on the list that allows new triggerings of correlation rules for the specified values using the direct comparison of values"
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "Key information value of a correlated event"
+            ru: "Значение ключевой информации скоррелированного события"
+    host:
+        Type: string
+        Name:
+            ru: "Узел, на котором произошло событие"
+            en: "Host on which an event occurred"
+    rule_name:
+        Type: string
+        Name:
+            ru: "Название правила корреляции"
+            en: "Correlation rule name"
+    user:
+        Type: string
+        Name:
+            ru: "Идентификатор пользователя, к которому относится скоррелированное событие"
+            en: "ID of the user the correlated event is related to"
+ObjectId: PT-RF-45
+Origin: PT

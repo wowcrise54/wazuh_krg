@@ -1,0 +1,40 @@
+TEXT = '{time=DATETIME} {STRING} ({WORD}) {WORD+} {msgid="admty"} {WORD}
+        ttidLogWssCellStgConcise [Url: {$path_tmp=STRING} {"i:"?}{"0#.w|"}{$fqdn_raw=STRING+}
+        GUID={WORD} ({WORD+}), OfficeBuildNumber={STRING} Request={NUMBER} bytes, Response={NUMBER} bytes]
+        [TotalRequestTime: {NUMBER}msec][PartitionID: {WORDDASH}]
+        [Request: {$action_tmp=WORD} {STRING} Pri={NUMBER} Result={$status_tmp=WORD} {"(Win32="WORD")"?}] {$tail=REST}'
+
+subject = "account"
+object = "file_object"
+
+# switch/case construction for the case of new actions exploration
+action = switch $action_tmp
+    case "QueryChanges" "download"
+    case "PutChanges"   "upload"
+endswitch
+
+if $status_tmp == "Success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+$fqdn = strip($fqdn_raw,"", "][User-agent:")
+$sep = csv($fqdn, "\\", "")
+subject.account.domain = lower($sep[0])
+subject.account.name = lower($sep[1])
+
+object.fullpath = strip($path_tmp,"","][User:")
+$temp_csv = csv(object.fullpath, "/", "")
+object.name = $temp_csv[length($temp_csv) - 1]
+object.path = strip(object.fullpath, '', object.name)
+
+datafield1 = substr($tail, -36, 36)  # server ID
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Cloud_file_access"

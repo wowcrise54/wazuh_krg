@@ -1,0 +1,61 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {$tmp_subsys=STRING} - - [meta language="ru-RU"][origin enterpriseId="{STRING} software="vGate"
+        swVersion="{datafield1=UNTIL("\\"]")}[event@{STRING}
+        id="{msgid="67110916"|msgid="67110919"|msgid="134219791"|msgid="67110925"}"
+        category="Целостность"] {"Проверка"|"При проверке"} целостности виртуальной машины "{object.name=STRING}
+        (uid: {object.id=UNTIL(")")}" {"завершилась неудачно."|"произошла ошибка:"|"не была сделана"} {$rest=REST}'
+
+action = "check"
+object = "virtual_machine"
+status = "failure"
+
+submessage("TEXT", "message", $rest)
+
+# datafield1 - Версия ПО vGate
+
+subformula "message"
+    # Определения reason из $event_message
+    TEXT = 'Файл {UNTIL(" был ")}изменен{REST}'
+
+    reason = "integrity check"
+endsubformula
+
+subformula "message"
+    # Извлечение $kv из $event_message
+    TEXT = '({UNTIL(")")} {$kv=REST}'
+
+    $kv = keyvalue(strip($kv, "{", "}"), ",", "=")
+    reason = strip($kv["msg"], "'" , ".'")
+endsubformula
+
+subformula "message"
+    # Извлечение src.ip|src.hostname и dst.ip|dst.hostname из $event_message
+    TEXT = 'по причине переноса ВМ с сервера "{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}" на сервер
+            "{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}".
+            Контрольную сумму для этой виртуальной машины необходимо пересчитать'
+
+    object.state = "moved"
+    reason = "integrity check"
+endsubformula
+
+importance = "low"
+
+event_src.title = "vgate"
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Host security"
+event_src.subsys = switch $tmp_subsys
+    case "Служба_удаленного_управления" "remote_management_services"
+    case "Служба_аутентификации" "authentication_service"
+    case "Компонент_защиты_VMware_vCenter" "vmware_vcenter_protection_component"
+    case "Компонент_защиты_VMware_ESXi" "vmware_esxi_protection_component"
+    case "Служба_контроля_доступа_к_vCenter" "vcenter_access_control_service"
+endswitch
+
+id = "PT_Security_code_vGate_syslog_67110916_67110919_134219791_67110925_check_virtual_machine"

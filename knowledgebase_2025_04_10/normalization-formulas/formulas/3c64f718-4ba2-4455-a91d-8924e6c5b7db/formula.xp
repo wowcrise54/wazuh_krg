@@ -1,0 +1,22 @@
+TEXT = '{time=DATETIME} [{WORD}] info: {$add="Добавление"|"Удаление"} сетевого интерфейса: {"{"} {$raw_kv=STRING}'
+
+subject = "account"
+action = if $add != null then "create" else "remove" endif
+object = "interface"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.name = coalesce($kv['"name"'], $kv['"iface"'], $kv['"vlanName"'])
+
+datafield5 = $kv['"vlanId"']  # vlanId
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_add_delete_network_int"

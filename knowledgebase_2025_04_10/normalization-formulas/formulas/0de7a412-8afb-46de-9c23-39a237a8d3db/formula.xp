@@ -1,0 +1,57 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys="Identity Logging"}|Check Point|{UNTIL("|")}
+        {UNTIL("|")}{UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = in_list(["Log In", "Log Out"], $kv["operation"])
+       or in_list(["Log In", "Log Out"], $kv["act"])
+
+object = "resource"
+switch coalesce($kv["operation"], $kv["act"])
+    case 'Log In'
+        action = 'create'
+        if $kv["act"] == 'Accept'
+            then status = 'success'
+        elif $kv["act"] == 'Log In'
+            then status = 'success'
+        else 
+            status = 'failure'
+        endif
+    case 'Log Out'
+    action = 'remove'
+        status = 'success'
+endswitch
+
+object.account.name = coalesce($kv["administrator"], $kv["duser"])
+object.account.session_id = $kv["session_uid"]
+
+object.type = "AD user to IP mapping"
+
+if maybe_ipv4($kv["machine"]) == null and maybe_ipv6($kv["machine"]) == null then
+    src.hostname = $kv["machine"]
+endif
+src.ip = $kv["src"]
+$shost = $kv["shost"]
+if find_substr($shost, '@') != null then
+    src.fqdn = $shost
+    src.hostname = substr($shost, 0, find_substr($shost, "@"))
+else
+    src.hostname = $shost
+endif
+
+logon_auth_method = "remote"
+
+datafield4 =  $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+reason = coalesce($kv["additional_info"], $kv["msg"])
+time = epoch_ms_to_datetime(number($kv["rt"]))
+importance = "info"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Common_Identity_logging_ad_to_ip"

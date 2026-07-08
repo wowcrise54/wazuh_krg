@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} {WORDDASH?} {":"?}
+        SecurityLog%%{NUMBER} # {WORDDASH} # {subject.account.name = WORD} # {WORDDASH+} # {src.ip = IPV4} # Security Management #
+        Log {$tmp_act="in"|$tmp_act="out"} {"to"?} the server # Network Management # {$tmp_status="Succeeded"|$tmp_status="Failed"} #
+        User name: {WORD} {$tmp_var=STRING*} # {DATETIME} #'
+
+subject = "account"
+
+if $tmp_act=="in" then
+    action = "login"
+else
+    action = "logout"
+endif
+
+object = "system"
+
+if $tmp_status=="Succeeded" then
+    status = "success"
+elif ($tmp_status=="Failed" and $tmp_act=="in") then
+    status = "failure"
+    reason = strip($tmp_var, "\\nProbable cause: ", "")
+endif
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+logon_auth_method = "remote"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "m2000"
+event_src.vendor = "huawei"
+event_src.category = "Telecom"
+
+id = "PT_Huawei_M2000_syslog_Log_in_out_to_the_server_success_fail"

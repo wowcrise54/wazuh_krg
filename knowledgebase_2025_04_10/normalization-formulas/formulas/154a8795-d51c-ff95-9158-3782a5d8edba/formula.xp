@@ -1,0 +1,48 @@
+JSON = 'Provider = "Microsoft-Windows-RPC"'
+COND = $EventID == 5 or $EventID == 6
+
+action = "open"
+object = "session"
+status = "success"
+
+object.account.privileges = switch $EventData["ImpersonationLevel"]
+   case 0 "Anonymous impersonation"
+   case 1 "Default impersonation"
+   case 2 "Identify-level impersonation"
+   case 3 "Impersonate-level impersonation"
+   case 4 "Delegate-level impersonation"
+endswitch
+
+object.process.id = $ProcessID
+
+if $TaskName == "RpcClientCall" then
+    object.type = "client"
+elif $TaskName == "RpcServerCall" then
+    object.type = "server"
+endif
+
+if $EventData["NetworkAddress"] != "" then src.ip = $EventData["NetworkAddress"] endif
+
+datafield1 = $EventData["AuthenticationLevel"]    # Authentication level
+datafield2 = $EventData["AuthenticationService"]  # Authentication service
+datafield3 = $EventData["InterfaceUuid"]          # Interface uuid
+datafield4 = $EventData["Options"]                # Options
+datafield5 = $EventData["ProcNum"]                # ProcNum
+datafield6 = $EventData["Protocol"]               # Protocol
+if $Name != "" then datafield7 = $Name endif      # process name if not empty
+datafield8 = $EventData["Endpoint"]               # endpoint, here can be just a number
+datafield9 = $ActivityID                          # Activity ID
+
+time = $Timestamp
+msgid = $EventID
+importance = "info"
+
+category.generic = "Session"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_ETW_RPC_call_start"

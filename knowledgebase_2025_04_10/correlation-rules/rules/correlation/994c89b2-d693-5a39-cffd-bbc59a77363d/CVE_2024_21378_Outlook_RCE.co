@@ -1,0 +1,117 @@
+event COM_Object:
+    key:
+        event_src.host, object.new_value, subject.process.id
+    filter {
+        correlation_name == "COM_Object_Persistence"
+        and regex(lower(subject.process.fullpath), "^[a-z]:\\\\program\s+files(\s+\(x86\))?\\\\microsoft\s+office\\\\office\d+\\\\outlook\.exe$", 0) != null
+        and regex(lower(object.new_value), "^[a-z]:\\\\users\\\\.*\\\\appdata\\\\local\\\\micros\S+\\\\forms\\\\\S+\\\\\S+\.(dll$)?", 0) != null
+    }
+
+event Module_Loaded:
+    key:
+        event_src.host, object.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "7"
+        and regex(lower(subject.process.fullpath), "^[a-z]:\\\\program\s+files(\s+\(x86\))?\\\\microsoft\s+office\\\\office\d+\\\\outlook\.exe$", 0) != null
+        and regex(lower(object.process.fullpath), "^[a-z]:\\\\users\\\\.*\\\\appdata\\\\local\\\\micros\S+\\\\forms\\\\\S+\\\\\S+\.(dll$)?", 0) != null
+        and filter::CheckWL_Specific_Only("CVE_2024_21378_Outlook_RCE", lower(join([subject.account.name, subject.process.fullpath, object.process.fullpath], "|")))
+    }
+
+rule CVE_2024_21378_Outlook_RCE: COM_Object and Module_Loaded within 5s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on COM_Object {
+        $object.path = object.path
+        $object.name = object.name
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+        
+        $alert.context = alert.context
+        $alert.regex_match = lower(join([regex(lower(subject.process.fullpath), "^[a-z]:\\\\program\s+files(\s+\(x86\))?\\\\microsoft\s+office\\\\office\d+\\\\outlook\.exe$", 0),
+            regex(lower(object.path), "\\\\clsid\\\\\{.*\}\\\\inprocserver32\\\\", 0),
+            regex(lower(object.new_value), "^[a-z]:\\\\users\\\\.*\\\\appdata\\\\local\\\\micros\S+\\\\forms\\\\\S+\\\\\S+\.(dll$)?", 0)
+        ], "|"))
+    }
+
+    on Module_Loaded {
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([subject.account.name, subject.process.fullpath, object.process.fullpath], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "start"
+    $object = "module"
+    $status = "success"
+
+    # повышаем важность так как под эту DLL по умолчанию маскируется Ruler
+    if lower($object.process.name) == "microsoft.teams.shim.dll" then
+        $importance = "medium"
+    else
+        $importance = "low"
+    endif
+
+    $detect = "CVE-2024-21378"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Office Application Startup: Outlook Forms"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

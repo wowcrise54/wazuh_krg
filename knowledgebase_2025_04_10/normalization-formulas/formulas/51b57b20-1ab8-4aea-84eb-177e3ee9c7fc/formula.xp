@@ -1,0 +1,54 @@
+TABULAR = "DBMS,
+           {$type=type},
+           exception,
+           {time=event_time},
+           {interface=interface},
+           user,
+           query_kind,
+           http_user_agent,
+           {$source=address},
+           {src.port=port},
+           client_hostname,
+           client_name,
+           query
+           "
+
+COND = $DBMS == "ClickHouse" and lower($query_kind) == "backup"
+
+subject = "account"
+action = "backup"
+object = "db_object"
+status = if $exception == "" then "success" else "failure" endif
+
+subject.account.name = if $user != "" then lower($user) else null endif
+
+object.query = $query
+
+subformula "parse_query"
+    TEXT = '{UNTIL("backup")} {"temporary"?} {object.type=WORD} {"if exists"?} {object.name=STRING} to disk(\'{object.storage.path=UNTIL("\'")}, \'{object.storage.name=UNTIL("\'")}){$addition=REST}'
+    
+    object.storage.fullpath = object.storage.path + "/" + object.storage.name
+endsubformula
+
+submessage("TEXT","parse_query", lower(object.query))
+
+src.ip = strip($source, '::ffff:', '')
+src.hostname = if $client_hostname != "" then lower($client_hostname) else null endif
+
+logon_service = if $http_user_agent != "" then $http_user_agent else null endif
+
+reason = if $exception != "" then $exception else null endif
+
+datafield1 = lower(join(csv(strip($databases, '[', ']'), ",", "'"), "|"))  # affected databases
+datafield2 = lower(join(csv(strip($tables, '[', ']'), ",", "'"), "|"))     # affected tables
+datafield3 = lower(join(csv(strip($columns, '[', ']'), ",", "'"), "|"))    # affected columns
+datafield4 = if $addition != "" then lower($addition) else null endif      # additional info
+
+importance = "low"
+
+event_src.vendor = "yandex"
+event_src.title = "clickhouse"
+event_src.category = "Database server"
+event_src.ip = recv_ipv4
+
+id = "PT_Yandex_Clickhouse_odbc_backup_operation"

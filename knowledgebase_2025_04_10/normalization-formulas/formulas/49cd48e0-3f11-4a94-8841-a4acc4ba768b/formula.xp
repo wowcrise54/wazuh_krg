@@ -1,0 +1,55 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time = DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {$tmp_subsys = STRING} - - [meta language="ru-RU"][origin enterpriseId="{STRING} software="vGate"
+        swVersion="{$maj = NUMBER}.{$min1 = NUMBER}.{$min2 = NUMBER}.{$min3 = NUMBER}"][event@{STRING} id="{msgid = "134283269"}"
+        category="Управление доступом"] {STRING} правила разграничения доступа завершилось неудачно. Имя: {object.name = STRING+}
+        Описание: {STRING+?} Пользователь: {datafield3 = STRING} Компьютер пользователя: {$scip = STRING+} Исходящий порт: {$scp = STRING}
+        Защищаемый сервер: {dst.ip = IPV4 | dst.ip = IPV6 | dst.hostname = HOSTNAME} Порт назначения: {$dstp = STRING}
+        Протокол: {protocol = WORD} Администратор: {subject.name = WORDDASH}@{subject.domain = STRING}
+        Адрес: {datafield2 = IPV4 | datafield2 = IPV6 | datafield2 = HOSTNAME} Причина: {$reas = REST}'
+
+subject = "account"
+action = "create"
+object = "rule"
+status = "failure"
+
+if $scip != "Любой" then
+    if maybe_ipv4($scip) != NULL then
+        src.ip = $scip
+    else
+        src.hostname = $scip
+    endif
+endif
+if $scp != "Любой" then
+    src.port = $scp
+endif
+if $dstp != "Любой" then
+    dst.port = $dstp
+endif
+
+datafield1 = string($maj) + '.' + string($min1) + '.' + string($min2) + '.' + string($min3)  # Версия ПО vGate
+# datafield2 -  Хост администратора
+# datafield3 - Тип или имя пользователя на которого работает правило
+
+reason = strip($reas,'','.')  # Обрезаем лишние символы в конце
+
+importance = "high"
+
+event_src.title = "vgate"
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Host security"
+event_src.subsys = switch $tmp_subsys
+    case "Служба_удаленного_управления" "remote_management_services"
+    case "Служба_аутентификации" "authentication_service"
+    case "Компонент_защиты_VMware_vCenter" "vmware_vcenter_protection_component"
+    case "Компонент_защиты_VMware_ESXi" "vmware_esxi_protection_component"
+    case "Служба_контроля_доступа_к_vCenter" "vcenter_access_control_service"
+endswitch
+
+id = "PT_Security_code_vGate_syslog_134283269_rule_create_failure"

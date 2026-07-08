@@ -1,0 +1,8 @@
+filter ProcessStart_Linux() {
+    filter::OperatingSystem_UNIXLike()
+    and action == "start"
+    and status == "success"
+    and category.generic == "Process"
+    and category.high == "Availability Management"
+    and category.low == "Control"
+}

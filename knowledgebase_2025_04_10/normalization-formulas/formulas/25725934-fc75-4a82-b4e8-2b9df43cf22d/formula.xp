@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} 
+{"Hostd:"?} [{WORD} info \'Vimsvc.ha-eventmgr\' {$kvs=UNTIL("] ")} Event {NUMBER}:
+Firewall configuration has changed. Operation \'{$arguments_1=WORD}\' for rule set {$arguments_2=STRING+} succeeded.'
+
+$action_raw = switch $arguments_1
+    case "add" "create"
+    case "enable" "enable"
+    case "disable" "disable"
+endswitch
+
+action = coalesce($action_raw, "info")
+object = "rule"
+status = "success"
+
+object.id = strip($arguments_2, "", ".")
+
+$kv_msg = keyvalue($kvs, " ", "=", "'")
+chain_id = $kv_msg["opID"]  # opID field of header
+
+msgid = "esx.audit.net.firewall.config.changed"
+importance = "medium"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_5_0_syslog_Firewall_configuration"

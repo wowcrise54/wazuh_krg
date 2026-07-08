@@ -1,0 +1,48 @@
+!TABULAR = 'GLOBAL_ID,
+            MESSAGE_TEXT,
+           {time=EVENT_TIME},
+           DRIVER_NAME,
+           MESSAGE_ID'
+
+COND = $DRIVER_NAME == "Бастион-C2000" and
+       in_list([-2, -1, 1, 2, 3, 11, 12, 14, 16, 19, 20, 50, 53, 54, 56, 57, 63], $MESSAGE_ID) == true and
+       $MESSAGE_TEXT != ""
+
+if in_list([2, 11, 12, 14, 16, 50, 53, 54], $MESSAGE_ID) == true then
+    action = "alert"
+    importance = "high"
+else
+    action = "info"
+    importance = "info"
+endif
+
+object = "device"
+status = "success"
+
+object.name = $SOURCE_DEVICE_NAME
+object.type = $DEVICE_TYPE_NAME
+
+reason = $MESSAGE_TEXT
+
+if $USER_FAMILY_NAME != "" then
+    $temp = replace($MESSAGE_TEXT, $USER_FAMILY_NAME, "%nm")  # %nm - имя пользователя
+    reason = replace($temp, $ACCESS_CARD_NUMBER, "%cn")       # %cn - номер карточки
+else
+    $temp = strip($MESSAGE_TEXT,""," %cn")
+    reason = replace($temp, " unknown user", "%nm")
+endif
+
+msgid = $MESSAGE_ID
+
+event_src.vendor = "es_prom"
+event_src.title = "bastion"
+event_src.category = "Physical security"
+event_src.subsys = "bastion-c2000"
+
+if $WORKSTATION_NAME == "Локальный компьютер" then
+    event_src.hostname = "localhost"
+else
+    event_src.hostname = $WORKSTATION_NAME
+endif
+
+id = "PT_es_prom_bastion_odbc_c2000_driver_info"

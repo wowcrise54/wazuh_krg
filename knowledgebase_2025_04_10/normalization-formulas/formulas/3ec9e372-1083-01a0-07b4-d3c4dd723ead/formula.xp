@@ -1,0 +1,82 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+        
+COND = $kv["product"] == "HTTPS Inspection"
+       and $kv["https_inspection_action"] != null
+
+subject = "rule"
+action = "validate"
+object = "request"
+status = "success"
+
+subject.type = $kv["https_inspection_action"]
+subject.account.dn = $kv["src_user_dn"]
+
+subformula "suser"
+TEXT = '{subject.account.fullname=UNTIL(" (")}
+        {subject.account.name=WORD}{"@"?}{subject.account.domain=UNTIL(")")}'
+endsubformula
+    
+subformula "suser"
+    TEXT = '{subject.account.name=WORDDASH}'
+endsubformula
+
+subformula "suser"
+    TEXT = '{REST}'
+endsubformula  
+
+submessage('TEXT', 'suser', $kv["src_user_name"])
+
+subformula "duser"
+TEXT = '{object.account.fullname=UNTIL(" (")}
+        {object.account.name=WORD}{"@"?}{object.account.domain=UNTIL(")")}'
+endsubformula
+    
+subformula "duser"
+    TEXT = '{object.account.name=WORDDASH}'
+endsubformula
+
+subformula "duser"
+    TEXT = '{REST}'
+endsubformula  
+
+submessage('TEXT', 'duser', $kv["dst_user_name"])
+
+object.path = $kv["resource"]
+$https_validation = $kv["https_validation"]
+if ($https_validation != null) then
+    object.property = "Precise error, describing HTTPS inspection failure"
+    object.value =  $https_validation
+endif
+
+src.ip = $kv["src"]
+src.port = $kv["s_port"]
+$shost = $kv["src_machine_name"]
+
+if find_substr($shost, '@') != null then
+    src.fqdn = $shost
+    src.hostname = substr($shost, 0, find_substr($shost, "@"))
+else
+    src.hostname = $shost
+endif
+
+dst.ip = $kv["dst"]
+dst.port = $kv["service"]
+
+protocol = $kv["proto"]
+
+datafield8 = $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+datafield9 = $hostname  # имя устройства с LogExporter
+
+reason = $kv["reason"]
+time = coalesce(epoch_ms_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_HTTPS_Inspection_HTTPS_inspection_rule"
+        

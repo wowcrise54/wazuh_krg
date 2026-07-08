@@ -1,0 +1,251 @@
+event Get_Clipboard_By_Nircmd:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_cmd_meta("nircmd.exe", ".*clipboard.*", "description:nircmd | product:nircmd | company:nirsoft")
+        and filter::CheckWL_Process_Creation("Clipboard_Access", lower(join([object.process.parent.fullpath, object.process.cmdline], "|")))
+    }
+
+event Get_Clipboard_By_PowerShell_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and event_src.title == "windows"
+        and object == "command"
+        and find_substr(lower(object.process.cmdline), "get-clipboard") != null
+        and filter::CheckWL_Powershell("Clipboard_Access", lower(join([object.process.cmdline, object.fullpath], "|")))
+    }
+
+event Get_Clipboard_By_PowerShell_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "nircmd.*?clipboard|get-clipboard", 0) != null
+        and filter::CheckWL_Powershell("Clipboard_Access", lower(join([object.process.cmdline, object.fullpath], "|")))
+    }
+
+rule Clipboard_Access: Get_Clipboard_By_Nircmd or Get_Clipboard_By_PowerShell_Pipeline or Get_Clipboard_By_PowerShell_Command
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Get_Clipboard_By_Nircmd {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $reason = "nircmd"
+
+        $alert.key = lower(join([object.process.parent.fullpath, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "clipboard", 0)
+        $alert.context = object.process.name
+        $incident_fullpath = object.process.parent.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Get_Clipboard_By_PowerShell_Pipeline {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield8 = datafield8  # версия модуля
+
+        $chain_id = chain_id
+
+        $reason = "powershell_pipeline"
+
+        $alert.key = lower(join([object.process.cmdline, object.fullpath], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "get-clipboard", 0)
+        $alert.context = object.fullpath
+        $incident_fullpath = object.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Get_Clipboard_By_PowerShell_Command {
+        $action = action  # execute
+        $object = object  # command
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $reason = "powershell_command"
+
+        $alert.key = lower(join([object.process.cmdline, object.fullpath], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "nircmd.*?clipboard|get-clipboard", 0)
+        $alert.context = object.fullpath
+        $incident_fullpath = object.fullpath
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+emit {
+    if $alert.regex_match == "get-clipboard" then
+        $correlation_type = "event"
+    else
+        $correlation_type = "incident"
+    endif
+    
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Clipboard Data"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $incident_fullpath], "|")
+    $incident.severity = $importance 
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

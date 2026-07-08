@@ -1,0 +1,54 @@
+<!--
+  Wazuh 4.14 port of MaxPatrol SIEM rules PT-CR-265
+  (COM_Object_Persistence) and PT-CR-2314
+  (CVE_2024_21378_Outlook_RCE). MITRE ATT&CK T1546.015.
+-->
+<group name="windows,com_hijacking,t1546_015,">
+
+  <!-- PT-CR-265: COM server or ScriptletURL points to executable content. -->
+  <rule id="110300" level="7">
+    <if_sid>61614,61615,61616</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Classes\\.+\\(?:(?:InprocServer|LocalServer)(?:32)?|ScriptletURL)(?:\\|$)</field>
+    <field name="win.eventdata.details" type="pcre2">(?i)\.(?:dll|sct|exe|ocx)(?:[&quot;'\s]|$)</field>
+    <description>COM registration modified by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre><id>T1546.015</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,com_hijacking,</group>
+  </rule>
+
+  <!-- PT-CR-265: TreatAs redirects one COM class to another. -->
+  <rule id="110301" level="10">
+    <if_sid>61614,61615,61616</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Classes\\.+\\TreatAs(?:\\|$)</field>
+    <description>COM TreatAs registration modified by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre><id>T1546.015</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,com_hijacking,</group>
+  </rule>
+
+  <!-- Internal PT-CR-2314 candidate: Outlook writes a Forms DLL COM server. -->
+  <rule id="110302" level="5">
+    <if_sid>110300</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)^[A-Z]:\\Program Files(?: \(x86\))?\\Microsoft Office\\(?:root\\)?Office[0-9]+\\OUTLOOK\.EXE$</field>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\CLSID\\\{[^}]+\}\\InprocServer32(?:\\|$)</field>
+    <field name="win.eventdata.details" type="pcre2">(?i)^[A-Z]:\\Users\\[^\\]+\\AppData\\Local\\Microsoft[^\\]*\\Forms\\.+\.dll$</field>
+    <description>Outlook Forms COM server registration candidate for CVE-2024-21378.</description>
+    <options>no_log</options>
+    <group>sysmon,com_hijacking,outlook_forms,cve_2024_21378,</group>
+  </rule>
+
+  <!-- PT-CR-2314: same Outlook PID loads a Forms DLL within five seconds. -->
+  <rule id="110303" level="12" frequency="1" timeframe="5">
+    <if_sid>61609</if_sid>
+    <if_matched_sid>110302</if_matched_sid>
+    <same_location />
+    <same_field>win.eventdata.processId</same_field>
+    <field name="win.eventdata.image" type="pcre2">(?i)^[A-Z]:\\Program Files(?: \(x86\))?\\Microsoft Office\\(?:root\\)?Office[0-9]+\\OUTLOOK\.EXE$</field>
+    <field name="win.eventdata.imageLoaded" type="pcre2">(?i)^[A-Z]:\\Users\\[^\\]+\\AppData\\Local\\Microsoft[^\\]*\\Forms\\.+\.dll$</field>
+    <description>Possible CVE-2024-21378 exploitation: Outlook loaded Forms module $(win.eventdata.imageLoaded), user $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1203</id>
+      <id>T1546.015</id>
+    </mitre>
+    <group>sysmon,attack,execution,persistence,privilege_escalation,exploitation_for_client_execution,com_hijacking,outlook_forms,cve_2024_21378,</group>
+  </rule>
+
+</group>

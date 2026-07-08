@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Подозрительная активность офисных программ: создание исполняемых файлов, изменение ключей реестра, загрузка DLL-библиотеки COM-объекта Internet Explorer, создание потоков в адресном пространстве иных процессов</Description>
+  <EventDescriptions>
+    <EventDescription id="4d66ff6b-eaf9-24d4-d5cc-7605b9a332fa">Приложение Microsoft Office "{subject.process.name}", запущенное пользователем {subject.account.name}, создало набор несвойственных ему исполняемых файлов на узле {event_src.host}</EventDescription>
+    <EventDescription id="561cc1e3-49fd-c55a-ac4b-821c2bf3ead7">Приложение Microsoft Office "{subject.process.name}", запущенное пользователем {subject.account.name}, загрузило несвойственную ему DLL-библиотеку "{object.process.fullpath}" на узле {event_src.host}</EventDescription>
+    <EventDescription id="62a01d43-b777-449b-54cc-56bb28486d92">Приложение Microsoft Office "{subject.process.name}", запущенное пользователем {subject.account.name}, создало несвойственный ему исполняемый файл "{object.name}" на узле {event_src.host}</EventDescription>
+    <EventDescription id="714360de-ff8f-005b-1862-6b35604eff8f">Приложение Microsoft Office "{subject.process.name}", запущенное пользователем {subject.account.name}, изменило несвойственный ему параметр реестра "{object.name}" на узле {event_src.host}</EventDescription>
+    <EventDescription id="b46d53cc-ba94-b520-91e5-3a687a114a40">Приложение Microsoft Office "{subject.process.name}", запущенное пользователем {subject.account.name}, создало несвойственный ему удаленный поток в адресном пространстве процесса "{object.process.name}" на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

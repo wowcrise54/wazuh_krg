@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {time=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?}
+        {"python3["?}{subject.process.id=NUMBER?}{"]"?}{":"?}
+        ansible-ansible.legacy.yum{":"?} Invoked with {$kv=KEYVALUE(" ","=","")}'
+
+subject = "process"
+object = "package"
+status = "success"
+
+$install_state = ["present", "installed", "latest", "None"]
+$remove_state = ["absent", "removed"]
+if in_list($install_state, $kv["state"]) then
+    action = "install"
+elif in_list($remove_state, $kv["state"]) then
+    action = "uninstall"
+endif
+
+$temp_packages = strip(replace($kv["name"], "", "'"), "[", "]")
+object.name = replace($temp_packages, " | ", ", ")
+
+importance = "info"
+
+event_src.vendor = "ansible"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ansible"
+event_src.category = "Other"
+
+id = "PT_Ansible_Ansible_syslog_yum_packages_manipulation"

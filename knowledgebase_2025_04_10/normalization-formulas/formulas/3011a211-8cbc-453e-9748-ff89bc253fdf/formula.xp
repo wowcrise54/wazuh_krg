@@ -1,0 +1,81 @@
+TEXT = "LEEF:1.0|KasperskyLab|SecurityCenter|{UNTIL('|')}{msgid='KLAUD_EV_ADMGROUP_CHANGED'}|{STRING}{$kv=KEYVALUE('\t','=', '')}"
+
+subject = "account"
+status = "success"
+
+subformula "group"
+    !TEXT = 'Группа администрирования {$obj_name=STRING+} была {$raw_action=STRING} пользователем {$subj_name=STRING}'
+
+    if find_substr($raw_action, "изменен") != null then
+        action = "modify"
+    elif find_substr($raw_action, "добавлен") != null then
+        action = "create"
+    else
+        action = "modify"
+    endif
+
+    object = "resource"
+    object.type = "group"
+endsubformula
+
+subformula "host"
+    !TEXT = 'Устройство {$obj_name=STRING} было {$raw_action=STRING+} администрирования {$group=STRING+} пользователем {$subj_name=STRING}'
+
+    if find_substr($raw_action, "удален") != null then
+        action = "unbind"
+    elif find_substr($raw_action, "добавлен") != null then
+        action = "bind"
+    endif
+
+    object = "host"
+endsubformula
+
+if find_substr($kv['EVC_EV_DESC'], "Группа администрирования") != null then
+    submessage("TEXT", "group", $kv['EVC_EV_DESC'])
+elif find_substr($kv['EVC_EV_DESC'], "Устройство") != null then
+    submessage("TEXT", "host", $kv['EVC_EV_DESC'])
+endif
+
+object.name = strip(strip($obj_name, '"', '"'), "'", "'")
+
+object.group = strip(strip($group, '"', '"'), "'", "'")
+
+$user = strip(strip($subj_name, '"', '".'), "'", "'.")
+if find_substr($user, "\\") != null then
+    subject.account.name = lower(csv($user, "\\", "")[1])
+    subject.account.domain = lower(csv($user, "\\", "")[0])
+else
+    subject.account.name = lower($user)
+endif
+
+datafield1 = $kv['EVC_EV_GROUP_NAME']    # имя группы администрирования, в которую входит узел-источник
+
+time = $kv['devTime']
+importance = "info"
+
+if object.type == "group" then
+    category.generic = "Group"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endif
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $kv['EVC_EV_KL_PRODUCT_NAME']
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+if $kv['src'] != "127.0.0.1" then
+    event_src.ip = $kv['src']
+endif
+event_src.hostname = lower($kv['EVC_EV_DISP_HOST_NAME'])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_LEEF_KLAUD_EV_ADMGROUP_CHANGED"

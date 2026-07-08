@@ -1,0 +1,112 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} api_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"method":"POST"') != null
+    and find_substr($json, '"route":"/api/:version/jobs/:id/artifacts"') != null
+)
+
+subject = "process"
+action = "create"
+object = "file_object"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_path"
+    TEXT = '/api/v{NUMBER}/jobs/{$job_id=NUMBER}/artifacts'
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+submessage("TEXT", "parse_path", $path)
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.type = "job"
+subject.process.meta = $ua
+subject.process.id = $job_id
+subject.account.name = $['meta.user']
+
+if substr($['meta.client_id'], 0, 5) == "user/" then
+    subject.account.id = strip($['meta.client_id'], "user/", "")
+endif
+
+$s_artifact_type = find_substr($json, '{"key":"artifact_type","value":"')
+$e_artifact_type = find_substr(substr($json, $s_artifact_type, length($json)), '"}')
+$artifact_type = substr($json, $s_artifact_type + 32, $e_artifact_type - 32)
+object.type = if length($artifact_type) != 0 then $artifact_type else null endif
+
+$s_file_name = find_substr($json, '{"key":"file.name","value":"')
+$e_file_name = find_substr(substr($json, $s_file_name, length($json)), '"}')
+$file_name = substr($json, $s_file_name + 28, $e_file_name - 28)
+object.name = if length($file_name) != 0 then $file_name else null endif
+
+$s_file_path = find_substr($json, '{"key":"file.path","value":"')
+$e_file_path = find_substr(substr($json, $s_file_path, length($json)), '"}')
+$file_path = substr($json, $s_file_path + 28, $e_file_path - 28)
+$file_path = if length($file_path) != 0 then $file_path else null endif
+
+$storage_list = csv($file_path, "/", "'")
+$storage_name = $storage_list[length($storage_list)-1]
+$storage_path = strip($file_path, "", $storage_name)
+
+object.storage.fullpath = $file_path
+object.storage.path = $storage_path
+object.storage.name = $storage_name
+
+$s_file_md5 = find_substr($json, '{"key":"file.md5","value":"')
+$e_file_md5 = find_substr(substr($json, $s_file_md5, length($json)), '"}')
+$file_md5 = substr($json, $s_file_md5 + 27, $e_file_md5 - 27)
+
+$s_file_sha256 = find_substr($json, '{"key":"file.sha256","value":"')
+$e_file_sha256 = find_substr(substr($json, $s_file_sha256, length($json)), '"}')
+$file_sha256 = substr($json, $s_file_sha256 + 30, $e_file_sha256 - 30)
+
+$s_file_sha1 = find_substr($json, '{"key":"file.sha1","value":"')
+$e_file_sha1 = find_substr(substr($json, $s_file_sha1, length($json)), '"}')
+$file_sha1 = substr($json, $s_file_sha1 + 28, $e_file_sha1 - 28)
+
+object.hash = (if length($file_sha256) != 0 then "sha256:" + $file_sha256 else null endif) + (if length($file_sha1) != 0 then " sha1:" + $file_sha1 else null endif) + (if length($file_md5) != 0 then " md5:" + $file_md5 else null endif)
+object.hash.md5 = $file_md5
+object.hash.sha256 = $file_sha256
+object.hash.sha1 = $file_sha1
+
+src.ip = coalesce($['meta.remote_ip'], $remote_ip)
+
+$project_list = csv($['meta.project'], "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($['meta.project'], "", "/" + $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = $project_namespace_fullpath  # Namespace Fullpath
+
+numfield4 = number($['meta.pipeline_id'])  # Pipeline ID
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "medium"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "api"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_API_JSON_Job_Artifacts"

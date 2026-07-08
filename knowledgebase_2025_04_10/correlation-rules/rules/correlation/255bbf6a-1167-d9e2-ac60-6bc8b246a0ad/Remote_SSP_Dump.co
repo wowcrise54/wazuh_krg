@@ -1,0 +1,292 @@
+event Suspicious_Registry_Key:
+    key:
+        event_src.host
+    filter {
+        correlation_name == "Suspicious_Registry_Value"
+        and match(lower(object.path), "\\registry\\machine\\software\\microsoft\\edge\\")
+        and regex(lower(datafield2), "^((patch|larry(\d*)?)(\|)?){2,}$", 0) != null
+        and filter::CheckWL_Registry_Actions("Remote_SSP_Dump", alert.key)
+    }
+
+event Create_Registry_Key:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and object == "command"
+        and action == "execute"
+        and (
+            regex(lower(object.process.cmdline), "stdregprov\s+-name\s+(getstringvalue|setstringvalue)\s+@\(\d+,\s+\\\"software\\\\microsoft\\\\edge\\\",(\s+\$b64result,)?\s+\\\"(larry(\d)*?|patch)\\\"\)", 0) != null
+            or (
+                regex(lower(object.process.cmdline), "21474836(48|49|50|51|53)", 0) != null
+                and match(lower(object.process.cmdline), "*udd3185.tmp*")
+            )
+        )
+    }
+
+event B64_In_Cmdline:
+    key:
+        event_src.host, object.process.id
+    filter {
+        correlation_name == "Execute_Encoded_Powershell"
+        and filter::CheckWL_Process_Creation("Remote_SSP_Dump", alert.key)
+    }
+
+event Remote_File_Creation:
+    key:
+        event_src.host, object.storage.path
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "5145"
+        and (
+            lower(object.name) == "nssp.dll"
+            or
+            lower(object.name) == "report.docx"
+        )
+        and (
+            in_list(["%%4416", "%%4417"], subject.account.privileges)
+            or match(subject.account.privileges, "%%4417*%%4424")
+            or match(subject.account.privileges, "%%4416*%%4417*%%4424")
+            or match(subject.account.privileges, "%%4416*%%4417*%%4423*%%4424")
+        )
+        and filter::CheckWL_Windows_Shares("Remote_SSP_Dump", lower(join([subject.account.name, src.ip, object.fullpath], "|")))
+    }
+
+event Local_File_Creation:
+    key:
+        event_src.host, object.path
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and lower(object.name) == "nssp.dll"
+    }
+
+rule Remote_SSP_Dump: (Suspicious_Registry_Key 
+        or (Create_Registry_Key and B64_In_Cmdline) 
+        or (Remote_File_Creation+ and Local_File_Creation)) timer 3m
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on Suspicious_Registry_Key {
+        $action = action  # modify, create, remove
+        $object = object  # reg_object
+
+        # subject
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.chain = object.process.chain
+        
+        # object
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+        
+        # event src host
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $datafield2 = datafield2  # список использованных полей реестра
+        $labels = $labels + "|CheckWL_Registry_Actions"
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        # other
+        $alert.key = alert.key
+        $alert.context = alert.context
+        $reason = reason
+    }
+
+    on Create_Registry_Key {
+        # object
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.cmdline = object.process.cmdline
+
+        # event src host
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $labels = $labels + "|CheckWL_Powershell"
+
+        # other
+        $cmdline1 = regex(lower(object.process.cmdline), "stdregprov\s+-name\s+(getstringvalue|setstringvalue)\s+@\(\d+,\s+\\\"software\\\\microsoft\\\\edge\\\",(\s+\$b64result,)?\s+\\\"(larry(\d)*?|patch)\\\"\)", 0)
+        if find_substr($cmdline1, "patch") != null then
+            $datafield1 = "stdregprov|getstringvalue|software\microsoft\edge\patch" 
+        elif find_substr($cmdline1, "setstringvalue") != null then
+            $datafield1 = "stdregprov|setstringvalue|software\microsoft\edge\larry"
+        else
+            $datafield1 = "stdregprov|getstringvalue|software\microsoft\edge\larry*"
+        endif
+        if $cmdline1 == null then
+            $datafield1 = regex(lower(object.process.cmdline), "21474836(48|49|50|51|53)", 0) + "|UDD3185.tmp"
+        endif
+    }
+
+    on B64_In_Cmdline {
+        $action = action  # execute, start
+        $object = object  # command, process
+
+        # subject
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        # object
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $chain_id = chain_id
+        
+        $datafield6 = datafield6  # LogonGuid
+        $datafield8 = datafield8  # ProcessGuid/Module version
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+        
+        # other
+        $alert.key = alert.key
+        $alert.context = "Base64 in PowerShell cmdline|" + alert.context
+        $reason = "Base64"
+    }
+
+    on Remote_File_Creation {
+        if $first_event == true then
+            $action = action  # access
+            $object = object  # file_object
+
+            # subject
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            # object
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.storage.name = object.storage.name
+            $object.storage.id = object.storage.id
+            $object.storage.path = object.storage.path
+            $object.storage.fullpath = object.storage.fullpath
+            
+            # src
+            $src.host = src.host
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.asset = src.asset
+            $src.port = src.port
+        
+            # dst
+            $dst.host = dst.host
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.asset = dst.asset
+            $dst.port = dst.port
+
+            # event src host
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            
+            $labels = $labels + "|CheckWL_Windows_Shares"
+
+            # other
+            $alert.key = lower(join([subject.account.name, src.ip, object.fullpath], "|"))
+            $reason = object.name + ": " + subject.account.privileges
+
+            $first_event = false
+        else
+            $reason = $reason + "|" + object.name + ": " + subject.account.privileges
+            $alert.context = $reason
+        endif
+    }
+
+    on Local_File_Creation {
+        # subject
+        $subject.process.id = subject.process.id
+        $subject.process.guid = subject.process.guid
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+    }
+
+emit {
+    $correlation_type = "event"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $status = "success"
+
+    $importance = "high"
+    
+    if $subject.account.name != null or $subject.account.id != null then 
+        $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    elif $subject.account.name == null and ($object.account.name != null or $object.account.id != null) then
+        $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($object.account.id)], "|")
+    else
+        $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($object.path)], "|")
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Lateral Tool Transfer"
+
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

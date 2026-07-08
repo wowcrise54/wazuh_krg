@@ -1,0 +1,35 @@
+!TABULAR = "C_3,
+            {datafield3 = C_5},
+            {time = EVENT_TIME},
+            {datafield1 = SESSION_ID}"
+
+!COND = find_substr($C_4,"Удаление") != null and ($EVENT_TYPE == "VW_CRIT_DIARY_LOCK_INFO")
+
+subject = "account"
+action = "terminate"
+object = "session"
+status = "success"
+
+submessage ("TEXT", "session_info", $C_3)
+submessage ("TEXT", "user_info", $C_4)
+
+subformula "session_info"
+    !TEXT = "{datafield2=UNTIL(' (')} {STRING} - {subject.name=STRING} - {REST}"
+endsubformula
+
+subformula "user_info"
+    !TEXT = "Удаление {object.value=REST}"
+    object.property = "username"
+endsubformula
+
+# datafield1 - id сессии
+# datafield2 - имя компьютера пользователя
+# datafield3 - имя файла исполняемого модуля
+
+importance = "low"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_session_terminate"

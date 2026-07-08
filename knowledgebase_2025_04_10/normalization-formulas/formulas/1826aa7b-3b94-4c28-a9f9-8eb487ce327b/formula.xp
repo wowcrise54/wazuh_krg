@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?} mgd{"["NUMBER"]"?}:
+    {"%INTERACT-6-UI_LOGOUT_EVENT"|"UI_LOGOUT_EVENT"|"%-UI_LOGOUT_EVENT"}: User {$uname=STRING} logout'
+
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+subject.account.name = strip($uname, "'", "'")
+
+dst.hostname = coalesce($host, $host_pref)
+dst.ip = coalesce($ip, $ip_pref)
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_Logout_ui_interact"

@@ -1,0 +1,61 @@
+event Kernel_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and in_list(["ntkrnlmp.exe", "ntoskrnl.exe", "ntkrnlpa.exe", "ntkrpamp.exe"], lower(object.name))
+        and filter::CheckWL_File_Creation("Suspicious_Windows_Kernel_Creating", lower(join([subject.process.fullpath, object.fullpath], "|")))
+    }
+ 
+rule Suspicious_Windows_Kernel_Creating: Kernel_Created
+
+    init {
+        $labels = "w_auto|CheckWL_File_Creation"
+    }
+
+    on Kernel_Created {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    
+        $alert.key = lower(join([subject.process.fullpath, object.fullpath], "|"))
+        $alert.context = join([subject.process.name, object.name], " | ")
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "process"
+    $action = "create"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+
+    $incident.aggregation.key = join([$correlation_name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

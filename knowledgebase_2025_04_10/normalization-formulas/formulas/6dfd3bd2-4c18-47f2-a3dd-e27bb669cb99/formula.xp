@@ -1,0 +1,82 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} info hostd[{WORD}] [Originator@{NUMBER} {$kv=UNTIL("]")} 
+{$prefix="Task Completed"|$prefix="Task Created"}:{$rest=REST}'
+
+subject = "account"
+
+action = switch $prefix
+    case "Task Completed" "close"
+    case "Task Created" "create"
+endswitch
+
+object = "task"
+
+subformula "task_created"
+    TEXT = 'haTask-{LITERAL*}-vim.{$type=LITERAL+}-{$id=NUMBER}'
+    
+    status = "success"
+endsubformula
+
+subformula "task_completed"
+    TEXT = 'haTask-{LITERAL*}-vim.{$type=LITERAL+}-{$id=NUMBER} Status {$task_status=WORD}'
+    
+    if $task_status == "success" then
+        status = "success"
+    else
+        status = "failure"
+    endif
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+switch $prefix
+    case "Task Completed"
+        submessage("TEXT", "task_completed", $rest)
+    case "Task Created"
+        submessage("TEXT", "task_created", $rest)
+endswitch
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = $type
+object.id = "task-" + string($id)
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "info"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_6_0_syslog_Task_Event"

@@ -1,0 +1,57 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           {subject.domain=user_domain},
+           {subject.name=user_name}
+           "
+
+COND = string($event_id) == "1278"
+       and (
+        $event_category == "Mandatory access control"
+        or $event_category == "Полномочное управление доступом"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "remove"
+object = "resource"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Удаление конфиденциального ресурса"|"Confidential resource removal"}. {$kv=KEYVALUE("\n", ": ", "")}'
+
+    object.name = csv(coalesce($kv["Resource name"], $kv["Имя ресурса"]), "\n", "")[0]
+
+    datafield1 = coalesce($kv["Категория конфиденциальности"], $kv["Confidentiality level"])  # категория конфиденциальности
+    datafield2 = coalesce($kv["Имя процесса"], $kv["Process name"])                           # имя процесса
+endsubformula
+
+# datafield1 - категория конфиденциальности
+# datafield2 - имя процесса
+
+msgid = $event_id
+importance = "high"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Полномочное управление доступом" then
+    event_src.subsys = "mandatory access control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1278_confidential_resource_removed"

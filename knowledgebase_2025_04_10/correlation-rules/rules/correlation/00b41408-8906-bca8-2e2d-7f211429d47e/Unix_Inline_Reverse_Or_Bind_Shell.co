@@ -1,0 +1,283 @@
+event Syscall_Execve_Run_Process:
+    key:
+        event_src.host, subject.account.id, subject.account.session_id, object.process.id
+    filter {       
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and object.process.cmdline != null
+        and not filter::Legitimate_Processes_Linux()
+        and (
+            # Node 
+            regex(lower(object.process.cmdline), "node\\b.*?(child_process\\b.*?spawn)", 0) != null
+            # netcat (traditional)
+            or regex(lower(object.process.cmdline), "\\bn(et)?c(at)?\\b.*?(\s+((-(c|e)\s+.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b)|(\d+\.\d+\.\d+\.\d+\s+\d+))){2}", 0) != null
+            # netcat OpenBsd/BusyBox
+            or regex(lower(object.process.cmdline), "\\b(mkfifo|mknod)\\b.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b.*?\d>&\d.*?\\bnc\\b\s+(\d+\.\d+\.\d+\.\d+\s+\d+)", 0) != null
+            # Для zsh: "zmodload zsh/net/tcp" или "ztcp"
+            or regex(lower(object.process.cmdline), "(zmodload\s+zsh\/net\/tcp)|(\\bztcp\\b)", 0) != null
+            # socat (lowercase, т.к. возможны EXEC и exec)
+            or regex(lower(object.process.cmdline), "\\bsocat\\b\s+.*?\s+exec:.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b", 0) != null
+            # Perl
+            or regex(lower(object.process.cmdline), "\\bperl\\b\s+.*?-e\\b.*?\\b(pf_inet|sockaddr_in|getprotobyname|io::socket)\\b.*?(->fdopen\(.*?\)|\\bopen\((stdin|stdout),\">&.*?\"\))(.*\\bexec\(.*?\))?", 0) != null
+            # PHP
+            or regex(lower(object.process.cmdline), "\\bphp\\b\s+-r\\b.*?\\b(fsockopen)\\b.*?(\\b(exec|shell_exec|system|passthru|proc_open|popen)|(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b)", 0) != null
+            # Python
+            or (
+                regex(lower(object.process.cmdline), "\\bpython(\d)?\\b\s+-c\\b", 0) != null
+                and regex(lower(object.process.cmdline), "(\\b\w+\.(socket|connect)\()|\\bpty\\b", 0) != null
+                and regex(lower(object.process.cmdline), "(\\bpty\\b|\\bsubprocess\\b|)\.(spawn|call)\\b", 0) != null
+            )
+            # Ruby
+            or regex(lower(object.process.cmdline), "-rsocket\\b.*?\\b(exec|\.popen)\\b", 0) != null
+            # Lua
+            or regex(lower(object.process.cmdline), "\\bsocket\.tcp\(\).*?\\bconnect\(.*?,.*?\).*?(\.execute|popen\(.*?\))", 0) != null
+            # Golang
+            or regex(lower(object.process.cmdline), "\\bnet\.dial\(.*?\).*?\.command\(.*?\)", 0) != null
+            # telnet
+            or regex(lower(object.process.cmdline), "\\btelnet\\b.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b", 0) != null
+            # bash (ловим 1 или сразу 2 паттерна, например, "bash -i" и/или "/dev/tcp/<ip-address>/<port>") + awk
+            or regex(object.process.name, "((\/(dev|inet)\/(tcp|udp)\/.*?\/\d+)|(\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b\s+-i\\b))+", 0) != null
+        )
+        and filter::CheckWL_Linux_Process_Creation("Unix_Inline_Reverse_Or_Bind_Shell", lower(join([subject.account.name, object.process.cmdline], "|")))                  
+    }
+
+event Syscall_Process_Connect:
+    key:
+        event_src.host, subject.account.id, subject.account.session_id, subject.process.id
+    filter {       
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and object == "connection"
+        and action == "open"
+        and subject.process.meta != null
+        and (
+            # Node 
+            regex(lower(subject.process.meta), "node\\b.*?(child_process\\b.*?spawn)", 0) != null
+            # netcat (traditional)
+            or regex(lower(subject.process.meta), "\\bn(et)?c(at)?\\b.*?(\s+((-(c|e)\s+.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b)|(\d+\.\d+\.\d+\.\d+\s+\d+))){2}", 0) != null
+            # netcat OpenBsd/BusyBox
+            or regex(lower(subject.process.meta), "\\b(mkfifo|mknod)\\b.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b.*?\d>&\d.*?\\bnc\\b\s+(\d+\.\d+\.\d+\.\d+\s+\d+)", 0) != null
+            # Для zsh: "zmodload zsh/net/tcp" или "ztcp"
+            or regex(lower(subject.process.meta), "(zmodload\s+zsh\/net\/tcp)|(\\bztcp\\b)", 0) != null
+            # socat (lowercase, т.к. возможны EXEC и exec)
+            or regex(lower(subject.process.meta), "\\bsocat\\b\s+.*?\s+exec:.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b", 0) != null
+            # Perl
+            or regex(lower(subject.process.meta), "\\bperl\\b\s+.*?-e\\b.*?\\b(pf_inet|sockaddr_in|getprotobyname|io::socket)\\b.*?(->fdopen\(.*?\)|\\bopen\((stdin|stdout),\">&.*?\"\))(.*\\bexec\(.*?\))?", 0) != null
+            # PHP
+            or regex(lower(subject.process.meta), "\\bphp\\b\s+-r\\b.*?\\b(fsockopen)\\b.*?(\\b(exec|shell_exec|system|passthru|proc_open|popen)|(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b)", 0) != null
+            # Python
+            or (
+                regex(lower(subject.process.meta), "\\bpython(\d)?\\b\s+-c\\b", 0) != null
+                and regex(lower(subject.process.meta), "(\\b\w+\.(socket|connect)\()|\\bpty\\b", 0) != null
+                and regex(lower(subject.process.meta), "(\\bpty\\b|\\bsubprocess\\b|)\.(spawn|call)\\b", 0) != null
+            )
+            # Ruby
+            or regex(lower(subject.process.meta), "-rsocket\\b.*?\\b(exec|\.popen)\\b", 0) != null
+            # Lua
+            or regex(lower(subject.process.meta), "\\bsocket\.tcp\(\).*?\\bconnect\(.*?,.*?\).*?(\.execute|popen\(.*?\))", 0) != null
+            # Golang
+            or regex(lower(subject.process.meta), "\\bnet\.dial\(.*?\).*?\.command\(.*?\)", 0) != null
+            # telnet
+            or regex(lower(subject.process.meta), "\\btelnet\\b.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b", 0) != null
+            # bash (ловим 1 или сразу 2 паттерна, например, "bash -i" и/или "/dev/tcp/<ip-address>/<port>") + awk
+            or regex(lower(subject.process.meta), "((\/(dev|inet)\/(tcp|udp)\/.*?\/\d+)|(\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b\s+-i\\b))+", 0) != null
+        )
+        and filter::CheckWL_Linux_Networking("Unix_Inline_Reverse_Or_Bind_Shell", lower(join([subject.account.name, subject.process.meta, string(dst.ip)], "|")))
+    }
+
+rule Unix_Inline_Reverse_Or_Bind_Shell: (Syscall_Execve_Run_Process[,1] and Syscall_Process_Connect[,1]) timer 10s
+
+    init {
+        $labels = "w_auto"
+        $execve = false
+        $connect = false
+    }
+
+    on Syscall_Execve_Run_Process {
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.session_id = object.account.session_id
+        $object.account.group = object.account.group
+
+        $object.process.name = object.process.name
+        $object.process.cmdline = object.process.cmdline
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.cwd = object.process.cwd
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.id = object.process.id
+        $object.process.meta = object.process.meta
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+        $object.type = object.type
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $datafield1 = datafield1
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+
+        $numfield2 = numfield2
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline], "|"))
+
+        $labels = $labels + "|CheckWL_Linux_Process_Creation"
+
+        $execve = true
+    }   
+
+    on Syscall_Process_Connect {
+        if $execve == false and $connect == false then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            $subject.type = subject.type
+
+            $object.account.id = object.account.id
+            $object.account.name = object.account.name
+            $object.account.session_id = object.account.session_id
+            $object.account.group = object.account.group
+            
+            $object.process.name = subject.process.name
+            $object.process.cmdline = subject.process.cmdline
+            $object.process.hash = subject.process.hash
+            $object.process.cwd = subject.process.cwd
+            $object.process.path = subject.process.path
+            $object.process.fullpath = subject.process.fullpath
+            $object.process.id = subject.process.id
+            $object.process.meta = subject.process.meta
+            $object.process.parent.id = subject.process.parent.id
+
+            $object.value = object.value
+            $object.property = object.property
+            $object.type = object.type
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $datafield10 = datafield10
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $alert.key = lower(join([subject.account.name, subject.process.meta, string(dst.ip)], "|"))
+
+            $labels = $labels + "|CheckWL_Linux_Networking"
+
+            $connect = true
+        endif
+        
+        if $dst.host == null and dst.host != null then
+            $dst.ip = dst.ip
+            $dst.host = dst.host
+            $dst.port = dst.port
+            $dst.asset = dst.asset
+            
+            $direction = direction
+        endif        
+    }   
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "open"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    # Found patterns
+    $node = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "node\\b.*?(child_process\\b.*?spawn)", 0)
+    $nc_traditional = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\bn(et)?c(at)?\\b.*?(\s+((-(c|e)\s+.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b)|(\d+\.\d+\.\d+\.\d+\s+\d+))){2}", 0)
+    $nc_specific = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\b(mkfifo|mknod)\\b.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b.*?\d>&\d.*?\\bnc\\b\s+(\d+\.\d+\.\d+\.\d+\s+\d+)", 0)
+    $zsh_ztcp = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "(zmodload\s+zsh\/net\/tcp)|(\\bztcp\\b)", 0)
+    $socat = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\bsocat\\b\s+.*?\s+exec:.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b", 0)
+    $perl = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\bperl\\b\s+.*?-e\\b.*?\\b(pf_inet|sockaddr_in|getprotobyname|io::socket)\\b.*?(->fdopen\(.*?\)|\\bopen\((stdin|stdout),\">&.*?\"\))(.*\\bexec\(.*?\))?", 0)
+    $php = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\bphp\\b\s+-r\\b.*?\\b(fsockopen)\\b.*?(\\b(exec|shell_exec|system|passthru|proc_open|popen)|(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b)", 0)
+    $python_patterns = []
+    $python1 = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\bpython(\d)?\\b\s+-c\\b", 0)
+    $python2 = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "(\\b\w+\.(socket|connect)\()|\\bpty\\b", 0)
+    $python3 = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "(\\bpty\\b|\\bsubprocess\\b|)\.(spawn|call)\\b", 0)
+    if $python1 != null then $python_patterns = append($python_patterns, $python1) endif
+    if $python2 != null then $python_patterns = append($python_patterns, $python2) endif
+    if $python3 != null then $python_patterns = append($python_patterns, $python3) endif
+    if length($python_patterns) > 0 then $python = join($python_patterns, " | ") endif
+    $ruby = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "-rsocket\\b.*?\\b(exec|\.popen)\\b", 0)
+    $lua = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\bsocket\.tcp\(\).*?\\bconnect\(.*?,.*?\).*?(\.execute|popen\(.*?\))", 0)
+    $golang = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\bnet\.dial\(.*?\).*?\.command\(.*?\)", 0)
+    $telnet = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "\\btelnet\\b.*?\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b", 0)
+    $bash = regex(lower(coalesce($object.process.cmdline, $object.process.meta)), "((\/(dev|inet)\/(tcp|udp)\/.*?\/\d+)|(\\b(\/bin\/)?(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh\\b\s+-i\\b))+", 0)
+
+    $alert.regex_match = coalesce(
+        $node, $nc_traditional, $nc_specific, $zsh_ztcp, $socat, $perl,
+        $php, $python, $ruby, $lua, $golang, $telnet, $bash
+    )
+
+    if $node != null then $reason = "NodeJS"
+    elif $nc_traditional != null then $reason = "Netcat"
+    elif $nc_specific != null then $reason = "Netcat (OpenBsd/BusyBox)"
+    elif $zsh_ztcp != null then $reason = "Zsh (zmodload/ztcp)"
+    elif $socat != null then $reason = "Socat"
+    elif $perl != null then $reason = "Perl"
+    elif $php != null then $reason = "PHP"
+    elif $python != null then $reason = "Python"
+    elif $ruby != null then $reason = "Ruby"
+    elif $lua != null then $reason = "Lua"
+    elif $golang != null then $reason = "Golang"
+    elif $telnet != null then $reason = "Telnet"
+    elif $bash != null then $reason = "Bash"
+    else $reason = "unknown"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

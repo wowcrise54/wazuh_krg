@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}  
+SafeMobile  SafeMobileEventService: {$json=REST}'
+
+COND = find_substr($json, "\"code\": 32,") != null
+
+subject = "account"
+action = "restore"
+object = "configuration"
+status = "success"
+
+subformula 'json_in_syslog_device_reset'
+    JSON = ''
+    
+    subject.account.fullname = lower($employee["fullname"])
+    subject.account.contact = lower($employee["email"])
+
+    object.type = "device settings"
+    
+    datafield1 = $mobile["imei"]            # IMEI устройства
+    datafield2 = $mobile["udid"]            # UDID устройства
+    datafield3 = $mobile["model"]           # модель устройства
+    datafield4 = $mobile["serial"]          # Серийный номер устройства
+    datafield5 = $mobile["version"]         # Версия ОС устройства
+    datafield6 = $mobile["platform"]        # Платформа устройства
+    datafield7 = $mobile["safemobile_id"]   # Идентификатор комплекта в системе
+    
+    reason = $data["description"]
+    
+    msgid = $data["code"]
+    time = $ts
+endsubformula
+
+submessage("JSON","json_in_syslog_device_reset", $json)
+
+importance = "info"
+
+event_src.vendor = "pt_niisokb"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "uem_safemobile"
+event_src.category = "Mobile"
+
+id = "PT_NIISOKB_UEM_SafeMobile_syslog_device_reset"

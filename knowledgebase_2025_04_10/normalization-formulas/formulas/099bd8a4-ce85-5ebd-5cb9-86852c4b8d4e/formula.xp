@@ -1,0 +1,45 @@
+TEXT = "<{NUMBER}>{DATETIME} {STRING} {$date=NUMBER} {$Computer=STRING} {NUMBER} {NUMBER} syslog[{NUMBER?}] [{NUMBER}]
+        {datafield1 = UNTIL(':')} User {object.account.name=STRING+} parameters have been changed successfully. 
+        Parameters: {object.property=STRING+} Initiator: {$tempuser=STRING+}"
+        
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+$tempuser = strip($tempuser, "", ".")
+if find_substr($tempuser, '@') != null then
+    $temp_csv = csv(lower($tempuser), "@", "`")
+    subject.account.name = $temp_csv[0]
+    subject.account.domain = $temp_csv[1]
+elif find_substr($tempuser, '\\') != null then
+    $temp_csv2 = csv(lower($tempuser), "\\", "`")
+    subject.account.name = $temp_csv2[1]
+    subject.account.domain = $temp_csv2[0]
+else 
+    subject.account.name = lower($tempuser)
+endif 
+
+object.property = strip(object.property, "", ".")
+
+#datafield1 name of plugin
+
+time = epoch_to_datetime($date)
+importance = "low"
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "secretnet_lsp"
+event_src.category = "Host security"
+
+id = "PT_Securitycode_SecretNet_LSP_syslog_user_parameters_changed"

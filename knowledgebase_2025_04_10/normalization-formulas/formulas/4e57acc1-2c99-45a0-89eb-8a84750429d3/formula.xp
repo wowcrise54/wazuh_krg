@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{$time_syslog=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {WORD $time_file=DATETIME "us="NUMBER?} ocserv{"["NUMBER"]"?}:
+        sec-mod: using \'{object.value=WORD}\' authentication to authenticate user (session: {object.name=UNTIL(")")}'
+
+action = "create"
+object = "session"
+status = "ongoing"
+
+object.property = "auth method"
+
+time = coalesce($time_file, $time_syslog)
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "openconnect"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Opensource_OpenConnect_syslog_auth_method_selected"

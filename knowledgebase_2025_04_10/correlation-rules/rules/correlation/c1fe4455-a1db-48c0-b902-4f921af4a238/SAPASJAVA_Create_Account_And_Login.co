@@ -1,0 +1,85 @@
+event Create_User:
+    key:
+        event_src.host, object.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_java"
+        and action == "create"
+        and object == "account"
+        and filter::CheckWL_Specific_Only("SAPASJAVA_Create_Account_And_Login", lower(object.account.name))
+    }
+
+event Login_Successful:
+    key:
+        event_src.host, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_java"
+        and action == "login"
+        and object == "system"
+        and status == "success"
+    }
+
+rule SAPASJAVA_Create_Account_And_Login: (Create_User -> Login_Successful) within 3h
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Create_User {
+        $datafield7 = subject.account.id          # Пользователь, создавший нового пользователя
+        $datafield4 = subject.account.session_id  # Идентификатор сессии пользователя, создавшего нового пользователя
+
+        $alert.key = lower(event_src.host)
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Login_Successful {
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $datafield1 = datafield1  # application
+        $datafield2 = datafield2  # transaction id
+        $datafield3 = datafield3  # thread name
+        $datafield5 = datafield5  # component name
+
+        $alert.context = join(["user from host", $src.host, "logged in to previously created account"], " ")
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit { 
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Create Account"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $datafield7], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising" 
+    $incident.aggregation.timeout = 2h
+}

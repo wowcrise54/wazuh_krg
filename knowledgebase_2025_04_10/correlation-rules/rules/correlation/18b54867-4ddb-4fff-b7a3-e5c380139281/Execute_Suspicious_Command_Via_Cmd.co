@@ -1,0 +1,123 @@
+event Run_Command_In_Cmd:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("cmd.exe", "(>.*?)+&|>.*?[\\\]+\.[\\\]+pipe[\\\]+|127\.0\.0\.1\\b.*?>.*?&|\\b__output\\b")
+        and filter::CheckWL_Process_Creation("Execute_Suspicious_Command_Via_Cmd", lower(object.process.cmdline))
+    }
+
+rule Execute_Suspicious_Command_Via_Cmd: Run_Command_In_Cmd
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Run_Command_In_Cmd {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        
+        if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+            $reason = "Service execution"
+        elif $object.process.parent.name == "scheduler.exe" then
+            $reason = "Task execution"
+        else
+            $reason = "User execution"
+        endif
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "(>.*?)+&|>.*?[\\\]+\.[\\\]+pipe[\\\]+|127\.0\.0\.1\\b.*?>.*?&|\\b__output\\b", 0)
+        $alert.context = lower(object.account.name)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    $C2_host = regex(lower($object.process.cmdline), "(http(s)?:\/\/|ftp:\/\/|\\\\\\\\)((([0-9]{1,3}[\.]){3}[0-9]{1,3}:(\d+)?)|(([a-z0-9-]+\.){1,3}[a-z]{2,4}))(\/|\\\\)", 3)
+    $datafield20 = $C2_host
+    if $C2_host != null then
+        $port_raw = regex($C2_host,":(\d+)$", 1)
+        $dst.port = strip($port_raw, ":", "")
+        $dst.host = strip($C2_host, "", ":" + $port_raw)
+        
+        if maybe_ipv4($dst.host) != null or maybe_ipv6($dst.host) != null then
+            $dst.ip = $dst.host
+            if in_subnet($dst.ip, "127.0.0.0/8") or $dst.ip == "::1" then
+                $dst.ip = null
+                $dst.host = null
+            endif
+        else
+            $maybe_dot_pos = find_substr($dst.host, '.')
+            if $maybe_dot_pos != null then
+                $dst.fqdn = $dst.host
+                $dst.hostname = substr($dst.host, 0, $maybe_dot_pos)
+            else
+                $dst.hostname = $dst.host
+            endif
+        endif
+    endif
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Windows Command Shell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

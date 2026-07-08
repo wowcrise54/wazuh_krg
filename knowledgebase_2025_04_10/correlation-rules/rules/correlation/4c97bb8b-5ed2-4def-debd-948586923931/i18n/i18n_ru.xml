@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Использованы функции PowerShell System.IO.Pipes.NamedPipeServerStream и System.IO.Pipes.NamedPipeClientStream, предназначенные для создания сервера, ожидающего прямого или обратного подключения (bind или reverse shell). Это может быть признаком использования однострочных сценариев Fuegoshell и создания удаленной оболочки для исполнения вредоносных команд через PowerShell</Description>
+  <EventDescriptions>
+    <EventDescription id="05ebe542-b94b-a15a-8b85-0da2ec7defbf">Использована функция, предназначенная для создания сервера, ожидающего обратного подключения (reverse shell), от имени пользователя {object.account.name} на узле {event_src.host}</EventDescription>
+    <EventDescription id="af28e973-0c95-155d-f5b0-87c5c63a063b">Использована функция, предназначенная для создания сервера, ожидающего прямого подключения (bind shell), от имени пользователя {object.account.name} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

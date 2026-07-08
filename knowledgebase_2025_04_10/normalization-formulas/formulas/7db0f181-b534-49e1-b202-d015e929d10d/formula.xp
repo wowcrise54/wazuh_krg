@@ -1,0 +1,22 @@
+!TABULAR = "{reason = C_4},
+            {time = EVENT_TIME},
+            {subject.account.name = USER_NAME}"
+
+!COND = ($C_3 == "Подключение") and ($EVENT_TYPE == "VW_CRIT_DIARY_ERRORS")
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+importance = "high"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_connect_to_database"

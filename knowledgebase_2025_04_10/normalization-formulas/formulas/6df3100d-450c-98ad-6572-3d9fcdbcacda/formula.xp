@@ -1,0 +1,33 @@
+JSON = 'Provider = "Microsoft-Windows-WMI-Activity"'
+COND = $EventData["CONSUMER"] != null
+        and $EventData["ESS"] != null
+        and $EventData["Namespace"] != null
+        and $EventData["PossibleCause"] != null
+        and $EventID == 5861
+
+action = "create"
+object = "resource"
+status = "success"
+
+object.process.id = $["ProcessID"]
+ 
+$csv = csv($EventData["CONSUMER"], "=", "")
+object.name = strip($csv[1], '"', '"')  # Event Log Consumer
+object.path = lower(strip($EventData["Namespace"], "//./", ""))
+object.property = "PossibleCause"
+object.type = "WMI subscription"
+object.value = lower($EventData["PossibleCause"])
+
+datafield1 = $ThreadID                        # Thread ID
+datafield2 = $EventData["ESS"]                # Event Log Consumer
+if $Name != "" then datafield3 = $Name endif  # process name if not empty
+
+time = $Timestamp
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_ETW_WMI_subscription_created"

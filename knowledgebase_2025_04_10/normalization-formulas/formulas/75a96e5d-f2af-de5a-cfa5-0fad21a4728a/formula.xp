@@ -1,0 +1,41 @@
+# {"ApacheKafkaMessage": {"message": "{\"login\":\"sys\",\"message\":\"\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0446\u0435\u043b\u043e\u0441\u0442\u043d\u043e\u0441\u0442\u0438 \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a \u0441\u0435\u0440\u0432\u0438\u0441\u0430 uss-admin. \u0426\u0435\u043b\u043e\u0441\u0442\u043d\u043e\u0441\u0442\u044c \u043d\u0435 \u043d\u0430\u0440\u0443\u0448\u0435\u043d\u0430.\",\"result\":0,\"environment\":\"uss-rg\",\"@timestamp\":\"2022-09-07T14:45:00.000444080Z\",\"event_type\":\"LIBRARY_INTEGRITY_CONTROL\",\"service\":\"uss-event-registration\",\"@version\":\"1\"}", "topic": "uss-sp-events", "group_id": "maxpatrol-siem"}}
+
+JSON = ''
+
+COND = $ApacheKafkaMessage["message"] != null
+        and find_substr($ApacheKafkaMessage["message"], 'LIBRARY_INTEGRITY_CONTROL') != null
+
+$stripped = strip($ApacheKafkaMessage["message"], '{', '}')
+$replaced = replace($stripped, ' ', '\"')
+$kv = keyvalue($replaced, ',', ':', '\"')
+
+subject = "account"
+action = "validate"
+object = "resource"
+status = switch $kv["result"]
+   case "0" "success"
+   case "1" "failure"
+   case "2" "success"
+endswitch
+
+subject.account.name = $kv["login"]
+
+$objservice = find_substr($kv["message"], "uss")
+$objdot = find_substr($kv["message"], ". Целостность")
+object.name = substr($kv["message"], $objservice, $objdot - $objservice)
+object.type = "library"
+object.state = $kv["message"]
+
+time = $kv["@timestamp"]
+msgid = $kv["event_type"]
+importance = switch $kv["result"]
+   case "0" "info"
+   case "1" "low"    
+   case "2" "high"
+endswitch
+
+event_src.vendor = "otr"
+event_src.title = "uss"
+event_src.category = "AAA"
+
+id = "PT_OTR_USS_customeventcollector_Checking_the_integrity_of_libraries"

@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL(" Info: ")}Delayed: DCID 
+        {datafield1=NUMBER} MID {object.id=NUMBER} to RID {datafield2=NUMBER} - {reason=STRING+} (\' {REST}'
+
+action = "send"
+object = "message"
+status = "failure"
+
+object.type = "email"
+
+# datafield1 - DCID
+# datafield2 - Recipient ID
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_message_soft_bounces"

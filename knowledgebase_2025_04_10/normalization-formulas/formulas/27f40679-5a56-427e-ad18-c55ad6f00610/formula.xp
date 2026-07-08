@@ -1,0 +1,46 @@
+EVENTLOG = 'Provider.Name="PT-XDR"'
+
+COND = $Channel == "host_isolator"
+
+if in_list(["hi_block_connections_failed", "hi_block_connections_successful", "hi_disable_adapters_in_progress"], $EventID) then
+    action = "disconnect"
+elif in_list(["hi_isolation_failed", "hi_isolation_successful"], $EventID) then
+    action = "disable"
+elif in_list(["hi_restore_failed", "hi_restore_successful"], $EventID) then
+    action = "enable"
+elif in_list(["hi_unblock_connections_failed", "hi_unblock_connections_successful"], $EventID) then
+    action = "connect"
+endif
+
+object = "host"
+if find_substr($EventID, "_successful") != null then
+    status = "success"
+elif find_substr($EventID, "_in_progress") != null then
+    status = "ongoing"
+else
+    status = "failure"
+endif
+
+reason = $Data["reason"]
+
+importance = "info"
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.id = $Data["agent_id"]
+event_src.ip = $Data["agent_ip"]
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.subsys = $Channel
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_eventlog_host_isolator"

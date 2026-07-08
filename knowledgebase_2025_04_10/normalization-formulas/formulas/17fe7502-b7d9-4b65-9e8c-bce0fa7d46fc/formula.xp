@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        KSMG: not processed: message-id="{$obj_id=UNTIL("\\":")} relay-ip="{src.ip=IPV4|src.ip=IPV6}":
+        kt-reason="blacklist", av-reason="blacklist", ap-reason="blacklist", as-reason="blacklist",
+        ma-reason="blacklist", cf-reason="blacklist": action="{object.state="Rejected"|object.state="Deleted"}":
+        rules="{subject.id=NUMBER}": size={datafield1=NUMBER}: mail-from="{datafield2=UNTIL("\\":")}
+        rcpt-to="{datafield3=UNTIL("\\"")}'
+
+subject = "rule"
+action = "deny"
+object = "message"
+status = "success"
+
+object.type = "email"
+# object.state = delete - удалено без уведомления; reject - удалено с уведомлением
+if $obj_id != "" then
+    object.id = $obj_id  # Идентификатор письма
+endif
+
+reason = "blacklist"
+
+# datafield1 - Размер письма
+# datafield2 - Отправитель письма
+# datafield3 - Получатель письма
+
+importance = "low"
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_secure_mail_gateway"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KLMS_KSMG_syslog_message_deny"

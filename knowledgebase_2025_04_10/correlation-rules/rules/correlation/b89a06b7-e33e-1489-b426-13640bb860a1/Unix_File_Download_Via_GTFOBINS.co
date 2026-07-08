@@ -1,0 +1,100 @@
+query Check_File_Download_GTFOBin($process_name) from Unix_GTFOBins {
+    gtfobin_name == $process_name
+    and detection_category == "file_download"
+}
+
+event File_Created_GTFOBin:
+    key:
+        event_src.host, subject.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.subsys == "auditd"
+        and event_src.title == "unix_like"
+        and object == "file_object"
+        and action == "create"
+        and status == "success"
+        and subject.account.id != "0"
+        and exec_query("Check_File_Download_GTFOBin", [subject.process.name])
+        and filter::CheckWL_Linux_File_Operations("Unix_File_Download_Via_GTFOBINS",
+            lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|")))
+    }
+
+rule Unix_File_Download_Via_GTFOBINS: File_Created_GTFOBin
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+    }
+
+    on File_Created_GTFOBin {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.meta = subject.process.meta
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.parent.id = subject.process.parent.id
+        
+        $object.name = object.name
+        $object.id = object.id
+        $object.type = object.type
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.state = object.state
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.group = object.account.group
+
+        $logon_service = logon_service
+
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+
+        $numfield2 = numfield2  # Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $alert.key = lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|"))
+        $alert.context = join([$subject.process.name, "gtfobin_functions:" + select_query_first("Check_File_Download_GTFOBin", [subject.process.name], "gtfobin_functions")], " | ")
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "create"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Lateral Tool Transfer"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

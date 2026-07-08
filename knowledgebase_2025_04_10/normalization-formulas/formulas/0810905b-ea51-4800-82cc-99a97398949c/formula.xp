@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        KSMG: rule {object.id=NUMBER} created with name "{$name=REST}'
+
+action = "create"
+object = "rule"
+status = "success"
+
+object.name = strip($name,'','"')
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_secure_mail_gateway"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KLMS_KSMG_syslog_rule_create"

@@ -1,0 +1,30 @@
+    # <133>1 2021-12-15T15:41:58+03:00 control KerioControl - - - AV check failed: Kerio Antivirus verdict: No virus found. Password protected or corrupted file., client - 10.127.70.20, http://rt.webcompanion.com/notifications/download/rt/ActiveFeatures.zip
+
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {$subsys=WORDDASH} - - -{STRING?}
+        AV check failed: Kerio Antivirus verdict: {reason=UNTIL(", client")} - {src.ip=IPV4|src.ip=IPV6}, {$link=REST}'
+
+action = "info"
+object = "file"
+status = "success"
+
+external_link = $link
+
+$stripped_link = strip($link, "http://", "")
+$first_slash = find_substr($stripped_link, "/")
+datafield1 = substr($stripped_link, 0, $first_slash)  # Адрес сайта
+
+importance = "low"
+
+event_src.vendor = "kerio_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kerio_control"
+event_src.subsys = lower($subsys)
+event_src.category = "Anti-virus"
+
+id = "PT_Kerio_Technologies_Kerio_Control_syslog_av_check_failed"

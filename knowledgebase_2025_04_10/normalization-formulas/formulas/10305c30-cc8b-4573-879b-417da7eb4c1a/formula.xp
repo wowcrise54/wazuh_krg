@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{event_src.hostname=HOSTNAME|STRING}  :Web authentication {$re=REST}'
+
+if find_substr($re, 'fail') != null then
+    submessage ("TEXT", "parse_rest1", $re)
+elif find_substr($re, 'fail') == null then
+    submessage ("TEXT", "parse_rest2", $re)
+endif
+
+subformula "parse_rest1"
+    !TEXT = "fail from IP address {src.ip=IPV4|src.ip=IPV6}"
+    status = "failure"
+endsubformula
+
+subformula "parse_rest2"
+    !TEXT = "from IP address {src.ip=IPV4|src.ip=IPV6}, access mode: {subject.account.privileges=REST}"
+    subject = "account"
+    status = "success"
+endsubformula
+
+action = "login"
+object = "system"
+
+dst.hostname = event_src.hostname
+
+logon_auth_method = "remote"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "ers_5500"
+event_src.vendor = "avaya"
+event_src.category = "Network device"
+
+id = "PT_Avaya_ERS_5500_syslog_login_http_session_login"

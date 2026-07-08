@@ -1,0 +1,66 @@
+JSON = "AUDIT_RECORD.RECORD_ID"
+
+COND = $AUDIT_RECORD["NAME"] == "Query"
+       and $AUDIT_RECORD["COMMAND_CLASS"] == "set_option"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+
+if in_list([0, null], number($AUDIT_RECORD["STATUS"])) then
+    status = "success"
+else
+    status = "failure"
+
+    reason = $AUDIT_RECORD["STATUS"]
+endif
+
+subformula "parse_query"
+    TEXT = "set {object.type=WORD?} {object.property=WORD} = {object.new_value=REST}"
+endsubformula
+
+subformula "parse_query"
+    TEXT = "{REST}"
+endsubformula
+
+$square_bracket = find_substr($AUDIT_RECORD["USER"], "[")
+$user = substr($AUDIT_RECORD["USER"], 0, $square_bracket)
+subject.account.id = $user
+subject.account.name = $user
+
+subject.account.session_id = $AUDIT_RECORD["CONNECTION_ID"] 
+
+$query = $AUDIT_RECORD["SQLTEXT"]
+object.query = $query
+
+submessage("TEXT", "parse_query", lower($query))
+
+if $AUDIT_RECORD["HOST"] != "localhost" then
+    $first_dot = find_substr($AUDIT_RECORD["HOST"], '.')
+
+    if $first_dot != null then
+        src.fqdn = lower($AUDIT_RECORD["HOST"])
+        src.hostname = lower(substr($AUDIT_RECORD["HOST"], 0, $first_dot))
+    else
+        src.hostname = lower($AUDIT_RECORD["HOST"])
+    endif
+endif
+
+if $AUDIT_RECORD["IP"] == "::1" then
+    src.ip = recv_ipv4
+else
+    src.ip = $AUDIT_RECORD["IP"]
+endif
+
+dst.ip = recv_ipv4
+
+time = strip($AUDIT_RECORD["TIMESTAMP"], "", " UTC")
+msgid = $AUDIT_RECORD["COMMAND_CLASS"]
+importance = "high"
+
+event_src.ip = dst.ip
+event_src.title = "mysql"
+event_src.vendor = "oracle"
+event_src.category = "Database server"
+
+id = "PT_Oracle_MySQL_filemonitor_set_option"

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying via SSH. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="5e9eca95-ccf5-17ae-0c93-a10c9170e86a">Password spraying attempts via SSH from host {src.host} on host {event_src.host}. Number of login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="a2a2499e-e381-e3cf-c66b-f988222581c2">Successful password spraying via SSH from host {src.host} on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="e61fa567-2b4d-6098-343b-4b36b24e06d0">Successful password spraying via SSH from host {src.host} on host {event_src.host}. Attackers obtained the passwords of the following users: {datafield2}. Number of failed login attempts: {datafield1}.</EventDescription>
+  </EventDescriptions>
+</Localization>

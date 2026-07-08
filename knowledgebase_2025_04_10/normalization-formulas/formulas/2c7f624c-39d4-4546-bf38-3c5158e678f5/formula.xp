@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"."NUMBER"."NUMBER?} {"+"NUMBER":"NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} {"%%"?}{WORD+}/{NUMBER}/{msgid=WORD+}{"(l)"?}
+        {"["NUMBER"]"?}:- {STRING} - {subject.account.name=WORDDASH}({src.ip=IPV4|src.ip=IPV6}) in {WORDDASH} login'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+importance = "high"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "3com"
+event_src.vendor = "huawei"
+event_src.category = "Network device"
+
+id = "PT_Huawei_3Com_syslog_Login"

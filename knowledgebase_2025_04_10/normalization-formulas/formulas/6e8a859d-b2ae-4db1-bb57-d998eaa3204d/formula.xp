@@ -1,0 +1,33 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "LS Response Group Service" and $number == 31023
+
+msgid = $number
+
+object = "service"
+object.name = "LS Response Group Service"
+action = "alert"
+status = "success"
+subject = "host"
+reason = "Failed to create application endpoint"
+
+importance = "high"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_31023_application_endpoint_cannot_be_created"

@@ -1,0 +1,33 @@
+TEXT = '{$raw_time=STRING+} {$timestamp=STRING} INFO {"Пользователь"|"The user"} {$raw_name=STRING} 
+        {"("?}{subject.account.id=UNTIL(")")?} 
+        {$login="вошел в систему"|$login="has logged in"|"вышел из системы"|"has logged out"}{"."?}
+        |||@src="{UNTIL("\\"")};@pid={object.process.id=NUMBER};@thid={NUMBER};
+        {"MicroserviceId=\\"1\\";"?}ClientIp="{$raw_ip=UNTIL("\\"")}{REST}'
+
+subject = "account"
+action = if $login != null then "login" else "logout" endif
+object = "application"
+status = "success"
+
+if find_substr($raw_name, "@") != null then
+    $name_domain = csv($raw_name, "@", "`")
+    subject.account.name = $name_domain[0]
+    subject.account.domain = $name_domain[1]
+else
+    subject.account.name = $raw_name
+endif
+
+src.ip = strip($raw_ip, "::ffff:", "")
+
+time = maybe_datetime($raw_time + $timestamp)
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "iam"
+event_src.category = "AAA"
+
+id = "PT_Positive_Technologies_iam_filemonitor_login_logout"

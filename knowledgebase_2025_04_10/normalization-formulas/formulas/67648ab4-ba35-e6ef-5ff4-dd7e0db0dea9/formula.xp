@@ -1,0 +1,54 @@
+EVENTLOG = 'EventID.text="3202"'
+COND = $Channel == "Kaspersky Security"
+       and $Provider["Name"] == "Real-Time File Protection"
+
+action = "detect"
+object = "malware"
+status = "success"
+
+$tmp = csv($Data[0], "\\", "'")
+$temp_csv = csv($Data[3], '\\', '')
+
+object.account.fullname = $Data[3]
+object.account.name = $temp_csv[1]
+object.account.domain = $temp_csv[0]
+
+object.fullpath = $Data[0]
+object.name = $tmp[length($tmp) - 1]
+object.path = strip($Data[0], "", object.name)
+
+object.type = $Data[1]
+object.process.name  = $Data[6]
+object.process.id = $Data[7]
+
+if $Data[4] != "localhost" then
+    src.ip = maybe_ipv4($Data[4])
+endif
+
+if src.ip == null and $Data[4] != "localhost" then
+    src.hostname = $Data[4]
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "high"
+
+reason = "Malicious object is found"
+
+category.generic = "IS Incident"
+category.high = "Information Security"
+category.low = "State"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_11_eventlog_3202_malicious_object_is_found"

@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {msgid="CisACS_03_RADIUSAcc"} {WORD} {NUMBER} 0 {$kv=KEYVALUE}'
+
+subject = "account"
+if ($kv['Acct-Status-Type'] == 'Start') or ($kv['Acct-Status-Type'] == 'NAS Port re-used') then
+    action = "start"
+elif $kv['Acct-Status-Type'] == 'Stop' then
+    action = "stop"
+endif
+object = "session"
+status = "success"
+
+subject.name = $kv['User-Name']
+subject.group = $kv['Group-Name']
+
+object.id = $kv['Acct-Session-Id']
+
+if maybe_ipv4(strip($kv["Calling-Station-Id"], "", "/")) != null
+        or maybe_ipv6(strip($kv["Caller-ID"], "", "/")) != null then
+    src.ip = strip($kv['Calling-Station-Id'], "", "/")
+elif maybe_macaddr(strip($kv["Calling-Station-Id"], "", "/")) != null then
+    src.mac = strip($kv["Calling-Station-Id"], "", "/")
+endif
+
+protocol = $kv['Framed-Protocol']
+assigned_src_ip = $kv['Framed-IP-Address']
+nas_ip = $kv['NAS-IP-Address']
+
+duration=$kv['Acct-Session-Time']
+count.bytes_in=$kv['Acct-Input-Octets']
+count.bytes_out=$kv['Acct-Output-Octets']
+count.packets_in=$kv['Acct-Input-Packets']
+count.packets_out=$kv['Acct-Output-Packets']
+
+importance = "info"
+
+event_src.title = "acs"
+event_src.vendor = "cisco"
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_CisACS_03_RADIUSAcc"

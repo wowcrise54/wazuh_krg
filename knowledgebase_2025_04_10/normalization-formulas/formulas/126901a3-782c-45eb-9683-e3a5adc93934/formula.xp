@@ -1,0 +1,48 @@
+TABULAR =  "recordid,
+            module_name,
+            severity,
+            event_id,
+            {time = time},
+            {datafield1 = site_code},
+            hostname,
+            {datafield2 = component},
+            params
+            "
+
+COND = $event_id == 30076 and $product != "MECM"
+
+subject = "account"
+object = "session"
+
+action = "start"
+status = "success"
+
+msgid = string($event_id)
+
+submessage ("TEXT", "add_info", $params)
+subformula "add_info"
+    TEXT = "{$csv=CSV}"
+
+    $tmp = find_substr($csv[2], "\\")
+    if $tmp != null then
+        subject.name = lower(strip(substr($csv[2], $tmp, length($csv[2])), "\\", ""))
+        subject.domain = lower(substr($csv[2], 0, $tmp))
+    else
+        subject.name = lower($csv[2])
+    endif
+
+    if $csv[1] != $hostname then
+        src.hostname = lower($csv[1])
+    else
+        src.hostname = lower($csv[0])
+    endif
+endsubformula
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "info"
+
+id = "PT_Microsoft_SCCM_odbc_30076_user_started_remote_session"

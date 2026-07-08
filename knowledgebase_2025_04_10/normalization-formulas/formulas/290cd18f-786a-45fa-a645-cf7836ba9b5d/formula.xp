@@ -1,0 +1,37 @@
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Application_control_Policy_update"
+
+TABULAR = ' event_type,
+            product,
+            src,
+            src_machine_name,
+            src_user_name,
+            time,
+            product_family,
+            policy_date,
+            policy_name,
+            policy_type'
+
+COND = ($product_family == "Endpoint" and $product == "Application Control" and $event_type == "Policy Update")
+
+object = "policy"
+object.name = $policy_name
+object.version = $policy_date
+
+action = "update"
+status = "success"
+
+subject = "account"
+subject.name = $src_user_name
+
+msgid = $event_type
+
+time = $time
+
+importance = "high"
+
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.ip = $src
+event_src.hostname = $src_machine_name
+event_src.subsys = lower($product)
+event_src.category = "Host security"

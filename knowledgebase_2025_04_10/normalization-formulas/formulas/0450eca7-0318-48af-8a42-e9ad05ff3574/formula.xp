@@ -1,0 +1,73 @@
+TEXT = '{$json=REST}'
+COND = (
+    find_substr($json, '"meta.caller_id":"Ci::BuildFinishedWorker"') != null
+    and find_substr($json, '"meta.feature_category":"continuous_integration"') != null
+    and find_substr($json, '"message":"Cannot obtain an exclusive lease. There must be another instance already in execution."') != null
+    and find_substr($json, '"lease_key":') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = "account"
+action = "execute"
+object = "process"
+status = "failure"
+
+subject.account.name = $['meta.user']
+if $['meta.gl_user_id'] != null then
+    subject.account.id = string($['meta.gl_user_id'])
+elif substr($['meta.client_id'], 0, 5) == "user/" then
+    subject.account.id = strip($['meta.client_id'], "user/", "")
+endif
+subject.account.session_id = $['meta.client_id']
+
+object.type = "worker"
+object.name = $['meta.caller_id']
+object.process.name = $['meta.caller_id']
+object.process.id = string($['meta.job_id'])
+object.process.meta = $class_name
+object.property = "exclusive_lease"
+object.value = $lease_key
+object.state = "exclusive lease already acquired"
+
+reason = $message
+duration = $lease_timeout
+
+src.ip = $['meta.remote_ip']
+
+$project_list = csv($['meta.project'], "/", "'")
+$project_path = $project_list[length($project_list) - 1]
+$project_namespace_fullpath = strip($['meta.project'], "", "/" + $project_path)
+
+datafield1 = $project_path                                # Project Slug
+datafield2 = coalesce($project_namespace_fullpath, $['meta.root_namespace'])  # Namespace Fullpath
+datafield3 = $['meta.root_namespace']                     # Root Namespace
+datafield4 = $lease_key                                   # Lease Key
+datafield5 = $class_name                                  # Class Name
+datafield6 = $['meta.root_caller_id']                     # Root Caller ID
+datafield7 = $['meta.feature_category']                   # Feature Category
+datafield8 = string($['meta.pipeline_id'])                # Pipeline ID
+datafield9 = string($['meta.job_id'])                     # Job ID
+
+numfield3 = $['meta.job_id']       # Job ID
+numfield4 = $['meta.pipeline_id']  # Pipeline ID
+
+chain_id = $correlation_id
+msgid = coalesce($['meta.root_caller_id'], $['meta.caller_id'])
+time = $time
+importance = "low"
+
+category.generic = "Application"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "gitlab"
+event_src.title = "gitlab"
+event_src.subsys = "sidekiq"
+event_src.category = "Other"
+
+id = "LOC_GitLab_GitLab_json_Sidekiq_Build_Finished_Worker_Lease"

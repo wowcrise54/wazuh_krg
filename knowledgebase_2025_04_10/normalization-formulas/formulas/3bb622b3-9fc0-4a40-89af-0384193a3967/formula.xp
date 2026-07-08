@@ -1,0 +1,49 @@
+!TABULAR = "sys_event_id,
+            timestamp,
+            sys_event_type,
+            component_id,
+            component_name,
+            coord_center,
+            description"
+!COND = (find_substr($description, "авторизации с адреса") != null)
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+subformula "Login_failed"
+    !TEXT = 'Зафиксирован{LITERAL} {datafield1=NUMBER} неудачных попыт{LITERAL+} авторизации
+            с адреса {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}'
+endsubformula
+
+object.id = $component_id
+object.name = $component_name
+
+submessage("TEXT", "Login_failed", $description)
+
+logon_auth_method = "remote"
+
+# datafield1 - number of failed attempts
+
+time = epoch_to_datetime($timestamp)
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "rnt"
+event_src.title = "forpost"
+event_src.category = "IDS/IPS"
+
+if $component_host != null then
+    event_src.hostname = $component_host
+    dst.hostname = $component_host
+else
+    # Fallback case:
+    event_src.hostname = $coord_center
+    dst.hostname = $coord_center
+endif
+
+id = "PT_RNT_Forpost_odbc_Login_failed_many_times"

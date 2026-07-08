@@ -1,0 +1,36 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and $msgid == "Edit Monitoring Policy"
+
+subformula "get_data"
+    TEXT = '{UNTIL("Monitoring Policy: [")}{object.name=UNTIL("]\\";")}
+            {REST}'
+endsubformula
+
+subject = "account"
+action = "modify"
+object = "policy"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+submessage("TEXT", "get_data", $data)
+
+object.type = "monitoring"
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "medium"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_monitoring_policy"

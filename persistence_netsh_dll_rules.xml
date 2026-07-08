@@ -1,0 +1,31 @@
+<!--
+  Native Wazuh port of MaxPatrol SIEM PT-CR-607 / Persistence_Netsh_DLL.
+  MITRE ATT&CK T1546.007: Netsh Helper DLL.
+  Data source: Microsoft Sysmon Event IDs 1 and 13.
+-->
+<group name="windows,persistence_netsh_dll,t1546_007,">
+
+  <!-- netsh.exe add helper <path.dll> -->
+  <rule id="110240" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\netsh\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\badd\b.*?\bhelper\b.*?\.dll(?:[&quot;'\s]|$)</field>
+    <description>Netsh helper DLL registration detected: $(win.eventdata.commandLine), executed by $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.007</id>
+    </mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,netsh_helper_dll,</group>
+  </rule>
+
+  <!-- Registry value set below HKLM\SOFTWARE\Microsoft\NetSh. -->
+  <rule id="110241" level="10">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\NetSh\\</field>
+    <description>Netsh helper registry value modified by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.007</id>
+    </mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,netsh_helper_dll,</group>
+  </rule>
+
+</group>

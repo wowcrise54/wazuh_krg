@@ -1,0 +1,55 @@
+TABULAR = 'client_name,
+           client_version,
+           description,
+           event_type,
+           fde_account,
+           orig,
+           os_name,
+           os_version,
+           product,
+           product_family,
+           src,
+           src_machine_name,
+           time'
+
+COND = $product_family == "Endpoint"
+       and $product == "FDE"
+       and $event_type == "Account"
+       and $description == "Account logon Logon completed successfully."
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+if length($src_user_name) != 0 then
+    subject.name = $src_user_name
+endif
+
+src.hostname = $src_machine_name
+src.ip = $src
+dst.hostname = $src_machine_name
+dst.ip = $src
+
+logon_auth_method = "local"
+
+datafield1 = strip($fde_account,'(',')')
+
+reason = strip($description,' ','.')
+
+time = $time
+msgid = $event_type
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.subsys = lower($product)
+event_src.hostname = $src_machine_name
+event_src.ip = $src
+event_src.category = "Host security"
+
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_FDE_Account_logon"

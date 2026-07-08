@@ -1,0 +1,42 @@
+!JSON = 'EventIdentifier=593'
+!COND = $Logfile=="Security" and $Category==5
+
+subject = "account"
+action = "stop"
+object = "process"
+status = "success"
+
+object.account.session_id = maybe_number16(strip(csv($InsertionStrings[4], ",", "`")[1], "", ")"))
+object.account.name = lower($InsertionStrings[2])
+object.account.domain = lower($InsertionStrings[3])
+
+$path_splitdrive = csv(lower($InsertionStrings[1]),'\\','"')
+object.process.id = $InsertionStrings[0]
+object.process.name = $path_splitdrive[length($path_splitdrive) - 1]
+object.process.path = strip(lower($InsertionStrings[1]), "", object.process.name)
+object.process.fullpath = lower($InsertionStrings[1])
+
+reason = $code_split[0]
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+category.generic = "Process"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_Common_Security_593_A_process_has_exited"

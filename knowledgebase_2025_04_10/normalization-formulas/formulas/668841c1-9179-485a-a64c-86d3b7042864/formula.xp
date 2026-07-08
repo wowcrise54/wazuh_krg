@@ -1,0 +1,47 @@
+TEXT = '{UNTIL("CEF:0")}|AO Kaspersky Lab|{subject.name="Kaspersky Anti Targeted Attack Platform"}|4.{$ver=UNTIL("|")}
+        {msgid="url_web"}|URL from web detected|{$level=WORD}| dvc={event_src.ip=IPV4|$Computer=HOSTNAME}
+        {$kv=KEYVALUE(" ", "=")}'
+
+subject = "application"
+action = "detect"
+object = "alert"
+status = "success"
+
+subject.version = "4." + $ver
+object.name = $kv["cs1"]
+object.type = "url"
+object.property = "suspicious resource"
+object.value = $kv["request"]
+
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+
+datafield4 = $kv["reason"]         # code of reason
+datafield5 = $kv["requestMethod"]  # request method
+
+time = datetime($kv["rt"])
+
+importance = switch $level
+    case "Low" "low"
+    case "Medium" "medium"
+    case "High" "high"
+endswitch
+
+if importance == null then
+    importance = "info"
+endif
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v4_url_web"

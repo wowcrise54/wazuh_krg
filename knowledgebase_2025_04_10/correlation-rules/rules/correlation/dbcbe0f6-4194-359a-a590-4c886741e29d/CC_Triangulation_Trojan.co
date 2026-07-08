@@ -1,0 +1,112 @@
+event NAD_Alert:
+    key:
+        src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and (
+                (
+                    id == "PT_Positive_Technologies_NAD_filemonitor_reputation"
+                    and lower(subject.name) == "esc-manual-operation_triangulation-dns"
+                )
+                or (
+                    id == "PT_Positive_Technologies_NAD_filemonitor_alert"
+                    and lower(object.name) == "et mobile_malware trojan/ios operation triangulation cnc domain in dns lookup"
+                )
+        )
+        and filter::CheckWL_NAD_Alert("CC_Triangulation_Trojan", lower(join([object.property, src.ip, dst.ip], "|")))
+    }
+
+rule CC_Triangulation_Trojan: NAD_Alert
+
+    init {
+        $labels = "w_auto|CheckWL_NAD_Alert"
+    }
+
+    on NAD_Alert { 
+        $object = object    # session, alert
+
+        $subject.name = subject.name
+        $subject.type = subject.type
+
+        $object.name = object.name
+        $object.id = object.id
+        $object.path = object.path
+        $object.group = object.group
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $src.geo.city = src.geo.city
+        $src.geo.country = src.geo.country
+        $src.geo.asn = src.geo.asn
+        $src.geo.org = src.geo.org
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $dst.geo.city = src.geo.city
+        $dst.geo.country = src.geo.country
+        $dst.geo.asn = src.geo.asn
+        $dst.geo.org = src.geo.org
+
+        $direction = direction
+        $protocol = protocol
+        $protocol.layer7 = protocol.layer7
+        $reason = reason
+
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield6 = datafield6
+        $datafield7 = datafield7
+        $datafield8 = datafield8
+        $datafield9 = datafield9
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([object.property, src.ip, dst.ip], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "rule"
+    $action = "detect"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Application Layer Protocol"
+    
+    $incident.aggregation.key = join([$correlation_name, $subject.name, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "BotNetCC"
+    $incident.aggregation.timeout = 2h
+}

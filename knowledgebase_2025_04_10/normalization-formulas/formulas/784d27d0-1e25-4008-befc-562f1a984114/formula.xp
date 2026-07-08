@@ -1,0 +1,21 @@
+TEXT = "{'<'NUMBER'>'?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        apt-monitor{'['NUMBER']'?} {':'?} [__main__] Cannot get {object.name=STRING+} bases status: '{$reas=REST}"
+
+action = "alert"
+object = "database"
+status = "success"
+
+importance = "info"
+
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_check_status_bd_failure"

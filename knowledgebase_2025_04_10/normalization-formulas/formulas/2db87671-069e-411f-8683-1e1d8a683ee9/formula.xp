@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys=WORDDASH} {":"?} [wabaudit] type={$type="\'session opened\'"| $type="\'session closed\'"}
+        username={"\'"}{subject.name=WORDDASH}{"\'"} secondary={$data=STRING}
+        client_ip={"\'"}{src.ip=IPV4}{"\'"} src_protocol={"\'"}{$proto=WORDDASH}{"\'"} dst_protocol={"\'"}{WORDDASH}{"\'"}
+        message={"\'"}{WORDDASH*}{"\'"} uid={"\'"}{$uid=WORDDASH}{"\'"}'
+
+subject = "account" 
+
+action = switch $type
+    case "\'session opened\'" "start"
+    case "\'session closed\'" "stop"
+endswitch
+
+object = "session"
+status = "success"
+
+object.name =  strip($data, "\'", "\'")
+
+if $uid != "None" then
+    object.id = $uid
+endif
+
+protocol.layer7 = lower($proto)
+
+importance = "medium"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_syslog_user_session"

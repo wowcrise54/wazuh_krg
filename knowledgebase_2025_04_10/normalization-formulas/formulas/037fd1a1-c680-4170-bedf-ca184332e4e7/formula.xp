@@ -1,0 +1,54 @@
+EVENTLOG = ''
+
+COND = (
+            $Channel == "Kaspersky Endpoint Security"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "315"
+        )
+        or
+        (
+            $Channel == "Kaspersky Event Log"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "4660"
+            and find_substr($Data[0], "Объект пропущен") != null
+        )
+
+subject = "application"
+action = "stop"
+object = "scan"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+subject.type = $kv["Компонент"]
+
+if $kv["Объект\\Тип"]  ==  "Файл" then
+    object.type = "file"
+endif
+object.path = coalesce($kv["Объект"], $kv["Объект\\Название"])
+object.state = $kv["Результат\\Описание"]
+
+reason = $kv["Причина"]
+
+time = $TimeCreated["SystemTime"]
+
+msgid = switch $EventID["text"]
+    case "4660" $kv["Тип события"]
+    case "315" $EventID["text"]
+endswitch
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_315_object_skipped"

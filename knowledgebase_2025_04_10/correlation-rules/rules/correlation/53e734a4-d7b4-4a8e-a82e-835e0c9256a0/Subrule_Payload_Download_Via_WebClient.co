@@ -1,0 +1,120 @@
+event Payload_Download:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("rundll32.exe", "http(s)?:")
+        and regex(lower(object.process.cmdline), "\.(exe|bin|msi|dll|ps1|bat|scr|cmd|hta|vb|vbe|vbs|wsf)\\b$", 0) != null
+        and filter::CheckWL_Specific_Only("Subrule_Payload_Download_Via_WebClient", lower(join([subject.account.name, object.process.cmdline], "|")))
+    }
+
+event Remote_Storage_Connection:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or (event_src.title == "sysmon" and msgid == "3")
+        )
+        and lower(object.process.name) == "svchost.exe"
+        and lower(object.account.name) == "local service"
+        and direction == "egress"
+        and status == "success"
+    }
+
+rule Subrule_Payload_Download_Via_WebClient: (Payload_Download+ and Remote_Storage_Connection+) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Payload_Download {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield5 = regex(lower(object.process.cmdline), "(\w+?)\.(exe|bin|msi|dll|ps1|bat|scr|cmd|hta|vb|vbe|vbs|wsf)\\b$", 0) # скачиваемый файл
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline], "|"))
+        $alert.regex_match = "Source: " + regex(lower(object.process.cmdline), "http(s)?:\/\/(\w+(-\w+)?\.)+(\w+(-\w+)?)", 0)
+        $alert.context ="Payload: " + $datafield5 + " | " + $alert.regex_match
+    }
+
+    on Remote_Storage_Connection {
+        # src
+        $src.host = src.host
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.asset = src.asset
+        $src.port = src.port
+
+        # dst
+        $dst.host = dst.host
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.asset = dst.asset
+        $dst.port = dst.port
+    }
+
+emit {
+    $correlation_type = "subrule"
+    
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "User Execution: Malicious File"
+}

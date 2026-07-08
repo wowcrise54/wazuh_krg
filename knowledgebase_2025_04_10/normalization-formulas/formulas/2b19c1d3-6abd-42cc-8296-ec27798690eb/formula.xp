@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {msgid="CISE_Administrative_and_Operational_Audit"}
+        {NUMBER+} 0 {UNTIL(" service")}{$kv=KEYVALUE}'
+
+subject = "account"
+action = "start"
+object = "process"
+status = "success"
+
+subject.account.name = $kv["AdminName"]
+
+submessage ("TEXT", "parse_kv", $kv['OperationMessageText'])
+
+subformula "parse_kv"
+    !TEXT = "Process: {$obname=STRING+} started by ISE watchdog process"
+    object.process.name = strip($obname, "'", "'")
+endsubformula
+
+src.ip = $kv["AdminIPAddress"]
+
+logon_service = $kv["AdminInterface"]
+
+reason = "restarted by watchdog service"
+
+importance = "info"
+
+category.generic = "Process"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.title = "ise"
+event_src.vendor = "cisco"
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_Administrative_and_Operational_Audit_restart_process"

@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}-{WORD?}{"-"?}{NUMBER}-{msgid="722051"}:
+        Group <{$tunnel_group=STRING} User <{$subject_name=STRING} IP <{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}>
+        IPv4 Address <{$assigned_src_ipv4=IPV4}> IPv6 address <{$assigned_src_ipv6=IPV6}> assigned to session'
+
+subject = "account"
+action = "assign"
+object = "ip_address"
+status = "success"
+
+subject.account.name = strip($subject_name, '', '>')
+
+if maybe_ipv4($assigned_src_ipv4) != null and maybe_ipv4($assigned_src_ipv4) != "0.0.0.0" and maybe_ipv6($assigned_src_ipv6) != null and maybe_ipv6($assigned_src_ipv6) != "::" then
+    assigned_src_ip = $assigned_src_ipv4
+    datafield1 = $assigned_src_ipv6
+elif maybe_ipv4($assigned_src_ipv4) != null and maybe_ipv4($assigned_src_ipv4) != "0.0.0.0" then
+    assigned_src_ip = $assigned_src_ipv4
+elif maybe_ipv6($assigned_src_ipv6) != null and maybe_ipv6($assigned_src_ipv6) != "::" then
+    assigned_src_ip = $assigned_src_ipv6
+endif
+
+# datafield1 - assigned IPv6
+datafield4 = strip($tunnel_group, '', '>')  # group policy
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.subsys = "vpn-gateway"
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_722051_Address_has_been_assigned_to_the_given_user"

@@ -1,0 +1,113 @@
+EVENTLOG = 'EventID.text="1001"'
+COND = (($Channel=="Kaspersky Security for Exchange Servers" and $Provider["Name"]=="KSE") 
+        or ($Channel=="Application" and $Provider["Name"] == "KSCM8"))
+        and find_substr($Data[0], "Результат проверки вложений") == null
+        and find_substr($Data[0], "Attachment Filtering") == null
+
+action = "detect"
+object = "malware"
+status = "success"
+
+submessage("TEXT", "SPLIT1", $Data[0])
+
+subformula "SPLIT1"  # EN
+    TEXT='{UNTIL("\r\n")} Server {WORDDASH}. Notification of an object detected. {$r = REST}'
+    $separated = csv($r, "\r\n", "'")
+    $kv=keyvalue($r, "\r\n", ":")
+
+    $delim1 = find_substr($separated[6], "Object ") + 7
+    $delim2 = find_substr($separated[6], " detected") - $delim1
+    $subbed = substr($separated[6], $delim1, $delim2)
+    $temp = csv($subbed, ", containing threat ", "`")
+
+    object.path = $temp[0]
+    object.name = $temp[1]
+
+    switch $kv["Status"]
+        case "Disinfected"
+            object.state = "cured"
+
+            importance = "info"
+
+        case "Infected"
+            object.state = "not cured"
+
+            importance = "high"
+
+        case "Password-protected"
+            $temp = csv($kv["Subject"], "\r\n \r\n Password-protected object ", "`")
+
+            object.path = strip($temp[1], "", " detected.")
+            object.type = "file"
+            object.state = "skipped"
+
+            reason = "the file is encrypted"
+            importance = "medium"
+        endswitch
+
+    src.ip = $kv["X-MS-Exchange-Organization-OriginalClientIPAddress"]
+    dst.ip = $kv["X-MS-Exchange-Organization-OriginalServerIPAddress"]
+    dst.hostname = $kv["X-MS-Exchange-Organization-Cross-Premises-Headers-Processed"]
+
+    datafield1 = $kv["From"]
+    datafield2 = $kv["To"]
+    datafield3 = $kv["X-MS-Exchange-Organization-OriginalSize"]
+    datafield4 = $kv["Message-ID"]
+endsubformula
+
+subformula "SPLIT1"  # RU
+    TEXT='{UNTIL("\r\n")} Сервер {WORDDASH}. Уведомление об обнаруженном объекте. {$r = REST}'
+    $separated = csv($r, "\r\n", "'")
+    $kv=keyvalue($r, "\r\n", ":")
+
+    $separator = "Обнаружен объект "
+    $delim1 = find_substr($separated[6], $separator) + length($separator)  # отступаем на длину искомой строки
+    $delim2 = length($separated[6]) - $delim1 - 1                          # откинем ненужную точку
+    $subbed = substr($separated[6], $delim1, $delim2)
+    $temp = csv($subbed, ", содержащий угрозу", "`")
+
+    object.path = $temp[0]
+    object.name = $temp[1]
+
+    switch $kv["Результат"]
+        case "Вылечен"
+            object.state = "cured"
+
+            importance = "info"
+
+        case "Заражен"
+            object.state = "not cured"
+
+            importance = "high"
+
+        case "Возможно зараженный"
+            object.state = "not cured"
+
+            importance = "medium"
+        endswitch
+
+    src.ip = $kv["X-MS-Exchange-Organization-OriginalClientIPAddress"]
+    dst.ip = $kv["X-MS-Exchange-Organization-OriginalServerIPAddress"]
+    dst.hostname = $kv["X-MS-Exchange-Organization-Cross-Premises-Headers-Processed"]
+
+    datafield1 = $kv["От"]
+    datafield2 = $kv["Кому"]
+    datafield3 = $kv["X-MS-Exchange-Organization-OriginalSize"]
+    datafield4 = $kv["Message-ID"]
+endsubformula
+
+# Datafield1 - Отправитель письма
+# Datafield2 - Получатель письма
+# Datafield3 - Размер письма
+# Datafield4 - id email
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_microsoft_exchange_servers"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Kaspersky_Security_for_Exchange_eventlog_1001_check_mail_antivirus"

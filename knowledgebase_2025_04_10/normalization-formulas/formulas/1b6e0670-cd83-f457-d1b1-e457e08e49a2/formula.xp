@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {$dt=STRING} INFO 
+        [{UNTIL("]")} [{$req_id=WORD|}] - {$kv_str=REST}'
+
+COND = find_substr($kv_str, "UNKNOWN - User enabling continuous availability") != null
+       or find_substr($kv_str, "UNKNOWN - User disabling continuous availability") != null
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "ongoing"
+
+$kv = keyvalue($kv_str,",",":")
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "unknown" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+object.type = "continuous availability configuration"
+object.property = "state"
+if find_substr($kv_str, "enabling") != null then
+    object.value = "enable"
+else
+    object.value = "disable"
+endif
+
+if $kv["AuthSource"] != "unknown" then
+    logon_service = $kv["AuthSource"]
+endif
+
+time = datetime(replace($dt, ".", ","))
+importance = switch object.value
+    case "enable" "info"
+    case "disable" "medium"
+endswitch
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_ca_manipulation"

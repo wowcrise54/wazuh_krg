@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME}
+        AgentDevice={STRING} AgentLogFile={STRING} PluginVersion={STRING}
+        ID={msgid="14"} Date={$mm=WORD}/{$dd=WORD}/{$yy=WORD}
+        {$kv=KEYVALUE("\t","=")}'
+
+action = "alert"
+object = "ip_address"
+status = "success"
+
+reason = $kv["Description"]
+
+datafield1 = $kv['IP Address']  # Scope name
+
+# Gluing the date and time to ISO8601
+time = datetime("20" + $yy + "-" + $mm + "-" + $dd + "T" + $kv["Time"])
+
+importance = "high"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($hostname)
+    event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    event_src.hostname = lower($hostname)
+endif
+event_src.category = "DHCP server"
+
+id = "PT_Microsoft_Windows_qradar_syslog_14_Scope_full"

@@ -1,0 +1,28 @@
+query GetVm($filepath_space, $filepath_no_space) from VSphere_VM_Files_Assets {
+    filepath == $filepath_space
+    or filepath == $filepath_no_space
+}
+
+qhandler {
+    $datacenter = datacenter
+    $vm_name = vm_name
+}
+
+event VM_file_event:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vmware"
+        and in_list(["upload", "download"], action)
+        and object == "file_object"
+  }
+
+enrichment VMware_get_VM_name_by_file
+
+    enrich VM_file_event:
+        enrich_fields {
+            object.fullpath = "[" + datafield2 + "] " + object.path + object.name
+            $obj_fullpath_no_space = "[" + datafield2 + "]" + object.path + object.name
+            $get_vm_name = exec_query("GetVm", [ object.fullpath, $obj_fullpath_no_space ])
+            datafield1 = $get_vm_name["$datacenter"]
+            datafield5 = $get_vm_name["$vm_name"]
+        }

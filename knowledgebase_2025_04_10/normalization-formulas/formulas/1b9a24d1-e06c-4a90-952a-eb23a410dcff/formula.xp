@@ -1,0 +1,38 @@
+!TABULAR = "{time=GenTime},
+            {datafield1=Name}"
+
+!COND = $Description != null
+
+action = "info"
+object = "account"
+status = "success"
+
+if $PersNum != '' then
+    object.id = $PersNum
+endif
+
+$temp_desc = lower($Description)
+
+if find_substr($temp_desc, "вход") != null or find_substr($temp_desc, "въезд") != null or find_substr($temp_desc, "заезд") != null then
+    object.state = "Enter"
+elif find_substr($temp_desc, "выход") != null or find_substr($temp_desc, "выезд") != null then
+    object.state = "Exit"
+endif
+
+# datafiedl1 - название устройства/считывателя
+if $fname != '' or $lname != '' then
+    $fname = $FirstName
+    $lname = $LastName
+    datafield2 = $lname + ' ' + $fname   # ФИО сотрудника
+endif
+datafield3 = $Note9                      # место работы
+datafield4 = $Note8                      # должность
+
+importance = "info"
+
+event_src.vendor = "mmk"
+event_src.title = "kis"
+event_src.subsys = "skd"
+event_src.category = "Application server"
+
+id = "PT_MMK_KIS_skd_odbc_info_user"

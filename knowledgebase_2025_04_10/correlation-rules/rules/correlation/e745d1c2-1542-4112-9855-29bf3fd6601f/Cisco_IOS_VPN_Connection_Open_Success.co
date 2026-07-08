@@ -1,0 +1,132 @@
+# Cisco IOS
+
+event User_Login_Success:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and id == "PT_Cisco_IOS_syslog_CRYPTO_VPN_TUNNEL_STATUS_Authentication" 
+        and status == "success"
+        and src.ip != null
+    }
+
+event VPN_Session_Up:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "CRYPTO-6-EZVPN_CONNECTION_UP" 
+        and action == "start" 
+        and status == "success"
+        and src.ip != null
+        and filter::CheckWL_Networking("Cisco_IOS_VPN_Connection_Open_Success", src.ip)
+    }
+
+event Session_Status_Up:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "CRYPTO-5-SESSION_STATUS" 
+        and action == "start"
+        and status == "success"
+        and src.ip != null
+        and filter::CheckWL_Networking("Cisco_IOS_VPN_Connection_Open_Success", src.ip)
+    }
+
+rule Cisco_IOS_VPN_Connection_Open_Success: (Session_Status_Up or (User_Login_Success and VPN_Session_Up and Session_Status_Up?)) timer 5s
+
+    init {
+        $labels = "w_auto"
+    }
+    
+    on User_Login_Success {
+        $subject.account.name = subject.account.name
+        $subject.account.group = subject.account.group
+
+        $logon_auth_method = logon_auth_method
+
+        $alert.context = join([$alert.context, subject.account.name, subject.account.group], " | ")
+    }
+
+    on VPN_Session_Up {
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $assigned_src_ip = assigned_src_ip
+
+        $datafield1 = datafield1  # client type
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = src.ip
+        $alert.context = join([$alert.context, dst.host], " | ")
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+    on Session_Status_Up {
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        if $datafield4 == null then $datafield4 = datafield4 endif  # group policy
+
+        if $event_src.host == null then
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        endif
+
+        $alert.key = src.ip
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "open"
+    $object = "connection"
+    $status = "success"
+
+    $object.type = "VPN"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "External Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

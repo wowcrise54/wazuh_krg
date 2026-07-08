@@ -1,0 +1,25 @@
+TABULAR = 'action,
+           log_sys_message,
+           orig,
+           time'
+
+COND = $action == "ctl"
+       and find_substr($log_sys_message, "Log file has been switched to") != null
+
+action = "modify"
+object = "log"
+status = "success"
+
+object.name = strip($log_sys_message, "Log file has been switched to: ", "")
+
+datafield4 = $origin_sic_name  # полное доменное имя
+
+time = $time
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Common_Log_switched"

@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        unbound: [{NUMBER}{":"NUMBER?}] error: could not read {object.type="root hints"} {$re=REST}'
+
+action = "view"
+object = "file"
+status = "failure"
+
+object.name = substr($re, 0, find_substr($re, ':'))
+reason = lower(substr($re, find_substr($re, ':') + 2, length($re)))
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "unbound"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_Unbound_syslog_failed_to_read_root_hints"

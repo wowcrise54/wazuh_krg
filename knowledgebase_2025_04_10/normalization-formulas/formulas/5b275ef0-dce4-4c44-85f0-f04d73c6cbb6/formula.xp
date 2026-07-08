@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = find_substr($kv["default_device_message"], "fwha_update_state:") != null 
+
+action = "info"
+object = "node"
+status = "success"
+
+subformula 'sub1'
+    # извлечение object.id, object.state, object.value и duration из default_device_message
+    TEXT = '{UNTIL("fwha_update_state")}: ID {object.id=NUMBER} (state {object.value=WORD} -> {object.state=WORD}) 
+            (time {duration=UNTIL(")")} {REST}'
+endsubformula
+
+submessage('TEXT', 'sub1', $kv["default_device_message"])
+
+object.property = "old state"
+object.type = "Cluster"
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_VPN_and_Firewall_Cluster_member_changed_state"

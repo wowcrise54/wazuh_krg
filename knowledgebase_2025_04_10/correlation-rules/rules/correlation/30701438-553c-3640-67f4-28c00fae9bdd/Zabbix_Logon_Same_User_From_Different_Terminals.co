@@ -1,0 +1,93 @@
+event Login_Attempt:
+    key:
+        subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::Login_except_Windows()
+        and event_src.title == "zabbix"
+        and not in_list([subject.account.name, src.host], null)
+        and filter::CheckWL_Specific_Only("Zabbix_Logon_Same_User_From_Different_Terminals", lower(subject.account.name))
+    }
+
+rule Zabbix_Logon_Same_User_From_Different_Terminals: (Login_Attempt[3,] with different src.host) timer 15m
+
+    init {
+        $first_event = true
+        $success_logins = 0
+        $failure_logins = 0
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Login_Attempt {
+        if $first_event then
+            $first_event = false
+
+            $subject.account.name = subject.account.name
+            $subject.account.privileges = subject.account.privileges
+            $subject.account.id = subject.account.id
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.asset = src.asset
+
+            $alert.key = lower(subject.account.name)
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+        endif
+
+        if src.host != null and not in_list($sources, src.host) then
+            $sources = append($sources, src.host)
+        endif
+
+        switch status
+            case "success" $success_logins = $success_logins + 1
+            case "failure" $failure_logins = $failure_logins + 1
+        endswitch
+    }
+
+emit {
+    switch $success_logins > 0
+        case true
+            $correlation_type = "incident"
+            $status = "success"
+            $logins_count = join(["success logins count: " + string($success_logins),
+                                  "failure logins count: " + string($failure_logins)], " | ")
+
+        case false 
+            $correlation_type = "event"
+            $status = "failure"
+            $logins_count = "failure logins count: " + string($failure_logins)
+    endswitch
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+
+    if length($sources) > 0 then
+        $sources_joined = join($sources, "|")
+    endif
+
+    $alert.context = join(remove([$subject.account.name, $sources_joined, $logins_count], null), " | ")
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Brute Force: Password Guessing"
+    
+    $incident.aggregation.key = join([$correlation_name, $subject.application.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

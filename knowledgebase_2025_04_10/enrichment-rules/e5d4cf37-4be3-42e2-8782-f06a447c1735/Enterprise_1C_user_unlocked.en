@@ -1,0 +1,24 @@
+query CheckIfAccountIsLocked($username) from Enterprise_1C_Locked_Accounts {
+    account == $username
+}
+
+event unlocked_user:
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["_$User$_.Update", "_$User$_.New"], msgid)
+        and event_src.title == "1c_enterprise"
+        and object.state == null
+        and exec_query("CheckIfAccountIsLocked", [object.application.account.name])
+    }
+
+enrichment Enterprise_1C_user_unlocked
+    enrich unlocked_user:
+        enrich_fields {
+            if msgid == "_$User$_.Update" then
+                action = "unlock"
+            endif
+       }
+        
+    remove_from Enterprise_1C_Locked_Accounts {
+        account == object.application.account.name
+    }

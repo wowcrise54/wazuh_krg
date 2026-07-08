@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} 
+        {UNTIL(" Info: ")}MID {object.id=NUMBER} SDR:
+        Message was not scanned for Sender Domain Reputation. Reason:{reason=REST}'
+
+subject = "application"
+action = "validate"
+object = "message"
+status = "failure"
+
+subject.name = "Sender Domain Reputation"
+
+importance = "low"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_Message_is_not_scanned_SDR"

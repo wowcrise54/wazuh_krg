@@ -1,0 +1,16 @@
+TEXT = '{time=DATETIME}:t@{NUMBER}:ERROR: VmDirSendLdapResult: Request ({UNTIL(")")}, Error ({object.value=NUMBER}){REST}'
+
+action = "alert"
+object = "request"
+status = "success"
+
+object.type = "LDAP"
+object.property = "error code"
+
+importance = "low"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_filemonitor_sendldap_error"

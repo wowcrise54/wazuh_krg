@@ -1,0 +1,54 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        [{time=DATETIME}] ["http{"s"?}-{WORD}-{WORD}-{NUMBER}-exec-{NUMBER}"/{dst.ip=IPV4|dst.ip=IPV6} INFO] 
+        [com.vmware.loginsight.web.actions.BaseActionBean.audit] [{$kv_str=UNTIL("]")}'
+
+COND = find_substr($kv_str, "Agent group") != null
+
+subject = "account"
+
+if find_substr($kv_str, "created") != null then
+    action = "create"
+elif find_substr($kv_str, "changed") != null then
+    action = "modify"
+elif find_substr($kv_str, "deleted") != null then
+    action = "remove"
+endif
+
+object = "configuration"
+status = "success"
+
+subformula "parse_name"
+    TEXT = 'Agent group \'{$obj_name=UNTIL("\'")} {"deleted"|"changed. Name changed from "|"created"|"changed"} 
+            {"\'"?}{$old_name=UNTIL("\'")?}'
+    
+    if $old_name != null then
+        object.property = "name"
+        object.value = lower($old_name)
+        object.new_value = lower($obj_name)
+    endif
+    
+    object.name = lower($obj_name)
+endsubformula
+
+$kv = keyvalue($kv_str,",",":")
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.domain = lower($kv["Domain"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "Default (built-in)" "local"
+    case "Active Directory" "domain"
+endswitch
+
+submessage("TEXT","parse_name",$kv["UserAction"])
+object.type = "agent group configuration"
+
+logon_service = replace($kv["AuthSource"], "", " (built-in)")
+
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_agent_group_manipulation"

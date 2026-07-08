@@ -1,0 +1,50 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4} {event_src.hostname=HOSTNAME}
+        - {'Log'|'Alert'} [Fields@{STRING} Action=\"{object.state='encrypt'|object.state='decrypt'}\" UUid={STRING} {$kv=REST}"
+
+$kv = keyvalue($kv, " ", "=", "\"")
+
+subject = "rule"
+action = "allow"
+object = "connection"
+status = "success"
+
+subject.name = $kv["rule_name"]
+subject.id = $kv["rule"]
+
+dst.ip = $kv["dst"]
+dst.port = $kv["service"]
+
+src.ip = $kv["src"]
+src.port = $kv["s_port"]
+
+protocol = $kv["proto"]
+
+datafield1 = $kv["inzone"]             # входная зона (ingress zone)
+datafield3 = $kv["outzone"]            # исходящая зона (egress zone)
+datafield8 = $kv["originsicname"]      # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+datafield9 = $kv["community"]          # "Сommunity". Имя сообщества для ключа IPsec и использование IKE
+datafield10 = $kv["peer gateway"]      # основной IP-адрес VPN-узла шлюза безопасности
+numfield1 = $kv["nat_rulenum"]         # номер правила NAT
+numfield2 = $kv["nat_addtnl_rulenum"]  # номер дополнительного правила NAT
+
+if ($kv["methods:"] != null) then
+    $tmp_reason_methods = "Methods: " + $kv["methods:"]
+   endif
+if ($kv["scheme:"] != null) then
+    $tmp_reason_scheme = "Scheme: " + $kv["scheme:"]
+   endif
+
+reason = join(remove([$tmp_reason_methods, $tmp_reason_scheme], null), ". ")
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = "vpn-gateway"
+event_src.category = 'Network security'
+
+id = "PT_Checkpoint_Gaia_syslog_VPN_and_Firewall_VPN_rule"

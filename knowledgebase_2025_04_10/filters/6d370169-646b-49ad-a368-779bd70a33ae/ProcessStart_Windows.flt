@@ -1,0 +1,22 @@
+filter ProcessStart_Windows(string $name) {
+    (
+        (
+            in_list(["4688", "592"], msgid)
+            and event_src.title == "windows"
+        )
+        or 
+        (
+            msgid == "1"
+            and event_src.title == "sysmon"
+        )
+    )
+    and ( 
+        match(lower(object.process.name), lower($name)) 
+        or match(lower(object.process.original_name), lower($name))
+    )
+    and (
+        category.generic == "Process"
+        and category.high == "Availability Management"
+        and category.low == "Control"
+    ) 
+}

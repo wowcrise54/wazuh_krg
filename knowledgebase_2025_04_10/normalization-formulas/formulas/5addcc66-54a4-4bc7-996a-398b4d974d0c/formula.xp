@@ -1,0 +1,127 @@
+EVENTLOG = 'EventID.text="33205"'
+
+COND = (
+        find_substr($Provider["Name"], "MSSQL$") != null
+        or $Provider["Name"] == "MSSQLSERVER"
+       )
+       and find_substr($Data[0], "action_id:SL ") != null
+       and (
+            find_substr($Data[0], "class_type:V") != null
+            or find_substr($Data[0], "class_type:U") != null
+            or find_substr($Data[0], "class_type:TF") != null
+           )
+
+$kv = replace($Data[0], " ", "\r\n")
+$kv = keyvalue($kv, "\n", ":")
+
+subformula "get_quoted_data"
+    TEXT = '{UNTIL("\'")} {object.value=UNTIL("\'")} {REST}'
+endsubformula
+
+subject = "account"
+action = "view"
+object = "db_object"
+
+if $kv["succeeded"] == "true" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+# разбираем домен и имя пользователя
+$csv = csv($kv["server_principal_name"], "\\", "'")
+if length($csv) == 2 then
+    subject.account.domain = lower($csv[0])
+    subject.account.name = lower($csv[1])
+else
+    subject.account.name = lower($csv[0])
+endif
+
+subject.account.id = $kv["server_principal_sid"]
+
+object.name = $kv["object_name"]
+
+if $kv["class_type"] == "V" then
+    if find_substr(lower($kv["statement"]), "audit") != null then
+        object.property = "audit configuration"
+        importance = "low"
+
+    elif find_substr(lower($kv["statement"]), "encrypt") != null then
+        object.property = "encryption configuration"
+        importance = "low"
+
+    elif (
+          find_substr(lower($kv["statement"]), "logins") != null
+          or find_substr(lower($kv["statement"]), "rolemember") != null
+         ) then
+               object.property = "credentials"
+               importance = "medium"
+
+    elif (
+            (
+             find_substr(lower($kv["statement"]), "sys.all_views") != null
+             or find_substr(lower($kv["statement"]), "sys.tables") != null
+             or find_substr(lower($kv["statement"]), "sys.all_columns") != null
+            )
+            and find_substr(lower($kv["statement"]), "like") != null
+         ) then
+               object.property = "pattern search"
+
+               if find_substr(lower($kv["statement"]), "'") != null then
+                   submessage("TEXT", "get_quoted_data", $kv["statement"])
+               endif
+
+               if find_substr(object.value, "pass") != null then
+                   importance = "high"
+               else
+                   importance = "medium"
+               endif
+    else
+        importance = "low"
+    endif
+
+elif $kv["class_type"] == "U" then
+
+    if find_substr(lower($kv["statement"]), "backup") != null then
+        object.property = "backup location"
+
+    elif (
+          find_substr(lower($kv["statement"]), "login") != null
+          or find_substr(lower($kv["statement"]), "principal") != null
+         ) then
+               object.property = "credentials"
+    endif
+
+    importance = "medium"
+
+elif $kv["class_type"] == "TF" then
+
+    object.property = "own permissions"
+    importance = "medium"
+
+endif
+
+object.query = $kv["statement"]  # текст выполняемого запроса без переносов строки
+
+datafield2 = $kv["server_instance_name"]  # имя экземпляра
+datafield3 = $kv["database_name"]  # имя используемой БД
+datafield4 = $kv["action_id"]  # идентификатор действия
+datafield5 = $kv["class_type"]  # Тип класса сущности, для которой был проведен аудит
+
+time = $kv["event_time"]
+msgid = $EventID["text"]
+
+event_src.vendor = "microsoft"
+event_src.title = "sql_server"
+
+$first_dot = find_substr($Computer, ".")
+if $first_dot != null then
+    event_src.fqdn = lower($Computer)
+    event_src.hostname = lower(substr($Computer, 0, $first_dot))
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = lower($Channel)
+event_src.category = "Database server"
+
+id = "PT_Microsoft_SQL_Server_eventlog_33205_audit_request_operation"

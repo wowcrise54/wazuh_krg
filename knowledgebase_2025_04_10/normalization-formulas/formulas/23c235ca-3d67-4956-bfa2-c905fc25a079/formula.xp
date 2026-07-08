@@ -1,0 +1,94 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[esx.audit.dcui.host."WORD"]"?}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[vob.user.dcui.host."WORD"]"?}
+{$subsys="vobd:""[GenericCorrelator]" WORD":" "[esx.audit.dcui.host."WORD"]"?}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[esx.audit.esxcli.host."WORD"]"?}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[vob.user.esxcli.host."WORD"]"?}
+{$subsys="vobd:""[GenericCorrelator]" WORD":" "[vob.user.esxcli.host."WORD"]"?}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[esx.audit.host.stop."WORD"]"?}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[vob.user.host.stop."WORD"]"?}
+{$subsys="vobd:""[GenericCorrelator]" WORD":" "[vob.user.host.stop."WORD"]"?}
+{$subsys="Hostd:" WORD "hostd["WORD"] [Originator@"NUMBER $kv=UNTIL("]") "Event" NUMBER ":"?}
+{"The host is being"|"Host is"|$act="Shut down of"}{$rest=REST}'
+
+object = "host"
+status = "ongoing"
+
+subformula "parse_vim_event"
+    TEXT = '{$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=UNTIL(":")}{reason=REST}'
+    
+    action = "stop"
+    msgid = "HostShutdownEvent"
+endsubformula
+
+subformula "parse_hostdiag_event"
+    TEXT = '{$act="rebooted"|$act="shut down"|$act="shutdown"} through {"the"?} Direct Console User Interface (DCUI). {$rest=REST}'
+    
+    if ($act == "rebooted") then
+        action = "restart"
+        msgid = "esx.audit.dcui.host.reboot"
+    else
+        action = "stop"
+        msgid = "esx.audit.dcui.host.shutdown"
+    endif
+endsubformula
+
+subformula "parse_hostdiag_event"
+    TEXT = '{$act="rebooted"|$act="powered off"} through esxcli. Reason for {"reboot"|"powering off"|"power off"}: {reason=UNTIL(". Please consult vSphere Documentation Center or follow the Ask VMware link for more information.")|reason=UNTIL(".Please consult ESXi Embedded and vCenter Server Setup Guide or follow the Ask VMware link for more information.")}'
+    
+    if ($act == "rebooted") then
+        action = "restart"
+        msgid = "esx.audit.esxcli.host.reboot"
+    else
+        action = "stop"
+        msgid = "esx.audit.esxcli.host.poweroff"
+    endif
+endsubformula
+
+subformula "parse_hostdiag_event"
+    TEXT = '{$act="rebooting"|$act="shutting down"}.'
+    
+    if ($act == "rebooting") then
+        action = "restart"
+        msgid = "esx.audit.host.stop.reboot"
+    else
+        action = "stop"
+        msgid = "esx.audit.host.stop.shutdown"
+    endif
+endsubformula
+
+if ($act == "Shut down of") then
+    submessage("TEXT", "parse_vim_event", $rest)
+else
+    submessage("TEXT", "parse_hostdiag_event", $rest)
+endif
+
+object.type = "esxi"
+object.name = $host_name
+
+datafield1 = $datacenter_name  # Datacenter Name
+datafield6 = $host_name  # Host Name
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = lower(strip($subsys, "", ":"))
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_Host_Reboot_Shutdown"

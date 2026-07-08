@@ -1,0 +1,22 @@
+!EVENTLOG = 'EventID.text="12070"'
+!COND = $Channel=="Application" and $Provider["Name"]=="Windows Server Update Services"
+
+action = "info"
+object = "resource"
+status = "success"
+
+object.name = "WSUS content directory"
+object.state = "shared"
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+
+event_src.vendor = "microsoft"
+event_src.title = "wsus"
+event_src.category = "Other"
+
+id = "PT_Microsoft_WSUS_eventlog_12070_WSUS_content_directory_is_available"

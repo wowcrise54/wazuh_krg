@@ -1,0 +1,34 @@
+EVENTLOG = 'EventID.text="16404"'
+
+COND = (
+        $Channel == "ViPNet Administrator KCA"
+        and $Provider["Name"] == "Key and Certification Authority"
+        and $Keywords == '0x80000000000000'
+       )
+
+subject = "account"
+action = "modify"
+object = "virtual_key"
+status = "success"
+
+subject.application.account.name = $Data[0]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_kca"
+event_src.subsys = lower($Channel)
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_KCA_eventlog_16404_changing_security_key_kca"

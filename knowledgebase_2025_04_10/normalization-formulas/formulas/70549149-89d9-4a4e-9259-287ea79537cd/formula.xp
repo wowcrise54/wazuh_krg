@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} activate[{NUMBER}]:
+        <{msgid=NUMBER}> <ERRS> < {STRING} {event_src.ip=IPV4|event_src.ip=IPV6} > {object.name=REST}'
+
+action = "info"
+object = "alert"
+status = "success"
+
+importance = "info"
+
+event_src.title = "arubaos"
+event_src.vendor = "aruba_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Wireless"
+
+id = "PT_Aruba_Networks_ArubaOS_syslog_transient_error"

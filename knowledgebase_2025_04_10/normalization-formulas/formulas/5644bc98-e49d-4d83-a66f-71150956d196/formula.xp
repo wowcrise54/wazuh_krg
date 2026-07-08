@@ -1,0 +1,19 @@
+TEXT = '[{time=DATETIME}] INFO TaskManager: {reason="Task is finished"}. Task: [Task:
+        {object.id=NUMBER} {$tmp_object.name=STRING+} Scan: {NUMBER}, {WORD}, Scanner:
+        {$scanner=STRING+} Started {REST}'
+
+action = "stop"
+object = "task"
+status = "success"
+
+object.name = strip($tmp_object.name, "(", "),")
+
+datafield1 = strip($scanner, "", ",")  # название сканера
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_task_finish"

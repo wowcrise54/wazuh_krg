@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?} 
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="PORT_ATTACK_END"|msgid="PORT_ATTACK_OCCUR"}
+        ({WORD}){"["NUMBER"]"?}: Auto port-defend {$act=WORD}
+        .(SourceAttackInterface= {$iface=STRING} AttackProtocol={$name=REST}'
+
+action = switch $act
+    case "started" "detect"
+    case "stop" "info"
+endswitch
+object = "attack"
+status = "success"
+
+object.type = strip($name,'',')')
+
+interface = strip($iface,'',',')
+
+importance = "medium"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Port_attack_detect_end"

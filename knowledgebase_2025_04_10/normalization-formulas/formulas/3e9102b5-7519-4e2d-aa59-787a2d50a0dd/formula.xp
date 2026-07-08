@@ -1,0 +1,56 @@
+EVENTLOG = 'EventID="1151"'
+COND = $Channel=="Microsoft-Windows-Windows Defender/Operational"
+       and $Provider["Name"]=="Microsoft-Windows-Windows Defender"
+
+action = "check"
+object = "application"
+status = "success"
+
+object.name = "Endpoint Protection client"
+
+object.value = 'Product Name: ' + $Data["Product Name"] + '\r\n' +
+               'Platform version: ' + $Data["Platform version"] + '\r\n' +
+               'Engine version: ' + $Data["Engine version"] + '\r\n' +  
+               'NRI engine version: ' + $Data["NRI engine version"] + '\r\n' +   
+               'AV security intelligence version: ' + $Data["AV security intelligence version"] + '\r\n' +  
+               'AS security intelligence version: ' + $Data["AS security intelligence version"] + '\r\n' + 
+               'NRI security intelligence version: ' + $Data["NRI security intelligence version"] + '\r\n' + 
+               'RTP state: ' + $Data["RTP state"] + '\r\n' + 
+               'OA state: ' + $Data["OA state"] + '\r\n' + 
+               'IOAV state: ' + $Data["IOAV state"] + '\r\n' + 
+               'BM state: ' + $Data["BM state"] + '\r\n' + 
+               'Last AV security intelligence age: ' + $Data["Last AV security intelligence age"] + '\r\n' + 
+               'Last AS security intelligence age: ' + $Data["Last AS security intelligence age"] + '\r\n' + 
+               'Last quick scan age: ' + $Data["Last quick scan age"] + '\r\n' +
+               'Last full scan age: ' + $Data["Last full scan age"] + '\r\n' +
+               'AV security intelligence creation time: ' + $Data["AV security intelligence creation time"] + '\r\n' +
+               'AS security intelligence creation time: ' + $Data["AS security intelligence creation time"] + '\r\n' +
+               'Last quick scan start time: ' + $Data["Last quick scan start time"] + '\r\n' +
+               'Last quick scan end time: ' + $Data["Last quick scan end time"] + '\r\n' +
+               'Last quick scan source: ' + $Data["Last quick scan source"] + '\r\n' +
+               'Last full scan start time: ' + $Data["Last full scan start time"] + '\r\n' +
+               'Last full scan end time: ' + $Data["Last full scan end time"] + '\r\n' +
+               'Last full scan source: ' + $Data["Last full scan source"] + '\r\n' +
+               'Product status: ' + $Data["Product status"] + '\r\n' +
+               'Latest engine version: ' + $Data["Latest engine version"] + '\r\n' +
+               'Engine up-to-date: ' + $Data["Engine up-to-date"] + '\r\n' +
+               'Latest platform version: ' + $Data["Latest platform version"] + '\r\n' + 
+               'Platform up-to-date: ' + $Data["Platform up-to-date"]              
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Host security"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1151_Defender_client_health_report"

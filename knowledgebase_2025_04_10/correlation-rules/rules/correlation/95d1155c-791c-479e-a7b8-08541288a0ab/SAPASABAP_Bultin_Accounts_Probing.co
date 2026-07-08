@@ -1,0 +1,105 @@
+query SAP_User_In_Default_List($user, $event_src_title) from Applications_Significant_Users {
+    user == $user
+    and event_src_title == $event_src_title
+    and reason == 'default'
+}
+
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid
+    and (
+             group == "Production"
+             or group == "Test"
+        )
+}
+
+event Failed_Or_Success_Login:
+    key:
+      event_src.host, event_src.id, src.host, datafield1 
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and (
+                 in_list(["Incorrect logon data (client, user name, password)", "Invalid user type"], reason)
+                 or (
+                         action == "login"
+                         and status == "success"
+                    )
+            )
+        and src.host != null
+        and exec_query("SAP_User_In_Default_List", [subject.account.id, event_src.title])
+        and exec_query("SAP_Check_Groups", [event_src.id])
+    }
+
+rule SAPASABAP_Bultin_Accounts_Probing: (Failed_Or_Success_Login[3,] with different subject.account.id) timer 5m
+
+    init {
+        $first_event = true
+    }
+
+    on Failed_Or_Success_Login {
+        if $first_event then
+            $subject.account.id = subject.account.id
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+        
+            $datafield1 = datafield1  # SAP Client
+
+            $event_src.id = event_src.id
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $count_subevents_success = 0
+            $count_subevents_failure = 0
+
+            $first_event = false
+        endif
+
+        $account_list = append($account_list, subject.account.id)
+
+        if status == "success" then
+            $count_subevents_success = $count_subevents_success + 1
+        else
+            $count_subevents_failure = $count_subevents_failure + 1
+        endif
+    }
+
+emit {
+    if $count_subevents_success != 0 then
+        $correlation_type = "incident"
+        $status = "success"
+    else
+        $correlation_type = "event"
+        $status = "failure"
+    endif
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+
+    $datafield2 = join($account_list, "|")  # Перечень аккаунтов
+
+    $alert.context = join([join(["success login attempts count", $count_subevents_success], ": "), join(["failure login attempts count", $count_subevents_failure], ": ")], " | ")
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Brute Force: Password Spraying"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id, $src.host, $datafield1], "|")
+    $incident.severity = $importance
+    $incident.category = "BruteForce"
+    $incident.aggregation.timeout = 2h
+}

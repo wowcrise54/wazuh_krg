@@ -1,0 +1,129 @@
+JSON = ''
+COND = (
+    $eventid != null
+    and $node != null
+    and $timestamp != null
+    and $items["LOGIN"] != null
+)
+
+$kv_main = keyvalue($items["LOGIN"][0], " ", "=", "'")
+$kv_syscall = keyvalue($items['SYSCALL'][0], ' ', '=')
+
+subject = "account"
+action = "login"
+object = "system"
+status = if ($kv_main["res"] == "1") then "ongoing" else "failure" endif
+
+# Декодируем HEX, если требуется
+$auid_en = strip($kv_main["AUID"], '"', '"')
+if $auid_en == $kv_main["AUID"] then
+    $auid_en = hex_to_string($kv_main["AUID"])
+endif
+
+$auid_list = csv($auid_en, "@", "")
+
+subject.account.id = $kv_main["auid"]
+subject.account.name = $auid_list[0]
+subject.account.domain = $auid_list[1]
+
+if ($kv_main["ses"] != "4294967295") then
+    subject.account.session_id = $kv_main["ses"]
+endif
+
+if ($kv_main["res"] == "1") then
+    subject.state = "changed-login-id-to"
+endif
+
+object.process.id = $kv_main["pid"]
+
+# SYSCALL::exe
+if not in_list(["<no_memory>", "<too_long>", "(null)"], $kv_syscall["exe"]) then
+    # Декодируем HEX, если требуется
+    $exe = strip($kv_syscall["exe"], '"', '"')
+    if $exe == $kv_syscall["exe"] then
+        $exe = hex_to_string($kv_syscall["exe"])
+    endif
+endif
+
+$process_path_and_name = csv($exe, "/", "")
+$process_name = $process_path_and_name[length($process_path_and_name) - 1]
+$process_path = strip($exe, "", $process_name)
+
+object.process.fullpath = $exe
+object.process.name = $process_name
+object.process.path = $process_path
+
+object.process.parent.id = $kv_syscall["ppid"]
+
+# PROCTITLE
+if $items["PROCTITLE"] != null then
+    $kv_proctitle = keyvalue($items["PROCTITLE"][0], ' ', '=')
+
+    $process_proctitle = strip($kv_proctitle["proctitle"], '"', '"')
+    if $process_proctitle == "(null)" then
+        $process_proctitle = null
+    elif $process_proctitle == $kv_proctitle["proctitle"] then
+        $cmdline_raw = hex_to_string($kv_proctitle["proctitle"])
+
+        # stripping corrupted char
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 254))
+        endif
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 253))
+        endif
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 252))
+        endif
+
+        $process_proctitle = replace($cmdline_raw, " ", "\u0000")
+    endif
+endif
+
+object.process.meta = $process_proctitle  # PROCTITLE
+
+object.property = "session_id"
+
+if $kv_main["old-ses"] != "4294967295" then
+    object.value = $kv_main["old-ses"]
+endif
+
+object.new_value = $kv_main["ses"]
+
+chain_id = $eventid  # AuditD Event ID
+
+time = epoch_ms_to_datetime(number($timestamp + $timestampfractional))
+msgid = "LOGIN"
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.subsys = "auditd"
+event_src.category = "Operating system"
+
+if $node != "" then
+    if maybe_ipv4($node) != null or maybe_ipv6($node) != null then
+        if (in_subnet($node, "127.0.0.0/8") == False and $node != "::1") then
+            event_src.ip = $node
+            labels = "node_contains_ext_ip"
+        else
+            event_src.ip = recv_ipv4
+        endif
+    else
+        $first_dot = find_substr($node, ".")
+        if $first_dot != null then
+            event_src.fqdn = $node
+            event_src.hostname = substr($node, 0, $first_dot)
+        else
+            event_src.hostname = $node
+        endif
+    endif
+else
+    event_src.ip = recv_ipv4
+endif
+
+id = "PT_UNIX_like_auditd_syslog_structured_login"

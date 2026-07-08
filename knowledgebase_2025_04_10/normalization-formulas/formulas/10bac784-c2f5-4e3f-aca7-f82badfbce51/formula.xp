@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="TCP_kconnect"} {WORDDASH} {$status="OK"|"FAIL"|"FAILURE"}
+        {subject.name=STRING} {WORDDASH} {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}
+        {object.value=WORDDASH}'
+
+action = "open"
+object = "connection"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.property = "port"
+
+src.ip = event_src.ip
+src.hostname = event_src.hostname
+
+direction = "egress"
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_tcp_kconnect"

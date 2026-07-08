@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {event_src.ip=IPV4|event_src.ip=IPV6|}: {time=DATETIME}: {"#"|"%"}
+        {msgid="UC_-3-DeviceImageDownloadStart"}: %[DeviceName={src.hostname=HOSTNAME}][{"UNKNOWN_PARAMNAME:"?}IPv4Address=
+        {src.ip=IPV4?}] [{"UNKNOWN_PARAMNAME:"?}IPv6Address={src.ip=IPV6?}]{UNTIL("NodeID=")}{event_src.hostname=HOSTNAME}
+        {REST}'
+
+action = "download"
+object = "update"
+status = "ongoing"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "cucm"
+event_src.category = "Telecom"
+
+id = "PT_Cisco_CUCM_syslog_UC_3_DeviceImageDownloadStart"

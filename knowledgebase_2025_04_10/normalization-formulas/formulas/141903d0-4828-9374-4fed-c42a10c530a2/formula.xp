@@ -1,0 +1,65 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        CEF:0|IT-Bastion LLC|SKDPU-NT|{datafield5=UNTIL("|")} {msgid="SKDPUNT.WS.00006"}|
+        SettingsChange|{NUMBER}|act=SettingsChange {$kv=KEYVALUE(" ", "=")}'
+
+COND = $kv["group\\"] != null
+        
+subject = "account"
+
+if in_list(["Group added:", "Group person added:","Group system added:","Group ldap persons added:", "Group ldap systems added:"], $kv["msg"]) then
+    action = "create"
+elif in_list(["Group changed:", "Group person changed:","Group system changed:","Group ldap persons changed:", "Group ldap systems changed:"], $kv["msg"]) then
+    action = "modify"   
+elif in_list(["Group deleted:", "Group person deleted:","Group system deleted:","Group ldap persons deleted:", "Group ldap systems deleted:"], $kv["msg"]) then
+    action = "remove"
+endif
+
+object = "user_group"
+status = "success"
+
+if find_substr($kv["suser"], "@") != null then
+    $temp_acc = csv($kv["suser"], "@", "")
+    subject.application.account.domain = $temp_acc[length($temp_acc) - 1]
+    subject.application.account.name = $temp_acc[0]
+else
+    subject.application.account.name = $kv["suser"]
+endif
+
+object.name = strip($kv["group\\"], "", ",")
+
+if coalesce(maybe_ipv4($kv["dst"]),maybe_ipv6($kv["dst"])) != null then
+    dst.ip = $kv["dst"]
+else    
+    dst.fqdn = strip($kv["dst"], "https://", "")
+    $temp_csv = csv(dst.fqdn, ".", "")
+    dst.hostname = $temp_csv[0]
+endif
+
+datafield1 = $kv["cat"]                         # action category
+# datafield5 skdpu nt version
+datafield6 = $kv["msg"]                         # extra info
+datafield7 = strip($kv["target\\"], "", ",")    # group target
+datafield8 = strip($kv["roles\\"], "['", "']")  # group role
+datafield9 = strip($kv["person\\"], "", ",")    # group person name
+datafield10 = strip($kv["proxy\\"], "", ",")    # gateway name
+datafield11 = strip($kv["domain\\"], "", ",")   # ldap domain name
+datafield12 = strip($kv["name\\"], "", ",")     # ldap cn name
+
+category.high = "Users And Rights Management"
+category.generic = "Group"
+category.low = "Manipulation"
+
+importance = "low"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_cef_access_restriction_group_changed"

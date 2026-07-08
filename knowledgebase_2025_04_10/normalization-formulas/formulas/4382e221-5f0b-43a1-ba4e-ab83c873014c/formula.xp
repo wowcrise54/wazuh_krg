@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-session"?}-{NUMBER}-{msgid="733100"}:
+        {reason=REST}'
+
+action = "detect"
+object = "attack"
+status = "success"
+
+importance = "medium"
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Network Attack"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_733100_Drop_rate_is_exceeded"

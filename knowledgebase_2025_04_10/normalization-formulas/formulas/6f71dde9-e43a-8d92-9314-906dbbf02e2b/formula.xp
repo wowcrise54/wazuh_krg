@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?}{time=DATETIME_SYSLOG|time=DATETIME_ISO8601}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        {":"?}%{$title="ASA"|$title="PIX"|$title="FWSM"|$title="FTD"}-
+        {NUMBER}-{msgid="722028"}:Group <{datafield1=UNTIL(">")}
+        User <{datafield2=UNTIL(">")}IP <{dst.ip=IPV4}> Stale{protocol=WORD?}
+        SVC connection closed.'
+        
+action = "close"
+object = "connection"
+status = "success"
+
+# datafield1 - VPN Group
+# datafield2 - VPN user name
+
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"   
+category.low = "Communication"
+
+event_src.vendor = "cisco"
+event_src.title = lower($title)
+event_src.subsys = "vpn-gateway"
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_722028_svc_connection_closed"          

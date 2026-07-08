@@ -1,0 +1,44 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER} : {"default"?}
+        {msgid="AAA LOGIN_FAILED"} {NUMBER+} : {$kv=KEYVALUE("- ", " ", "\\"")}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+$user = $kv["User"]
+if find_substr($user, "\\") != null then
+    subject.account.name = csv($user, "\\", "")[1]
+    subject.account.domain = csv($user, "\\", "")[0]
+elif find_substr($user, "@") != null then
+    subject.account.name = csv($user, "@", "")[0]
+    subject.account.domain = csv($user, "@", "")[1]
+else
+    subject.account.name = $user
+endif
+
+src.ip = $kv["Client_ip"]
+dst.hostname = $Computer
+
+reason = strip($kv["Failure_reason"], '"', '"')
+
+time = $sys_time
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "netscaler"
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = "aaa"
+event_src.category = "Terminal services"
+
+id = "PT_Citrix_NetScaler_syslog_aaa_login_failed"

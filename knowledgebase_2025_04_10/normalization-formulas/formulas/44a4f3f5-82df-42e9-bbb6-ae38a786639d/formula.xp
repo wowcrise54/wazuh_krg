@@ -1,0 +1,132 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} api_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"method":"POST"') != null
+    and (
+        find_substr($json, '"route":"/api/:version/internal/pre_receive"') != null
+        or find_substr($json, '"route":"/api/:version/internal/post_receive"') != null
+    )
+)
+
+subject = "account"
+object = "resource"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_changes"
+    TEXT = '{$old_hash=STRING} {$new_hash=STRING} refs/heads/{$branch=REST}'
+    
+    object.type = "branch"
+    object.name = strip($branch, "", "\\n")
+    object.property = "commit_id"
+    if ($old_hash == "0000000000000000000000000000000000000000") then
+        action = "create"
+        object.new_value = $new_hash
+    elif ($new_hash == "0000000000000000000000000000000000000000") then
+        action = "remove"
+        object.value = $old_hash
+    else
+        action = "modify"
+        object.value = $old_hash
+        object.new_value = $new_hash
+    endif
+    
+    datafield3 = strip($branch, "", "\\n")  # Branch Name
+endsubformula
+
+subformula "parse_changes"
+    TEXT = '{$old_hash=STRING} {$new_hash=STRING} refs/tags/{$tag=REST}'
+    
+    object.type = "tag"
+    object.name = strip($tag, "", "\\n")
+    object.property = "commit_id"
+    if ($old_hash == "0000000000000000000000000000000000000000") then
+        action = "create"
+        object.new_value = $new_hash
+    elif ($new_hash == "0000000000000000000000000000000000000000") then
+        action = "remove"
+        object.value = $old_hash
+    else
+        action = "modify"
+        object.value = $old_hash
+        object.new_value = $new_hash
+    endif
+    
+    datafield5 = strip($tag, "", "\\n")  # Tag Name
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+$status_new = substr(string($status), 0, 1)
+$stage = strip($route, "/api/:version/internal/", "")
+if in_list(["2", "3"], $status_new) and ($stage == "pre_receive") then
+    status = "ongoing"
+    external_link = "https://docs.gitlab.com/ee/development/internal_api.html#incrementing-counter-on-pre-receive"
+elif in_list(["2", "3"], $status_new) and ($stage == "post_receive") then
+    status = "success"
+    external_link = "https://docs.gitlab.com/ee/development/internal_api.html#postreceive"
+else
+    status = "failure"
+endif
+
+$s_changes = find_substr($json, '{"key":"changes","value":"')
+$e_changes = find_substr(substr($json, $s_changes, length($json)), '"}')
+$changes = substr($json, $s_changes + 26, $e_changes - 26)
+$changes = if length($changes) != 0 then $changes else null endif
+
+if not in_list([null, "_any"], $changes) then
+    submessage("TEXT", "parse_changes", $changes)
+else
+    action = "modify"
+endif
+
+subject.account.name = $['meta.user']
+if substr($['meta.client_id'], 0, 5) == "user/" then
+    subject.account.id = strip($['meta.client_id'], "user/", "")
+endif
+
+$s_identifier = find_substr($json, '{"key":"identifier","value":"')
+$e_identifier = find_substr(substr($json, $s_identifier, length($json)), '"}')
+$identifier = substr($json, $s_identifier + 29, $e_identifier - 29)
+$identifier = if length($identifier) != 0 then $identifier else null endif
+
+if substr($identifier, 0, 4) == "key-" then
+    subject.account.privileges = "SSH:" + strip($identifier, "key-", "")  # SSH Key ID
+endif
+
+subject.process.meta = $ua
+
+$project_list = csv($['meta.project'], "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($['meta.project'], "", "/" + $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = $project_namespace_fullpath  # Namespace Fullpath
+
+$s_gl_repository = find_substr($json, '{"key":"gl_repository","value":"')
+$e_gl_repository = find_substr(substr($json, $s_gl_repository, length($json)), '"}')
+$gl_repository = substr($json, $s_gl_repository + 32, $e_gl_repository - 32)
+$gl_repository = if length($gl_repository) != 0 then $gl_repository else null endif
+
+numfield1 = strip($gl_repository, "project-", "")  # Project ID
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "medium"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "api"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_API_JSON_Branch_Push"

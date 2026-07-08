@@ -1,0 +1,67 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "1292"
+       and $event_category == "Администрирование"
+       and (
+        $event_type == "Information"
+        or $event_type == "Информация"
+       )
+
+subformula "message"
+    TEXT = 'Изменение ПРД. {$kv=KEYVALUE("\n", ": ", "")}'
+
+    object.id = coalesce($kv["ID правила"])
+    object.type = lower(coalesce($kv["Тип правила"]))
+
+    protocol = coalesce($kv["Протокол"])
+
+    $raw_subject = coalesce($kv["Администратор безопасности"])
+    $change_type = coalesce($kv["Тип изменения"])
+    $way = coalesce($kv["Направление"])
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+if $change_type == "создание" then
+    action = "create"
+elif $change_type == "удаление" then
+    action = "remove"
+else
+    drop
+endif
+object = "rule"
+status = "success"
+
+$csv_name_domain = csv($raw_subject, '@', '')
+
+subject.name = $csv_name_domain[0]
+subject.domain = $csv_name_domain[1]
+
+if $way == "исходящий" then
+    direction = "egress"
+elif $way == "входящий" then
+    direction = "ingress"
+endif
+
+msgid = $event_id
+importance = "low"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Администрирование" then
+    event_src.subsys = "administration"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1292_firewall_rule_created_deleted"

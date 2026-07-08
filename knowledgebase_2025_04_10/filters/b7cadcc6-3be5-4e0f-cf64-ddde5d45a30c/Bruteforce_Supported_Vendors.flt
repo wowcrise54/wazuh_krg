@@ -1,0 +1,59 @@
+filter Bruteforce_Supported_Vendors() {
+    in_list(["openvpn", "gitlab", "jfrog", "hashicorp", "grafanalabs"], lower(event_src.vendor))
+    or (
+        lower(event_src.vendor) == "opensource"
+        and in_list(["teampass", "postgresql", "mongodb", "openssh", "apache_cassandra"], lower(event_src.title))
+    )
+    or (
+        lower(event_src.vendor) == "microsoft"
+        and (
+            in_list(["windows", "sql_server", "internet_information_services"], lower(event_src.title))
+            or event_src.id == "ad fs auditing"
+        )
+    )
+    or (
+        lower(event_src.vendor) == "vmware"
+        and in_list(["vsphere", "esxi", "aria_operations", "aria_operations_for_logs"], lower(event_src.title))
+    )
+    or (
+        lower(event_src.vendor) == "cisco"
+        and in_list(["ios", "asa", "pix", "fwsm", "ftd"], lower(event_src.title))
+    )
+    or (
+        lower(event_src.vendor) == "mikrotik"
+        and lower(event_src.title) == "routeros"
+    )
+    or (
+        lower(event_src.vendor) == "zabbix"
+        and lower(event_src.title) == "zabbix"
+    )
+    or (
+        lower(event_src.vendor) == "eltex"
+        and in_list(["fastpath", "ros", "esr"], lower(event_src.title))
+    )
+    or (
+        lower(event_src.vendor) == "positive_technologies"
+        and lower(event_src.title) == "application_firewall"
+    )
+    or lower(event_src.title) == "unix_like"
+    or (
+        lower(event_src.vendor) == "drweb"
+        and lower(event_src.title) == "security_suite"
+    )
+    or (
+        lower(event_src.vendor) == "prosoft_systems"
+        and in_list(["regul_rx00", "astra_security"], lower(event_src.title))
+    )
+    or (
+        lower(event_src.vendor) == "cryptopro"
+        and lower(event_src.title) == "ngate"
+    )
+    or (
+        lower(event_src.vendor) == "infowatch"
+        and lower(event_src.title) == "traffic_monitor"
+    )
+    or (
+        lower(event_src.vendor) == "infotecs"
+        and lower(event_src.title) == "vipnet_ids"
+    )
+}

@@ -1,0 +1,112 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME} {HOSTNAME} 
+        CheckPoint {NUMBER} - [{$kv=KEYVALUE(";", ":", "\\"")}'
+        
+COND = $kv["product"] == "New Anti Virus"
+        and in_list(["Prevent",
+                     "Block",
+                     "Redirect",
+                     "Detect"], $kv["action"])
+
+if $kv["malware_rule_name"] != null then
+    subject = "rule"
+
+    subject.name = $kv["malware_rule_name"]
+    subject.type = $kv["smartdefense_profile"]
+endif
+                     
+action = "detect"
+object = "malware"
+status = "success"
+
+if $kv["resource"] != null then
+    object.process.meta = $kv["user_agent"]  
+    object.process.name = $kv["web_client_type"]
+
+    object.fullpath = $kv["resource"]
+    object.name = $kv["protection_name"]
+    object.id = $kv["protection_id"]
+    object.group = $kv["malware_family"]
+    object.type = $kv["protection_type"]
+else
+    $urlstart = find_substr($kv["portal_message"], "http")
+    $urllen = find_substr($kv["portal_message"], "Reference") - $urlstart - 1
+    object.storage.fullpath = substr($kv["portal_message"], $urlstart, $urllen)
+    $fullpath = csv(object.storage.fullpath, "/", "")
+    object.storage.name = $fullpath[length($fullpath) - 1]
+    object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+endif
+
+object.state = lower($kv["action"])
+
+if find_substr($kv["src_machine_name"], '@') != null then
+    src.fqdn = $kv["src_machine_name"]
+    src.hostname = substr($kv["src_machine_name"], 0, find_substr($kv["src_machine_name"], "@"))
+else
+    src.hostname = $kv["src_machine_name"]
+endif
+src.ip = $kv["src"]
+$spt = $kv["s_port"]
+if ($spt != 0) then 
+    src.port = $spt 
+endif
+
+dst.ip = $kv["dst"]
+dst.fqdn = $kv["dst_machine_name"]
+$dpt = $kv["service"]
+if ($dpt != 0) then 
+    dst.port = $dpt 
+endif
+
+interface = $kv["ifname"]
+protocol = $kv["proto"]
+            
+datafield1 = $kv["question_rdata"]                  # List of question records domains              
+datafield2 = $kv["policy"]                          # Policy name
+$confidence = $kv["confidence_level"]
+datafield3 = switch $confidence                     # Confidence level
+                 case "5" "High"
+                 case "4" "Medium-High"
+                 case "3" "Medium"
+                 case "2" "Medium-Low"
+                 case "1" "Low"
+                 case "0" "N/A"
+             endswitch
+datafield4 = $kv["scope"]                           # IP address related to the attack
+$user_name = csv($kv["src_user_dn"], ",", "")
+datafield5 = $kv["src_user_name"]                   # Username connected to the source IP
+datafield6 =  $kv["originsicname"]                  # Name and domain of the SIC security gateway that generated the log  
+
+if $kv["description"] != null then
+    $values = append($values, join(["description: ", $kv["description"]], ""))
+endif 
+if $kv["malware_action"] != null then
+    $values = append($values, join(["malware_action: ", $kv["malware_action"]], ""))
+endif 
+if $kv["portal_message"] != null then
+    $values = append($values, join(["portal_message: ", $kv["portal_message"]], ""))
+endif 
+reason = join($values, "|")
+
+time = epoch_to_datetime(number($kv["time"]))
+$severity = $kv["severity"]
+if ($severity != null) then
+    importance = switch $severity
+         case "0" "info"
+         case "1" "low"
+         case "2" "medium"
+         case "3" "high"
+         case "4" "high"
+    endswitch
+else
+    importance = "medium" 
+endif
+
+$kv_names = keyvalue($kv["originsicname"], ",", "=", "~")
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Antivirus_detect"

@@ -1,0 +1,29 @@
+!EVENTLOG = 'EventID.text="13031"'
+!COND = $Channel=="Application" and $Provider["Name"]=="Windows Server Update Services"
+
+action = "info"
+object = "service"
+status = "success"
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+submessage ("TEXT", "add_info", $Data[0])
+
+subformula "add_info"
+    TEXT = 'Некоторые клиентские компьютеры не сообщали информацию на сервер за последние {datafield1=NUMBER} дн. На данный момент обнаружено таких компьютеров: {datafield2=NUMBER}.'
+endsubformula
+
+subformula "add_info"
+    TEXT = 'Some client computers have not reported back to the server in the last {datafield1=NUMBER} days. {datafield2=NUMBER} have been detected so far.'
+endsubformula
+
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+
+event_src.vendor = "microsoft"
+event_src.title = "wsus"
+event_src.category = "Other"
+
+id = "PT_Microsoft_WSUS_eventlog_13031_Client_computers_have_not_contacted_the_server_in_the_last_days"
+importance = "low"

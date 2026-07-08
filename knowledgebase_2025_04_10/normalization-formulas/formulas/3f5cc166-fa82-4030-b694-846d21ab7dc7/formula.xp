@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.EventEx] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+[{"Port"|$prefix="Adding port"}{$arguments_1=STRING} {$rest1="is now protected by Firewall"|$rest2="is no longer protected with Firewall"|"to Firewall failed"}.]'
+
+action = "info"
+object = "interface"
+
+if ($prefix == "Adding port") then
+    status = "failure"
+else
+    status = "success"
+endif
+
+object.type = "vmknic"
+object.name = $arguments_1
+
+if $rest1 != null then
+    object.property = "protection_by_firewall"
+    object.value = "on"
+    msgid = "esx.audit.net.firewall.port.hooked"
+elif $rest2 != null then
+    object.property = "protection_by_firewall"
+    object.value = "off"
+    msgid = "esx.audit.net.firewall.port.removed"
+else
+    msgid = "esx.problem.net.firewall.port.hookfailed"
+endif
+
+datafield1 = $def_dc_name  # Datacenter Name
+
+importance = "medium"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Firewall_Port_Protection"

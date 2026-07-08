@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {$ip=IPV4|$ip=IPV6|$hostname=HOSTNAME|}{":"?} {NUMBER?}{":"?}
+        {$origin_id_ip=IPV4|$origin_id_ip=IPV6|$origin_id_hostname=HOSTNAME|}{":"?} {"*"|"."|}{time=DATETIME}{":"?} {WORD":"?}
+        %{msgid="SEC-6-IPACCESSLOGP"}: list {subject.name=STRING} {$action_packet="permitted"|$action_packet="denied"} {protocol=WORD}
+        {src.ip=IPV4}({src.port=NUMBER}) -> {dst.ip=IPV4}({dst.port=NUMBER}), {count.packets=NUMBER} packet {REST}'
+
+subject = "rule"
+
+action = switch $action_packet
+    case "permitted" "allow"
+    case "denied" "deny"
+endswitch
+
+object = "connection"
+status = "success"
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "cisco"
+event_src.title = "ios"
+event_src.hostname = coalesce($hostname, $origin_id_hostname)
+
+if ($origin_id_ip == "127.0.0.1" or $origin_id_ip == "0.0.0.0") then
+    $origin_id_ip = null
+endif
+event_src.ip = coalesce($ip, $origin_id_ip)
+
+event_src.category = "Network device"
+
+id = "PT_Cisco_IOS_syslog_SEC_6_IPACCESSLOGP"

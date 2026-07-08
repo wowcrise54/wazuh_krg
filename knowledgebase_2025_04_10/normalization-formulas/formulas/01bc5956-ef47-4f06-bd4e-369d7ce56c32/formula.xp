@@ -1,0 +1,32 @@
+TABULAR = '{subject.name=Administrator},
+           {msgid=Operation},
+           client_ip,
+           orig,
+           {time=time}'
+
+COND = $Subject == "Revision Control"
+       and $Operation == "Publish"
+
+subject = "account"
+action = "apply"
+object = "configuration"
+status = "success"
+
+subject.account.name = $Administrator
+subject.process.name = $Session_name
+subject.account.session_id = $Session_UID
+
+src.hostname = $Machine
+src.ip = $client_ip
+
+importance = "low"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+if $orig != $client_ip then
+    event_src.ip = $orig
+endif
+event_src.category = "Network security"
+event_src.subsys = lower($product)
+
+id = "PT_Checkpoint_Gaia_opseclog_Configuration_Publish_changes"

@@ -1,0 +1,36 @@
+TEXT = '{NUMBER?} {"<"NUMBER">"?} {NUMBER?} {DATETIME} {WORDDASH} - - - - 
+        CEF:{NUMBER}|xello|deception|{UNTIL("|")}Deception Event|{NUMBER}|rt={$raw_time=NUMBER} {$kv=KEYVALUE(" ", "=", " ")}'
+
+COND = $kv["cn1"] == "4625" and $kv["destinationServiceName"] == "WIN"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+$name_domain = csv($kv["duser"], "@", "")
+subject.account.name = $name_domain[0]
+subject.account.domain = $name_domain[1]
+
+object.id = $kv["cn2"]
+
+msgid = $kv["cn1"]
+
+src.hostname = $kv["shost"]
+dst.hostname = $kv["dhost"]
+
+time = epoch_to_datetime($raw_time)
+
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.rule = $kv["destinationServiceName"]
+event_src.vendor = "xello"
+event_src.title = "xello_deception"
+event_src.hostname = dst.hostname
+event_src.category = "Honeypot"
+
+id = "PT_Xello_Xello_Deception_syslog_User_authentication_failed"

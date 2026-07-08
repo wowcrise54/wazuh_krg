@@ -1,0 +1,93 @@
+event Registry_Shadow_Key_Creation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and lower(object.name) == "shadow"
+        and find_substr(lower(object.path), "software\\policies\\microsoft\\windows nt\\") != null
+        and regex(lower(object.new_value), "dword.*?([1-4])\)$", 0) != null # Флаг 0 - это запрет
+        and filter::CheckWL_Registry_Actions("Shadow_Key_Creation", lower(join([subject.process.fullpath, object.new_value, event_src.host], "|")))
+        }
+    
+rule Shadow_Key_Creation: Registry_Shadow_Key_Creation
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+    }
+
+    on Registry_Shadow_Key_Creation {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.new_value = object.new_value
+        
+        $mode = regex(lower(object.new_value), "dword.*?([1-4])\)$", 1)
+        if $mode != null then
+            if $mode == "1" then
+                $reason = "full control with user permission"
+            elif $mode == "2" then
+                $reason = "full control without user permission"
+            elif $mode == "3" then
+                $reason = "session monitoring with user permission"
+            else 
+                $reason = "session monitoring without user permission"
+            endif
+        endif
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+            
+        $alert.key = lower(join([subject.process.fullpath, object.new_value, event_src.host], "|"))
+        $alert.context = "Created Shadow Key with mode: " + $reason
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $object = "reg_object"
+    $action = "modify"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: Remote Desktop Protocol"
+
+    $importance = "medium"
+        
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance 
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h 
+}

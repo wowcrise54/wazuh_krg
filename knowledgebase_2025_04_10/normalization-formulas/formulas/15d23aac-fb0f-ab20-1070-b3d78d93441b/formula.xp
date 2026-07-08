@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}rvpn_shell{"["NUMBER"]"}:
+        {"["UNTIL("]")?}{"<"?}{NUMBER|$f3=WORDDASH|}{">"?}{"("?}{WORDDASH?}{")"?}{"["WORDDASH"]"?}{"syslog |"?}
+        {"<"WORDDASH">"?}{"The"?}{"C"|"c"}ommand{":"?}{"\'"?}{$f1=UNTIL("\'")?}{UNTIL(":")WORDDASH":"?}{$f2=REST?}'
+        
+COND =  ($f1 != null or (find_substr($f2,"session") == null and 
+        find_substr($f2,"logged in") == null)) 
+      
+if $f3 == "DGD" then
+    drop
+endif
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+if $f1 != null then
+    object.process.cmdline = $f1
+else
+    object.process.cmdline = strip($f2, ": ","")
+endif
+
+importance = "medium"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_coordinator"
+event_src.category = "Network device"
+
+id = "PT_Infotecs_VipNet_Coordinator_HW_syslog_command_execute"

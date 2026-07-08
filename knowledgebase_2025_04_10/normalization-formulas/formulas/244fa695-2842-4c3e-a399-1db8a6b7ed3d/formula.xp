@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        postfix{"/"event_src.subsys=WORDDASH?}{"["NUMBER"]"?}:
+        connect from {$hostname=HOSTNAME}[{src.ip=IPV4|src.ip=IPV6}]{":"src.port=NUMBER?}'
+
+subject = "application"
+action = "connect"
+object = "application"
+status = "success"
+
+subject.type = "SMTP client"
+object.name = "SMTP server"
+
+
+if $hostname != "unknown" and $hostname != "none" then
+    src.hostname = $hostname
+endif
+
+protocol = "SMTP"
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "postfix"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Postfix_syslog_smtp_client_connected"

@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {NUMBER+},{DATETIME},
+        {event_src.id=WORD?},SYSTEM,port,{$csv=CSV}'
+COND = $csv[3] == "link-change"
+
+submessage ("TEXT", "parse_rest", $csv[9])
+subformula "parse_rest"
+    !TEXT = 'Port {$ifname=STRING+} {$state="Up"|$state="Down"} {object.type=REST}'
+endsubformula
+
+action = lower($state)
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+interface = strip($ifname, "", ":")
+
+time = $csv[1]
+msgid = $csv[3]
+importance = "info"
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_System_Port"

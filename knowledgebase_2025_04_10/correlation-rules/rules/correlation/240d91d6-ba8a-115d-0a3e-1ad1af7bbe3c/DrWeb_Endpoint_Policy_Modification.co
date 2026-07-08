@@ -1,0 +1,63 @@
+event Policy_Modify:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "drweb"
+        and event_src.title == "security_suite"
+        and in_list(["60021", "60050", "60040", "60070"], msgid)
+        and filter::CheckWL_Specific_Only("DrWeb_Endpoint_Policy_Modification", lower(join([subject.account.name, coalesce(object.id, object.value)], "|")))
+    }
+
+rule DrWeb_Endpoint_Policy_Modification: Policy_Modify
+
+    init {       
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Policy_Modify {
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.id = object.id
+        $object.type = object.type
+        $object.property = object.property
+        $object.state = object.state
+        $object.value = object.value
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "policy"
+    $status = "success"
+    
+    $alert.key = lower(join([$subject.account.name, coalesce($object.id, $object.value)], "|"))
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, coalesce($object.id, $object.value), $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareInstallationPolicyViolation"
+    $incident.aggregation.timeout = 2h
+}

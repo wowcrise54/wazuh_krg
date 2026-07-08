@@ -1,0 +1,63 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {STRING} CEF:{NUMBER}|Infotecs|IDS HS|{UNTIL("|")}{msgid=NUMBER}|
+        {$desc=UNTIL("|")}{$priority=NUMBER}|{$tmp=REST}'
+
+COND = in_list(["500001", "500004", "500008", "500009", "880005"], msgid)
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subformula "data"
+        TEXT = "{$kv=KEYVALUE(' ','=','')}"
+endsubformula
+
+subformula "data2"
+    TEXT = "InfotecsIDSHShost={$InfotecsIDSHShost=STRING} InfotecsIDSHShostId={$InfotecsIDSHShostId=STRING} deviceExternalId={STRING} cnt={NUMBER} dvc={$dvc=IPV4|$dvc=IPV6} rt={$time=NUMBER} deviceFacility={$deviceFacility=STRING} cat={STRING} msg={DATETIME} {UNTIL('session opened for user')} {subject.account.privileges=STRING} by {$name=UNTIL('(')}{REST}"
+endsubformula    
+    
+if in_list(["500001", "500004", "500008", "500009"], msgid) then
+    submessage("TEXT", "data", $tmp)
+endif
+
+if in_list(["880005"], msgid) then
+    submessage("TEXT", "data2", $tmp)
+endif
+
+subject.account.name = coalesce($kv['duser'], $kv['suser'], $name)
+subject.account.domain = coalesce($kv['dntdom'], $kv['sntdom'])
+subject.account.id = coalesce($kv['duid'], $kv['suid'], $kv['user(uid'])
+
+src.hostname = $kv['shost']
+src.ip = $kv['src']
+src.port = $kv['spt']
+
+logon_type = $kv['InfotecsIDSHSLogonType']
+logon_service = $kv['InfotecsIDSHSAuthType']
+logon_auth_method = "remote"
+
+time = epoch_ms_to_datetime(coalesce(number($kv['rt']), $time))
+
+if $priority < 6 then
+    importance = "info"
+elif $priority >= 6 and $priority < 8 then
+    importance = "low"
+elif $priority >= 8 and $priority < 10 then
+    importance = "medium"
+elif $priority >= 10 then
+    importance = "high"
+endif
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids_hs"
+event_src.subsys = coalesce($kv['deviceFacility'], $deviceFacility)
+event_src.ip = coalesce($kv['dvc'], $dvc)
+event_src.hostname = coalesce($kv['InfotecsIDSHShost'], $InfotecsIDSHShost)
+event_src.category = "IDS/IPS"
+event_src.id = coalesce($kv['InfotecsIDSHShostId'], $InfotecsIDSHShostId)
+
+id = "PT_Infotecs_VipNet_IDS_HS_syslog_cef_logon_success"

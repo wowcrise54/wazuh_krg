@@ -1,0 +1,28 @@
+query CheckIfAccountIsLocked($username) from Enterprise_1C_Locked_Accounts {
+    account == $username
+}
+
+event locked_user:
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["_$User$_.Update", "_$User$_.New"], msgid)
+        and event_src.title == "1c_enterprise"
+        and (
+             match(object.state, "*roles disabled*")
+             or match(object.state, "*authentication disabled*")
+        )
+        and not exec_query("CheckIfAccountIsLocked", [object.application.account.name])
+    }
+
+enrichment Enterprise_1C_user_locked
+    enrich locked_user:
+        enrich_fields {
+            if msgid == "_$User$_.Update" then
+                action = "lock"
+            endif
+       }
+        
+    insert_into Enterprise_1C_Locked_Accounts {
+        account = object.application.account.name
+        reason = object.state
+    }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in the FreeIPA domain. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="1b5257ca-a811-4ec4-3376-e9598dda8e59">Password spraying from host {src.host} in the FreeIPA domain on host {event_src.host}. The password of user {subject.account.name} is bruteforced. Number of failed login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="cb11f874-49f9-f744-6ef8-2c7115ed89b5">Password spraying attempts from host {src.host} in the FreeIPA domain on host {event_src.host}. Number of login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="d49227c4-9a7f-f49d-8838-bc24865e035e">Password spraying from host {src.host} in the FreeIPA domain on host {event_src.host}. The passwords of users {datafield3} are bruteforced. Number of failed login attempts: {count.subevents}.</EventDescription>
+  </EventDescriptions>
+</Localization>

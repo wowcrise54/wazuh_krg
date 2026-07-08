@@ -1,0 +1,134 @@
+query Get_File_Info($host, $file_name) from Unix_Suspicious_Created_Files {
+    host == $host
+    and file_name == $file_name
+}
+    qhandler {
+        $cmdline = cmdline
+        $process_name = process_name
+        $file_name = file_name
+    }
+
+event Syscall_Socket_Raw:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "create"
+        and object == "socket"
+        and status == "success"
+        and event_src.subsys == "auditd"
+        and (
+            (
+                in_list(["SOCK_RAW", "SOCK_PACKET"], object.type)
+                and in_list(["AF_INET", "AF_INET6"], object.domain)
+            )
+            or object.domain == "AF_PACKET"
+        )
+        and filter::CheckWL_Linux_Networking("Unix_Raw_Socket",
+            lower(join([subject.process.fullpath, subject.process.meta], "|")))
+    }
+
+rule Unix_Raw_Socket: Syscall_Socket_Raw+ timer 1m
+
+    init {
+        $first_event = true
+        $labels = "w_auto|CheckWL_Linux_Networking"
+        $context = ""
+    }
+
+    on Syscall_Socket_Raw {
+        if $first_event then  # блок выполняется только при первом событии инстанса
+            $status = status
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            $subject.type = subject.type
+            
+            if subject != null and logon_service != null then
+                $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+            else
+                $prefix = "[sys] "
+            endif
+
+            $subject.process.name = subject.process.name
+            $subject.process.id = subject.process.id
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.meta = subject.process.meta
+            $subject.process.parent.id = subject.process.parent.id
+            
+            $context = $context + "[" + string(subject.process.id) + "] " + subject.process.meta
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+
+            $result = exec_query("Get_File_Info", [event_src.host, subject.process.name])
+
+            $object.process.name = $result["$process_name"]
+            $object.process.cmdline = $result["$cmdline"]
+            
+            $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "
+
+            $object.domain = object.domain
+            $object.type = object.type
+            $object.property = object.property
+            $object.value = object.value
+        
+            $logon_service = logon_service
+        
+            $protocol = protocol
+        
+            $direction = direction
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+                
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+            
+            $alert.key = lower(join([subject.process.fullpath, subject.process.meta], "|"))
+
+            $first_event = false
+        endif        
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "process"
+    $action = "create"
+    $object = "socket"
+
+    if $result != null then
+        $importance = "medium"
+    else
+        $importance = "low"
+    endif 
+
+    $alert.context = $prefix + $context
+
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Non-Application Layer Protocol"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,79 @@
+JSON = 'source="neutron"'
+
+COND = in_list(["create-network", "delete-network"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "create-network" "create"
+    case "delete-network" "remove"
+endswitch
+
+object = "network"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["network"]
+
+if $properties["id"] != null then
+    object.id = $properties["id"]
+else
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[length($csv_uri) - 1]
+endif
+
+object.name = $properties["name"]
+object.state = $properties["status"]
+object.type = $properties["provider:network_type"]
+
+datafield1 = $method                    # Method
+datafield2 = $uri                       # URL
+datafield6 = $properties["project_id"]  # The ID of the project that owns the resource
+
+if $properties["description"] != "" then
+    datafield9 = $properties["description"]  # A human-readable description for the resource
+endif
+
+$settings = join(remove([if $properties["port_security_enabled"] != null then "port security enabled: " + string($properties["port_security_enabled"]) else null endif,
+                         if $properties["router:external"] != null then "router external: " + string($properties["router:external"]) else null endif,
+                         if $properties["shared"] != null then "shared: " + string($properties["shared"]) else null endif,
+                         if $properties["vlan_transparent"] != null then "vlan transparent: " + string($properties["vlan_transparent"]) else null endif,
+                         if $properties["is_default"] != null then "is default: " + string($properties["is_default"]) else null endif,
+                         if $properties["admin_state_up"] != null then "admin state up: " + string($properties["admin_state_up"]) else null endif,
+                         if $properties["l2_adjacency"] != null then "l2 adjacency: " + string($properties["l2_adjacency"]) else null endif], null), " | ")
+
+if $settings != "" then
+    datafield10 = $settings
+endif
+
+reason = $response_body["NeutronError"]["message"]
+
+time = $timestamp
+msgid = $action
+importance = "low"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Neutron_Network_operations"

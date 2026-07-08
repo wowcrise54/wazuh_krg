@@ -1,0 +1,33 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="http-proxy"}[{NUMBER}]: msg_id="{msgid="1AFF-0013"}"
+         Allow {WORDDASH} {WORDDASH} {$pt1=WORD} {src.ip=IPV4|src.ip=IPV6} {dst.ip=IPV4|dst.ip=IPV6}
+         {src.port=NUMBER} {dst.port=NUMBER} {$msg=STRING*} ({datafield1=WORDDASH+})'
+
+$kv = keyvalue($msg, " ", "=", '"')
+
+action = "alert"
+object = "request"
+status = "success"
+
+object.property = "header"
+object.value = $kv["header"]
+
+protocol = upper($pt1)
+
+# datafield1 - Proxy policy name
+reason = "HTTP header malformed"
+
+importance = "info"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_1AFF0013_HTTP_header_malformed"

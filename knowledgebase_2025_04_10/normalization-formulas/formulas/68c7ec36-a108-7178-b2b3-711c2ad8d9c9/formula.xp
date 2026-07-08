@@ -1,0 +1,37 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}integration|{NUMBER}|cat=System:Configuration
+        {$kv=KEYVALUE(" ", "=", "\\"")}'
+          
+COND = find_substr($kv["act"], "integration_snmp_change") != null
+       or find_substr($kv["act"], "integration_tias_change") != null
+       or $kv["act"] == "integration_netflow_settings"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+subject.account.name = $kv["suser"]
+
+if find_substr($kv["act"], "snmp") != null then
+    object.name = "SNMP"
+elif find_substr($kv["act"], "tias") != null then
+    object.name = "ViPNet TIAS Connectio"
+elif find_substr($kv["act"], "netflow") != null then
+    object.name = "netflow"
+endif
+
+if $kv["cs1"] != null then
+    object.property = $kv["cs1"]
+    object.new_value = $kv["cs2"]
+endif    
+
+time = recv_time 
+importance = "info" 
+msgid = $kv["act"]
+    
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_cef_integration_change"

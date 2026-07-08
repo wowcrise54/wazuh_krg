@@ -1,0 +1,148 @@
+JSON = ''
+
+COND = in_list(["yandex.cloud.audit.k8s.StartCluster",
+                "yandex.cloud.audit.k8s.StopCluster",
+                "yandex.cloud.audit.k8s.CreateCluster",
+                "yandex.cloud.audit.k8s.UpdateCluster",
+                "yandex.cloud.audit.k8s.DeleteCluster"], $event_type)
+
+subject = "account"
+
+$operation = strip($event_type, "yandex.cloud.audit.k8s.", "")
+
+action = switch $operation
+    case "StartCluster" "start"
+    case "StopCluster" "stop"
+    case "CreateCluster" "create"
+    case "UpdateCluster" "modify"
+    case "DeleteCluster" "remove"
+    case "MoveCluster" "move"
+endswitch
+
+object = "resource"
+
+status = switch $event_status
+    case "DONE" "success"
+    case "STARTED" "ongoing"
+    case "ERROR" "failure"
+    case "CANCELLED" "failure"
+endswitch
+
+subject.account.id = $authentication["subject_id"]
+subject.account.name = $authentication["subject_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+object.account.id = $details["service_account_id"]
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+$cloud = $resource_metadata["path"][1]["resource_name"] 
+$folder = $resource_metadata["path"][2]["resource_name"]
+object.storage.fullpath = join([$organization, $cloud, $folder], "|")
+
+object.id = $details["cluster_id"]
+object.name = $details["name"]
+object.path = $details["master"]["zonal_master"]["zone_id"]
+object.state = join([$details["status"], $details["health"]], "|")
+object.type = "cluster"
+object.version = $details["master"]["version_info"]["current_version"]
+
+if $operation == "UpdateCluster" then
+    object.property = $request_parameters["update_mask"]
+endif
+
+$remote_address = ipv4($request_metadata["remote_address"])
+if $remote_address != null then
+    src.ip = $remote_address
+
+    logon_auth_method = "remote"
+else
+    logon_auth_method = "local"
+endif
+
+datafield1 = $organization                        # Наименование организации
+datafield2 = $cloud                               # Наименование облака
+datafield3 = $folder                              # Наименование каталога
+datafield4 = $details["node_service_account_id"]  # Идентификатор сервисной учетной записи рабочих узлов
+datafield5 = $details["network_id"]               # Идентификатор сети
+
+datafield6 = coalesce($details["master"]["regional_master"]["internal_v4_address"],
+                      $details["master"]["zonal_master"]["internal_v4_address"])     # Внутренний IP-адрес
+
+datafield7 = coalesce($details["master"]["regional_master"]["external_v4_address"],
+                      $details["master"]["zonal_master"]["external_v4_address"])     # Внешний IP-адрес
+
+datafield8 = $request_parameters["master_spec"]["zonal_master_spec"]["internal_v4_address_spec"]["subnet_id"]  # Идентификатор подсети
+datafield9 = join($details["master"]["security_group_ids"], "|")  # Группы безопасности
+
+if $details["master"]["endpoints"]["internal_v4_endpoint"] != null then 
+    $properties = append($properties, "internal v4 endpoint: " + $details["master"]["endpoints"]["internal_v4_endpoint"])
+endif
+if $details["master"]["endpoints"]["external_v4_endpoint"] != null then 
+    $properties = append($properties, "external v4 endpoint: " + $details["master"]["endpoints"]["external_v4_endpoint"])
+endif
+if $details["master"]["endpoints"]["external_v6_endpoint"] != null then 
+    $properties = append($properties, "external v6 endpoint: " + $details["master"]["endpoints"]["external_v6_endpoint"])
+endif
+if $details["ip_allocation_policy"]["cluster_ipv4_cidr_block"] != null then 
+    $properties = append($properties, "cluster ipv4 cidr block: " + $details["ip_allocation_policy"]["cluster_ipv4_cidr_block"])
+endif
+if $details["ip_allocation_policy"]["cluster_ipv6_cidr_block"] != null then 
+    $properties = append($properties, "cluster ipv6 cidr block: " + $details["ip_allocation_policy"]["cluster_ipv6_cidr_block"])
+endif
+if $details["ip_allocation_policy"]["service_ipv4_cidr_block"] != null then 
+    $properties = append($properties, "service ipv4 cidr block: " + $details["ip_allocation_policy"]["service_ipv4_cidr_block"])
+endif
+if $details["ip_allocation_policy"]["service_ipv6_cidr_block"] != null then 
+    $properties = append($properties, "service ipv6 cidr block: " + $details["ip_allocation_policy"]["service_ipv6_cidr_block"])
+endif
+if $details["ip_allocation_policy"]["node_ipv4_cidr_mask_size"] != null then 
+    $properties = append($properties, "node ipv4 cidr mask size: " + $details["ip_allocation_policy"]["node_ipv4_cidr_mask_size"])
+endif
+if $details["release_channel"] != null then 
+    $properties = append($properties, "release channel: " + $details["release_channel"])
+endif
+if $details["master"]["maintenance_policy"]["auto_upgrade"] == true then 
+    $properties = append($properties, "auto upgrade: true")
+else
+    $properties = append($properties, "auto upgrade: false")
+endif
+datafield10 = lower(join($properties, "|"))  # Свойства кластера
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = $operation
+
+importance = switch $operation
+    case "StartCluster" "info"
+    case "StopCluster" "medium"
+    case "CreateCluster" "info"
+    case "UpdateCluster" "low"
+    case "DeleteCluster" "medium"
+endswitch
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = $event_source
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_Kubernetes_Cluster_Manage"

@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {time=DATETIME?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} audispd{":"?}
+        node={HOSTNAME} type=SYSCALL msg={STRING} arch={WORDDASH} syscall={NUMBER}
+        success={$status=WORD} exit={NUMBER} a0={WORDDASH} a1={WORDDASH} a2={WORDDASH} a3={WORDDASH}
+        items={NUMBER} ppid={NUMBER} pid={NUMBER} auid={subject.id=NUMBER} uid={NUMBER} gid={NUMBER}
+        euid={NUMBER} suid={NUMBER} fsuid={NUMBER} egid={NUMBER} sgid={NUMBER} fsgid={NUMBER}
+        tty={STRING} ses={NUMBER} comm={$cmd=STRING} exe={STRING} {"subj="?}{STRING?}
+        key="perm_mod"'
+
+subject = "account"
+action = "execute"
+object = "command"
+object.value = strip($cmd,'"','"')
+if $status == "yes" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+reason = "changes of access permissions to file system objects"
+
+importance = "low"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_auditd_syslog_cmd_perm_mod"

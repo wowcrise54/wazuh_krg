@@ -1,0 +1,77 @@
+event Passwords_Storage_Correlation:
+    key:
+        event_src.host, subject.process.name, subject.process.id
+    filter {
+        lower(correlation_name) == "credential_access_to_passwords_storage"
+        and filter::CheckWL_Specific_Only("Lazagne_Usage", lower(subject.process.fullpath))
+    }
+
+rule Lazagne_Usage: (Passwords_Storage_Correlation[3,] with different object.name) timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $count.subevents = 0
+    }
+
+    on Passwords_Storage_Correlation {
+        if $count.subevents == 0 then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+
+            $object.name = object.name
+            $object.type = object.type
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+
+            $datafield1 = datafield1
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $alert.key = lower(subject.process.fullpath)
+            $alert.context = alert.context
+        else
+            $alert.context = lower(join(remove([$alert.context, reason], null), " | "))
+        endif
+
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    if $count.subevents > 5 then
+        $correlation_type = "incident"
+        $importance = "high"
+    else
+        $correlation_type = "event"
+        $importance = "medium"
+    endif
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,66 @@
+event Do_Not_Hide_Usernames_In_Logs:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "111010"
+        and event_src.vendor == "cisco"
+        and event_src.title == "asa"
+        and match(object.process.cmdline, "no logging hid*")
+        and filter::CheckWL_Specific_Only("Cisco_ASA_Disable_Username_Hiding", lower(join([subject.account.name, src.host], "|")))
+    }
+
+rule Cisco_ASA_Disable_Username_Hiding: Do_Not_Hide_Usernames_In_Logs
+    
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Do_Not_Hide_Usernames_In_Logs {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+
+        $object.process.cmdline = object.process.cmdline
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+    
+        $alert.key = lower(join([subject.account.name, src.host], "|"))
+        $alert.context = event_src.host
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Manipulation: Stored Data Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 3h
+}

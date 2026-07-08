@@ -1,0 +1,44 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-vpn"?}-{NUMBER}-{msgid="602304"}:
+        IPSEC: An {$direction_raw="inbound"|$direction_raw="outbound"} {object.type=WORDDASH+} SA (SPI= {object.id=WORD}) between
+        {$first_side_ip=IPV4|$first_side_ip=IPV6|$first_side_hostname=HOSTNAME} and
+        {$second_side_ip=IPV4|$second_side_ip=IPV6|$second_side_hostname=HOSTNAME}
+        (user= {$subject_name=STRING} has been deleted.'
+
+$subject_name = strip($subject_name, "", ")")
+
+if maybe_ipv4($subject_name) == null and maybe_ipv6($subject_name) == null then
+    subject = "account"
+    subject.account.name = $subject_name
+endif
+action = "stop"
+object = "session"
+status = "success"
+
+if $direction_raw == "inbound" then
+    src.ip = $first_side_ip
+    src.hostname = $first_side_hostname
+    dst.ip = $second_side_ip
+    dst.hostname = $second_side_hostname
+elif $direction_raw == "outbound" then
+    dst.ip = $first_side_ip
+    dst.hostname = $first_side_hostname
+    src.ip = $second_side_ip
+    src.hostname = $second_side_hostname
+endif
+
+protocol = "ipsec"
+
+direction = switch lower($direction_raw)
+    case "inbound" "ingress"
+    case "outbound" "egress"
+endswitch
+
+importance = "medium"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.subsys = "vpn-gateway"
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_602304_Ipsec_deleted"

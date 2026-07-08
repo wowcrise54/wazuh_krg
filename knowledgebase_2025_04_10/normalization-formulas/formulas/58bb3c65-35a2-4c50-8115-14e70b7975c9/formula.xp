@@ -1,0 +1,41 @@
+!TABULAR = "sys_event_id,
+            timestamp,
+            sys_event_type,
+            component_id,
+            component_name,
+            coord_center,
+            description"
+!COND = (find_substr($description, "Ошибка попытки подключения компонента") != null)
+
+submessage("TEXT", "Connect_failure", $description)
+subformula "Connect_failure"
+    !TEXT = 'Ошибка попытки подключения компонента - "{$subject_name=STRING+} с хоста {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}:
+            Уже активен компонент с заданным UUID {REST}'
+endsubformula
+
+subject = "application"
+action = "connect"
+object = "application"
+status = "failure"
+
+subject.name = strip($subject_name, "", "\"")
+
+object.id = $component_id
+object.name = $component_name
+object.type = "Координационный центр"
+
+time = epoch_to_datetime($timestamp)
+importance = "medium"
+
+event_src.vendor = "rnt"
+event_src.title = "forpost"
+event_src.category = "IDS/IPS"
+
+if $component_host != null then
+    event_src.hostname = $component_host
+else
+    # Fallback case:
+    event_src.hostname = $coord_center
+endif
+
+id = "PT_RNT_Forpost_odbc_Component_connect_failure"

@@ -1,0 +1,23 @@
+EVENTLOG = 'EventID="5126"'
+!COND = $Channel=="Security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "system"
+action = "update"
+object = "certificate"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+object.property = "CAConfigurationId"
+object.value = $Data["CAConfigurationId"]
+datafield1 = $Data["NewSigningCertificateHash"]
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+event_src.category = "Certification authority"
+
+id = "PT_Microsoft_Certification_Authority_eventlog_5126_Signing_Certificate_automatically_updated_by_OCSP"
+importance = "info"

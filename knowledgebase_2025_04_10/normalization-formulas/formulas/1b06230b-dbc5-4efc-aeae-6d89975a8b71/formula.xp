@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"("?}{"apache"|"apache2"|"httpd"}{")"?}{"["NUMBER"]"?}:
+        [{WORD?} {time=DATETIME}]
+        [{WORD}]
+        {"[pid "NUMBER"]"?}
+        [client {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}{":"src.port=NUMBER?}]
+        {$reason_raw=STRING+} exec of {$path=STRING+} failed {", referer: "datafield1=REST?}'
+
+object = "application"
+action = "start"
+status = "failure"
+
+object.path = strip($path,"'","'")
+reason = strip($reason_raw,"",":")
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache"
+event_src.category = "Web server"
+
+id = "PT_Opensource_ASF_Apache_HTTP_Server_syslog_failed_to_execute_script"

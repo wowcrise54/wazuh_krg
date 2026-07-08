@@ -1,0 +1,36 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME|} grafana[{NUMBER}]: {$json=REST}'
+
+COND = find_substr($json, "Downloaded and extracted") != null
+       and find_substr($json, "grafana/plugins") != null
+
+action = "install"
+object = "module"
+status = "success"
+
+subformula 'json_in_syslog_plugin_installed'
+    JSON = ''
+    
+    $message = csv($msg, " ", "")                           # Breaking the message into blocks
+    $plugin_path = csv($message[8], "/", "")                # Extract the path from the message
+    object.fullpath = $message[8]
+    object.name = $plugin_path[length($plugin_path) - 1]
+    object.path = substr($message[8], 0, length($message[8]) - length(object.name))
+    object.version = $message[4]
+endsubformula
+
+submessage("JSON","json_in_syslog_plugin_installed", $json)
+
+importance = "low"
+
+event_src.vendor = "grafanalabs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "grafana"
+event_src.category = "Application security"
+
+id = "PT_GrafanaLabs_Grafana_syslog_plugin_installed"

@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME}
+        View - {NUMBER} [View@{NUMBER} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["EventType"] == "BROKER_USERLOGGEDOUT"
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+$csv = csv($kv["UserDisplayName"], "\\\\", "'")
+if length($csv) == 2 then
+    subject.account.domain = $csv[0]
+    subject.account.name = $csv[1]
+else
+    subject.account.name = $csv[0]
+endif
+
+subject.account.id = $kv["UserSID"]
+
+msgid = $kv["EventType"]
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "vmware"
+event_src.title = "horizon"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_Horizon_View_syslog_User_logged_out"

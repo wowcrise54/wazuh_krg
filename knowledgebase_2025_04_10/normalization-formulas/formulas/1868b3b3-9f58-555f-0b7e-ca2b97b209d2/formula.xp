@@ -1,0 +1,71 @@
+JSON = 'source="nova"'
+
+COND = in_list(["server-groups-create", "server-groups-delete"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "server-groups-create" "create"
+    case "server-groups-delete" "remove"
+endswitch
+
+object = "resource"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["server_group"]
+
+if $properties["id"] != null then
+    object.id = $properties["id"]
+else
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[3]
+endif
+
+if $response_body["name"] != "" then
+    object.name = $properties["name"]
+endif
+
+object.type = "virtual machines group"
+
+datafield1 = $method                             # Method
+datafield2 = $uri                                # URL
+datafield6 = $properties["project_id"]           # The project ID who owns the server group
+datafield7 = join($properties["policies"], "|")  # A list of exactly one policy name to associate with the server group
+
+if $success == "no" then
+    $message_path = coalesce($response_body["itemNotFound"], $response_body["badRequest"],
+                             $response_body["computeFault"], $response_body["conflictingRequest"])
+
+    reason = coalesce($message_path["message"], $response_body["message"])
+endif
+
+time = $timestamp
+msgid = $action
+importance = "low"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Nova_VM_group_operations"

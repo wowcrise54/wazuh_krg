@@ -1,0 +1,5 @@
+filter ADReplication_Established() {
+    event_src.vendor == "microsoft" and
+    event_src.title == "active_directory" and
+    msgid == "4928"
+}

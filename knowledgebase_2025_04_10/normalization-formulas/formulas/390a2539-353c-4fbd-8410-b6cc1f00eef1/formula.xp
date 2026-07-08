@@ -1,0 +1,61 @@
+# {"class":"vim.event.EventEx","key":"94422","chainId":"94422","createdTime":"2021-07-09 11:49:39.658000+00:00","userName":"VCSA.LOCAL\\machine-96aac122-29f8-4016-8141-449853683a01","fullFormattedMessage":"vCenter Stats, events, alarms, and tasks File System Resource status changed from Yellow to Green on 192.168.206.152  ","eventTypeId":"vim.event.ResourceExhaustionStatusChangedEvent","severity":"info","message":"","arguments":{"resourceName":"storage_util_filesystem_seat","oldStatus":"yellow","newStatus":"green","reason":" ","nodeType":"vcenter","_sourcehost_":"192.168.206.152"},"objectId":"","objectName":""}
+
+JSON = ''
+COND = $eventTypeId == "vim.event.ResourceExhaustionStatusChangedEvent"
+
+action = "info"
+object = "resource"
+status = "success"
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+subformula "parse_message"
+    TEXT = '{$node_type="PSC"|$node_type="vCenter"|$node_type="vSphere"|}{$resource=STRING+} status changed from {WORD} to {WORD} on {IPV4|IPV6|HOSTNAME} {REST}'
+endsubformula
+
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+submessage("TEXT", "parse_message", $fullFormattedMessage)
+
+object.type = $node_type
+object.name = $resource
+object.id = $arguments["resourceName"]
+object.state = $arguments["oldStatus"]
+
+object.property = "state"
+object.value = $arguments["oldStatus"]
+object.new_value = $arguments["newStatus"]
+
+reason = if $arguments["reason"] != "" then $arguments["reason"] else null endif
+
+datafield4 = $arguments["_sourcehost_"]  # vCenter Host Name
+
+chain_id = $chainId
+
+time = $createdTime
+msgid = "ResourceExhaustionStatusChangedEvent"
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_Resource_Exhaustion_Status"

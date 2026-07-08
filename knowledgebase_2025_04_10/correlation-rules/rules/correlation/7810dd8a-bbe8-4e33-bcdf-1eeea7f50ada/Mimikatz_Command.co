@@ -1,0 +1,263 @@
+event Mimikatz_In_Commandline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            regex(lower(object.process.cmdline), "\\b(privilege|crypto|sekurlsa|kerberos|lsadump|vault|token|misc|busylight|dpapi)::", 0) != null
+            or regex(lower(object.process.cmdline), "\\biis::apphost\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bts::(multirdp|sessions|remote|logonpasswords)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bnet::(alias|group|serverinfo|session|share|stats|tod|user|wsession)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bprocess::(exports|imports|list|resume|run|start|stop|suspend)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\brpc::(close|connect|enum|server)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bsid::(add|clear|lookup|modify|patch|query)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "-(dump-(credentials|hashes))\\b", 0) != null
+            or regex(lower(object.process.cmdline), "(-wmimikatz|(\\blive\s+(lsa|kerberos|smbapi|users|token|process|dpapi|smb|ldap|crypto|registry)))\\b", 0) != null
+        )
+        and filter::CheckWL_Process_Creation("Mimikatz_Command", lower(object.process.cmdline))
+    }
+
+event Mimikatz_In_PowerShell_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            regex(lower(object.process.cmdline), "\\b(privilege|crypto|sekurlsa|kerberos|lsadump|vault|token|misc|busylight|dpapi)::", 0) != null
+            or regex(lower(object.process.cmdline), "\\biis::apphost\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bevent::(drop|clear)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bts::(multirdp|sessions|remote|logonpasswords)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bnet::(alias|group|serverinfo|session|share|stats|tod|user|wsession)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bprocess::(exports|imports|list|resume|run|start|stop|suspend)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\brpc::(close|connect|enum|server)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bsid::(add|clear|lookup|modify|patch|query)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "-dump(creds|certs)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "-(dump-(credentials|hashes))\\b", 0) != null
+            or regex(lower(object.process.cmdline), "(-wmimikatz|(\\blive\s+(lsa|kerberos|smbapi|users|token|process|dpapi|smb|ldap|crypto|registry)))\\b", 0) != null
+        )
+        and filter::CheckWL_Powershell("Mimikatz_Command", lower(join([object.name, object.process.cmdline], "|")))
+    }
+
+event Mimikatz_In_PowerShell_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            regex(lower(object.process.cmdline), "\\b(privilege|crypto|sekurlsa|kerberos|lsadump|vault|token|misc|busylight|dpapi)::", 0) != null
+            or regex(lower(object.process.cmdline), "\\biis::apphost\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bevent::(drop|clear)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bts::(multirdp|sessions|remote|logonpasswords)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bnet::(alias|group|serverinfo|session|share|stats|tod|user|wsession)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bprocess::(exports|imports|list|resume|run|start|stop|suspend)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\brpc::(close|connect|enum|server)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "\\bsid::(add|clear|lookup|modify|patch|query)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "-dump(creds|certs)\\b", 0) != null
+            or regex(lower(object.process.cmdline), "-(dump-(credentials|hashes))\\b", 0) != null
+            or regex(lower(object.process.cmdline), "(-wmimikatz|(\\blive\s+(lsa|kerberos|smbapi|users|token|process|dpapi|smb|ldap|crypto|registry)))\\b", 0) != null
+        )
+        and filter::CheckWL_Powershell("Mimikatz_Command", lower(join([object.name, object.process.cmdline], "|")))
+    }
+
+rule Mimikatz_Command: Mimikatz_In_Commandline or Mimikatz_In_PowerShell_Pipeline or Mimikatz_In_PowerShell_Command
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Mimikatz_In_Commandline {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.fullpath = object.process.fullpath
+
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.process.parent.fullpath
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Mimikatz_In_PowerShell_Pipeline {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+
+        $object.process.name = object.process.name
+        $object.process.cmdline = object.process.cmdline
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.fullpath
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Mimikatz_In_PowerShell_Command {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.cmdline = object.process.cmdline
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.fullpath
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $alert.key = lower($object.process.cmdline)
+    $alert.regex_match = regex(lower($object.process.cmdline), "((privilege|crypto|sekurlsa|kerberos|lsadump|vault|token|misc|busylight|dpapi)::[\w]+)|(iis::apphost)|(event::(drop|clear))|(ts::(multirdp|sessions|remote|logonpasswords))|(net::(alias|group|serverinfo|session|share|stats|tod|user|wsession))|(process::(exports|imports|list|resume|run|start|stop|suspend))|(rpc::(close|connect|enum|server))|(sid::(add|clear|lookup|modify|patch|query))|(-dump(creds|certs))|(-dump-(credentials|hashes))|(-wmimikatz|(live\s+(lsa|kerberos|smbapi|users|token|process|dpapi|smb|ldap|crypto|registry)))", 0)
+    $alert.context = $object.process.name
+    if $alert.context == "privilege::debug" then
+        $maybe_second = regex(lower($object.process.cmdline), "privilege::debug.*?([\w]+::[\w]+)", 1)
+        if $maybe_second != null then
+            $alert.context = $alert.context + " | " + $maybe_second
+        endif
+    endif
+    if find_substr(lower($object.process.cmdline), "sekurlsa::") != null then
+        if find_substr($alert.context, "sekurlsa::") == null then
+            $alert.context = $alert.context + " sekurlsa::"
+        endif
+        $user = string(regex($object.process.cmdline, ".*user:(\S+).*", 1))
+        $domain = string(regex($object.process.cmdline, ".*domain:(\S+).*", 1))
+        if $user != null or $domain != null then
+            $object.account.name = $user
+            $object.account.domain = $domain
+        endif
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $incident_fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

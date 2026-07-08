@@ -1,0 +1,8 @@
+event ARP_table_modify:
+    key:
+        event_src.host, dst.host, reason, action, object, status,
+        importance, event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Juniper_Junos_syslog_arp_entry_change"
+
+aggregate Juniper_Junos_ARP_table_modify: ARP_table_modify[3,10] within 10m

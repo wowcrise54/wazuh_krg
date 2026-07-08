@@ -1,0 +1,125 @@
+event Anonymous_Pipe_Connected:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["17", "18"], msgid)
+        and lower(object.name) == "<anonymous pipe>"
+        and status == "success"
+        and not in_list(["powershell.exe", "pwsh.exe", "powershell_ise.exe"], lower(subject.process.name)) 
+    }
+
+event Powershell_Pipeline_Execute:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.parent.cmdline), "powershell\.exe?.*|powershell?.*|powershell_ise\.exe?.*|pwsh\.exe?.*", 0) == null
+        and object.process.parent.cmdline != null
+        and filter::CheckWL_Powershell("NimPlant_Powershell_Activity", lower(join([object.process.parent.cmdline, object.process.cmdline], "|")))
+    }
+
+rule NimPlant_Powershell_Activity: Anonymous_Pipe_Connected and Powershell_Pipeline_Execute within 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+    }
+
+    on Anonymous_Pipe_Connected {
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.id = subject.process.id
+        
+        $object.name = object.name
+        $object.type = object.type
+    }
+
+    on Powershell_Pipeline_Execute {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $datafield8 = datafield8  # версия модуля
+
+        $chain_id = chain_id
+
+        $alert.key = lower(join([object.process.parent.cmdline, object.process.cmdline], "|"))
+        $alert.context = lower(join([object.process.parent.cmdline, object.process.name], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $alert.context = lower(join([$object.name, $alert.context], "|"))
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: PowerShell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance 
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,21 @@
+TABULAR = '{object.type=description},
+           orig,
+           status,
+           {time=time},
+           {object.version=version}'
+
+COND = $product == "Security Gateway/Management" and $status == "Started"
+
+action = "download"
+object = "update"
+status = "ongoing"
+
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $orig
+event_src.category = "Network security"
+event_src.subsys = lower($product)
+
+id = "PT_Checkpoint_Gaia_opseclog_SGM_Update_started"

@@ -1,0 +1,203 @@
+
+JSON = ''
+
+datafield1 = $Event["Timestamp"]["text"]
+time = recv_time
+
+COND = $Event["Packet-Type"]["text"] != null 
+       and $Event["Reason-Code"]["text"] != null 
+       and $Event["Event-Source"]["text"] != null 
+       and (
+            $Event["Proxy-Policy-Name"]["text"] != null 
+            or $Event["Class"]["text"] != null
+       ) 
+    
+$check_userdata = coalesce($Event["User-Name"]["text"], $Event["Fully-Qualifed-User-Name"]["text"])
+subject = if $check_userdata != null then "account" else null endif
+
+if $check_userdata != null and $Event["Packet-Type"]["text"] != "11" then 
+    subject = "account"
+elif $Event["Packet-Type"]["text"] == "11" then
+    subject = "service"
+else
+    subject = null 
+endif
+
+if in_list(["1", "4"], $Event["Packet-Type"]["text"]) then
+    action = "receive"
+    object = "request"
+elif in_list(["2", "3", "5", "11"], $Event["Packet-Type"]["text"]) then
+    action = "send"
+    object = "request"
+endif
+
+$request_type = $Event["Packet-Type"]["text"]
+
+if in_list(["1", "4", "11"], $request_type) then
+    status = "ongoing"
+elif in_list(["2", "3", "5"], $request_type) then
+    status = "success"
+endif
+
+if find_substr($check_userdata, '@') != null then
+    $temp_csv = csv($check_userdata, "@", "`")
+    subject.account.name = lower($temp_csv[1])
+    subject.account.domain = lower($temp_csv[0])
+elif find_substr($check_userdata, '\\') != null then
+    $temp_csv = csv($check_userdata, "\\", "`")
+    subject.account.name = lower($temp_csv[1])
+    subject.account.domain = lower($temp_csv[0])
+else 
+    subject.account.name = lower($check_userdata)
+endif
+
+if ($Event["NAS-Identifier"]["text"] != null) then
+    $object_params = csv($Event["NAS-Identifier"]["text"], ":", "//")
+    object.id = lower($object_params[0])  # the network access server originating the request
+    datafield10 = $object_params[1]       # NAS MAC
+endif
+
+if coalesce(maybe_ipv4($Event["Calling-Station-ID"]["text"]), maybe_ipv6($Event["Calling-Station-ID"]["text"])) != null then
+    src.ip = $Event["Calling-Station-ID"]["text"]                       # Calling station IP
+elif maybe_macaddr($Event["Calling-Station-ID"]["text"]) != null then
+    src.mac = $Event["Calling-Station-ID"]["text"]                      # Calling station MAC
+else 
+    datafield8 = $Event["Calling-Station-ID"]["text"]                   # Calling station ID
+endif
+
+# данные сервера, который дает права
+if coalesce(maybe_ipv4($Event["Called-Station-Id"]["text"]), maybe_ipv6($Event["Called-Station-Id"]["text"])) != null then
+    dst.ip = $Event["Called-Station-Id"]["text"]                      # Called station IP
+elif maybe_macaddr($Event["Called-Station-Id"]["text"]) != null then
+    dst.mac = $Event["Called-Station-Id"]["text"]                     # Called station MAC
+else 
+    datafield3 = $Event["Called-Station-Id"]["text"]                  # Called station ID
+endif
+
+if ($Event["NAS-IP-Address"]["text"] != null) then
+    nas_ip = $Event["NAS-IP-Address"]["text"]
+endif
+
+logon_auth_method = "remote"
+
+datafield1 = switch $Event["Authentication-Type"]["text"]  # Authentication type
+    case "1" "PAP"
+    case "2" "CHAP"
+    case "3" "MS-CHAP"
+    case "4" "MS-CHAP v2"
+    case "5" "EAP"
+    case "7" "None"
+    case "8" "Custom"
+endswitch
+
+datafield2 = lower($Event["Tunnel-Client-Endpt"]["text"])                                        # Tunnel client IP
+datafield4 = lower($Event["NP-Policy-Name"]["text"])                                             # NP policy name
+datafield5 = coalesce($Event["Client-IP-Address"]["text"], $Event["MS-Machine-Name"]["text"])    # RADIUS client IP address or FQDN
+datafield6 = lower($Event["Proxy-Policy-Name"]["text"])                                          # Proxy policy name
+datafield7 = $Event["Fully-Qualified-Machine-Name"]["text"]                                      # Computer fullname
+datafield9 = $Event["Event-Source"]["text"]
+
+numfield1 = $Event["Packet-Type"]["text"]  # request_type values: 1 = Access-Request 2 = Access-Accept 3 = Access-Reject 4 = Accounting-Request  5 = Accounting-Response 11 = Challenge
+
+reason = switch $Event["Reason-Code"]["text"]
+   case "0" "IAS_SUCCESS"
+   case "1" "IAS_INTERNAL_ERROR"
+   case "2" "IAS_ACCESS_DENIED"
+   case "3" "IAS_MALFORMED_REQUEST"
+   case "4" "IAS_GLOBAL_CATALOG_UNAVAILABLE"
+   case "5" "IAS_DOMAIN_UNAVAILABLE"
+   case "6" "IAS_SERVER_UNAVAILABLE"
+   case "7" "IAS_NO_SUCH_DOMAIN"
+   case "8" "IAS_NO_SUCH_USER"
+   case "9" "The request was discarded by a third-party extension DLL file"
+   case "10" "A third-party extension DLL has failed and cannot perform its function"
+   case "16" "IAS_AUTH_FAILURE"
+   case "17" "IAS_CHANGE_PASSWORD_FAILURE"
+   case "18" "IAS_UNSUPPORTED_AUTH_TYPE"
+   case "19" "No reversibly encrypted password is stored for the user account"
+   case "20" "Lan Manager Authentication is not enabled"
+   case "21" "An IAS extension dynamic link library (DLL) that is installed on the NPS server rejected the connection request"
+   case "22" "The client could not be authenticated because the EAP type cannot be processed by the server"
+   case "23" "Unexpected error. Possible error in server or client configuration"
+   case "32" "IAS_LOCAL_USERS_ONLY"
+   case "33" "IAS_PASSWORD_MUST_CHANGE"
+   case "34" "IAS_ACCOUNT_DISABLED"
+   case "35" "IAS_ACCOUNT_EXPIRED"
+   case "36" "IAS_ACCOUNT_LOCKED_OUT"
+   case "37" "IAS_INVALID_LOGON_HOURS"
+   case "38" "IAS_ACCOUNT_RESTRICTION"
+   case "48" "IAS_NO_POLICY_MATCH"
+   case "49" "Did not match connection request policy"
+   case "64" "IAS_DIALIN_LOCKED_OUT"
+   case "65" "IAS_DIALIN_DISABLED"
+   case "66" "IAS_INVALID_AUTH_TYPE"
+   case "67" "IAS_INVALID_CALLING_STATION"
+   case "68" "IAS_INVALID_DIALIN_HOURS"
+   case "69" "IAS_INVALID_CALLED_STATION"
+   case "70" "IAS_INVALID_PORT_TYPE"
+   case "71" "IAS_INVALID_RESTRICTION"
+   case "72" "The Enhanced Key Usage (EKU) extensions, section of the user or computer certificate are not valid or are missing"
+   case "73" "IAS_INVALID_RESTRICTION"
+   case "80" "IAS_NO_RECORD"
+   case "96" "IAS_SESSION_TIMEOUT"
+   case "97" "IAS_UNEXPECTED_REQUEST"
+   case "112" "The remote RADIUS server did not process the authentication request"
+   case "113" "The local NPS proxy attempted to forward a connection request to a member of a remote RADIUS server group that does not exist"
+   case "115" "The local NPS proxy did not forward a RADIUS message because it is not an accounting request or a connection request"   
+   case "116" "The local NPS proxy server cannot forward the connection request to the remote RADIUS server"
+   case "117" "The remote RADIUS (Remote Authentication Dial-In User Service) server did not respond"
+   case "118" "The local NPS proxy server received a RADIUS message that is malformed from a remote RADIUS server, and the message is unreadable"
+   case "256" "The certificate provided by the user or computer as proof of their identity is a revoked certificate"
+   case "257" "Due to a missing dynamic link library (DLL) or exported function, NPS cannot access the certificate
+   revocation list to verify whether the user or client computer certificate is valid or is revoked"
+   case "258" "The revocation function was unable to check revocation for the certificate"
+   case "259" "The certification authority that manages the certificate revocation list is not available" 
+   case "260" "The message supplied for verification has been altered"
+   case "261" "NPS cannot contact Active Directory Domain Services (AD DS) or the local user accounts database to perform authentication and authorization"
+   case "262" "The supplied message is incomplete. The signature was not verified"
+   case "263" "NPS did not receive complete credentials from the user or computer"
+   case "264" "The Security Support Provider Interface (SSPI) called by EAP reports that the system clocks 
+   on the NPS server and the access client are not synchronized"
+   case "265" "The certificate that the user or client computer provided to NPS as proof of identity chains 
+   to an enterprise root certification authority that is not trusted by the NPS server"
+   case "266" "The message received was unexpected or badly formatted"   
+   case "267" "The certificate provided by the connecting user or computer is not valid"
+   case "268" "The certificate provided by the connecting user or computer is expired"
+   case "269" "The Security Support Provider Interface (SSPI) called by EAP reports that the NPS server and 
+   the access client cannot communicate because they do not possess a common algorithm"
+   case "270" "Based on the matching NPS network policy, the user is required to log on with a smart card, 
+   but they have attempted to log on by using other credentials"
+   case "271" "The connection request was not processed because the NPS server was in the process of shutting down
+   or restarting when it received the request"
+   case "272" "The certificate that the user or client computer provided to NPS as proof of identity maps 
+   to multiple user or computer accounts rather than one account"
+endswitch
+
+if in_list(["273", "274", "275", "276", "277", "280", "281", "282", "283", "284", "285", "286",
+            "287", "288", "289", "290", "291", "292", "293", "294", "295", "296", "297", "298",
+            "299", "300", "301", "302"], $Event["Reason-Code"]["text"]) then
+    reason = "Authentication failed"
+endif
+
+time = $Event["Timestamp"]["text"]
+
+if $request_type == "3" then
+    importance = "medium"
+else
+    importance = "info"
+endif
+
+$hostname = lower($Event["Computer-Name"]["text"])
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($hostname)
+    event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    event_src.hostname = lower($hostname)
+endif
+
+event_src.category = "AAA"
+event_src.vendor = "microsoft"
+event_src.title = "nps"
+
+id = "PT_Microsoft_NPS_filemonitor_Login_attempt_dts_compliant"

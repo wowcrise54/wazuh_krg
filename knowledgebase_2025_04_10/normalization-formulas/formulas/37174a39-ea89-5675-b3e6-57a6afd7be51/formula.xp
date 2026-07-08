@@ -1,0 +1,59 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} 
+        {$Computer=HOSTNAME} {subject.process.name="php-fpm"}
+        {subject.process.id = NUMBER} - - /
+        {event_src.subsys=UNTIL(":")} 
+        Configuration Change: 
+        {subject.account.name=WORD}@{src.ip=IPV4|src.ip=IPV6} 
+        ({$database=UNTIL(")")}: {$message=REST}'
+
+COND = (find_substr(lower($message), 'certificate') != null 
+        and (find_substr($message, 'Created') != null 
+        or find_substr($message, 'Renewed') != null 
+        or find_substr($message, 'Imported') != null 
+        or find_substr($message, 'Signed') != null))     # only events with words "IPsec" and "configuration" together
+
+subject = "account"
+action = "create"
+object = "virtual_key"
+status = "success"
+
+$csv_msg = csv($message, ' ', '*')
+object.state = $csv_msg[0]    #real action
+
+if object.state != 'Renewed' then
+    object.name = $csv_msg[length($csv_msg) - 1]
+    $csv_msg = remove($csv_msg, object.name)
+else
+    action = "update"
+    $state_change = substr($message, find_substr($message, '-') + 2, length($message) - (find_substr($message, ' -') + 2))
+    $csv_state = csv(strip($state_change, 'Serial', null), '->', '*')
+    object.property = "state"
+    object.value = $csv_state[0]
+    object.new_value = $csv_state[1]
+    object.name = substr($message, find_substr($message,'(') + 1, find_substr($message, ')') - find_substr($message,'(') - 1)
+    $message = substr($message, 0, find_substr($message,'(') - 1)
+    $csv_msg = csv($message, ' ', '*')
+    object.id = $csv_msg[length($csv_msg) - 1]
+    $csv_msg = remove($csv_msg, object.id)
+endif
+
+$csv_msg = remove($csv_msg, object.state) # removing real action
+$message = join($csv_msg, ' ')
+object.type = $message
+
+datafield1 = $database # Belonging to the database
+
+importance = "low"
+
+event_src.title = "php"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Opensource_PHP_syslog_Certificates_events"

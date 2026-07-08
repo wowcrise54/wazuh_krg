@@ -1,0 +1,41 @@
+TABULAR =  "unixtime,
+            {time = detect_time},
+            {datafield2 = os_name},
+            hostname,
+            product_uuid"
+
+action = "install"
+object = "application"
+status = "success"
+
+object.id = strip($product_uuid,'{','}')
+
+if $product_name != null then
+    object.name = $product_name
+endif
+
+if $product_publisher != null then
+    object.vendor = $product_publisher
+endif
+
+if $product_version != null then
+    object.version = $product_version
+endif
+
+if $install_date != null then
+    object.property = "Original install date"
+    object.value = $install_date
+endif
+
+if $domain != null then
+    datafield1 = lower($domain)
+endif
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "info"
+
+id = "PT_Microsoft_SCCM_odbc_detect_installed_software"

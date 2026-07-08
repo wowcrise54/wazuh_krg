@@ -1,0 +1,238 @@
+filter CheckWL_External_Connection(string $rule_name, string $specific_value)
+{
+    # Проверяем наличие параметров события в блеклисте по параметрам макроса
+    (
+        # iivanov
+        not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.name),
+            lower($specific_value)
+        )
+
+        # user@domain.com
+        and not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.contact),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.contact),
+            lower($specific_value)
+        )
+
+        # Ivan Ivanov
+        and not filter::CheckWL_BlackListValue_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.fullname),
+            lower($specific_value)
+        )
+        and not filter::CheckWL_BlackListRegex_Exc(
+            $rule_name,
+            lower(event_src.host),
+            lower(subject.account.fullname),
+            lower($specific_value)
+        )
+    )
+    and
+    (
+        (
+            # iivanov
+            filter::CheckWL_BlackListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+
+            # user@domain.com
+            or filter::CheckWL_BlackListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.fullname),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.fullname),
+                lower($specific_value)
+            )
+
+            # Ivan Ivanov
+            or filter::CheckWL_BlackListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.contact),
+                lower($specific_value)
+            )
+            or filter::CheckWL_BlackListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.contact),
+                lower($specific_value)
+            )
+        )
+        or
+        (
+            # iivanov
+            not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower($specific_value)
+            )
+
+            # user@domain.com
+            and not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.fullname),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.fullname),
+                lower($specific_value)
+            )
+
+            # Ivan Ivanov
+            and not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.contact),
+                lower($specific_value)
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.contact),
+                lower($specific_value)
+            )
+            
+            # Проверка ручного вайтлистинга от добавленных исключения из UI
+            and not filter::CheckWL_WhiteListValue_2(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+
+                assigned_src_ip,
+                external_src.ip
+            )
+            and not filter::CheckWL_WhiteListValue_2(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.fullname),
+
+                assigned_src_ip,
+                external_src.ip
+            )
+            and not filter::CheckWL_WhiteListValue_2(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.contact),
+
+                assigned_src_ip,
+                external_src.ip
+            )
+
+            # Комбинация значений полей
+            and not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                external_src.ip + "|" + assigned_src_ip
+            )
+            and not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.fullname),
+                external_src.ip + "|" + assigned_src_ip
+            )
+            and not filter::CheckWL_WhiteListValue(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.contact),
+                external_src.ip + "|" + assigned_src_ip
+            )
+         
+            # Комбинация регулярных полей для проверки полей
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower(join([external_src.ip, assigned_src_ip], "|"))
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.fullname),
+                lower(join([external_src.ip, assigned_src_ip], "|"))
+            )
+            and not filter::CheckWL_WhiteListRegex(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.contact),
+                lower(join([external_src.ip, assigned_src_ip], "|"))
+            )
+
+            # GeoIP whitelist
+            and not filter::CheckWL_WhiteListValue_4(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.name),
+                lower(external_dst.geo.country),
+                lower(external_src.geo.country),
+                lower(external_dst.geo.org),
+                lower(external_src.geo.org)
+            )
+            and not filter::CheckWL_WhiteListValue_4(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.contact),
+                lower(external_dst.geo.country),
+                lower(external_src.geo.country),
+                lower(external_dst.geo.org),
+                lower(external_src.geo.org)
+            )
+            and not filter::CheckWL_WhiteListValue_4(
+                $rule_name,
+                lower(event_src.host),
+                lower(subject.account.fullname),
+                lower(external_dst.geo.country),
+                lower(external_src.geo.country),
+                lower(external_dst.geo.org),
+                lower(external_src.geo.org)
+            )
+
+            # Проверка автовайтлистинга 
+            and not filter::CheckWL_Auto(
+                $rule_name,
+                lower($specific_value)
+            )
+        )
+    )
+}

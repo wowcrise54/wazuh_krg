@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in the CryptoPro NGate control panel. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="0e6e911c-e1ca-2b57-02e5-4fc0da28403f">Successful password spraying from host {src.host} on host {event_src.host}. Attackers obtained the passwords of the following users: {datafield2}. Number of failed login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="694104df-6888-25ce-b880-6c20eecf6e0b">Successful password spraying from host {src.host} on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="853d1cfb-0974-a85e-26f5-c86ed5d08b66">Password spraying attempts from host {src.host} on host {event_src.host}. Number of login attempts: {count.subevents}.</EventDescription>
+  </EventDescriptions>
+</Localization>

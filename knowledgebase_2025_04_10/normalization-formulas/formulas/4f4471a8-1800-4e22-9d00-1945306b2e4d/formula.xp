@@ -1,0 +1,76 @@
+TABULAR = 'TransactionId,
+           SequenceId,
+           {time=OccurredAt},
+           {$selector=ObjectSelector},
+           {$login=Login},
+           {$workstation=Workstation},
+           {$account=NTAccount},
+           SequenceNumber,
+           {$temp_action=Action},
+           {msgid=ObjectType},
+           {$server=Server},
+           ServerIsPrimary'
+
+COND = $ObjectType == "Login"
+
+subject = "account"
+
+if $FieldName == "Lock" or $FieldName == "Блокировка" then 
+    action = switch $NewValue
+        case "Yes" "lock"
+        case "No" "unlock"
+        case "Да" "lock"
+        case "Нет" "unlock"
+    endswitch
+elif $temp_action == "Insert" then
+    action = "create"
+
+    object.property = $FieldName
+    object.value = $NewValue
+elif $temp_action == "Update" then
+    action = "modify"
+
+    object.property = $FieldName
+    object.value = $OldValue
+    object.new_value = $NewValue
+elif $temp_action == "Delete" then
+    action = "remove"
+endif    
+
+object = "account"
+status = "success"
+
+subject.account.name = lower($login)
+
+$csv_account = csv(lower($account), "\\", "")
+subject.name = $csv_account[1]    # Имя системного пользователя
+subject.domain = $csv_account[0]  # Домен системного пользователя
+
+object.account.name = lower($selector)
+
+src.hostname = lower($workstation)
+dst.hostname = lower($server)
+
+if lower($workstation) == lower($server) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+
+if $FieldName == "Lock" or $FieldName == "Блокировка" then
+    category.low = "Control"
+else
+    category.low = "Manipulation"
+endif
+
+event_src.vendor = "infowatch"
+event_src.title = "device_monitor"
+event_src.hostname = lower($server)
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Device_Monitor_odbc_account_actions"

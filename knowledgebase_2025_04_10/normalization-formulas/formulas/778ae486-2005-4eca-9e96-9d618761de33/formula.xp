@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}{$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}{":"?}
+        mgd{"["NUMBER"]"?}: {"%CHANGE-6-UI_CFG_AUDIT_SET_SECRET"|"UI_CFG_AUDIT_SET_SECRET"}: User \'{$uname = STRING} {WORDDASH}: {$re = REST}'
+
+subject.name = strip ($uname, "", "\'")
+
+if find_substr ($re, "system login user")!=null then
+    submessage ("TEXT", "parse_rest", $re)	
+endif
+
+subformula "parse_rest"
+  !TEXT = "{$csv=CSV(' ', '\"')}"
+  datafield1 = $csv[3]
+endsubformula
+
+object.value = strip($re, '[', ']')
+
+if find_substr($re, "[system login user")!= null then
+    reason = "change user attributes"
+elif find_substr($re, "[system root-authentication")!= null then
+    reason = "change root authentication"
+else reason = "set configuration value"
+endif
+		
+subject = "account"
+object = "configuration"
+action = "modify"
+status = "success"		
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_ui_cfg_audit_set_secret"
+importance = "info"

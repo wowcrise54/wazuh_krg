@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Possible forced user authentication using .scf or .url files. Such authentication allows attackers to obtain NTLM password hashes of users who open a local folder or network share with these files using Windows Explorer. Attackers can then use these hashes for attacks such as Pass-the-Hash, or to bruteforce passwords in clear text and use them to gain access to other systems.</Description>
+  <EventDescriptions>
+    <EventDescription id="7312d17d-5788-473b-aa27-df5f83df050a">A user from host {src.host} was redirected for forced authentication to host {dst.host} after opening the folder with placed by user {subject.account.name} malicious file "{object.name}" on network share of host {event_src.host}</EventDescription>
+    <EventDescription id="a5bf00d5-9c5b-4605-a0a2-5d4cf833f016">Possible forced authentication of users opening a network share with file "{object.storage.name}" (placed by user {subject.account.name} from host {src.host}) on host {event_src.host}</EventDescription>
+    <EventDescription id="b94fa285-6596-436b-847c-e8ce6982a77d">User {subject.account.name} from host {src.host} was redirected for forced authentication to host {dst.host} after downloading file "{object.name}" and opening the folder with this file on host {event_src.host}</EventDescription>
+    <EventDescription id="c8ae3c88-c100-4cca-9a39-03df8cd8edd6">Possible forced authentication of user {subject.account.name} after downloading file "{object.name}" and opening the folder with this file on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

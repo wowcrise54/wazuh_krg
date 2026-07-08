@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {STRING} CEF:{NUMBER}|Infotecs|IDS HS|{UNTIL("|")}{msgid=NUMBER}|
+        {$desc=UNTIL("|")}{$priority=NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+COND = in_list(["2025992", "2100975", "2016956", "3026159"], msgid)
+
+action = "detect"
+object = "attack"
+status = "success"
+
+object.name = $desc
+
+src.ip = $kv['src']
+src.port = $kv['spt']
+dst.ip = $kv['dst']
+dst.port = $kv['dport']
+
+protocol = $kv['proto']
+
+time = epoch_ms_to_datetime(number($kv['rt']))
+
+if $priority < 6 then
+    importance = "info"
+elif $priority >= 6 and $priority < 8 then
+    importance = "low"
+elif $priority >= 8 and $priority < 10 then
+    importance = "medium"
+elif $priority >= 10 then
+    importance = "high"
+endif
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids_hs"
+event_src.subsys = lower($kv['deviceFacility'])
+event_src.ip = $kv['dvc']
+event_src.hostname = $kv['InfotecsIDSHShost']
+event_src.category = "IDS/IPS"
+event_src.id = $kv['InfotecsIDSHShostId']
+
+id = "PT_Infotecs_VipNet_IDS_HS_syslog_detect_attack_web"

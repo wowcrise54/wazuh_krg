@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|} {event_src.hostname=HOSTNAME}: *{WORDDASH}: {time=DATETIME}:
+        {"#"|"%"} {msgid="DTL-4-ARP_ORPHANPKT_DETECTED"| msgid = "LOG-4-Q_IND"}: {STRING}
+        STA(Target MAC Address) [{src.mac=MACADDR}, {IPV4|IPV6}]
+        ARP (op ARP {"REQUEST"|"REPLY"}) received with invalid SPA(Source IP Address) {IPV4|IPV6}
+        /TPA(Destination IP Address) {IPV4|IPV6} {REST}'
+
+action = "receive"
+object = "packet"
+status = "success"
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+protocol = "arp"
+
+reason = "Controller has received an orphaned ARP packet"
+
+importance = "info"
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_syslog_DTL_ARP_ORPHANPKT_DETECTED"

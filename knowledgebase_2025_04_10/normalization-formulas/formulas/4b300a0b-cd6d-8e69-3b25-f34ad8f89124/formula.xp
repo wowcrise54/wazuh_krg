@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+{UNTIL("[")?}{NUMBER"]:"?}{$temp_time=UNTIL(",")?}{NUMBER?} 
+{"[salt.fileclient"?}{":"?}{msgid = "241"?}{"]"?}{"["?}{WORD?}{"]["?}{object.process.id=NUMBER?}] 
+Caching directory {object.fullpath=UNTIL(" for ")}environment {datafield3=REST}'
+
+action = "validate"
+object = "file_object"
+status = "success"
+
+object.fullpath = strip(object.fullpath, "'", "'")
+$ofp_csv = csv(object.fullpath,"/","")
+object.name = $ofp_csv[length($ofp_csv)-1]
+object.path = strip(object.fullpath, "", object.name)
+
+datafield3 = strip(datafield3, "'", "'")  # Enviroment name
+
+if $temp_time != null then
+    time = datetime($temp_time)
+endif
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "saltstack"
+event_src.category = "Other"
+
+id = "PT_Opensource_SaltStack_syslog_241_caching_directory"

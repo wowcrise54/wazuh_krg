@@ -1,0 +1,33 @@
+JSON = ""
+
+COND = $entity_type == "Term"
+        and in_list(["create", "delete", "update"], $operation)
+
+subject = "account"
+action = switch $operation
+    case "create" "create"
+    case "delete" "remove"
+    case "update" "modify"
+endswitch
+object = "resource"
+status = "success"
+
+subject.account.id = $user_id
+subject.account.name = $user_login
+subject.account.fullname = $user_fullname
+subject.account.contact = $user_email
+
+object.id = $entity_id
+object.name = $entity_display_name
+object.type = $entity_type
+
+time = $change_date
+
+importance = "info"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_protected_catalog_document_update"

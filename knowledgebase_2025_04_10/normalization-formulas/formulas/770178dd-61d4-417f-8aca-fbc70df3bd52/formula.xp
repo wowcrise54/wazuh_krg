@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|} {event_src.hostname=HOSTNAME} : *{WORDDASH}: {time=DATETIME}:
+        {"#"|"%"}{msgid="DOT1X-3-INVALID_REPLAY_CTR"}: {STRING}
+        Invalid replay counter from client {src.mac=MACADDR} - got {REST}'
+
+subject = "account"
+action = "connect"
+object = "host"
+status = "failure"
+
+object.type = "wlan client"
+
+reason = "An EAPOL message from the client contained an invalid replay counter"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_syslog_DOT1X_3_INVALID_REPLAY_CTR"

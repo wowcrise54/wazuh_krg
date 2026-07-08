@@ -1,0 +1,59 @@
+TABULAR = '__policy_id_tag,
+           action,
+           dst,
+           orig,
+           product,
+           proto,
+           s_port,
+           service,
+           src,
+           time'
+
+COND = ($product == "HTTPS Inspection")
+
+subject = "rule"
+action = "validate"
+object = "request"
+status = "success"
+
+subject.account.fullname = $src_user_name
+
+if $HTTPS_inspection_rule_name != "" then
+    subject.name = $HTTPS_inspection_rule_name
+endif
+if $HTTPS_inspection_rule_id != "" then
+    subject.id = $HTTPS_inspection_rule_id
+endif
+subject.type = $https_inspection_action
+
+$https_validation = $https_validation
+if ($https_validation != null) then
+    object.property = "Precise error, describing HTTPS inspection failure"
+    object.value =  $https_validation
+endif
+
+src.ip = $src
+src.port = $s_port
+$shost = $src_machine_name
+if find_substr($shost, '@') != null then
+    src.fqdn = $shost
+    src.hostname = substr($shost, 0, find_substr($shost, "@"))
+else
+    src.hostname = $shost
+endif
+
+dst.ip = $dst
+dst.port = $service
+
+protocol = lower($proto)
+
+time = $time
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($product)
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_HTTPS_Inspection_rule"

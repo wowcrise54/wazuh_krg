@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} 
+        {$Computer=HOSTNAME} reboot 
+        {subject.process.id = NUMBER} - - rebooted by 
+        {subject.account.name=WORD}'
+
+subject = "account"
+action = "restart"
+object = "system"
+status = "success"
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Application"
+category.low = "Control"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "freebsd"
+event_src.category = "Operating system"
+
+id = "PT_Opensource_FreeBSD_syslog_reboot"

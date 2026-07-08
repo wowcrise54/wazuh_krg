@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        en: "Checks a specific value for PT ISIM events against the white lists"
+        ru: "Проверяет специфичное значение для событий из PT ISIM с помощью белых списков"
+    Description:
+        en: "This filter helps to reduce the repetitive part of the check using the table white lists"
+        ru: "Фильтр используется для сокращения повторяющейся части проверки с помощью табличных белых списков"
+    UseAsEventName: False
+Args:
+    rule_name:
+        Type: string
+        Name:
+            en: "Correlation rule name"
+            ru: "Название правила корреляции"
+    specific_value:
+        Type: string
+        Name:
+            ru: "Проверяемое специфичное значение"
+            en: "Specific value to check"
+ObjectId: PT-RF-119
+Origin: PT

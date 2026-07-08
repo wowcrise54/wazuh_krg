@@ -1,0 +1,194 @@
+event File_Modify_SSH_Key:
+    key:
+        event_src.host, subject.account.id, subject.process.id, object.path
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileModify_Linux("^/(root|home/[^/]+)/\.ssh2?")
+        and in_list(["modify", "access", "rename"], action)
+        and in_list(["file", "file_object"], object)
+        and not in_list(["config", "known_hosts", ".ssh"], object.name)
+        and status == "success"
+        and filter::CheckWL_Linux_File_Operations("Unix_SSH_Key_Modify", lower(join([subject.account.id, subject.process.fullpath, object.fullpath], "|")))
+    }
+
+event SSH_Authorized_Key_Modify:
+    key:
+        event_src.host, object.path
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and object.property == "ssh_authkeys"
+        and action == "configure"
+        and status == "success"
+        and filter::CheckWL_Linux_File_Operations("Unix_SSH_Key_Modify", object.fullpath)
+    }
+
+rule Unix_SSH_Key_Modify: File_Modify_SSH_Key+ timer 10s 
+                          or SSH_Authorized_Key_Modify+ timer 10s
+
+    init {
+        $count.subevents = 0
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+        $context = ""
+    }
+
+    on File_Modify_SSH_Key {
+        if $count.subevents == 0 then  # блок выполняется только при первом событии инстанса
+            $action = action  # modify, access, rename
+
+            $subject.type = subject.type
+
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            
+            if subject != null then
+                $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+            else
+                $prefix = "[sys] "
+            endif
+
+            $subject.process.name = subject.process.name
+            $subject.process.cmdline = subject.process.cmdline
+            $subject.process.hash = subject.process.hash
+            $subject.process.hash.md5 = subject.process.hash.md5
+            $subject.process.hash.imphash = subject.process.hash.imphash
+            $subject.process.hash.sha1 = subject.process.hash.sha1
+            $subject.process.hash.sha256 = subject.process.hash.sha256
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.id = subject.process.id
+            $subject.process.meta = subject.process.meta # old cmdline
+            $subject.process.parent.id = subject.process.parent.id
+            
+            $context = $context + "[" + string(subject.process.id) + "] " + subject.process.name + " → "
+
+            $object.name = object.name
+            $object.id = object.id
+            $object.type = object.type
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.state = object.state
+            
+            $files = object.fullpath
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.group = object.account.group
+            $object.account.id = object.account.id
+            
+            $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "  
+
+            $logon_service = logon_service
+            
+            $datafield1 = datafield1  # Executable Name
+            $datafield2 = datafield2  # Owner User Name
+            $datafield3 = datafield3  # File Access Mode
+
+            $numfield2 = numfield2  # Owner User ID
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+            $event_src.fqdn = event_src.fqdn
+
+            $alert.key = lower(join([subject.account.id, subject.process.fullpath, object.fullpath], "|"))
+        elif $count.subevents == 1 then
+            $object.name = null
+            $object.id = null
+            $object.type = null
+            $object.path = null
+            $object.fullpath = null
+            $object.state = null
+            
+            $datafield1 = null  # Executable Name
+            $datafield2 = null  # Owner User Name
+            $datafield3 = null  # File Access Mode
+
+            $numfield2 = null  # Owner User ID
+        endif
+        
+        $count.subevents = $count.subevents + 1
+    }
+
+    on SSH_Authorized_Key_Modify {
+        if $count.subevents == 0 then  # блок выполняется только при первом событии инстанса
+            $action = action  # configure
+
+            $object.property = object.property
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $files = object.fullpath
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+            $event_src.fqdn = event_src.fqdn
+
+            $alert.key = object.fullpath
+        elif $count.subevents == 1 then
+            $object.name = null
+            $object.id = null
+            $object.type = null
+            $object.path = null
+            $object.fullpath = null
+            $object.state = null
+            $object.value = null
+
+            $datafield1 = null  # Executable Name
+            $datafield2 = null  # Owner User Name
+            $datafield3 = null  # File Access Mode
+
+            $numfield2 = null  # Owner User ID
+        endif
+
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "medium"
+
+    if $count.subevents > 1 then
+        $files = string($count.subevents) + " files in " + $object.path
+    endif
+
+    $alert.context = $prefix + $context + $files
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation: SSH Authorized Keys"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.process.id, $object.path], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

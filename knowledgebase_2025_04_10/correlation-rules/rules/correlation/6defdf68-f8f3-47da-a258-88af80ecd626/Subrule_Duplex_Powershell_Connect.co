@@ -1,0 +1,108 @@
+event Powershell_Connection_Outbound:
+    key:
+        event_src.host, event_src.title, dst.ip, src.ip, src.port, dst.port, object.process.name
+    filter {
+        filter::NotFromCorrelator() 
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or (event_src.title == "sysmon" and msgid == "3")
+        )
+        and object == "connection"
+        and direction == "egress"
+        and protocol == "tcp"
+        and in_list(["powershell.exe", "powershell_ise.exe", "pwsh.exe"], lower(object.process.name))
+    }
+   
+event Powershell_Connection_Inbound:
+    key:
+        event_src.host, event_src.title, dst.ip, src.ip, src.port, dst.port, object.process.name
+    filter {
+        filter::NotFromCorrelator() 
+        and (
+            (event_src.title == "windows" and msgid == "5156")
+            or (event_src.title == "sysmon" and msgid == "3")
+        )
+        and object == "connection"
+        and direction == "ingress"
+        and protocol == "tcp"
+        and in_list(["powershell.exe", "powershell_ise.exe", "pwsh.exe"], lower(object.process.name))
+    }
+    
+rule Subrule_Duplex_Powershell_Connect: (Powershell_Connection_Outbound and Powershell_Connection_Inbound) within 1m
+
+    on Powershell_Connection_Outbound {
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $direction = direction
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([dst.ip, dst.port], "|")
+        if $src.ip == "127.0.0.1" or src.host == dst.host then 
+            $alert.context = "Loopback download from: " + src.ip
+        else
+            $alert.context = "Remote download from: " + src.ip
+        endif
+    }
+    
+emit {
+    $correlation_type = "subrule"
+
+    if $subject.account.name !=  null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Ingress Tool Transfer"
+
+    $importance = "info"
+}

@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"} {STRING} [{$mon=WORD}/{$day=WORD}/{$year=NUMBER}
+        {$h=STRING} SSH INFO SSH: User {subject.account.name=STRING} session closed. scp finished'
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+protocol.layer7 = "scp"
+
+reason = "scp finished"
+
+logon_auth_method = "remote"
+
+$hs = strip ($h,"","]")
+$ys = string($year+2000)
+time= $mon+"/"+$day+"/"+$ys+" "+$hs
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "ers_8600_8300"
+event_src.vendor = "avaya"
+event_src.category = "Network device"
+
+id = "PT_Avaya_ERS_8600_8300_syslog_Session_logout_scp"

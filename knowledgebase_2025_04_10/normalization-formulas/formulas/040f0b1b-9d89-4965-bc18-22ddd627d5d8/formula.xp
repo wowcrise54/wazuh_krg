@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        ssh-auditor{"["NUMBER"]"}: {$msgid_raw_1="4052"}{$msgid_raw_2="Configuration_changed"}, Admin name: {subject.name = WORDDASH}, Admin name: {object.name = WORDDASH},
+        \"admin\", \"is_active: {$act = WORD}\", {REST}'
+
+subject = "account"
+if $act == "True" then  # свзываем состояние флага is_active с action
+    action = "disable"
+elif $act == "False" then
+    action = "enable"
+endif
+object = "account"
+status = "success"
+
+object.type = "admin"
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+importance = "info"
+
+event_src.title = "safeinspect"
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_1_syslog_4052_Configuration_changed_enable_disable_admin"

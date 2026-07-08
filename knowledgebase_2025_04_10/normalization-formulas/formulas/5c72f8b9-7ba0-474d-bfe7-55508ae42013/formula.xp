@@ -1,0 +1,87 @@
+TEXT = '{$timedata=STRING+}{$timestamp=STRING} [DBG] {chain_id=STRING?} 
+        Sending request to API: {$json_1=UNTIL("} ")|$json_2=STRING+} {$ext_ip=STRING*}'
+
+subject = "account"
+action = "send"
+object = "request"
+status = "success"
+
+subformula "parse_json"
+    JSON = '' 
+    
+    $tempuser = lower(strip($['Identity'], "'","'"))
+    if find_substr($tempuser, '@') != null then
+        $temp_csv = csv(lower($tempuser), "@", "`")
+        subject.account.name = $temp_csv[0]
+        subject.account.domain = $temp_csv[1]
+    elif find_substr($tempuser, '\\') != null then
+        $temp_csv2 = csv(lower($tempuser), "\\", "`")
+        subject.account.name = $temp_csv2[1]
+        subject.account.domain = $temp_csv2[0]
+    else 
+        subject.account.name = lower($tempuser)
+    endif 
+    
+    subject.account.id = "synthetic:" + $tempuser
+    subject.account.fullname = $['Name']
+    subject.account.contact = $['Email']
+    
+    object.id = $['RequestId']
+    
+    if $['CallingStationId'] != "" then
+        if ipv4($['CallingStationId']) != null then
+            external_src.ip = ipv4($['CallingStationId'])
+        else
+            external_src.fqdn = lower($['CallingStationId'])
+        endif
+    endif
+    
+    if $['CalledStationId'] != "" then
+        if ipv4($['CalledStationId']) != null then
+            dst.ip = ipv4($['CalledStationId'])
+        else
+            dst.fqdn = lower($['CalledStationId'])
+        endif
+    endif
+    
+    datafield8 = $['Phone']                           # Phone number
+    datafield11 = $['PassCode']                       # Pass code
+    datafield12 = $['Capabilities']['InlineEnroll']   # Set up the second factor
+    datafield13 = $['Callback']['Action']             # Callback action
+    datafield14 = $['Claims']['rawUserName']          # Raw user name 
+    datafield15 = $['Challenge']                      # OTP
+endsubformula
+
+if $json_1 != null then
+    submessage("JSON", "parse_json", $json_1 + "}")
+else
+    submessage("JSON", "parse_json", $json_2)
+endif
+
+if find_substr($ext_ip, "ext_ip") == null then
+    submessage("JSON", "parse_json", $ext_ip)
+else 
+    $ext_ip = strip($ext_ip,"ext_ip='","'")
+    if find_substr($ext_ip, "CallingStationId") != null then
+        submessage("JSON", "parse_json", $ext_ip)
+    else
+        if $ext_ip != "" and $ext_ip != "null" then
+            if ipv4($ext_ip) != null or ipv6($ext_ip) != null then
+                external_src.ip = $ext_ip
+            else
+                external_src.fqdn = lower($ext_ip)
+            endif
+        endif 
+    endif
+endif
+
+reason = "Authentication request"
+
+time = datetime($timedata + $timestamp)
+importance = "info"
+
+event_src.vendor = "multifactor"
+event_src.title = "multifactor"
+event_src.category = "AAA"
+
+id = "PT_Multifactor_Multifactor_filemonitor_API_request_send"

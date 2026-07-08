@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$ev_src_host=HOSTNAME} 
+        {WORDDASH}[{NUMBER}]({WORDDASH}): {msgid="krb5_db_get_principal"} {$stat=WORD} {$tail=REST}'
+        
+action = "create"
+object = "request"
+status = switch $stat
+    case "finished" "success"
+    case "strating" "ongoing"
+endswitch
+
+importance = "info"
+
+if $tail != null then
+    duration = number(substr($tail, find_substr($tail, '[') + 1, find_substr($tail, ']') - find_substr($tail, '[') - 1))
+endif
+
+event_src.vendor = "freeipa"
+event_src.title = "freeipa"
+event_src.category = "Directory service"
+
+if find_substr($ev_src_host, ".") != null then
+    event_src.fqdn = $ev_src_host
+    event_src.hostname = substr($ev_src_host, 0, find_substr($ev_src_host, "."))
+else
+    event_src.hostname = $ev_src_host
+endif
+
+id = "PT_FreeIPA_FreeIPA_syslog_krb5_db_get_principal"

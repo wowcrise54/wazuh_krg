@@ -1,0 +1,117 @@
+query Is_Newly_Created_Suspicious_File($host, $file_name) from Unix_Suspicious_Created_Files {
+    host == $host
+    and file_name == $file_name
+}
+    qhandler {
+        $cmdline = cmdline
+        $process_name = process_name
+        $file_name = file_name
+    }
+
+event Process_Start_Home_Dir:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and match(object.process.fullpath, "/home/*")
+        and filter::CheckWL_Linux_Process_Creation("Unix_Run_Process_From_Home_Directory",
+            lower(join([subject.account.id, object.process.fullpath], "|")))
+    }
+
+rule Unix_Run_Process_From_Home_Directory: Process_Start_Home_Dir
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Process_Start_Home_Dir {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+
+        $logon_service = logon_service
+            
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([subject.account.id, object.process.fullpath], "|"))
+
+        $result = exec_query("Is_Newly_Created_Suspicious_File", [event_src.host, object.process.name])
+        $subject.process.name = $result["$process_name"]
+        $subject.process.cmdline = $result["$cmdline"]
+        if $result["$file_name"] != null then
+            $reason = "Newly created suspicious file"
+        endif
+
+        if subject != null then
+            $alert.context = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+        else
+            $alert.context = "[sys] "
+        endif
+        $alert.context = $alert.context + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "
+        $alert.context = $alert.context + "[" + string(object.process.id) + "] " + object.process.cmdline
+        $alert.regex_match = regex(object.process.path, "(.+?\/.+?)\/", 1)
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    if $reason == "Newly created suspicious file" then
+        $importance = "medium"
+    else
+        $importance = "info"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Masquerading: Match Legitimate Name or Location"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

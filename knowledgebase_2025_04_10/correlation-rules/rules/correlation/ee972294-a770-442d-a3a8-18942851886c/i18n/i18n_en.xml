@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>There are signs of using the KrbRelay or DavRelayUp utility, which allows you to use the lack of signature of LDAP requests to relay the authentication process and receive a TGS ticket for the SPN account on behalf of the administrator. After that, an attacker can elevate their privileges to a local administrator and execute malicious code on a compromised node</Description>
+  <EventDescriptions>
+    <EventDescription id="43ee018d-c10b-4b4a-8d06-b3d62053ab41">The signs of KrbRelay|DavRelayUp utility usage with the local authentication of the user {subject.account.name} using a Kerberos relayed ticket are detected on host {event_src.host}</EventDescription>
+    <EventDescription id="ed9d8efa-0a1c-4763-bdb9-0e2e92b12a68">The signs of KrbRelay|DavRelayUp utility usage with the creation interface {datafield2} by process {subject.process.name}, followed by a connection to host {dst.host}:{dst.port} are detected on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,155 @@
+event WMI_Event_Object:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "19"
+        and lower(object.state) != "deleted"
+        and event_src.title == "sysmon"
+        and filter::CheckWL_Specific_Only("WMI_Subscriptions", lower(join([object.name, object.query], "|")))
+    }
+
+event WMI_Event_Consumer:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "20"
+        and lower(object.state) != "deleted"
+        and event_src.title == "sysmon"
+        and filter::CheckWL_Specific_Only("WMI_Subscriptions", lower(join([object.name, object.storage.fullpath], "|")))
+    }
+
+event WMI_Event_Consumer_To_Filter:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "21"
+        and lower(object.state) != "deleted"
+        and event_src.title == "sysmon"
+        and filter::CheckWL_Specific_Only("WMI_Subscriptions", lower(datafield2))
+    }
+
+rule WMI_Subscriptions: WMI_Event_Object or WMI_Event_Consumer or WMI_Event_Consumer_To_Filter
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on WMI_Event_Object {
+        $object = object  # resource
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.type = object.type
+        $object.path = object.path
+        $object.name = object.name
+        $object.state = object.state
+        $object.query = object.query
+
+        $alert.key = lower(join([object.name, object.query], "|"))
+        $alert.context = join([object, object.name, object.query], " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on WMI_Event_Consumer {
+        $object = object  # resource
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.type = object.type
+        $object.name = object.name
+        $object.state = object.state
+        
+        $object.storage.fullpath = object.storage.fullpath
+
+        $datafield1 = datafield1  # Тип файла, с которым работает потребитель
+
+        $alert.key = lower(join([object.name, object.storage.fullpath], "|"))
+        $alert.context = join([object, object.name, object.storage.fullpath], " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+    
+    on WMI_Event_Consumer_To_Filter {
+        $object = object  # link
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.type = object.type
+        $object.state = object.state
+        
+        $datafield1 = datafield1  # Тип файла, с которым работает потребитель
+        $datafield2 = datafield2  # Путь к файлу
+
+        $alert.key = lower(datafield2)
+        $alert.context = join([object, datafield2], " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+    
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "modify"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Event Triggered Execution: Windows Management Instrumentation Event Subscription"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

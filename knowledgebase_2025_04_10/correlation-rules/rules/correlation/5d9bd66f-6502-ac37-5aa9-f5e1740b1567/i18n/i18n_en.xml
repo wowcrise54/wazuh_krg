@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The NET utility was used. Attackers use the NET utility with the "use" parameter for network reconnaissance, accessing network shares, credential checks, and lateral movement.</Description>
+  <EventDescriptions>
+    <EventDescription id="0eae8148-d6f6-e912-797e-52bf0f3e9a0d">Attempt to save credential data to connect to network shares on behalf of user {subject.account.name} using utility {object.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="119b59b7-a484-ba06-389e-53ac7f575385">Network share "{object.name}" was accessed on behalf of user {object.account.name} from host {src.host} using utility {object.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="1e3ef982-7d12-b6db-8aae-5506a47304d4">Attempt to save credential data to connect to network share "{datafield15}" on behalf of user {subject.account.name} using the NET utility on host {event_src.host}</EventDescription>
+    <EventDescription id="4b0ba403-efef-86fd-46ba-6a7d1640aedf">Attempt to obtain information about network connections using utility {object.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="6e53e3e6-e1db-f08b-278c-8880980c8b7e">Attempt to delete all connections to network shares on behalf of user {subject.account.name} using utility {object.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="6ec13d3b-3f10-f466-3e23-a5debc13cb5a">Attempt to save credential data of user {datafield14} to connect to a network share on behalf of user {subject.account.name} using utility {object.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="7052a359-45b3-cc0e-c247-0b518b5c2b67">Attempt to save credential data of user {datafield14} to connect to network share "{datafield15}" on behalf of user {subject.account.name} using utility {object.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="7dc54508-e9a2-186a-73f6-f51f98fd90b2">Attempt to delete connections to network share "{datafield15}" on behalf of user {subject.account.name} using utility {object.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="b3b01110-d35d-7e03-97da-4d42c9a88f68">Attempt to delete connections to network shares on behalf of user {subject.account.name} using utility {object.process.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="ba5515cb-4df4-1e6a-1093-949afae604e8">User {subject.account.name} attempted to access network share "{datafield15}" using the credentials of user {datafield14} and utility {object.process.name} on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

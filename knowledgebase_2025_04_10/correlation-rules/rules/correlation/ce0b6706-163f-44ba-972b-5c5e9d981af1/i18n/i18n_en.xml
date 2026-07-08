@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to a domain controller. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="5410268f-a04e-ea69-a567-6521c523f613">User {subject.account.name} from host {src.host} used new logon type {logon_type} ({datafield6}) to log in to a domain controller on host {event_src.host}. The logon type is missing from the collected profile.</EventDescription>
+    <EventDescription id="ca066536-8e96-bc82-87c7-b83d953121d5">User {subject.account.name} from new host {src.host} logged in to a domain controller on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="fe0114da-f00e-d319-9d8e-141dfc641329">New user {subject.account.name} from host {src.host} logged in to a domain controller on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,41 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        apt-detects{'['NUMBER']'?}: \"{subject.name='Kaspersky Anti Targeted Attack Platform'}\", \"2.{$ver=UNTIL('\",')} \"{msgid='file_endpoint'}\",
+        {$csv=CSV(',','\"')}"
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+subject.version = "2." + $ver
+
+object.name = $csv[18]
+object.path = $csv[8]
+object.hash = $csv[11]
+
+src.ip = $csv[4]
+src.hostname = $csv[6]
+
+$name_tmp = csv($csv[8], "\\", "'")
+datafield4 = $name_tmp[length($name_tmp) - 1]   # Имя файла
+datafield5 = $csv[14]                           # Размер файла, обнаруженного в составном объекте
+datafield6 = $csv[9]                            # Размер составного объекта в байтах
+
+time = $csv[0]
+
+if in_list(["Low", "Medium", "High"], $csv[1]) then
+    importance =  lower($csv[1])
+endif
+
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v2_file_endpoint"

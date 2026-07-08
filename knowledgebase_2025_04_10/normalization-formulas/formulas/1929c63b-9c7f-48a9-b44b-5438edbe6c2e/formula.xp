@@ -1,0 +1,81 @@
+#0 Instance ID: 69ee95e1-f25b-4259-af14-52060c2c56af  
+#1 Activity ID: ed36aefd-4d17-4aa9-7369-0080000000d4  
+# Request Details:  
+#2 Date And Time: 2023-01-11 06:06:30  
+#3 Client IP: 10.1.5.1  
+#4 HTTP Method: GET  
+#5 Url Absolute Path: /adfs/ls/  
+#6 Query string: ?SAMLRequest=pVNdj9owEHznV6...  
+#7 Local Port: 443  
+#8 Local IP: 10.1.5.1  
+#9 User Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0  
+#10 Content Length: 0  
+#11 Caller Identity: -  
+#12 Certificate Identity (if any): -  
+#13 Targeted relying party: -  
+#14 Through proxy: False  
+#15 Proxy DNS name: -
+
+EVENTLOG = 'EventID.text="403"'
+COND = $Channel == "Security" and
+       in_list(["AD FS 2.0 Auditing", "AD FS Auditing"], $Provider["Name"])
+
+action = "receive"
+object = "request"
+status = "success"
+
+object.type = $Data[4] # HTTP Method
+object.fullpath = $Data[5] # Url Absolute Path
+object.query = $Data[6] # Query string
+object.process.meta = $Data[9] # User Agent
+object.num_value = $Data[10] # Content Length
+
+src.ip = maybe_ipv4($Data[3]) # Client IP
+if find_substr($Data[3], ',') != null then
+    $raw_ip = csv($Data[3],",", "`")
+    src.ip = maybe_ipv4($raw_ip[0]) # Client IP
+    datafield7 = maybe_ipv4($raw_ip[1]) 
+endif
+    
+dst.ip = maybe_ipv4($Data[8]) # Local IP
+dst.port = $Data[7] # Local Port
+
+if find_substr($Data[11],"\\") != null then
+    $raw_username = csv($Data[11],"\\", "`") # Caller Identity:
+    subject.account.name = lower($raw_username[1])
+    subject.account.domain = lower($raw_username[0])
+else
+    subject.account.name = $Data[11]
+endif
+
+if subject.account.name == "-" then subject.account.name = null endif
+
+datafield1 = $Data[0] # Instance ID
+datafield2 = $Data[1] # Activity ID
+datafield3 = $Data[12] # Certificate Identity (if any)
+datafield4 = $Data[13] # Targeted relying party
+datafield5 = $Data[14] # Through proxy
+datafield6 = $Data[15] # Proxy DNS name
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+if subject.account.name != "-" then # фикс для кейса, когда есть юзернейм и поля приходят в другом порядке
+    object.fullpath = $Data[8]
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "ad fs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_403_HTTP_request_was_received"

@@ -1,0 +1,129 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = in_list([
+           "VmUuidConflictEvent",
+           "VmUuidAssignedEvent",
+           "VmUuidChangedEvent",
+           "VmInstanceUuidAssignedEvent",
+           "VmInstanceUuidChangedEvent",
+           "VmInstanceUuidConflictEvent"
+       ], $event_class)
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+if find_substr($event_class, "Conflict") != null then
+    action = "info"
+else
+    action = "configure"
+endif
+
+object = "virtual_machine"
+status = "success"
+
+subformula "assign_instance_uuid"
+    TEXT = '[Assign a new instance UUID ({$instance_uuid=WORDDASH}) to {$vm_name=REST}'
+    
+    object.property = "instance_uuid"
+    object.new_value = $instance_uuid
+endsubformula
+
+subformula "change_instance_uuid"
+    TEXT = '[The instance UUID of {$vm_name=STRING+} has been changed from ({$old_instance_uuid=WORDDASH}) to ({$new_instance_uuid=WORDDASH})]'
+    
+    object.property = "instance_uuid"
+    object.value = $old_instance_uuid
+    object.new_value = $new_instance_uuid
+endsubformula
+
+subformula "uuid_instance_conflict"
+    TEXT = '[The instance UUID ({$instance_uuid=WORDDASH}) of {$vm_name=STRING+} conflicts with the instance UUID assigned to {$conflicted_vm_name=REST}'
+    
+    object.property = "conflicted_vm|instance_uuid"
+    object.value = strip($conflicted_vm_name, "", "]") + " | " + $instance_uuid
+endsubformula
+
+subformula "assign_bios_uuid"
+    TEXT = '[Assigned new BIOS UUID ({$uuid=WORDDASH}) to {$vm_name=STRING+} on {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=REST}'
+    
+    object.property = "bios_uuid"
+    object.new_value = $uuid
+endsubformula
+
+subformula "change_bios_uuid"
+    TEXT = '[Changed BIOS UUID from {$old_uuid=WORDDASH} to {$new_uuid=WORDDASH} for {$vm_name=STRING+} on {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=REST}'
+    
+    object.property = "bios_uuid"
+    object.value = $old_uuid
+    object.new_value = $new_uuid
+endsubformula
+
+subformula "uuid_bios_conflict"
+    TEXT = '[BIOS ID ({$uuid=WORDDASH}) of {$vm_name=STRING+} conflicts with that of {$conflicted_vm_name=REST}'
+    
+    object.property = "conflicted_vm|bios_uuid"
+    object.value = strip($conflicted_vm_name, "", "]") + " | " + $uuid
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+switch $event_class
+    case "VmUuidConflictEvent" submessage("TEXT", "uuid_bios_conflict", $raw_message)
+    case "VmUuidAssignedEvent" submessage("TEXT", "assign_bios_uuid", $raw_message)
+    case "VmUuidChangedEvent" submessage("TEXT", "change_bios_uuid", $raw_message)
+    case "VmInstanceUuidAssignedEvent" submessage("TEXT", "assign_instance_uuid", $raw_message)
+    case "VmInstanceUuidChangedEvent" submessage("TEXT", "change_instance_uuid", $raw_message)
+    case "VmInstanceUuidConflictEvent" submessage("TEXT", "uuid_instance_conflict", $raw_message)
+endswitch
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = strip($vm_name, "", "]")
+
+if coalesce(ipv4($host_name), ipv6($host_name)) != null then
+    dst.ip = coalesce(ipv4($host_name), ipv6($host_name))
+else
+    dst.hostname = $host_name
+endif
+
+datafield1 = coalesce(strip($datacenter_name, "", "]"), $def_dc_name)  # Datacenter Name
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $host_name  # Host Name
+
+msgid = $event_class
+importance = "info"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_UUID_Management"

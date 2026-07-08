@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The use of the Masky tool is detected. Masky tool is designed to obtain NT hashes and TGT of users working on attacked hosts in order to request certificates on their behalf.</Description>
+  <EventDescriptions>
+    <EventDescription id="6bcbde4f-2608-4952-31f1-0a40bacd1649">The process "{object.process.name}" loaded the module "{object.process.name}" on host {event_src.host}. The name of the module does not match the original name "{object.process.original_name}" and shows signs of running the Masky tool</EventDescription>
+    <EventDescription id="729e5991-037d-88bd-3dbf-fa5e9c5f86ab">User {subject.account.id} created the service "{object.name}" which triggered the process "{object.process.name}" on host {event_src.host}. The name of the process does not match the original name "{object.process.original_name}" while the command line shows signs of running the Masky tool.</EventDescription>
+    <EventDescription id="e79b1f46-2ce1-1bb0-f282-7640b54a4cb3">The RasAuto system service attribute "{object.name}" was changed on behalf of user {subject.account.name} to run {datafield1} and generate suspicious files {datafield2} and {datafield3} on host {event_src.host}. This indicates running the Masky tool.</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,31 @@
+event Unix_Session:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and lower(event_src.subsys) == "auditd"
+        and action == "login"
+        and status == "success"
+        # Исключаем git и flus (авторизация в приложении по SSH-ключу)
+        and not in_list(["git", "flus", "teamcity"], subject.account.name)
+        # Исключаем лого при выполнении задач cron и системных демонов
+        and object.process.fullpath != "/usr/sbin/cron"
+        and object.process.name != "systemd"
+    }
+    
+enrichment Write_Unix_Session
+
+    enrich Unix_Session:
+
+        insert_into Unix_Logon_Sessions if (event_src.host != null and subject.account.session_id != null) {
+            src_ip = src.ip
+            src_host = lower(src.host)
+            src_asset = src.asset
+            dst_ip = coalesce(event_src.ip, maybe_ipv4(event_src.host))
+            dst_host = lower(event_src.host)
+            session_id = subject.account.session_id
+            username = lower(subject.account.name)
+            user_domain = lower(subject.account.domain)
+            user_sid = lower(subject.account.id)
+            logon_service = lower(logon_service)
+            logon_auth_method = lower(logon_auth_method)
+        }

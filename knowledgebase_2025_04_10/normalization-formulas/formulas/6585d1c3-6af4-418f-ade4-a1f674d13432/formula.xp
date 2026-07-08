@@ -1,0 +1,45 @@
+!JSON = 'event.originator.module.name="Participants"'
+!COND = in_list(["Participants:participantCreated",
+                "Participants:participantEdited",
+                "Participants:participantRead",
+                "Participants:participantActivated",
+                "Participants:participantDeactivated"],
+                $event["actionType"])
+
+subject = "account"
+
+action = switch $event["actionType"]
+    case "Participants:participantCreated" "create"
+    case "Participants:participantEdited" "modify"
+    case "Participants:participantRead" "view"
+    case "Participants:participantActivated" "enable"
+    case "Participants:participantDeactivated" "disable"
+endswitch
+
+object = "user_group"
+status = "success"
+
+subject.name = $userLogin
+object.name = $event["originator"]["id"]["displayName"]
+object.id = $event["originator"]["id"]["id"]
+
+src.ip = $userIp
+
+time = $datetime
+importance = "info"
+
+$dot_pos = find_substr($systemIp, '.')
+if maybe_ipv4($systemIp) != null then
+   event_src.ip = $systemIp
+elif $dot_pos != null then
+    event_src.fqdn = $systemIp
+    event_src.hostname = substr($systemIp, 0, $dot_pos)
+else
+    event_src.hostname = $systemIp
+endif
+
+event_src.title = "fcsp"
+event_src.vendor = "positive_technologies"
+event_src.category = "Other"
+
+id = "PT_Positive_Technologies_Operators_Participants_Portal_filemonitor_Participants_participant_actions"

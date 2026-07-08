@@ -1,0 +1,36 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "661061886"
+
+subject = "account"
+action = "remove"
+object = "application"
+status = "ongoing"
+
+submessage("TEXT", "SPLIT1", $zntf_srcmsg)
+submessage("TEXT", "SPLIT2", $zntf_user)
+
+msgid = string($zntf_status)
+
+subformula "SPLIT1"
+    # Извлечение object.name и object.version из $zntf_user
+    TEXT = 'Запущено удаление {object.name = STRING} {$tmp_version=REST}'
+    object.version = strip($tmp_version,"",".")
+endsubformula
+
+subformula "SPLIT2"
+    # Извлечение subject.domain и subject.name из $zntf_user
+    TEXT = '{$csv = CSV("\\\\", "\'")}'
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+endsubformula
+
+importance = "low"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_zlock_removal_launched"

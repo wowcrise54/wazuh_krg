@@ -1,0 +1,47 @@
+!TEXT = 'CEF:0|Netwrix|{$tmp_subsys="Active Directory"}|1.0|{$act="Added"|$act="Removed"}|{"Added"|"Removed"} volume|0|
+        shost={event_src.ip=IPV4|$hostname=HOSTNAME}{$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+
+action = switch $act
+    case "Added" "create"
+    case "Removed" "remove"
+endswitch
+
+object = "resource"
+status = "success"
+
+$csv1 = csv($kv["suser"], "\\", "*")
+
+if length($csv1) == 1 then
+    subject.name = $csv1[0]
+else
+    subject.domain = $csv1[0]
+    subject.name = $csv1[length($csv1) - 1]
+endif
+
+$path_raw = replace($kv["filePath"], "\\", "\\\\\\\\")
+$csv_path = csv($path_raw, "\\", "'")
+object.name = $csv_path[length($csv_path) - 1]
+object.path = strip($path_raw, "", object.name)
+object.type = "shared folder"
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($hostname)
+        event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+    elif $hostname != "unknown" then
+        event_src.hostname = lower($hostname)
+    endif
+endif
+
+time = $kv["start"]
+importance = "info"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Other"
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_Shared_volume_added_removed"

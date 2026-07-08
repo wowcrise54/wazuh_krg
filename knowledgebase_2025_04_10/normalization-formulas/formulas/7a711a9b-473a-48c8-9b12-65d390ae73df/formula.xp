@@ -1,0 +1,57 @@
+TABULAR = ""
+
+COND = $event_source == "Infowatch_Person_Monitor"
+       and in_list([0, 1, 2, 3, 27], $action)
+
+subject = "account"
+action = "login"
+object = "application"
+
+if $action == 27 then
+    status = "failure"
+else
+    status = "success"
+endif
+
+if find_substr($src_info, '\\') != null then
+    $csv = csv($src_info, "\\", "`")
+    subject.account.domain = $csv[0]
+    subject.account.name = $csv[1]
+
+    object.name = strip($reason, "log in to the ", "")
+
+    object.account.name = $user_name                     # имя пользователя, от имени которого произведен вход в конфигуратор
+else
+    subject.account.name = $user_name
+
+    if $action != 27 then
+        object.name = strip($reason, "log in to the ", "")
+    endif
+
+    object.account.name = ""  # для локализации при пустом поле имени пользователя
+
+    if (
+        ipv4($src_info) != null
+        or ipv6($src_info) != null
+       ) then
+        event_src.ip = $src_info
+    else
+        event_src.hostname = $src_info
+    endif
+endif
+
+
+time = epoch_to_datetime($event_time)
+msgid = $action
+
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "infowatch"
+event_src.title = "personal_monitor"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Person_Monitor_8_33_odbc_user_login"

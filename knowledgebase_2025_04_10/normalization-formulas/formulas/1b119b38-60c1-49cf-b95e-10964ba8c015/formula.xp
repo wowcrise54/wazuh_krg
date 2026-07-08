@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{"%"|"#"}{msgid="NTPD-I-PEER"}:
+        System time was synchronized by {protocol.layer7="NTP"} Peer {src.ip=IPV4|src.ip=IPV6}'
+
+action = "update"
+object = "resource"
+status = "success"
+
+object.type = "system time"
+
+importance = "info"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_ntp_sync"

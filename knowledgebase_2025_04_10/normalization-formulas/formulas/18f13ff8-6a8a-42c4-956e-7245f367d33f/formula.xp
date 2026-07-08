@@ -1,0 +1,44 @@
+!JSON = 'EventIdentifier=861'
+!COND = $Logfile=="Security" and $Category==5
+
+action = "detect"
+if $InsertionStrings[5] == "Yes" then
+    object  = "service"
+else
+    object = "process"
+endif
+status = "success"
+
+object.id = $InsertionStrings[2]
+$tmp_path = csv(lower($InsertionStrings[1]),'\\','"')
+object.process.name = $tmp_path[length($tmp_path) - 1]
+object.process.fullpath = lower($InsertionStrings[1])
+if length($tmp_path) > 1 then
+    object.process.path = strip(object.process.fullpath, '', object.process.name)
+endif
+
+dst.port = $InsertionStrings[9]
+direction = "ingress"
+protocol = $InsertionStrings[8]
+
+datafield1 = $InsertionStrings[3]  # User account
+datafield2 = $InsertionStrings[4]  # User domain
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "medium"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Firewall"
+
+id = "PT_Microsoft_Windows_wmi_Common_Security_861_Windows_Firewall_detected_app_listening_for_incoming_traffic"

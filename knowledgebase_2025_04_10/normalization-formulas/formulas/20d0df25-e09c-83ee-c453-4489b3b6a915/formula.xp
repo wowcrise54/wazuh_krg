@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {$event_src_ip=IPV4|$event_src_ip=IPV6|$event_src_host=HOSTNAME|} hub-login-audit.log:
+    {$mday_raw=WORD} {$month_raw=WORD} {$year_raw=WORD} {$hours_raw=UNTIL(",")}{NUMBER} |
+    INFO | LoginHandlerImpl | {src.ip=IPV4|src.ip=IPV6|$src_hostname=HOSTNAME} | {$query_method="GET"|$query_method="POST"|$query_method="DELETE"|$query_method="PUT"|} {$request_raw=UNTIL(" |")|datafield12=UNTIL("|")}
+    User {subject.account.name=STRING+} [{subject.account.id=UNTIL("]")} was logged in via {logon_service=STRING+} auth module with [username: {UNTIL(",")} serviceId: {object.id=UNTIL("]")}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+$raw_query = $query_method + " " + $request_raw
+object.query = if $raw_query == " " then null else $raw_query endif
+
+logon_auth_method = "remote"
+
+$dot_pos = find_substr($event_src_host, '.')
+
+if $dot_pos != null then
+    $event_src_fqdn = lower($event_src_host)
+    $event_src_hostname = lower(substr($event_src_host, 0, $dot_pos))
+else
+    $event_src_hostname = lower($event_src_host)
+endif
+dst.ip = $event_src_ip
+dst.hostname = $event_src_hostname
+dst.fqdn = $event_src_fqdn
+
+time = $month_raw + " " + $mday_raw + " " + $year_raw + " " + $hours_raw
+importance = "info"
+
+category.high = "Access Management"
+category.generic = "Application"
+category.low = "Communication"
+
+event_src.ip = $event_src_ip
+event_src.hostname = $event_src_hostname
+event_src.fqdn = $event_src_fqdn
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_JetBrains_Hub_syslog_login_audit_logged_in"

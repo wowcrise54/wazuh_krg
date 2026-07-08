@@ -1,0 +1,69 @@
+query Check_Malicious_Domains($request) from Malicious_Domains {
+    regex_match($request, column::pattern)
+    and description == "Monero crypto coin mining"
+}
+
+event Monero_Crypto_Coin_Mining_Domain_Request:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "bind"
+        and object == "request"
+        and action == "receive"
+        # *minexmr.com, *nanopool.org, *pool.supportxmr.com, *mine.c3pool.com, *xmr.2miners.com
+        # *xmr.hashcity.org, *xmr.f2pool.com, *xmrpool.eu, *pool.hashvault.pro
+        and exec_query("Check_Malicious_Domains", [coalesce(datafield2, object.value)])
+        and filter::CheckWL_Networking("BIND_Monero_Crypto_Coin_Mining_Domain_Detection", lower(join([src.host, object.value], "|")))
+    }
+
+rule BIND_Monero_Crypto_Coin_Mining_Domain_Detection: Monero_Crypto_Coin_Mining_Domain_Request
+
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+    }
+
+    on Monero_Crypto_Coin_Mining_Domain_Request {
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.query = object.query
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([src.host, object.value], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $action = "receive"
+    $object = "request"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Resource Hijacking"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "BotNetCC"
+    $incident.aggregation.timeout = 2h
+}

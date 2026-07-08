@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A user escalated privileges using one of the system utilities, the manifests of which contain the "autoElevate" element that allows for the privilege escalation without a prompt from User Account Control (UAC). To obtain a local administrator token with a high integrity level, attackers create the "DelegateExecute" key in the registry and add the payload to the "(Default)" key of the same branch. Then they start a system utility that accesses the "(Default)" key and always runs with a high integrity level, which allows attackers to execute the added payload with the highest permission level. For these purposes, system utilities fodhelper.exe and ComputerDefaults.exe are usually used.</Description>
+  <EventDescriptions>
+    <EventDescription id="cc9f29e5-1cbd-4cfb-9590-3a8710ee569d">User {subject.account.name} changed the values of the "{datafield1}" and "{object.name}" registry keys to bypass the UAC prompt using utility {object.process.name} and run command "{object.new_value}" on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

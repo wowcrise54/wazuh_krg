@@ -1,0 +1,54 @@
+!TEXT = 'CEF:0|Netwrix|{$tmp_subsys="Active Directory"}|1.0|{$act="Added"|$act="Removed"|$act="Modified"}|
+        {"Added user"|"Removed user"|"Modified user"}|0|shost={event_src.ip=IPV4|$hostname=HOSTNAME}{$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+
+if $act == "Added" then
+    action = "create"
+elif $act == "Removed" then
+    action = "remove"
+elif ($kv["msg"] == "User Account Enabled") or (find_substr($kv["msg"], 'Removed: "Account is disabled"') != null) then
+    action = "enable"
+elif ($kv["msg"] == "User Account Disabled") or (find_substr($kv["msg"], 'Added: "Account is disabled"') != null) then
+    action = "disable"
+else action = "modify"
+    object.property = "modify details"
+    object.value = $kv["msg"]
+endif
+
+object = "account"
+status = "success"
+
+$csv1 = csv($kv["suser"], "\\", "*")
+
+if length($csv1) == 1 then
+    subject.name = $csv1[0]
+else
+    subject.domain = $csv1[0]
+    subject.name = $csv1[length($csv1) - 1]
+endif
+
+$csv2 = csv($kv["filePath"],"\\","*")
+
+object.path = $kv["filePath"]
+object.name = $csv2[length($csv2) - 1]
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($hostname)
+        event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+    elif $hostname != "unknown" then
+        event_src.hostname = lower($hostname)
+    endif
+endif
+
+time = $kv["start"]
+importance = "info"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Other"
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_Account_actions"

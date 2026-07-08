@@ -1,0 +1,98 @@
+event Event_Downloading_Files_Of_Critical_VM:
+    key:
+        event_src.host, subject.account.name, subject.account.domain, status
+    filter {
+        correlation_name == "Downloading_Files_Of_Critical_VM"
+    }
+
+rule Mass_Downloading_Files_Of_Critical_VM: Event_Downloading_Files_Of_Critical_VM[3,] timer 10m
+
+    init {
+        $first_event = true
+        $files = []
+        $paths = []
+        $vm_names = []
+        $src_list = []
+        $dst_list = []
+        $guests = []
+        $esxis = []
+    }
+
+    on Event_Downloading_Files_Of_Critical_VM {
+        if $first_event then
+            $subject = subject
+            $action = action
+            $object = object
+            $status = status
+            
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $labels = $labels + "|subject_account_to_attacking_assets"
+            
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+                        
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            
+            $labels = $labels + "|event_source_to_related_assets"
+
+            $first_event = false
+        endif
+
+        $files = append($files, object.name)
+        $paths = append($paths, object.fullpath)
+        $vm_names = append($vm_names, datafield5)
+        
+        if datafield8 != null and datafield9 != null then
+            $guest_data = datafield8 + " : " + datafield9
+            $guests = append($guests, $guest_data)
+        endif
+        
+        if datafield11 != null and datafield12 != null then
+            $esxi_data = datafield11 + " : " + datafield12
+            $esxis = append($esxis, $esxi_data)
+        endif
+        
+        if src.host != null then
+            $src_list = append($src_list, src.host)
+        endif
+
+        if dst.host != null then
+            $dst_list = append($dst_list, dst.host)
+        endif
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $object.name = join($files, "|")  # Имена файлов
+    $object.fullpath = join($paths, "|")  # Имена файлов
+    $datafield5 = join($vm_names, "|")  # Перечень имен виртуальных машин
+    if $dst_list != null then
+        $datafield6 = join($dst_list, " | ")  # Перечень хостов ESXi
+    endif
+    $datafield7 = join($guests, "|")        # Перечень guest_data
+    $datafield8 = join($esxis, "|")         # Перечень esxi_data
+    
+    if $src_list != null then
+        $alert.context = "source user ips: " + join($src_list, ", ")
+    endif
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Automated Collection"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name, $subject.account.domain], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

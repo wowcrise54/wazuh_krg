@@ -1,0 +1,79 @@
+event Branch_Protect:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "modify"
+        and object.type == "branch"
+        and status == "success"
+        and object.state == "protected"
+        and find_substr(object.name, "*") != null
+        and in_list(["Projects::ProtectedBranchesController#create", "Project::ProtectedBranch#protect"], msgid)
+        and not table::SupplyChain_Important_Branches_Registry {
+            (column::event_src_asset == event_src.asset or column::event_src_asset == null)
+            and column::event_src_host == event_src.host
+            and column::repository == join([datafield2, datafield1], "/")
+            and regex_match(object.name, column::branch)
+        }
+    }
+
+rule SupplyChain_Branch_Protect: Branch_Protect
+
+    on Branch_Protect {
+        $subject.account.id = subject.account.id
+        $subject.account.name = coalesce(subject.account.name, subject.account.fullname)
+        $subject.account.fullname = subject.account.fullname
+        $subject.process.meta = subject.process.meta
+ 
+        $object.name = replace(replace(object.name, "[.]", "."), ".*", "\*")
+        $object.group = object.group
+        $object.state = object.state
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $chain_id = chain_id
+
+        $datafield1 = datafield1  # Project Slug
+        $datafield2 = datafield2  # Namespace Fullpath
+        $datafield3 = datafield3  # Branch Name or Wildcard
+
+        $numfield1 = $numfield1   # Project ID
+
+        $event_src_asset = if event_src.asset != null then "event_src_asset: " + event_src.asset else null endif
+        $event_src_host = "event_src_host: " + event_src.host
+        $repository = "repository: " + join([datafield2, datafield1], "/")  
+        $branch = "branch: " + $object.name
+
+        $alert.context = join(remove([$event_src_asset, $event_src_host, $repository, $branch], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "resource"
+    $status = "success"
+
+    $importance = "info"
+}

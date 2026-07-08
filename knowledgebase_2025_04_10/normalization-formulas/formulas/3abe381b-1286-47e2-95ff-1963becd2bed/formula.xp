@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys=WORDDASH} {":"?} sensor_id={event_src.id=NUMBER} node={HOSTNAME} type={msgid="USER_LOGIN"}
+        msg=audit({STRING} pid={NUMBER} uid={NUMBER} auid={NUMBER} ses={NUMBER} msg=\'op={UNTIL("acct=")}
+        "{subject.account.name=WORDDASH}" rport={NUMBER} exe={$application=UNTIL(" hostname=")}{"?"|src.hostname=HOSTNAME}
+        addr={"?"|src.ip=IPV4|src.ip=IPV6} terminal={"?"|logon_service=WORDDASH} res={$result=WORD}\''
+
+subject = "account"
+action = "login"
+object = "application"
+if $result == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+subject.process.fullpath = strip($application, "\"", "\"")
+$process_path = csv(subject.process.fullpath, "/", "")
+subject.process.name = $process_path[length($process_path) - 1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_2_4_syslog_plain_user_login"

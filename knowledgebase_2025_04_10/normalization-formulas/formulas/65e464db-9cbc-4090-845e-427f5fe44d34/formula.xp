@@ -1,0 +1,73 @@
+# <134>2024-02-04T12:44:10.663Z HOME-PC 1C-SIEM-converter: CEF:0|1С_Positive|1CV8C||_$OpenIDProvider$_.NegativeAssertion|8258|259961390| cs1={"Event":{"Data":"","DataPresentation":"","Level":"Информация","Date":"2024-02-04T11:00:52","ApplicationName":"1CV8C","ApplicationPresentation":"Провайдер OpenID. Отклонено","Event":"_$OpenIDProvider$_.NegativeAssertion","EventPresentation":null,"User":"7c193498-a8c6-4a0b-bd3e-e9fb77225cad","UserName":"Администратор (ОрловАВ)","Computer":"DESKTOP-AK6R6QM","Metadata":"","Comment":"","TransactionStatus":"U","TransactionID":"01.01.1970 0:00:00 (0)","Connection":10404,"Session":8258,"ServerName":"load-appwin01","Port":1589,"SyncPort":0}} cs1Label=JsonData
+
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} 
+        1C-SIEM-converter: CEF:0|{UNTIL("|")}{subject.application.name=WORD}||_$OpenIDProvider$_.NegativeAssertion|{NUMBER}|
+        {NUMBER}|  cs1={$json=UNTIL(" cs1Label=JsonData")}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject.application.account.session_id = $Event['Session']
+subject.application.account.id = lower($Event['User'])
+
+if $Event['UserName'] != "" then
+    subject.application.account.name = lower($Event['UserName'])
+endif
+
+object.name = $Event['ApplicationName']
+
+if $Event['Metadata'] != "" then
+    object.property = $Event['Metadata']
+endif
+
+if $Event['DataPresentation'] != "" then
+    object.value = $Event['DataPresentation']
+endif
+
+if $Event['Computer'] != "" then
+    src.hostname = lower($Event['Computer'])
+endif
+
+# Construction to cut the TransactionID from the parentheses: 18.04.2016 10:07:08 (10798)
+$transaction_id = string($Event['TransactionID'])
+$id_start = find_substr ($transaction_id,"(")
+
+if $Event['ServerName'] == null or $Event['ServerName'] == "" or lower($Event['ServerName']) == lower($Event['Computer']) then
+    logon_auth_method = "local"
+    dst.hostname = lower($Event['Computer'])  # to have at least any info
+else
+    logon_auth_method = "remote"
+    dst.hostname = lower($Event['ServerName'])
+endif
+dst.port = $Event['Port']
+
+datafield2 = substr($transaction_id, $id_start + 1, length($transaction_id) - $id_start - 2)
+datafield3 = $Event['ApplicationPresentation']  # access info
+if $Event['Comment'] != "" then
+    datafield6 = $Event['Comment']              # event info
+endif
+ 
+reason = $Event['EventPresentation'] 
+
+time = $Event['Date']
+msgid = $Event['Event']
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.id = $Event['v8ibase']
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_syslog_registration_log_OpenID_NegativeAssertion"

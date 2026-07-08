@@ -1,0 +1,52 @@
+TABULAR = 'Administrator,
+           {msgid=Operation},
+           orig,
+           {time=time}'
+
+COND = $product != "Endpoint Security Console" 
+       and $Subject == "Object Manipulation" 
+       and in_list(["Modify Object", "Set Object", "Rename Object", "Modify Rule"], $Operation)
+
+if $Administrator != "localhost" then
+    subject = "account"
+    subject.name = $Administrator
+endif
+action = "modify"
+object = "resource"
+status = "success"
+
+if $Operation == "Set Object" then
+    object.type = $ObjectName
+else
+    object.name = $ObjectName
+    object.type = $ObjectType
+endif
+
+object.group = $ObjectTable
+
+if $FieldsChanges != null then
+    object.property = "fields changes"
+    object.value = $FieldsChanges
+endif
+
+if $client_ip != "0.0.0.0" and $client_ip != "127.0.0.1" and $client_ip != "::" then
+    src.ip = $client_ip
+endif
+
+if $Operation == "Rename object" then
+    reason = "rename"
+endif
+
+datafield1 = $Session_UID  # идентификатор сессии
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+if $orig != $client_ip then
+    event_src.ip = $orig
+endif
+event_src.category = "Network security"
+event_src.subsys = lower($product)
+
+id = "PT_Checkpoint_Gaia_opseclog_Configuration_Modify_object"

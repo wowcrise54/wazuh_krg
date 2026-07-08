@@ -1,0 +1,176 @@
+# Проверяем режим сбора профиля и работы правила
+query AutoProfile($rule) from Auto_Profile {
+    rule == $rule
+}
+
+query CheckProfile($access_type, $username, $src_ip, $src_host, $dst_ip, $dst_host, $dst_path, $additional_data)
+from Risk_User_Logon_Correlation_Profile {
+    access_type == $access_type
+    and login == $username
+    and src_ip == $src_ip
+    and src_host == $src_host
+    and dst_ip == $dst_ip
+    and dst_host == $dst_host
+    and dst_path == $dst_path
+    and additional_data == $additional_data
+}
+
+event Access_To_PC:
+    key:
+        event_src.host
+    filter {
+        in_list([
+            "Subrule_Windows_Host_Abnormal_Access", 
+            "Subrule_Unix_Server_Abnormal_Access"
+        ], correlation_name)
+        # Проверка роли узла
+        and regex(lower(datafield1), "\\btop\s+manager\\b", 0) != null
+        and reason != null
+        and filter::CheckWL_Profiling("Top_Managers_Abnormal_Access", alert.key)
+    }
+
+rule Top_Managers_Abnormal_Access: Access_To_PC
+
+    init {
+        $auto_profile = coalesce(select_query_first("AutoProfile", ["Top_Managers_Abnormal_Access"], "auto_profiling"), 1)
+        $insert_into_cond = false
+        $labels = "CheckWL_Profiling"
+    }
+
+    on Access_To_PC {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+        
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+        
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $datafield1 = datafield1 # Роль узла
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    
+        $logon_type = logon_type
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+
+        $reason = reason
+
+        $alert.key = alert.key
+        $alert.context = alert.context
+
+        $category.generic = category.generic
+        $category.high = category.high
+        $category.low = category.low
+
+        # Если ОС Windows
+        if event_src.title == "windows" then 
+            
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.type = object.type
+
+            $object.storage.id = object.storage.id
+            $object.storage.name = object.storage.name
+            $object.storage.path = object.storage.path
+            $object.storage.fullpath = object.storage.fullpath
+            
+            $datafield6 = datafield6
+            $datafield9 = datafield9
+
+            # Для reason из списка: no_user, new_address, new_logon_type
+            if $action == "login" then 
+                $additional_data = lower($datafield6)
+            # Для reason из списка: new_ipc_share, new_network_share
+            elif $action == "access" then 
+                if $reason == "new_ipc_share" then
+                    $dst_path = lower(object.storage.name)
+                    $additional_data = "ipc"
+                    $alert.context = $dst_path + " | " + $alert.context
+                elif $reason == "new_network_share" then
+                    $dst_path = lower(object.storage.path)
+                    $additional_data = "network_share"
+                    $alert.context = $dst_path + " | " + $alert.context
+                endif
+            endif
+
+            $access_type = $event_src.title
+        
+        # Если ОС Unix-подобная
+        elif event_src.title == "unix_like" then
+
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.id = object.process.id
+
+            $access_type = "linux"
+
+        endif
+        
+        if in_list(["no_user", "new_address", "new_logon_type", "new_ipc_share", "new_network_share", "old_ttl"], $reason) then
+            $insert_into_cond = true
+        endif
+        
+        if $auto_profile == 2 then
+            $importance = "info"
+            $detect = "drop"
+        endif
+    }
+
+insert_into Risk_User_Logon_Correlation_Profile if ($auto_profile !=0 and $insert_into_cond == true) {
+    access_type = $access_type
+    login = lower($subject.account.name)
+    src_ip = string($src.ip)
+    src_host = lower($src.host)         
+    dst_ip = string($dst.ip)
+    dst_host = lower(coalesce($event_src.host, $dst.host))
+    dst_path = $dst_path
+    additional_data = $additional_data
+}
+
+emit {
+    $correlation_type = "event"
+
+    $importance = switch $reason
+        case "no_user" "high"
+        case "new_address" "medium"
+        case "new_logon_type" "low"
+        case "new_ipc_share" "medium"
+        case "new_network_share" "low"
+    endswitch
+
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,63 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "ALERT_DEFINITION_CREATE - Creating alert definition") != null
+       or find_substr($kv["Category"], "ALERT_DEFINITION_UPDATE - Updating alert definition") != null
+       
+subject = "account"
+object = "alert"
+
+subformula "parse_category"
+    TEXT = 'ALERT_DEFINITION_{$act="CREATE"|$act="UPDATE"} - 
+    {"Creating"|"Updating"} alert definition{"(s)"?} {$res="succeeded"|$res="failed"}. ID: {$alert_id=REST}' 
+    
+    action = switch $act
+        case "CREATE" "create"
+        case "UPDATE" "modify"
+    endswitch
+    status = switch $res
+        case "succeeded" "success"
+        case "failed" "failure"
+    endswitch
+    
+    $alert_id = strip($alert_id, '"','"')
+    
+    if not in_list($bad_values, $alert_id) then
+        object.id = $alert_id           # Alert id
+    endif
+endsubformula
+
+$bad_values = [null, 'n/a', 'null', '']
+
+submessage("TEXT", "parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+$alert_name = strip($kv["Name"], '"','".')
+if not in_list($bad_values, $alert_name) then
+    object.name = lower($alert_name)    # Alert name
+endif
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "ALERT_DEFINITION_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_alert_create_modify"

@@ -1,0 +1,52 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id
+           "
+
+COND = string($event_id) == "1195"
+       and (
+        $event_category == "Управление"
+        or $event_category == "Management"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+if $process == "Применение групповой политики" then
+    action = "apply"
+else
+    action = "modify"
+endif
+object = "policy"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Изменены параметры действующей политики безопасности"|
+            "Parameters of the effective security policy changed"}. {"Компонент"|"Component"}:
+            {object.name=STRING+} {"Процесс"|"Process"}: {REST}'
+endsubformula
+
+msgid = $event_id
+importance = "low"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Управление" then
+    event_src.subsys = "management"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1195_policy_modified"

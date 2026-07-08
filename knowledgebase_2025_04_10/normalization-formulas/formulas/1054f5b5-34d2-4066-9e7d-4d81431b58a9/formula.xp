@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        pdns[{NUMBER}]: Unable to {LITERAL}XFR zone {$z_name=STRING} from remote \'{src.ip=IPV4|src.ip=IPV6}\'
+        (resolver): {LITERAL}XFR chunk error: {reason=REST}'
+
+action = "download"
+object = "resource"
+status = "failure"
+
+object.type = "DNS zone"
+object.name = strip($z_name, "'", "'")
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "powerdns_authoritative_server"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_PowerDNS_Authoritative_Server_syslog_zone_receive_failed"

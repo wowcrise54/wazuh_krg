@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {$time_1=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?}
+        php{"["?}{object.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+        {$time_2=DATETIME?} {"host"?} CEF:0|Passwork|On premise|{NUMBER}|{msgid="rl-delete-from-user"}|role deleted from user|{NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+subject = "account"
+action = "revoke"
+object = "account"
+status = "success"
+
+subject.account.id = $kv["suid"]
+subject.account.name = $kv["suser"]
+
+object.account.id = $kv["duid"]
+object.account.name = $kv["duser"]
+
+object.property = "revoked_role"
+object.value = $kv["passworkRoleName"]
+
+src.ip = $kv['passworkIp']
+
+time = coalesce(datetime($time_2),datetime($time_1))
+importance = "info"
+
+category.generic = "Account"
+category.high = "Users And Rights Management" 
+category.low = "Manipulation"
+
+event_src.title = "passwork"
+event_src.vendor = "passwork"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Passwork_Passwork_syslog_role_revoked"

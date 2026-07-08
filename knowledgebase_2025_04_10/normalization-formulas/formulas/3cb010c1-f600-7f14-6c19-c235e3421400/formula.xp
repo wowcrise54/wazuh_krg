@@ -1,0 +1,30 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        KSMG: CEF:0|AO Kaspersky Lab|{subject.application.name="Kaspersky Secure Mail Gateway"}|2.{$ver=UNTIL("|") 
+        msgid="LMS_EV_SETTINGS_CHANGED"}|task settings changed|{$level=WORD}|{$kv=KEYVALUE(" ", "=")}'
+
+subject = "application"
+action = "modify"
+object = "task"
+status = "success"
+
+object.name = $kv["cs1"]
+object.id = $kv["cn1"]
+
+importance = switch $level
+    case "Low" "low"
+    case "Medium" "medium"
+    case "High" "high"
+endswitch
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_secure_mail_gateway"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KSMG_syslog_v2_task_modified"

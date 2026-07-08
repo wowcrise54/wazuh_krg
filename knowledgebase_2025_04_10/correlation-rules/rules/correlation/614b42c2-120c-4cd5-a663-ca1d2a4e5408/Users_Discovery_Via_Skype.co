@@ -1,0 +1,87 @@
+event Get_Query:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and lower(event_src.title) == "internet_information_services"
+        and object.state == "200"
+        and lower(object.value) == "get"
+        and subject.account.name != null
+        and match(lower(object.fullpath), "/ucwa/v1/applications/*/people/search?query=*&limit=*")
+        and regex(lower(object.fullpath), "\&limit=([0-9]+)$", 1) != "20"
+        and filter::CheckWL_Specific_Only("Users_Discovery_Via_Skype", lower(join([subject.account.name, src.ip, object.fullpath], "|")))
+    }
+
+rule Users_Discovery_Via_Skype: Get_Query
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Get_Query {       
+        if find_substr(subject.name, "@") != null then
+            $subject.account.name = regex(lower(subject.account.name), "(\S+)@", 1)
+            $subject.account.domain = regex(lower(subject.account.name), "@(\S+)", 1)
+        else
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+        endif
+
+        $object.process.meta = object.process.meta
+
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.state = object.state
+
+        $src.ip = src.ip
+        $src.host = src.host
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.ip = dst.ip
+
+        $protocol = protocol
+
+        $reason = reason
+
+        $datafield1 = datafield1
+        $datafield3 = datafield3
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, src.ip, object.fullpath], "|"))
+        $alert.regex_match = regex(lower(object.fullpath), "query=(\w+)\%?", 1) + " | limit: " + regex(lower(object.fullpath), "&limit=([0-9]+)$", 1)
+        $alert.context = "query: " +  $alert.regex_match # Запрос пользователей
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "access"
+    $object = "resource"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery: Domain Account"
+
+    $incident.aggregation.key = join([$correlation_name, lower($src.ip), lower($subject.account.name)], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

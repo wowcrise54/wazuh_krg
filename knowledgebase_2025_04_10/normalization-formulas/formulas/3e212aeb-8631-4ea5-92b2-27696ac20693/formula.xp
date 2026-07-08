@@ -1,0 +1,46 @@
+!TABULAR = '_1,
+            _2,
+            _3,
+            _5,
+            _6,
+            _8,
+            _11'
+
+!COND = $_11 == 147 or $_11 == 148
+
+subject = "account"
+action = "restore"
+object = "policy"
+status = switch $_1
+    case 8 "success"
+    case 16 "failure"
+endswitch
+
+$csv = csv($_8, "\\", "'")
+subject.domain = $csv[0]
+subject.name = $csv[1]
+
+if length($_5) != 0 then
+    object.name = strip($_5, "Политика ", " сброшена в неопределенное состояние")
+endif
+
+time = win_ticks_to_datetime($_3)
+msgid = $_11
+importance = "high"
+
+event_src.vendor = "smart_line"
+event_src.title = "devicelock"
+if maybe_ipv4($_2) != null or maybe_ipv6($_2) != null then
+    event_src.ip = $_2
+else
+    $dot_pos = find_substr($_2, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($_2)
+        event_src.hostname = lower(substr($_2, 0, $dot_pos))
+    else
+        event_src.hostname = lower($_2)
+    endif
+endif
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_odbc_Policy_reset"

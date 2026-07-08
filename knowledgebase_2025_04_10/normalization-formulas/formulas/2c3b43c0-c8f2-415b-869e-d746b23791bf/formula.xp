@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|} {event_src.hostname=HOSTNAME}: *{WORDDASH}: {time=DATETIME}:
+        {"#"|"%"}{msgid="DOT1X-4-AAA_MAX_RETRY"}: {STRING}
+        Max {object.name="AAA"} authentication attempts exceeded for client {src.mac=MACADDR} {src.ip=IPV4?} {NUMBER"/"NUMBER STRING?}'
+
+action = "info"
+object = "service"
+status = "success"
+
+reason = "Max AAA authentication attempts exceeded for client"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_syslog_DOT1X_AAA_MAX_RETRY"

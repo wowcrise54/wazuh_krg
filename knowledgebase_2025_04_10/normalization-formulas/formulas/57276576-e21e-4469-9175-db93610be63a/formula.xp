@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{"v"NUMBER"xxxx"?}date={$date=WORDDASH} time={$time=STRING} log_id={$log_id=NUMBER} msg_id={NUMBER}
+        device_id={event_src.hostname=WORDDASH} {UNTIL(" type=attack")}
+        {$rest_data=KEYVALUE(" ","=","\\"")}'
+
+subject = "rule"
+object.state = $rest_data['action']
+if object.state == "Alert" then
+    action = "detect"
+else
+    action = "deny"
+endif
+object = "attack"
+status = "success"
+
+object.type = coalesce($rest_data['sub_type'], $rest_data['subtype'])
+object.property = "details"
+object.value = strip($rest_data['msg'], "", "\"")
+
+subject.name = $rest_data['policy']
+
+src.ip = coalesce(ipv4($rest_data['src']), ipv6($rest_data['src']))     # проверка ip источника
+src.port = $rest_data['src_port']
+dst.ip = coalesce(ipv4($rest_data['dst']), ipv6($rest_data['dst']))     # проверка ip цели
+dst.port = $rest_data['dst_port']
+dst.hostname = $rest_data['http_host']
+protocol = upper($rest_data['service'])
+
+datafield1 = upper($rest_data['http_method'])            # метод HTTP
+datafield2 = strip($rest_data['http_url'], "", "\"")     # URL
+datafield3 = strip($rest_data['http_agent'], "", "\"")   # User-Agent
+
+time = $date + " " + $time
+msgid = $log_id
+$sev_lvl = lower($rest_data['severity_level'])
+if $sev_lvl == "low" or $sev_lvl == 'medium' or $sev_lvl == 'high' then
+    importance = $sev_lvl
+endif
+
+event_src.vendor = "fortinet"
+event_src.title = "fortiweb"
+event_src.category = "Web security"
+
+id = "PT_Fortinet_Fortiweb_syslog_Attack"

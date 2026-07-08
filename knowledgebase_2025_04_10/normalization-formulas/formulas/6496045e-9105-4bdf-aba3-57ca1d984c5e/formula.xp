@@ -1,0 +1,34 @@
+EVENTLOG = ''
+COND = $Channel=="DNS Server" and $Provider["Name"]=="Microsoft-Windows-DNS-Server-Service" 
+       and ($EventID["text"]=="7054" or $EventID=="7054")
+
+action = "terminate"
+object = "module"
+status = "success"
+
+object.name = "DNS Server"
+
+reason = "The select() function is completed with error"
+
+msgid = "7054"
+time = $TimeCreated["SystemTime"]
+importance = "info"
+
+category.generic = "Executable Module"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "DNS server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_7054_dns_server_select_function_failed"

@@ -1,0 +1,9 @@
+event FTP_access:
+    key:
+        event_src.host, src.host, dst.host, id, importance, event_src.category, event_src.vendor, event_src.title
+    action = "download"
+    object = "file"
+    status = "success"
+    protocol = "FTP"
+
+aggregate FTP_file_access: FTP_access[3,1000] within 1m

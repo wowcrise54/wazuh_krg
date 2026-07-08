@@ -1,0 +1,118 @@
+TABULAR = '{msgid=auditType_actionI18nKey},
+           author_id,
+           author_name,
+           author_type,
+           affectedObjects,
+           changedValues,
+           extraAttributes,
+           timestamp_epochSecond'
+
+COND = in_list([
+            "audit.logging.summary.space.created",
+            "audit.logging.summary.space.config.updated",
+            "audit.logging.summary.space.removed",
+            "audit.logging.summary.space.archived",
+            "audit.logging.summary.space.unarchived"
+       ], $auditType_actionI18nKey)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subject = switch $author_type
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = switch strip(msgid, "audit.logging.summary.space.", "")
+    case "created" "create"
+    case "config.updated" "modify"
+    case "removed" "remove"
+    case "archived" "info"
+    case "unarchived" "info"
+endswitch
+
+object = "resource"
+status = "success"
+
+if $author_type == "user" then
+    subject.account.fullname = $author_name
+    subject.account.id = $author_id
+endif
+
+submessage("JSON", "parse_json", '{"affectedObjects_json": ' + $affectedObjects + '}')
+object.type = "space"
+object.name = $affectedObjects_json[0]["name"]
+object.id = $affectedObjects_json[0]["id"]
+
+$property = ""
+$value = ""
+$new_value = ""
+
+submessage("JSON", "parse_json", '{"changedValues_json": ' + $changedValues + '}')
+$cv_0 = $changedValues_json[0]
+$cv_1 = $changedValues_json[1]
+$cv_2 = $changedValues_json[2]
+$cv_3 = $changedValues_json[3]
+$cv_4 = $changedValues_json[4]
+$cv_5 = $changedValues_json[5]
+$cv_6 = $changedValues_json[6]
+
+if $cv_0 != null then
+    $property = $property + $cv_0["key"]
+    $value = $value + $cv_0["from"]
+    $new_value = $new_value + $cv_0["to"]
+endif
+if $cv_1 != null then
+    $property = $property + " | " + $cv_1["key"]
+    $value = $value + " | " + $cv_1["from"]
+    $new_value = $new_value + " | " + $cv_1["to"]
+endif
+if $cv_2 != null then
+    $property = $property + " | " + $cv_2["key"]
+    $value = $value + " | " + $cv_2["from"]
+    $new_value = $new_value + " | " + $cv_2["to"]
+endif
+if $cv_3 != null then
+    $property = $property + " | " + $cv_3["key"]
+    $value = $value + " | " + $cv_3["from"]
+    $new_value = $new_value + " | " + $cv_3["to"]
+endif
+if $cv_4 != null then
+    $property = $property + " | " + $cv_4["key"]
+    $value = $value + " | " + $cv_4["from"]
+    $new_value = $new_value + " | " + $cv_4["to"]
+endif
+if $cv_5 != null then
+    $property = $property + " | " + $cv_5["key"]
+    $value = $value + " | " + $cv_5["from"]
+    $new_value = $new_value + " | " + $cv_5["to"]
+endif
+if $cv_6 != null then
+    $property = $property + " | and " + string(length($changedValues_json) - 6) + " more"
+    $value = $value + " | and " + string(length($changedValues_json) - 6) + " more"
+    $new_value = $new_value + " | and " + string(length($changedValues_json) - 6) + " more"
+endif
+
+object.property = if $property != "" then $property else null endif
+if (substr($value, 0, 22) != " |  |  |  |  |  | and ") and (replace($value, "", " | ") != "") then
+    object.value = if $value != "" then $value else null endif
+endif
+if (substr($new_value, 0, 22) != " |  |  |  |  |  | and ") and (replace($new_value, "", " | ") != "") then
+    object.new_value = if $new_value != "" then $new_value else null endif
+endif
+
+src.ip = $source
+
+datafield1 = $affectedObjects_json[0]["name"]  # Space Name
+
+numfield1 = $affectedObjects_json[0]["id"]  # Space ID
+
+time = epoch_to_datetime($timestamp_epochSecond)
+importance = "info"
+
+event_src.vendor = "atlassian"
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_odbc_Audit_Space_Management"

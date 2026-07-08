@@ -1,0 +1,151 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = in_list([
+           "VmReconfiguredEvent",
+           "VmUpgradingEvent",
+           "VmUpgradeCompleteEvent",
+           "VmUpgradeFailedEvent",
+           "VmRenamedEvent",
+           "VmAutoRenameEvent"
+       ], $event_class)
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+if $event_class == "VmReconfiguredEvent" then
+    action = "modify"
+elif in_list(["VmRenamedEvent", "VmAutoRenameEvent"], $event_class) then
+    action = "rename"
+else
+    action = "update"
+endif
+
+object = "virtual_machine"
+
+if $event_class == "VmUpgradeFailedEvent" then
+    status = "failure"
+elif $event_class == "VmUpgradingEvent" then
+    status = "ongoing"
+else
+    status = "success"
+endif
+
+subformula "reconfigure_vm"
+    # VmReconfiguredEvent
+    TEXT = '[Reconfigured {$vm_name=STRING+} on {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=STRING+} Modified: {$changes=REST}'
+    
+    $datacenter_name = strip($datacenter_name, "", ".")
+    object.property = "configuration"
+    object.new_value = "Modified: " + strip($changes, " ", "]")
+endsubformula
+
+subformula "upgrading_vm"
+    # VmUpgradingEvent
+    TEXT = '[Upgrading virtual machine compatibility of {$vm_name=STRING+} in {$datacenter_name=STRING+} to {$version=REST}'
+endsubformula
+
+subformula "upgrade_vm"
+    # VmUpgradeCompleteEvent
+    TEXT = '[Virtual machine compatibility upgraded to {$version=REST}'
+endsubformula
+
+subformula "rename_vm"
+    # VmRenamedEvent
+    TEXT = '[Renamed {$vm_name=STRING+} from {$old_name=STRING+} to {$new_name=STRING+} in {$datacenter_name=REST}'
+    
+    $datacenter_name = strip($datacenter_name, "", "]")
+endsubformula
+
+subformula "auto_rename_vm"
+    # VmAutoRenameEvent
+    TEXT = '[Invalid name for {$vm_name=STRING+} on {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=UNTIL(". Renamed from ")}{$old_name=STRING+} to {$new_name=REST}'
+    
+    $new_name = strip($new_name, "", "]")
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+if $event_class == "VmReconfiguredEvent" then
+    $raw_message = replace($raw_message, "", "\\\\n")
+    $raw_message = replace($raw_message, "'", "\"")
+endif
+
+switch $event_class
+    case "VmReconfiguredEvent"
+        submessage("TEXT", "reconfigure_vm", $raw_message)
+    case "VmUpgradingEvent"
+        submessage("TEXT", "upgrading_vm", $raw_message)
+    case "VmUpgradeCompleteEvent"
+        submessage("TEXT", "upgrade_vm", $raw_message)
+    case "VmRenamedEvent"
+        submessage("TEXT", "rename_vm", $raw_message)
+    case "VmAutoRenameEvent"
+        submessage("TEXT", "auto_rename_vm", $raw_message)
+endswitch
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+
+if not in_list(["", null], $version) then
+    object.property = "compatibility_version"
+    object.new_value = strip($version, "", "]")
+elif in_list(["VmRenamedEvent", "VmAutoRenameEvent"], $event_class) then
+    object.property = "name"
+    object.value = $old_name
+    
+    if (substr($new_name, 0, 14) == "/vmfs/volumes/") and (substr($new_name, -4, 4) == ".vmx") then
+        $new_name_list = csv($new_name, "/", "")
+        $new_name = strip($new_name_list[length($new_name_list)-1], "", ".vmx")
+    endif
+    
+    object.new_value = $new_name
+endif
+
+if coalesce(ipv4($host_name), ipv6($host_name)) != null then
+    dst.ip = coalesce(ipv4($host_name), ipv6($host_name))
+else
+    dst.hostname = $host_name
+endif
+
+datafield1 = coalesce($datacenter_name, $def_dc_name)  # Datacenter Name
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $host_name  # Host Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Modify_VM"

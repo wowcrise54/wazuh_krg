@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Правило обнаруживает локальное повышение привилегий через переполнение буфера. Атакующие, используя уязвимость CVE-2023-4911, могут запустить SUID-программы для выполнения кода с повышенными привилегиями</Description>
+  <EventDescriptions>
+    <EventDescription id="7a1df803-79bf-8054-a04b-57edf9961d3d">Локальное повышение привилегий пользователем {subject.account.name} через запуск вредоносной утилиты {subject.process.name}, которая вызвала переполнения буфера и старт процесса {object.process.name} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,34 @@
+!TABULAR = "{object.name = C_5},
+            C_6,
+            C_7,
+            {time = EVENT_TIME},
+            {datafield1 = SESSION_ID},
+            USER_NAME"
+
+!COND = in_list(['Изменение','Создание','Удаление'], $C_4) and ($EVENT_TYPE == "VW_CRIT_DIARY_SETTINGS")
+
+subject = "account"
+action = switch $C_4
+    case "Изменение" "modify"
+    case "Создание" "create"
+    case "Удаление" "remove"
+endswitch
+object = "resource"
+status = "success"
+
+subject.name = $USER_NAME
+
+object.type = "profile"
+object.state = $C_4
+object.property = $C_6
+object.value = strip($C_7, "'", "'")
+
+# datafield1 - id сессии
+
+importance = "info"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_settings_action"

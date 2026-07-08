@@ -1,0 +1,34 @@
+EVENTLOG = 'EventID.text="28673"'
+COND =  $Channel == "System"
+        and $Provider["Name"] == "Microsoft-Windows-DirectoryServices-DSROLE-Server"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+object = "ds_object"
+action = "info"
+status = "success"
+
+object.type = "domain"
+object.domain = lower($Data[1])
+object.property = "domain controller"
+object.value = $Data[0]
+
+reason = "Located domain controller"
+
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_28673_located_domain_controller"

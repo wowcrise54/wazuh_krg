@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {$fallback_time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING+?}
+        CEF:{NUMBER}|InfoTeCS|IDS|2.4{"."NUMBER?}-{NUMBER}|{NUMBER}:{NUMBER}:{NUMBER}|{msgid="IDS_RULE_CHANGES"}|
+        {NUMBER}|{$values=KEYVALUE(" ", "=", "\\\"")}'
+
+subject = "account"
+action = "modify"
+object = "rule"
+status = "success"
+
+subject.name = $values["suser"]
+subject.privileges = $values["spriv"]
+
+src.ip = $values["src"]
+
+if $values["dproc"] != "?" then
+    datafield1 = $values["dproc"]   # terminal type
+endif
+
+reason = $values["act"]
+
+if maybe_datetime($values["rt"]) != null then
+    time = $values["rt"]
+else
+    time = $fallback_time
+endif
+importance = "low"
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+event_src.id = $values["deviceExternalId"]
+
+id = "PT_Infotecs_VipNet_IDS_2_4_syslog_cef_rule_changed"

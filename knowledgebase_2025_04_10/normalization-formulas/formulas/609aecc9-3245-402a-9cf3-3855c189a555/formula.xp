@@ -1,0 +1,129 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"multiscanner"|"sandbox"} - {msgid="scan_machine.new_object"} - {$json_data=REST}'
+
+subject = "application"        
+action = "start"
+object = "scan"
+status = "success"
+
+# Parsing JSON submessage from PT Multiscanner
+submessage('JSON', 'multiscanner', $json_data) 
+subformula 'multiscanner'
+    JSON = 'created' 
+    chain_id = $scan_id    
+    
+    if find_substr($origin_file['name'], "\\/") != null then
+        object.storage.fullpath = replace($origin_file['name'], "", "/")
+        $splitted_parts = csv(object.storage.fullpath, "\\", "'")
+        object.storage.name = $splitted_parts[length($splitted_parts) - 1]
+        if length($splitted_parts) > 1 then
+            object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+        endif
+    elif find_substr($origin_file['name'], "/") != null then
+        object.storage.fullpath = $origin_file['name']
+        $splitted_parts = csv(object.storage.fullpath, "/", "'")
+        object.storage.name = $splitted_parts[length($splitted_parts) - 1]
+        if length($splitted_parts) > 1 then
+            object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+        endif
+    else
+        if $origin_file['name'] != "" then
+            object.storage.name = $origin_file['name']
+        endif
+    endif
+    
+    object.property = "size"
+    object.value = $origin_file['size']
+   
+    object.hash.sha256 = upper($origin_file['sha256'])
+    object.hash.md5 = upper($origin_file['md5'])
+    object.hash.sha1 = upper($origin_file['sha1'])
+        
+    if $recognized_object['archive'] != null then
+        object.type = "archive"
+    
+    elif $recognized_object['email'] != null then
+        object.type = "email"
+       
+        subject.account.contact = $recognized_object['email']['from_address']['address']  # sender address
+        $temp_sender = csv(subject.account.contact, "@", "`")
+        subject.account.name = $temp_sender[0]
+        subject.account.domain = $temp_sender[1]
+        
+        object.account.contact = $recognized_object['email']['to']['address']             # reciever address
+        
+        if $recognized_object['email']['to_list'][0]['address'] != null then
+            submessage("TEXT", "raw_to_list", $json_data)
+        endif
+        
+        if $recognized_object['email']['cc_list'][0]['address'] != null then
+            submessage("TEXT", "raw_cc_list", $json_data)
+        endif
+        
+        if $recognized_object['email']['bcc_list'][0]['address'] != null then
+            submessage("TEXT", "raw_bcc_list", $json_data)
+        endif 
+  
+        numfield1 = length($recognized_object['email']['to_list']) + length($recognized_object['email']['cc_list']) + length($recognized_object['email']['bcc_list'])           # число получателей письма + получатели в копии
+        
+        datafield5 = $recognized_object['email']['subject']                  # subject
+        
+        if $recognized_object['email']['id'] != "" then
+            object.id = $recognized_object['email']['id'] 
+        endif
+    else 
+        object.type = "scanning artifact"
+    endif
+
+    datafield7 = $origin_file['mime_type']         # MIME
+    
+    time = epoch_to_datetime(number($created))
+endsubformula
+
+subformula "raw_to_list"
+    TEXT = '{UNTIL("to_list\\": [{")}{$raw_to_list=UNTIL("]")}{REST}'
+    $raw_to_list = replace($raw_to_list, "", "\"")
+    $raw_to_list = replace($raw_to_list, "", "{")
+    $raw_to_list = replace($raw_to_list, "", "address: ")
+    $raw_to_list = replace($raw_to_list, "", ", name:*}")
+    $raw_to_list = replace($raw_to_list, "", "}")
+    $raw_to_list = replace($raw_to_list, "|", ", ")
+    datafield3 = lower($raw_to_list)    # to_list
+endsubformula
+
+subformula "raw_cc_list"
+    TEXT = '{UNTIL("cc_list\\": [{")}{$raw_cc_list=UNTIL("]")}{REST}'
+    $raw_cc_list = replace($raw_cc_list, "", "\"")
+    $raw_cc_list = replace($raw_cc_list, "", "{")
+    $raw_cc_list = replace($raw_cc_list, "", "address: ")
+    $raw_cc_list = replace($raw_cc_list, "", ", name:*}")
+    $raw_cc_list = replace($raw_cc_list, "", "}")
+    $raw_cc_list = replace($raw_cc_list, "|", ", ")
+    datafield4 = lower($raw_cc_list)    # cc_list
+endsubformula
+
+subformula "raw_bcc_list"
+    TEXT = '{UNTIL("bcc_list\\": [{")}{$raw_bcc_list=UNTIL("]")}{REST}'
+    $raw_bcc_list = replace($raw_bcc_list, "", "\"")
+    $raw_bcc_list = replace($raw_bcc_list, "", "{")
+    $raw_bcc_list = replace($raw_bcc_list, "", "address: ")
+    $raw_bcc_list = replace($raw_bcc_list, "", ", name:*}")
+    $raw_bcc_list = replace($raw_bcc_list, "", "}")
+    $raw_bcc_list = replace($raw_bcc_list, "|", ", ")
+    datafield10 = lower($raw_bcc_list)    # bcc_list
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multiscanner"
+event_src.category = "Anti-virus"
+
+id = "PT_Positive_Technologies_Multiscanner_syslog_scan_machine_new_object"

@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}{"%%"NUMBER?}
+        {$tmp_subsys=WORD}/{NUMBER}/{msgid="ARPMISS"}({WORD}){"["NUMBER"]"?}: Attack occurred.(AttackType={$name=STRING+}
+        SourceInterface= {$iface=STRING} SourceIP={src.ip=IPV4}, AttackPackets= {count.packets=NUMBER} packets per second)'
+
+action = "detect"
+object = "attack"
+status = "success"
+
+object.type = strip($name,'',',')
+
+interface = strip($iface,'',',')
+
+importance = "medium"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Arp_miss_attack_detected"

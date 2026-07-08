@@ -1,0 +1,29 @@
+event No_subject_account_id:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::Vendors_Without_SID()
+        and subject.account.name != null
+        and subject.account.name != "-"
+        and subject.account.id == null
+    }
+
+event No_object_account_id:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::Vendors_Without_SID()
+        and object.account.name != null
+        and object.account.name != "-"
+        and object.account.id == null
+    }
+
+enrichment Domain_and_sid_mapping_object_subject_id
+
+    enrich No_subject_account_id:
+        enrich_fields {
+            subject.account.id = "synthetic:" + subject.account.name
+        }
+
+    enrich No_object_account_id:
+        enrich_fields {
+            object.account.id = "synthetic:" + object.account.name
+        }

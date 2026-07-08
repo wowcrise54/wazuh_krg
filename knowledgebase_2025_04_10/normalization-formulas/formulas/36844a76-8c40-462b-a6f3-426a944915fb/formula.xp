@@ -1,0 +1,219 @@
+TABULAR = 'time_stamp,
+           {time=alert_detection},
+           alert,
+           action,
+           source,
+           filepath,
+           virusname,
+           username,
+           antivirus_version,
+           computer_name,
+           computer_domain_name,
+           ip_address'
+
+COND = in_list([
+                    "Virus found",
+                    "Forced proactive threat detected",
+                    "Security risk found",
+                    "Commercial application detected",
+                    "Proactive detection now permitted",
+                    "Potential risk found",
+                    "Risk sample was submitted to Symantec",
+                    "Detection Whitelisted",
+                    "Compressed File"
+                ],
+                $alert)
+
+if in_list(["Virus found", "Forced proactive threat detected","Compressed File"], $alert) then
+    # Секция по детектированию угроз
+    subject = "application"
+    if $action == "Quarantined" then  # Помещение в карантин
+        object = "malware"
+        action = "detect"
+        object.state = "quarantined"
+
+        object.name = $virusname
+    elif in_list(["Deleted"], $action) then  # Удаление
+        action = "detect"
+        object = "malware"
+        object.state = "removed"
+        object.name = $virusname
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Mitigation"
+    elif in_list(["Cleaned", "Cleaned by deletion", "Cleaned or macros deleted"], $action)  # Очистка без удаления
+    then
+        action = "detect"
+        object = "malware"
+        object.state = "cured"
+        object.name = $virusname
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Curing"
+    else    # Обычное детектирование без дальнешенго действия
+        object = "malware"
+        action = "detect"
+
+        object.name = $virusname
+        object.state = $action
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Detection"
+    endif
+    status = "success"
+
+    subject.name = "Symantec Endpoint Security Agent"
+    subject.version = $antivirus_version
+
+    object.storage.fullpath = lower($filepath)
+    $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+    $csv_path = csv($csv_p, '/', '')
+    if length($csv_path) > 1 then
+         object.storage.name = lower($csv_path[length($csv_path) - 1])
+         object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+    else
+         object.storage.name = $csv_p
+    endif
+    if $alert == "Virus found" then
+        object.type = "virus"
+    else
+        object.type = "proactive threat"
+    endif
+
+    reason = $alert + ", " + $action
+
+    elif in_list(["Security risk found", "Potential risk found", "Commercial application detected"], $alert) then  # Удаление угрозы
+
+    subject = "application"
+    if in_list(["Deleted"], $action) then
+        action = "detect"
+        object = "malware"
+
+        object.state = "removed"
+        object.name = $virusname
+        object.storage.fullpath = lower($filepath)
+        $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+        $csv_path = csv($csv_p, '/', '')
+        if length($csv_path) > 1 then
+            object.storage.name = lower($csv_path[length($csv_path) - 1])
+            object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+        else
+            object.storage.name = $csv_p
+        endif
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Mitigation"
+    elif in_list(["Cleaned", "Cleaned by deletion", "Cleaned or macros deleted"], $action)
+    then    # Излечение угрозы
+        action = "detect"
+        object = "malware"
+        object.state = "cured"
+        object.name = $virusname
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Curing"
+    else  # Обычное детектирование без дальнешенго действия
+
+        action = "detect"
+        object = "malware"
+
+        object.name = $virusname
+        object.storage.fullpath = lower($filepath)
+        $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+        $csv_path = csv($csv_p, '/', '')
+        if length($csv_path) > 1 then
+            object.storage.name = lower($csv_path[length($csv_path) - 1])
+            object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+        else
+            object.storage.name = $csv_p
+        endif
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Detection"
+    endif
+    status = "success"
+    
+    subject.name = "Symantec Endpoint Security Agent"
+    subject.version = $antivirus_version
+
+    if $alert == "Commercial application detected" then
+        object.type = "Commercial application"
+    else
+        object.type = strip($alert, "", " found")
+    endif
+
+    reason = $alert + ", " + $action
+
+    elif $alert == "Proactive detection now permitted" then   # Событие влючения сервиса проактивной защиты
+
+    action = "start"
+    object = "service"
+    status = "success"
+    object.name = "Proactive detection"
+
+    reason = $alert
+
+    elif $alert == "Risk sample was submitted to Symantec" then  # Отправка подозрительного объекта в Symantec
+
+     subject = "application"
+     action = "send"
+     object = "file"
+     status = "success"
+
+     subject.name = "Symantec Endpoint Security Agent"
+     subject.version = $antivirus_version
+
+     reason = $alert
+
+     elif $alert == "Detection Whitelisted" then    # Помещение ползователм в белый лист
+
+     subject = "application"
+     action = "detect"
+     object = "malware"
+     status = "success"
+
+     object.name = $virusname
+     object.storage.fullpath = lower($filepath)
+     $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+     $csv_path = csv($csv_p, '/', '')
+     if length($csv_path) > 1 then
+          object.storage.name = lower($csv_path[length($csv_path) - 1])
+          object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+     else
+          object.storage.name = $csv_p
+     endif
+     object.state = "skipped"
+     object.type = $alert
+
+     subject.name = "Symantec Endpoint Security Agent"
+     subject.version = $antivirus_version
+
+     reason = "Skipped by user"
+endif
+ 
+$domain_user = csv($username, "\\", "'")
+if length($domain_user) == 2 then
+    subject.account.name = $domain_user[1]
+    subject.account.domain = $domain_user[0]
+else
+    subject.account.name = $username
+endif
+
+datafield2 = $computer_domain_name  # доменное имя хоста, на котом обнаружена угроза
+
+importance = "high"
+
+event_src.ip = $ip_address
+$dot_pos = find_substr($computer_name, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($computer_name)
+    event_src.hostname = lower(substr($computer_name, 0, $dot_pos))
+else
+    event_src.hostname = lower($computer_name)
+endif
+event_src.vendor = "symantec"
+event_src.title = "endpoint_protection_manager"
+event_src.category = "Host security"
+event_src.subsys = lower($source)
+
+id = "PT_Symantec_EPM_odbc_alert_received"

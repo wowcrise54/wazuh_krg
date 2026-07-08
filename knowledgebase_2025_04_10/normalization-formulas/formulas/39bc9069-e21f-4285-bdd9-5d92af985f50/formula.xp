@@ -1,0 +1,14 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {UNTIL("Info: ")}
+Message finished MID {object.id=NUMBER} {object.state=REST}'
+
+action = "info"
+object = "message"
+status = "success"
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_message_finished"

@@ -1,0 +1,134 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {object.name=UNTIL("|")}{$cp_severity=WORD}|{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "Application Control"
+
+subject = "rule"
+switch lower($kv["act"])
+    case "accept"
+        action = "allow"
+    case "block"
+        action = "deny"
+endswitch
+    object = "connection"
+status = "success"
+
+subformula "user_long"
+TEXT = '{object.account.fullname=UNTIL(" (")}{object.account.name=WORD}@{object.account.domain=UNTIL(")")}{subject.account.fullname=UNTIL(" (")} {subject.account.name=WORD}@{subject.account.domain=UNTIL(")")}'
+endsubformula
+
+subformula "user_long"
+TEXT = '{object.account.name=WORD}@{object.account.domain=STRING} {subject.account.fullname=UNTIL(" (")} {subject.account.name=WORD}@{subject.account.domain=UNTIL(")")}'
+endsubformula
+
+subformula "user_long"
+TEXT = '{subject.account.fullname=UNTIL(" (")}
+        {subject.account.name=WORD}@{subject.account.domain=UNTIL(")")}'
+endsubformula
+
+subformula "user_long"
+TEXT = '{object.account.name=WORD}@{object.account.domain=STRING} {subject.account.fullname=REST}'
+
+if subject.account.fullname == "" then subject.account.fullname = null endif
+endsubformula
+
+subformula "user_long"
+    TEXT = '{object.account.name=WORDDASH}'
+endsubformula
+
+subformula "user_long"
+    TEXT = '{REST}'
+endsubformula
+
+submessage('TEXT', 'user_long', coalesce($kv["suser"], $kv["duser"]))
+
+subject.id = $kv["rule_uid"]
+
+object.process.original_name = $kv["requestClientApplication"]
+
+object.storage.fullpath = coalesce($kv["description_url"], $kv["request"])
+
+$check_script = find_substr(object.storage.fullpath, "<script>")
+if ($check_script == null) then
+    $fullpath = csv(object.storage.fullpath, "/", "")
+    object.storage.name = $fullpath[length($fullpath)- 1]
+    if strip(object.storage.fullpath, "", object.storage.name) != '' then
+        object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+    endif
+endif
+
+object.query = $kv["requestMethod"] + " " + object.storage.fullpath
+object.type = $kv["app_category"]
+$service_id = $kv["service_id"]
+if ($service_id != null) then
+    object.property = "Service found for the connection (by the destination port)"
+    object.value = $service_id
+endif
+
+src.ip = $kv["src"]
+$spt = $kv["spt"]
+if ($spt != 0) then src.port = $spt endif
+$shost = $kv["shost"]
+if find_substr($shost, '@') != null then
+    src.fqdn = $shost
+    src.hostname = substr($shost, 0, find_substr($shost, "@"))
+else
+    src.hostname = $shost
+endif
+dst.ip = $kv["dst"]
+$dpt = $kv["dpt"]
+if ($dpt != 0) then dst.port = $dpt endif
+$dhost = $kv["dhost"]
+if find_substr($dhost, '@') != null then
+    dst.fqdn = $dhost
+    dst.hostname = substr($dhost, 0, find_substr($dhost, "@"))
+else
+    dst.hostname = $dhost
+endif
+
+interface = $kv["ifname"]
+protocol = $kv["proto"]
+if $kv["app"] != "Unknown Protocol" then protocol.layer7 = $kv["app"] endif
+
+direction = switch lower($kv["conn_direction"])
+    case "internal" "ingress"
+    case "outgoing" "egress"
+endswitch
+
+count.bytes = $kv["bytes"]
+count.packets = $kv["packets"]
+
+duration = $kv["duration"]
+
+datafield5 = $kv["app_properties"]  # характеристики приложения
+datafield6 = $kv["app_desc"]        # описание приложения
+datafield8 = $kv["originsicname"]   # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+
+if ($cp_severity != null) then
+    importance = switch lower($cp_severity)
+        case "unknown" "info"
+        case "very low" "info"
+        case "very-low" "info"
+        case "low" "low"
+        case "medium" "medium"
+        case "high" "high"
+        case "very high" "high"
+        case "very-high" "high"
+        case "critical" "high"
+    endswitch
+else
+    importance = "medium"
+endif
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Application_control_Firewall_traffic"

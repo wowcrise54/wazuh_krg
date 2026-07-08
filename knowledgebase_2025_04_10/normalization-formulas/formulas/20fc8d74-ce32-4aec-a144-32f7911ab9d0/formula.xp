@@ -1,0 +1,47 @@
+TABULAR = '{$temp_time=TIME_STAMP},
+           {object.value=SIG_NAME},
+           {object.type=SIG_CLASS_NAME},
+           {src.ip=IP_SRC},
+           {src.port = SPORT},
+           {dst.ip=IP_DST},
+           {dst.port=DPORT},
+           {$item_count_raw=ITEM_COUNT},
+           {$subject_privileges_raw=RULE_ACTION}'
+
+COND = $SIG_CLASS_NAME == "ddos-attacks"
+
+subject = "rule"
+if $RULE_ACTION == 3 then
+    action = "deny"
+else
+    if $RULE_ACTION == 7 then
+        action = "reject"
+    else
+        if $RULE_ACTION == 2 then
+            action = "alert"
+        else
+            action = "info"
+        endif
+    endif
+endif
+object = "attack"
+status = "success"
+
+subject.privileges = $subject_privileges_raw  # действие СОВ
+
+object.property = "signature"
+
+datafield1 = $item_count_raw  # счетчик событий
+
+# Замена символа . на : во временной зоне
+if substr($temp_time, 22, 1) == "." then
+    $temp_time = join([substr($temp_time, 0, 22), substr($temp_time, 23, 5)], ":")
+endif
+time = $temp_time
+importance = "high"
+
+event_src.vendor = "entensys"
+event_src.title = "usergate_proxy_and_firewall"
+event_src.category = "Proxy server"
+
+id = "PT_Entensys_UserGate_Proxy_and_Firewall_odbc_ddos_sov"

@@ -1,0 +1,42 @@
+TABULAR = 'EVENT_ID,
+           {time=EVENT_TIME},
+           SEVERITY,
+           {msgid=AUDIT_TYPE_ID},
+           {event_src.subsys=MODULE_ID}'
+
+COND = $AUDIT_TYPE_ID == "GROUP_POLICY_CHANGED"
+
+subject = "account"
+action = "modify"
+object = "policy"
+status = "success"
+
+subject.application.account.id = $USER_ID
+subject.application.account.name = lower($USER_LOGIN)
+
+$fullname = join([$USER_NAME, $USER_LAST_NAME], " ")
+if $fullname != " " then
+    subject.account.fullname = $fullname
+endif
+
+subject.process.meta = $USER_AGENT
+
+object.property = "changes of policies"
+object.new_value = $DESCRIPTION
+
+src.ip = $REMOTE_ADDR
+
+datafield1 = $REQUEST_URI  # Запрос
+datafield2 = $SITE_ID      # Идентификатор сайта
+datafield3 = $OBJECT_NAME  # Группа
+datafield4 = $OBJECT_ID    # Идентификатор группы
+
+numfield1 = $GUEST_ID      # Идентификатор посетителя
+
+importance = "low"
+
+event_src.vendor = "1c_bitrix"
+event_src.title = "bitrix24"
+event_src.category = "Application server"
+
+id = "PT_1C_Bitrix_Bitrix24_odbclog_policy_changed"

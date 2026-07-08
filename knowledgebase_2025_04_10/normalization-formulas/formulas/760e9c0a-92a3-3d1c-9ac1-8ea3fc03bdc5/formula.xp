@@ -1,0 +1,24 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}system|{NUMBER}|cat=System:
+        Configuration{$kv=KEYVALUE(" ", "=", "\\"")}'
+          
+COND = $kv["act"] == "system_time_set"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+    
+subject.account.name = $kv["suser"]
+
+object.name = strip($kv["act"], "", "_set")
+
+time = recv_time  
+msgid = $kv["act"]
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_cef_system_time_change"

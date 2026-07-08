@@ -1,0 +1,43 @@
+EVENTLOG = 'EventID.text="593"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Security"
+
+subject = "account"
+action = "stop"
+object = "process"
+status = "success"
+
+subject.account.domain = lower($Data[3])
+subject.account.name = lower($Data[2])
+subject.account.session_id = $Data[4]
+
+object.account.name = subject.account.name
+object.account.domain = subject.account.domain
+object.account.id = subject.account.id
+
+object.id = $Data[0]
+$tmp_path = csv(lower($Data[1]),'\\','"')
+object.process.name = $tmp_path[length($tmp_path) - 1]
+object.process.path = strip(lower($Data[1]), "", object.process.name)
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_forwarded_Security_593_A_process_has_exited"

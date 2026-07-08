@@ -1,0 +1,73 @@
+event Subrule_Sharphound:
+    key:
+        src.ip, subject.account.name
+    filter {   
+        correlation_name == "Subrule_Sharphound_Server_Side"
+        and filter::CheckWL_Specific_Only("Sharphound_Server_Side", join([src.ip, lower(subject.account.name)], "|"))
+    }
+
+rule Sharphound_Server_Side: (Subrule_Sharphound[5,] with different event_src.host) timer 5m
+    
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $first_event = true
+    }
+
+    on Subrule_Sharphound {
+        if $first_event == true then  
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.storage.id = object.storage.id
+            $object.storage.path = object.storage.path
+            
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+        
+            $alert.key = join([src.ip, lower(subject.account.name)], "|")
+            
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $first_event = false
+        endif
+        
+        $fqdns = append($fqdns, event_src.fqdn)
+        $hostnames = append($hostnames, event_src.hostname)
+        $list_assets = append($list_assets, event_src.asset)
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "high"
+    
+    $datafield5 = join($fqdns, "|")
+    $datafield7 = join($hostnames, "|")
+    $datafield8 = join($list_assets, "|")
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery"
+   
+    $incident.aggregation.timeout = 2h
+    $incident.severity = $importance
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $src.host], "|")
+    $incident.category = "HackToolsDetection"
+}

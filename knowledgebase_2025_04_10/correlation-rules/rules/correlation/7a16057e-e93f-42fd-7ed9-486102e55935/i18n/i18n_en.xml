@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to a build agent server. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="1d436547-4354-dbdd-eb3f-b1d46a1200d8">User {subject.account.name} from host {src.host} logged in to a build agent server and accessed new shared network resource "{object.storage.path}" on host {event_src.host}. The network resource is missing from the collected profile.</EventDescription>
+    <EventDescription id="8511cca1-c77f-e3ec-b23b-08d5a0d8adef">User {subject.account.name} from new host {src.host} logged in to a build agent server on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="c295db84-5678-232e-35b2-e0a96eecd473">New user {subject.account.name} from host {src.host} logged in to a build agent server on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="e06f8b8d-36f7-09be-f566-c7490a25bd8f">User {subject.account.name} from host {src.host} used new logon type {logon_type} ({datafield6}) to log in to a build agent server on host {event_src.host}. The logon type is missing from the collected profile.</EventDescription>
+    <EventDescription id="f3d6d8cd-1f41-4e77-1e79-394a1885cb86">User {subject.account.name} from host {src.host} logged in to a build agent server and accessed a new object in shared network resource "{object.storage.name}" on host {event_src.host}. The object is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

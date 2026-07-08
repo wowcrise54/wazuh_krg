@@ -1,0 +1,47 @@
+EVENTLOG = 'EventID.text = "3112"'
+
+COND = $Provider["Name"] == "DPM-EM"
+
+action = "create"
+object = "resource"
+status = "success"
+
+subformula "data_0"
+    TEXT = "{STRING+?} for {object.fullpath=STRING+} {WORD WORD} at
+    {datafield1=UNTIL(', with')} {STRING+?} {$raw_dst=HOSTNAME}, {STRING+?} (ID: {NUMBER})"
+endsubformula
+
+submessage ("TEXT", "data_0", $Data[0])
+
+object.type = "recovery job"
+object.name = csv(object.fullpath, "\\", "")[length(csv(object.fullpath, "\\", "")) - 1]
+object.path = strip(object.fullpath, "", object.name)
+
+$dot_pos = find_substr($raw_dst, '.')
+
+if $dot_pos != null then
+    dst.fqdn = lower($raw_dst)
+    dst.hostname = lower(substr($raw_dst, 0, $dot_pos))
+else
+    dst.hostname = lower($raw_dst)
+endif
+
+# datafield1 - start date
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "system_center_data_protection_manager"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Backup server"
+
+id = "PT_Microsoft_Data_Protection_Manager_eventlog_3112_Recovery_completed_successfully"

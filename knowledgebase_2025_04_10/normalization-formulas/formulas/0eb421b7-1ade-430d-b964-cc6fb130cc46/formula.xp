@@ -1,0 +1,61 @@
+JSON = ''
+
+COND =
+    $ACTION_MNEMO == "copypaste"
+    and $INSERT_DATE != null
+    and $CAPTURE_DATE != null
+    and $VERDICT != null
+
+subject = "account"
+action = "copy"
+object = "resource"
+if $VERDICT == "Allowed" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+$name_domain = csv($senders_keys_simplified["auth"]["key_string"], "@", "'")
+subject.name = $name_domain[0]
+subject.domain = $name_domain[1]
+
+object.type = "clipboard"
+
+src.ip = $workstations_keys_simplified["ip"]["key_string"]
+src.hostname = $workstations_keys_simplified["dnshostname"]["key_string"]
+
+datafield1 = $USER_DECISION                     # Решение оператора DLP по событию
+datafield2 = $perimeters_simplified             # Перечень периметров через запятую
+datafield3 = $tags_simplified                   # Перечень тегов через запятую
+datafield4 = $protected_documents_simplified    # Перечень защищаемых документов через запятую
+datafield5 = $protected_catalogs_simplified     # Перечень защищаемых каталогов через запятую
+datafield6 = $policies_simplified               # Перечень нарушенных политик через запятую
+datafield7 = $APPLICATION_FROM                  # Приложение, из которого был заполнен буфер обмена
+datafield8 = $APPLICATION_TO                    # Приложение, в которое направилось содержимое буфера обмена
+
+time = $CAPTURE_DATE + $CAPTURE_DATE_TZ
+msgid = $ACTION_MNEMO
+
+if $USER_DECISION == "NotProcessed" then
+    if $VIOLATION_LEVEL == "No" then
+        importance = "info"
+    elif $VIOLATION_LEVEL == "Low" then
+        importance = "low"
+    else
+        importance = "high"
+    endif
+elif $USER_DECISION == "NoViolation" then
+    importance = "info"
+elif $USER_DECISION == "Violation" then
+    importance = "high"
+else
+    importance = "medium"
+endif
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.category = "DLP"
+event_src.hostname = $CAPTURE_SERVER_HOSTNAME
+event_src.ip = $CAPTURE_SERVER_IP
+
+id = "PT_InfoWatch_Traffic_Monitor_6_customeventcollector_Sensors_clipboard"

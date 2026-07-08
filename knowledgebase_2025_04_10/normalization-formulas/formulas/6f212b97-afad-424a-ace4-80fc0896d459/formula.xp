@@ -1,0 +1,42 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Контроль целостности"
+       and $event_id == 83886082
+
+subject = "application"
+action = "check"
+object = "resource"
+status = "failure"
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение subject.name, subject.version и reason из $event_message
+    TEXT = "Группа сообщений контроля целостности\n\r\n\r{subject.name='AIDE'} {subject.version=STRING}
+            {reason='found differences between database and filesystem'}!!{'\n'?}"
+endsubformula
+
+object.type = "filesystem"
+
+importance = "high"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_integrity_check_failure_in_filesystem"

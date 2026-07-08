@@ -1,0 +1,86 @@
+event Modify_data_critical_1c_enterprise_in_irregular_time:
+    key:
+        event_src.host, subject.application.account.name, object.value
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "1c_enterprise"
+        and in_list(["_$Data$_.New", "_$Data$_.Post", "_$Data$_.Update", "_$Data$_.Delete", "_$Data$_.Unpost"], msgid)
+        and object.property != null
+        and table::enterprise_1c_critical_data_values_tmp{column::data_value == object.property}
+        and in_list([0,15,16,17,18,19,20,21,22,23], hour(time))
+        and filter::CheckWL_Specific_Only("UTMN_CR_Enterprise_1C_manipulate_critical_data_in_irregular_time", lower(object.value))
+    }
+
+rule UTMN_CR_Enterprise_1C_manipulate_critical_data_in_irregular_time: Modify_data_critical_1c_enterprise_in_irregular_time
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Modify_data_critical_1c_enterprise_in_irregular_time {
+        $object = object
+
+        $subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.session_id = subject.application.account.session_id
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+
+        $object.property = object.property
+        $object.value = object.value
+
+        $datafield2 = datafield2  # TransactionID
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $alert.key = lower(object.value)
+
+        if $subject.account.name != null then
+            $os_account = join(remove([subject.account.name, subject.account.domain], null), "@")
+        endif
+
+        $alert.context = join(remove([subject.application.account.name,
+                                      $os_account,
+                                      src.host,
+                                      object.property,
+                                      reason], null), " | ")
+
+        $reason = reason
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit { 
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.application.account.name], "|")
+    $incident.severity = "medium"
+    $incident.category = "Undefined"
+    $incident.aggregation.timeout = 10m
+}

@@ -1,0 +1,90 @@
+event Get_Clipboard_By_PowerShell_Command:
+    key:
+        event_src.host, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and event_src.title == "windows"
+        and object == "command"
+        and action == "execute"
+        and (
+            find_substr(lower(object.process.cmdline), "windows.clipboard") != null
+            or find_substr(lower(object.process.cmdline), "windows.forms.clipboard") != null
+            or find_substr(lower(object.process.cmdline), "windows.forms.textbox") != null
+        )
+        and (
+            find_substr(lower(object.process.cmdline), "]::gettext") != null
+            or find_substr(lower(object.process.cmdline), ".paste()") != null
+        )
+        and filter::CheckWL_Powershell("Clipboard_Access_Powershell", lower(join([coalesce(subject.account.name, subject.account.id), coalesce(object.fullpath, substr(object.process.cmdline, 0, 120))], "|")))
+    }
+
+rule Clipboard_Access_Powershell: Get_Clipboard_By_PowerShell_Command+ timer 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+        $first_event = true
+    }
+
+    on Get_Clipboard_By_PowerShell_Command {
+        
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $object.account.name = object.account.name
+            $object.account.fullname = object.account.fullname
+            $object.account.domain = object.account.domain
+            $object.account.session_id = object.account.session_id
+            $object.account.id = object.account.id
+            $object.account.privileges = object.account.privileges
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $object.process.id = object.process.id
+            $object.process.cmdline = object.process.cmdline
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), coalesce(object.fullpath, substr(object.process.cmdline, 0, 120))], "|"))
+            $alert.regex_match = regex(lower(object.process.cmdline), "windows(\.forms)?\.(clipboard|textbox).*?((\]::gettext)|\.paste\(\))", 0)
+
+            $first_event = false
+        endif    
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Clipboard Data"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

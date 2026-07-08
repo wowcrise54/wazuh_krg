@@ -1,0 +1,89 @@
+event Process_Started_Via_Dllhost:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and lower(object.process.parent.name) == "dllhost.exe"
+        and not in_list(["dllhost.exe", null, "werfault.exe"], lower(coalesce(object.process.original_name, object.process.name)))
+        and regex(lower(object.process.parent.cmdline), "\/processid:{3e5fc7f9-9a51-4367-9063-a120244fbec7}|\/processid:{d2e7041b-2927-42fb-8e9f-7ce93b6dc937}", 0) != null
+        and filter::CheckWL_Process_Creation("ICMLuaUtil_UAC_Bypass", join([lower(event_src.host),lower(object.process.cmdline)], "|"))
+    }
+
+rule ICMLuaUtil_UAC_Bypass: Process_Started_Via_Dllhost
+   
+   init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Process_Started_Via_Dllhost {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+ 
+        $datafield18 = datafield18  # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = join([lower(event_src.host),lower(object.process.cmdline)], "|")
+        $alert.context = "dllhost.exe started process " + $object.process.name + " with elevated privileges bypassing the UAC"
+        $alert.regex_match = regex(lower(object.process.parent.cmdline), "\/processid:{3e5fc7f9-9a51-4367-9063-a120244fbec7}|\/processid:{d2e7041b-2927-42fb-8e9f-7ce93b6dc937}", 0)
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Abuse Elevation Control Mechanism: Bypass User Account Control"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

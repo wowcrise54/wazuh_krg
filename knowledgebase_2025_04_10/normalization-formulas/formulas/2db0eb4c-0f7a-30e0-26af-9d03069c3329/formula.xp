@@ -1,0 +1,35 @@
+TEXT = '<{NUMBER}>{time=DATETIME} 
+{$Computer=STRING|event_src.ip=IPV4|event_src.ip=IPV6} 
+{STRING?} {$initial_time=DATETIME?} {msgid="dnsmasq-dhcp"}[{NUMBER}]: 
+not giving name {object.name=STRING} to the DHCP lease of 
+{datafield3=IPV4|datafield3=IPV6} because the name exists in {STRING} 
+with address {datafield4=IPV4|datafield4=IPV6}'
+
+subject = "host"
+action = "bind"
+object = "resource"
+status = "failure"
+    
+object.type = "hostname"
+
+# datafield3 - IP address of the host to which the name was to be assigned
+# datafield4 - IP address of the host that has already been assigned this name
+
+if $initial_time != null then
+    time = $initial_time
+endif
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dnsmasq"
+event_src.category = "DHCP server"
+
+id = "PT_Dnsmasq_syslog_dhcp_not_giving_name_error"

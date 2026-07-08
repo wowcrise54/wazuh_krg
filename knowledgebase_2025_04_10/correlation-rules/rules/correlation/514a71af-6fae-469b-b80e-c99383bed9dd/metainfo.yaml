@@ -1,0 +1,11 @@
+Category:
+EventDescriptions:
+- Criteria: 'correlation_name = "MySQL_Code_Execution" and alert.context = "user defined function create"'
+  LocalizationId: 10400083-44ea-4c8f-9641-3406765e7420
+- Criteria: 'correlation_name = "MySQL_Code_Execution" and (alert.context = "user defined function create -> sql command execute for process create -> process create" or alert.context = "user defined function create -> process create")'
+  LocalizationId: 46b57f3b-9924-454f-8d38-710f9b320890
+- Criteria: 'correlation_name = "MySQL_Code_Execution" and alert.context = "user defined function create -> sql command execute for process create"'
+  LocalizationId: f633ec57-9a0a-4386-b831-20ad626994e2
+PtkbId: 514a71af-6fae-469b-b80e-c99383bed9dd
+ObjectId: PT-CR-617
+Origin: PT

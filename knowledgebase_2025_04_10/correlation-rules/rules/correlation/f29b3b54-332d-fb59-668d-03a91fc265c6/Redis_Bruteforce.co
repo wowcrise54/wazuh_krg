@@ -1,0 +1,65 @@
+event Closed_Connection_Cmd_Auth:
+    key:
+    event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and subject == "account"
+        and action == "close"
+        and object == "connection"
+        and status == "success" 
+        and object.process.cmdline == "auth"
+        and event_src.vendor == "opensource"
+        and event_src.title == "redis"
+        and event_src.category == "Database server"
+        and filter::CheckWL_Specific_Only("Redis_Bruteforce", lower(join([src.ip, subject.application.account.name], "|")))
+    }
+
+rule Redis_Bruteforce: Closed_Connection_Cmd_Auth[9,] timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $count_total = 0
+    }
+
+    on Closed_Connection_Cmd_Auth {
+        if $count_total == 0 then
+            $subject.application.account.name = subject.application.account.name
+            $subject.application.account.id = subject.application.account.id
+            
+            $object.process.cmdline = object.process.cmdline
+            
+            $src.ip = src.ip
+            
+            $dst.ip = dst.ip
+            $dst.port = dst.port
+            
+            $event_src.host = event_src.host
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.category = event_src.category
+            
+            $alert.key = lower(join([src.ip, subject.application.account.name], "|"))
+        endif
+        
+        $count_total = $count_total + 1
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "initiate"
+    $object = "attack"
+    $status = "ongoing"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Brute Force: Password Guessing"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "BruteForce"
+    $incident.aggregation.timeout = 2h
+}

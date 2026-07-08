@@ -1,0 +1,32 @@
+TABULAR =  "id,
+            {subject.account.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name},
+            {object.type=object_type}
+            "
+
+COND = $gr_name == "Добавление сетевых объектов"
+       and $ev_desc == "Добавление Группы пользователей"
+       and $status == "Успешно"
+
+subject = "account"
+action = "create"
+object = "user_group"
+status = "success"
+
+object.id = $source_identifier
+
+importance = "info"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_create_group"

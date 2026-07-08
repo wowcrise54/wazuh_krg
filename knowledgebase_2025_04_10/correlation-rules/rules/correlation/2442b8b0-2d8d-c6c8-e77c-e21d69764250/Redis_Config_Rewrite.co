@@ -1,0 +1,53 @@
+event Config_Rewrite:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and action == "apply"
+        and object == "configuration"
+        and status == "success"
+        and object.process.cmdline == "CONFIG REWRITE"
+        and event_src.vendor == "opensource"
+        and event_src.title == "redis"
+        and event_src.category == "Database server"
+        and filter::CheckWL_Database_Actions("Redis_Config_Rewrite", lower(object.process.cmdline))
+    }
+
+rule Redis_Config_Rewrite: Config_Rewrite
+
+    init {
+       $labels = "w_auto|CheckWL_Database_Actions" 
+    }
+
+    on Config_Rewrite {
+        $object.process.cmdline = object.process.cmdline
+        $reason = reason
+        
+        $event_src.host = event_src.host
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.process.cmdline)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "apply"
+    $object = "configuration"
+    $status = "success"
+
+    $importance = "medium" 
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    
+    $incident.severity = $importance
+    
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

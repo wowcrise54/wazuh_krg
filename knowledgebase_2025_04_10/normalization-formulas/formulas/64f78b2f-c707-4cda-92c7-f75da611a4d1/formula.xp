@@ -1,0 +1,212 @@
+JSON = ''
+
+COND = in_list(["yandex.cloud.audit.compute.instancegroup.StartInstanceGroup",
+                "yandex.cloud.audit.compute.instancegroup.PauseInstanceGroup",
+                "yandex.cloud.audit.compute.instancegroup.ResumeInstanceGroup",
+                "yandex.cloud.audit.compute.instancegroup.StopInstanceGroup"], $event_type)
+
+subject = "account"
+
+$operation = strip($event_type, "yandex.cloud.audit.compute.instancegroup.", "")
+
+action = switch $operation
+    case "StartInstanceGroup" "start"
+    case "ResumeInstanceGroup" "start"  # TODO: resume
+    case "PauseInstanceGroup" "stop"    # TODO: suspend
+    case "StopInstanceGroup" "stop"
+endswitch
+
+object = "resource"
+
+status = switch $event_status
+    case "DONE" "success"
+    case "STARTED" "ongoing"
+    case "ERROR" "failure"
+    case "CANCELLED" "failure"
+endswitch
+
+subformula "item_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $next = bool($array[$current + 1])   
+endsubformula
+
+subject.account.id = $authentication["subject_id"]
+
+$at_sign = find_substr($authentication["subject_name"], "@")
+if $at_sign != null then
+    $account = substr($authentication["subject_name"], 0, $at_sign)
+    subject.account.name = $account
+    subject.account.domain = strip($authentication["subject_name"], $account + "@", "")
+else
+    subject.account.name = $authentication["subject_name"]
+endif
+
+subject.account.group = $authentication["federation_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+object.account.id = $details["service_account_id"]
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+$cloud = $resource_metadata["path"][1]["resource_name"] 
+$folder = $resource_metadata["path"][2]["resource_name"]
+object.storage.fullpath = join([$organization, $cloud, $folder], "|")
+
+object.id = $details["instance_group_id"]
+object.name = $details["instance_group_name"]
+object.state =  $details["status"]
+object.type = "virtual machines group"
+
+$remote_address = coalesce(ipv4($request_metadata["remote_address"]), ipv6($request_metadata["remote_address"]))
+if $remote_address != null then
+    src.ip = $remote_address
+else
+    logon_service = $request_metadata["remote_address"]
+endif
+
+datafield1 = $organization                                                             # Наименование организации
+datafield2 = $cloud                                                                    # Наименование облака
+datafield3 = $folder                                                                   # Наименование каталога
+datafield4 = $details["instance_template"]["boot_disk_spec"]["disk_spec"]["image_id"]  # Идентификатор образа
+
+$array = $details["instance_template"]["network_interface_specs"]
+$current = -1
+submessage("TEXT", "item_handler", "")
+if bool($item) then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+if $next then
+    $networks = append($values, $item["network_id"])
+    $subnets = append($values, $item["subnet_ids"])
+endif
+
+if $networks != "" then
+    datafield5 = join($networks, "|")  # Идентефикаторы сети
+endif
+
+if $subnets != "" then
+    datafield6 = join($subnets, "|")   # Идентефикаторы подсети
+endif
+
+datafield7 = $details["instance_template"]["platform_id"]         # Идентификатор платформы
+datafield8 = $details["instance_template"]["service_account_id"]  # Идентификатор сервисного аккаунта
+
+if $details["instance_template"]["resources_spec"]["memory"] != null then
+    $parameters = append($parameters, "memory: " + $details["instance_template"]["resources_spec"]["memory"])
+endif
+if $details["instance_template"]["resources_spec"]["cores"] != null then
+    $parameters = append($parameters, "cores: " + $details["instance_template"]["resources_spec"]["cores"])
+endif
+if $details["instance_template"]["resources_spec"]["core_fraction"] != null then
+    $parameters = append($parameters, "core fraction: " + $details["instance_template"]["resources_spec"]["core_fraction"])
+endif
+if $details["instance_template"]["boot_disk_spec"]["mode"] != null then
+    $parameters = append($parameters, "mode: " + $details["instance_template"]["boot_disk_spec"]["mode"])
+endif
+if $details["instance_template"]["boot_disk_spec"]["disk_spec"]["type_id"] != null then
+    $parameters = append($parameters, "type: " + $details["instance_template"]["boot_disk_spec"]["disk_spec"]["type_id"])
+endif
+if $details["instance_template"]["boot_disk_spec"]["disk_spec"]["size"] != null then
+    $parameters = append($parameters, "size: " + $details["instance_template"]["boot_disk_spec"]["disk_spec"]["size"])
+endif
+if $details["instance_template"]["scheduling_policy"]["preemptible"] != null then
+    $parameters = append($parameters, "preemptible: " + string($details["instance_template"]["scheduling_policy"]["preemptible"]))
+endif
+datafield9 = join($parameters, " | ")  # Свойства объекта события
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = $operation
+
+importance = switch $operation
+    case "StartInstanceGroup" "info"
+    case "ResumeInstanceGroup" "info"
+    case "PauseInstanceGroup" "low"
+    case "StopInstanceGroup" "low"
+endswitch
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = $event_source
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_Compute_Cloud_Instance_Group_Control"

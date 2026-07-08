@@ -1,0 +1,39 @@
+event Service_Started:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and object == "service"
+        and action == "start"
+    }
+
+event Service_File_Modify:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::FileModify_Linux("^\/(etc|usr\/lib|home\/\S+\/\.config)\/(systemd\/(system|user)|init\.d)\/")
+        and event_src.subsys == "auditd"
+        and status == "success"
+        and action != "remove"
+    }
+
+enrichment Unix_Enrich_Service_Name
+
+    enrich Service_Started:
+        enrich_fields {
+            if not match(object.name, "*.service") then
+                datafield7 = object.name + ".service"
+            else
+                datafield7 = object.name
+            endif
+        }
+
+    enrich Service_File_Modify:
+        enrich_fields {
+            if not match(object.name, "*.service") and not match(object.name, "*.timer") then
+                datafield7 = object.name + ".service"
+            elif match(object.name, "*.timer") then
+                datafield6 = strip(object.name, "", ".timer")
+            else
+                datafield7 = object.name
+            endif
+        }

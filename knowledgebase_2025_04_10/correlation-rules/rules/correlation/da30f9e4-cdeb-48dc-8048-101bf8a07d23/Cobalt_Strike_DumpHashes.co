@@ -1,0 +1,132 @@
+query Check_Pipe($process_name, $process_id, $host) from Cobalt_Strike_Processes {
+    host == $host
+    and cobalt_executor_name == $process_name
+    and cobalt_executor_id == $process_id
+}
+
+query Get_Pipe($process_name, $process_id, $host) from Cobalt_Strike_Processes {
+    host == $host
+    and cobalt_executor_name == $process_name
+    and cobalt_executor_id == $process_id
+}
+    qhandler {
+        $parent_process_name = beacon_name
+        $parent_process_id = beacon_id
+        $username = username
+    }
+
+event Lsass_Access:
+    key:
+        event_src.host, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "8"
+        and event_src.title == "sysmon"
+        and lower(subject.process.name) == "rundll32.exe"
+        and lower(object.process.name) == "lsass.exe"
+        and exec_query("Check_Pipe", [lower(subject.process.name), subject.process.id, lower(event_src.host)])
+        and filter::CheckWL_Process_Access("Cobalt_Strike_DumpHashes", lower(subject.process.fullpath + "|" + event_src.host))
+    }
+   
+rule Cobalt_Strike_DumpHashes: Lsass_Access
+    init {
+        $labels = "w_auto|proc_chain_exclude|CheckWL_Process_Access"
+    }
+    
+    on  Lsass_Access {
+        $result = exec_query("Get_Pipe", [lower(subject.process.name), subject.process.id, lower(event_src.host)])
+        $subject.account.name = $result["$username"]
+        $subject.process.parent.name = $result["$parent_process_name"]
+        $subject.process.parent.id = $result["$parent_process_id"]
+
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.provider = subject.account.provider 
+        $subject.account.id = subject.account.id
+        
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.parent.cmdline = subject.process.parent.cmdline
+        $subject.process.meta = subject.process.meta
+        $subject.process.hash = subject.process.hash
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        $object.account.provider = object.account.provider
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.id = object.process.parent.id
+ 
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.fullpath = object.fullpath
+        $object.name = object.name
+        $object.path = object.path
+        $object.property = object.property
+        $object.value = object.value
+        $object.id = object.id
+        $object.type = object.type
+
+        $datafield6 = datafield6  # Начальный адрес потока
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.context = $subject.process.parent.name        
+        $alert.key = lower(subject.process.fullpath + "|" + event_src.host)
+    }
+         
+emit {      
+    $correlation_type = "incident"
+    
+    $subject = "process"
+    $action = "start"
+    $object = "thread"
+    $status = "success"
+        
+    $importance = "high"
+    
+    $labels = $labels + "|lsass_cache_to_correlation"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, lower($subject.process.name)], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

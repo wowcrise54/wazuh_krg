@@ -1,0 +1,85 @@
+event DLL_Load_Into_Process:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()       
+        and event_src.title == "sysmon"
+        and msgid == "7"
+        and match(lower(subject.process.fullpath), "*:\\windows\\system32\\lsass.exe")
+        and not match(lower(object.process.fullpath), "*:\\windows\\system32\\*")
+        and not match(lower(object.process.fullpath), "*:\\windows\\winsxs\\*")
+        and match(lower(object.process.name), "*.dll") 
+    }
+
+event AutodialDLL_Modified:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()       
+        and event_src.title == "sysmon"
+        and msgid == "13"
+        and match(lower(subject.process.fullpath), "*:\\windows\\system32\\lsass.exe")
+        and match(lower(object.fullpath), "*\\system\\currentcontrolset\\services\\winsock2\\parameters\\autodialdll")
+    }
+
+rule Subrule_Lsass_For_DragonCastle: (DLL_Load_Into_Process and AutodialDLL_Modified) within 5s
+
+    on DLL_Load_Into_Process {
+    
+        $subject.process.name = subject.process.name # lsass.exe
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        
+        $object.process.name = object.process.name # DragonCastle's dll
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.original_name = object.process.original_name
+        $object.process.meta = object.process.meta
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        
+        $object.property = object.property
+        $object.value = object.value
+        $object.version = object.version
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+    
+    on AutodialDLL_Modified {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+    
+        $datafield1 = object.fullpath
+        $datafield2 = object.new_value
+    }
+    
+emit {
+    $subject = "process"
+    $action = "start"
+    $object = "module"
+    $status = "success"
+    
+    $correlation_type = "subrule"
+    $importance = "info"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+}    
+    

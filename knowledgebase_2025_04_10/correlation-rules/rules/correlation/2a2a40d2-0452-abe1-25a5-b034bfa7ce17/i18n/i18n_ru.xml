@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Сабруль к правилу CVE_2023_4911_GLIBC_Buffer_Overflow. Правило обнаруживает локальное повышение привилегий через переполнение буфера. Атакующие, используя уязвимость CVE-2023-4911, могут запустить SUID-программы для выполнения кода с повышенными привилегиями</Description>
+  <EventDescriptions>
+    <EventDescription id="3944353e-08ea-3dc9-d22f-654b6479ed55">Обнаружен множественный запуск SUID-программы {object.process.name} пользователем {subject.account.name}, что указывает на попытку переполнения буфера на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

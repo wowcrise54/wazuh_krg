@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+       {event_src.subsys=WORDDASH}{"["NUMBER"]"}: STARTTLS={"client"|"server"},
+       relay={$relay=HOSTNAME} {"["?}{"IPv6:"?}{dst.ip=IPV4|dst.ip=IPV6|}{"]"?} ,
+       version={$version=STRING} verify={datafield2=WORD}, cipher={$cipher=STRING} bits={datafield4=STRING}'
+
+action = "modify"
+object = "session"
+status = switch datafield2
+    case "OK" "success"
+    case "FAIL" "failure"
+    case "NOT" "failure"
+endswitch
+
+dst.hostname = strip($relay,'','.')
+
+protocol = "SMTP"
+
+datafield1 = strip($version,'',',')  # version of TLS
+# datafield2                         - status of TLS session
+datafield3 = strip($cipher,'',',')   # cipher
+# datafield4                         - bits of cipher
+
+if datafield2 == "NOT" then
+    reason = "server does not request certificate"
+endif
+
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "sendmail"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Sendmail_syslog_tls_connection"

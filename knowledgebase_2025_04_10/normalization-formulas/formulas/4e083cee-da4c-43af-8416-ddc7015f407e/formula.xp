@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {event_src.ip=IPV4|event_src.ip=IPV6|}: {time=DATETIME}: {"#"|"%"}
+        {msgid="UC_CALLMANAGER-6-EndPointRegistered"}: %[DeviceName={src.hostname=HOSTNAME}][IPAddress={src.ip=IPV4|
+        src.ip=IPV6}]{UNTIL("Description=")}{datafield1=UNTIL("]")}[UserID={subject.name=UNTIL("]")}{UNTIL("MACAddress=")}
+        {src.mac=WORD}{UNTIL("NodeID=")}{event_src.hostname=HOSTNAME}{REST}'
+
+subject = "account"
+action = "start"
+object = "session"
+status = "success"
+
+# datafield1 - ФИО владельца сессии
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "cucm"
+event_src.category = "Telecom"
+
+id = "PT_Cisco_CUCM_syslog_UC_CALLMANAGER_6_EndPointRegistered"

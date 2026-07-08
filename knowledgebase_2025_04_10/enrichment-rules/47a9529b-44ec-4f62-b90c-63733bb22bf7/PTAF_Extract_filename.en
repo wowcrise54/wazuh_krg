@@ -1,0 +1,16 @@
+event Rule_about_file:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "application_firewall"
+        and event_src.vendor == "positive_technologies"
+        and object.value != null
+        and in_list(["acl", "attack", "tool", "weakness", "system"], msgid)
+        and action != "login"
+        and match(lower(subject.name), "*file*")
+    }
+    
+enrichment PTAF_Extract_filename
+    enrich Rule_about_file:
+        enrich_fields {
+            object.name = regex(lower(object.value), "\w+?\.(htaccess|htpasswd|htgroup|www_acl|acl|asa|conf|ini|bat|cmd|ps1|wsf|sh|wsh|hta|vbs|vbe|shell|php|xml|jpg|png|gif|jpeg|cfg)", 0)
+        }

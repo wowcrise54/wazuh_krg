@@ -1,0 +1,45 @@
+TEXT = "scd_timestamp={WORD} {DATETIME} ss_server_name={event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} event_name=
+        {msgid='FILE_RENAMED_UPDATE'} evt_id={NUMBER} evt_type={WORDDASH} evt_sink={STRING} seq_no={NUMBER} time_stamp=
+        {$date=NUMBER} server_state={NUMBER} user_name={subject.account.name=UNTIL('\\t')} orig_user_name={UNTIL('\\t')} file_name=
+        {$temp_path=UNTIL('\\t')} new_file_name={object.new_value=UNTIL('\\t')}prog_name={$prog_name=UNTIL('\\t')} workflow_id={REST}"
+
+subject = "account"
+action = "rename"
+object = "file_object"
+status = "success"
+
+subject.process.fullpath = $prog_name
+$csv_prog_name = csv($prog_name, "\\", "")
+subject.process.name = $csv_prog_name[length($csv_prog_name) - 1]
+if length($csv_prog_name) > 1 then
+    subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+endif
+
+object.fullpath = $temp_path
+$csv_temp_path = csv($temp_path, "\\", "")
+object.name = $csv_temp_path[length($csv_temp_path) - 1]
+if strip($temp_path, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+object.property = "fullpath"
+
+time = epoch_ms_to_datetime($date)
+importance = "low"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solidcore"
+event_src.category = "Host security"
+
+
+id = "PT_McAfee_Solidcore_filemonitor_FILE_RENAMED_UPDATE"

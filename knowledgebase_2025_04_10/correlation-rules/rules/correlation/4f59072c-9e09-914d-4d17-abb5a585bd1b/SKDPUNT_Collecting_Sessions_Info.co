@@ -1,0 +1,78 @@
+event View_Session:
+    key:
+        src.ip, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "skdpu_nt"
+        and event_src.vendor == "it_bastion"
+        and id == "PT_IT_Bastion_SKDPU_NT_syslog_view_session"
+        and subject.account.name != object.account.name
+        and filter::CheckWL_Specific_Only("SKDPUNT_Collecting_Sessions_Info", lower(join([subject.account.name, object.account.name, src.ip], "|")))
+    }
+
+rule SKDPUNT_Collecting_Sessions_Info: (View_Session[2,] with different object.account.name) timer 5m
+
+    init {
+        $first_event = true
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on View_Session {
+        if $first_event then
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.id = subject.id
+            $subject.account.session_id = subject.account.session_id
+
+            $object.account.name = object.account.name
+            $object.account.session_id = object.account.session_id            
+
+            $src.host = src.host
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.ip = src.ip
+            $dst.ip = dst.ip
+
+            $logon_auth_method = logon_auth_method
+
+            $datafield5 = datafield5
+
+            $protocol = protocol
+
+            $id = id
+
+            $event_src.ip = event_src.ip
+            $event_src.host = event_src.host
+            $event_src.hostname = event_src.hostname
+            $event_src.subsys = event_src.subsys
+
+            $first_event = false
+        endif
+
+        $accounts = append($accounts, object.account.name)
+
+        $alert.key = lower(join([subject.account.name, object.account.name, src.ip], "|"))
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "info"
+    $object = "account"
+    $status = "success"
+
+    $importance = "low"
+
+    $object.account.name = join($accounts, " | ")
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $object.account.name, $src.ip], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

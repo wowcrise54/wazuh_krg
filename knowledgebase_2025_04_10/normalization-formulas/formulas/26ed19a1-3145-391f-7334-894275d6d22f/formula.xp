@@ -1,0 +1,50 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|}
+        {WORDDASH}{"["?}{object.process.id=NUMBER?}{"]"?}:pam_sss({logon_service=WORDDASH}:auth):
+        received for user {$fullname=UNTIL(":")} {NUMBER} {$reas=REST}'
+
+action = "validate"
+object = "resource"
+status = "failure"
+
+object.type = "password"
+
+reason = strip($reas,"(",")")
+
+if find_substr($fullname,"@") != null then
+    subject.account.name = csv($fullname, "@", "")[0]
+    subject.account.domain = csv($fullname, "@", "")[1]
+else
+    subject.account.name = $fullname
+endif
+
+dst.hostname = $Computer
+dst.ip = event_src.ip
+
+logon_auth_method = switch logon_service
+    case "su-l" "local"
+    case "su" "local"
+    case "sudo" "local"
+    case "sudo-i" "local"
+    case "login" "local"
+    case "remote" "remote"
+    case "lightdm" "local"
+    case "lightdm-greeter" "local"
+    case "sshd" "remote"
+    case "rlogin" "remote"
+    case "rexec" "remote"
+endswitch
+
+importance = "low"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_common_syslog_pam_sss_auth_failure"

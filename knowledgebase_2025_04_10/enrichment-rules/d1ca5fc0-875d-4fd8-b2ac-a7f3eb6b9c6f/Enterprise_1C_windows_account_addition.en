@@ -1,0 +1,39 @@
+query GetAccountData($user_id) from Enterprise_1C_Windows_Accounts {
+    account_id_1c == $user_id
+}
+    qhandler {
+        $1c_name = account_name_1c
+        $win_domain = windows_account_domain
+        $win_name = windows_account_name
+        $win_id = windows_account_id
+    }
+
+event user_action:
+    filter {
+        filter::NotFromCorrelator()
+        and msgid != "_$Session$_.Authentication"
+        and event_src.title == "1c_enterprise"
+        and subject.application.account.id != null
+        and (
+             (
+              subject.account.name == null
+              and subject.account.domain == null
+             )
+             or subject.application.account.name == null
+        )
+        and exec_query("GetAccountData", [subject.application.account.id]) != null
+    }
+
+enrichment Enterprise_1C_windows_account_addition
+    enrich user_action:
+        enrich_fields {
+            $subject_data = exec_query("GetAccountData", [lower(subject.application.account.id)])
+
+            if subject.application.account.name == null then
+                subject.application.account.name = $subject_data["$1c_name"]
+            endif
+
+            subject.account.domain = $subject_data["$win_domain"]
+            subject.account.name = $subject_data["$win_name"]
+            subject.account.id = upper($subject_data["$win_id"])
+        }

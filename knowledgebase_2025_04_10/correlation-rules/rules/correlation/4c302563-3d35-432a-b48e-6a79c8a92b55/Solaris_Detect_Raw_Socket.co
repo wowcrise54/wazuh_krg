@@ -1,0 +1,91 @@
+event Syscall_Exec:
+    key:
+        event_src.host, object.process.id, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "solaris"
+        and event_src.category == "Operating system"
+        and action == "execute"
+        and object == "command"
+        and regex(object.process.fullpath, "^(/usr)?(/local)?/s?bin/(NetworkManager|dhclient|f?ping6?|traceroute6?|(ip|x)tables.*)$", 0) == null
+        and filter::CheckWL_Linux_Process_Creation("Solaris_Detect_Raw_Socket", lower(join([subject.account.name, object.process.fullpath, object.process.cmdline], "|")))
+}
+
+event Syscall_Socket_Raw:
+    key:
+        event_src.host, subject.process.id, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "solaris"
+        and event_src.category == "Operating system"
+        and action == "create"
+        and object == "socket"
+        and (
+            object.domain == "AF_PACKET"
+            or (
+                in_list(["SOCK_RAW", "SOCK_PACKET"], object.type)
+                and in_list(["AF_INET", "AF_INET6"], object.domain)
+            )
+        )
+    }
+
+rule Solaris_Detect_Raw_Socket: (Syscall_Exec and Syscall_Socket_Raw) within 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Syscall_Exec {
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.name = object.process.name
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+
+        $alert.key = lower(join([subject.account.name, object.process.fullpath, object.process.cmdline], "|"))
+    }
+
+    on Syscall_Socket_Raw {
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.group = subject.account.group
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.session_id = subject.account.session_id
+
+        $object.type = object.type
+        $object.domain = object.domain
+
+        $protocol = protocol
+
+        $reason = reason
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "create"
+    $object = "socket"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Non-Application Layer Protocol"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

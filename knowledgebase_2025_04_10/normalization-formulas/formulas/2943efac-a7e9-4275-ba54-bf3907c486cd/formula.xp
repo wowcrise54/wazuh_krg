@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {$subsys=WORDDASH} - - -{STRING?}
+        DHCP server [Transaction ID {WORD}]: Client {dst.mac=WORDDASH} declined IP address {datafield3=IPV4|datafield3=IPV6}.
+        {reason=REST}'
+
+action = "assign"
+object = "ip_address"
+status = "failure"
+
+# datafield3 - declined address
+
+importance = "medium"
+
+event_src.vendor = "kerio_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kerio_control"
+event_src.subsys = lower($subsys) 
+event_src.category = "Network security"
+
+id = "PT_Kerio_Technologies_Kerio_Control_syslog_ip_address_declined"

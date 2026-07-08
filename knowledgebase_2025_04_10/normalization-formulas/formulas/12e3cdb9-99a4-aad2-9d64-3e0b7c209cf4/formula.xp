@@ -1,0 +1,51 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1192"
+       and $event_category == "Trust Access"
+       and $event_type == "Аудит успехов"
+
+action = "update"
+object = "account"
+status = "success"
+
+subformula "message"
+    TEXT = 'Синхронизация учетной информации с Сервером Аутентификации. \n Realm: {datafield3=STRING}\n
+    KDC: {datafield1=STRING}\n Операция: {datafield2=WORD+}.\n Имя пользователя: {$username_with_domain=STRING}'
+    
+    $csv_username = csv($username_with_domain, "\\", "~")
+    object.account.name = $csv_username[1]
+    object.account.domain = $csv_username[0]
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+
+# datafield1 - KDC (Центр распространения ключей)
+# datafield2 - Операция после которой случилась синхронизация с KDC
+# datafield3 - Realm
+
+msgid = $event_id
+importance = "info"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Доверительный доступ" then
+    event_src.subsys = "trust access"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1192_sync_acc_with_auth_server"

@@ -1,0 +1,30 @@
+!TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$Computer=WORDDASH} {event_src.subsys=WORD}:
+        {$level=LITERAL} {UNTIL("]")} <parent meta_opid: {UNTIL(",")} CG:
+        {object.value=UNTIL(">:")} {reason=UNTIL(".")}'
+
+action = "info"
+object = "resource"
+status = "success"
+
+object.type = "attachment"
+object.property = "consistency group"
+
+importance = switch $level
+    case "I" "info"
+    case "W" "low"
+    case "E" "medium"
+    case "F" "high"
+endswitch
+
+event_src.vendor = "nutanix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ahv"
+event_src.category = "Virtualization"
+
+id = "PT_Nutanix_AHV_syslog_cannot_find_attachment"

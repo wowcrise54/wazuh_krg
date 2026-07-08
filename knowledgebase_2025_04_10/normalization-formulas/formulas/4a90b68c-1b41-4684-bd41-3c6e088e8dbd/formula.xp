@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME?}{$Computer=HOSTNAME?}
+        vpndmn: Source=LPARAMS, Local settings has been saved [LPARAMS_MODULE]: file:
+        {object.storage.fullpath=REST}'
+
+action = "modify"
+object = "configuration"
+status = "success"
+
+$path_csv = csv(object.storage.fullpath, "\\", "")
+object.storage.name = $path_csv[length($path_csv) - 1]
+if length($path_csv) > 1 then
+    object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+endif
+
+if time == null then
+    time = recv_time
+endif
+
+importance = "info"
+
+event_src.vendor = "elvis_plus"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zastava"
+event_src.subsys = "vpn-client"
+event_src.category = "VPN"
+
+id = "PT_Elvis_plus_Zastava_syslog_save_local_settings"

@@ -1,0 +1,47 @@
+JSON = 'doc_type = "snmp"'
+
+COND = $flow_id != null and $data != null and $data['tx_time'] != null
+
+action = "detect"
+object = "request"
+status = "success"
+
+object.version = $data['rqs']['ver']
+if $data['rqs']['community'] != null then
+    object.property = "community"
+    object.value = $data['rqs']['community']
+endif
+
+src.ip = coalesce($data['src']['ip'], $data['src']['ip6'])
+src.fqdn = $data['src']['dns']
+src.port = $data['src']['port']
+src.mac = $data['src']['mac']
+src.geo.country = $data['src']['geo']['country']
+src.geo.city = $data['src']['geo']['city']
+src.geo.org = $data['src']['geo']['org']
+src.geo.asn = $data['src']['geo']['asn']
+
+dst.ip = coalesce($data['dst']['ip'], $data['dst']['ip6'])
+dst.fqdn = $data['dst']['dns']
+dst.port = $data['dst']['port']
+dst.mac = $data['dst']['mac']
+dst.geo.country = $data['dst']['geo']['country']
+dst.geo.city = $data['dst']['geo']['city']
+dst.geo.org = $data['dst']['geo']['org']
+dst.geo.asn = $data['dst']['geo']['asn']
+
+protocol = lower($data['proto'])
+protocol.layer7 = "snmp"
+
+datafield2 = $flow_id                   # Идентификатор потока
+datafield3 = $data['rsp']['ver']        # Версия протокола ответа
+datafield4 = $data['rsp']['community']  # Community-string ответа
+
+time = $data['tx_time']
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "nad"
+event_src.category = "DPI"
+
+id = "PT_Positive_Technologies_NAD_filemonitor_snmp"

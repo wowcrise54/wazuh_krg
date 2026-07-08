@@ -1,0 +1,46 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Централизованное управление и мониторинг"
+       and ($event_id == 1191182341
+            or $event_id == 1191182336)
+
+# action differs: connect / disconnect
+object = "session"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение object.type из $event_message
+    TEXT = "Группа сообщений централизованного управления и мониторинга\n\r\n\r
+    {reason='disconnected from'|reason='connected to'} {object.type='security server'}{'\n'?}"
+
+   if find_substr(reason, "disconnected") != null then
+       action = "close"
+   else
+       action = "open"
+   endif
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_host_action"

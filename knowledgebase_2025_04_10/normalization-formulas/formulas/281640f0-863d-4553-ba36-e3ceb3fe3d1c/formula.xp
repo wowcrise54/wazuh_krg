@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$Computer=HOSTNAME} aps: Protection Level:
+        Changed Protection Level from {datafield1=NUMBER} to {object.value=NUMBER}, URL: {REST}'
+
+action = "info"
+object = "system"
+status = "success"
+
+object.property = "Protection level"
+
+reason = "Protection level is changed"
+
+# datafield1 - old protection level
+
+if number(datafield1) > number(object.value) then
+    importance = "medium"
+else
+    importance = "low"
+endif
+
+event_src.title = "pravail_aps"
+event_src.vendor = "arbor_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network security"
+
+id = "PT_Arbor_Networks_Pravail_APS_syslog_changed_protection_lvl"

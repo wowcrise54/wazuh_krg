@@ -1,0 +1,129 @@
+event Exploit_Process:
+    key:
+        event_src.host, object.account.id, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4688"
+        and lower(subject.account.privileges) == "tokenelevationtypelimited"
+        and subject.account.session_id == object.account.session_id
+        and filter::CheckWL_Process_Creation("Subrule_Full_Elevation_Token_Steal", join([lower(subject.account.name), lower(object.process.cmdline)], "|"))
+    }
+
+event Limited_Token_Process_Start:
+    key:
+        event_src.host, object.account.id, object.process.parent.id, object.process.parent.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4688"
+        and lower(subject.account.privileges) == "tokenelevationtypelimited"
+        and subject.account.session_id == "999"
+        and subject.account.session_id != object.account.session_id
+    }
+
+event Full_Token_Process_Start:
+    key:
+        event_src.host, object.account.id, object.process.parent.id, object.process.parent.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4688"
+        and lower(subject.account.privileges) == "tokenelevationtypefull"
+        and subject.account.session_id == "999"
+        and subject.account.session_id != object.account.session_id
+    }
+
+rule Subrule_Full_Elevation_Token_Steal: (Exploit_Process and (Limited_Token_Process_Start and Full_Token_Process_Start) with different object.process.name) within 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Exploit_Process {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.cmdline = object.process.cmdline
+        
+        $subject.process.parent.id = object.process.parent.id
+        $subject.process.parent.name = object.process.parent.name
+        $subject.process.parent.path = object.process.parent.path
+        $subject.process.parent.fullpath = object.process.parent.fullpath
+        $subject.process.parent.cmdline = object.process.parent.cmdline
+        
+        $object.account.session_id = object.account.session_id
+        
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $alert.key = join([lower(subject.account.name), lower(object.process.cmdline)], "|")
+    }
+
+    on Limited_Token_Process_Start {
+        $subject.account.session_id = object.account.session_id
+
+        $datafield4 = object.process.name
+        $datafield5 = object.process.cmdline
+    }
+
+    on Full_Token_Process_Start {
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.chain = object.process.chain 
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+    }
+
+emit {
+    $correlation_type = "subrule"
+    
+
+    if lower($datafield4) == "notepad.exe" and lower($object.process.name) == "taskmanager.exe" then
+        $alert.context = "known tool: Elevator"
+    elif find_substr($object.process.cmdline, "\\\\") != null or find_substr($datafield5, "\\\\") != null then
+        $alert.context = "known tool: Elevator"
+    endif
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Abuse Elevation Control Mechanism: Bypass User Account Control"
+}

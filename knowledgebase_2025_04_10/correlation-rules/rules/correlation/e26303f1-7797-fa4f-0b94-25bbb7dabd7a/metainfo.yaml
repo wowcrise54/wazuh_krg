@@ -1,0 +1,13 @@
+Category:
+EventDescriptions:
+- Criteria: 'correlation_name = "Unix_Systemd_Service_Modify" and subject.account.name = null and action != "create"'
+  LocalizationId: 53686d5a-93a7-40c3-dfee-fdae9ebaa493
+- Criteria: 'correlation_name = "Unix_Systemd_Service_Modify" and subject.account.name = null and action = "create"'
+  LocalizationId: 61539bfb-9b71-0363-20ee-7805d947729a
+- Criteria: 'correlation_name = "Unix_Systemd_Service_Modify" and subject.account.name != null and action != "create"'
+  LocalizationId: 648bdc25-7fa4-9359-bc7a-1bd8a20dd45f
+- Criteria: 'correlation_name = "Unix_Systemd_Service_Modify" and subject.account.name != null and action = "create"'
+  LocalizationId: d75385fd-6392-0b6d-13dc-d9bcb0417f10
+PtkbId: e26303f1-7797-fa4f-0b94-25bbb7dabd7a
+ObjectId: PT-CR-1671
+Origin: PT

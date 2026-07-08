@@ -1,0 +1,70 @@
+event TXTQuery:
+    key:
+    event_src.host, src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "dnsmasq"
+        and object == "request"
+        and action == "send"
+        and object.type == "TXT"
+        and filter::CheckWL_Networking("Dnsmasq_TXT_Query_High_Frequency", lower(src.host))
+    }     
+
+rule Dnsmasq_TXT_Query_High_Frequency: TXTQuery[50,] timer 1m
+
+    init {
+       $labels = "w_auto"
+        
+        $numfield1 = 0 # number of unsuccessful search attempts
+        $first_event = true 
+    }
+
+    on TXTQuery {
+        if $first_event then
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            
+            $alert.key = lower(src.host)
+            $labels = $labels + "|CheckWL_Networking"
+            
+            $first_event = false
+        endif
+        
+        $numfield1 = $numfield1 + 1
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "host"
+    $action = "send"
+    $object = "request"
+    $status = "success"
+    
+    $importance = "low"
+    
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Application Layer Protocol: DNS"
+
+    $alert.context = join([$numfield1, "queries per 1m from", $src.host], " ")
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,190 @@
+event Connection_To_Internet:
+    key:
+        event_src.host, dst.ip, dst.port, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::External_Address(dst.ip)
+        and (
+            (event_src.title == "sysmon" and msgid == "3")
+            or (event_src.title == "windows" and msgid == "5156")
+        )
+        and direction == "egress"
+        and in_list([135, 445, 139], dst.port)
+        and maybe_ipv4(dst.ip) != null
+        and filter::CheckWL_Networking("SMB_RPC_Internet_Connection", join([lower(event_src.host), lower(dst.ip), string(dst.port)], "|"))
+    }
+
+event Connection_From_Internet:
+    key:
+        event_src.host, src.ip, dst.port, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::External_Address(src.ip)
+        and (
+            (event_src.title == "sysmon" and msgid == "3")
+            or (event_src.title == "windows" and msgid == "5156")
+        )
+        and direction == "ingress"
+        and in_list([135, 445, 139], dst.port)
+        and maybe_ipv4(src.ip) != null
+        and filter::CheckWL_Networking("SMB_RPC_Internet_Connection", join([lower(event_src.host), lower(src.ip), string(dst.port)], "|"))
+    }
+
+rule SMB_RPC_Internet_Connection: (Connection_To_Internet or Connection_From_Internet)+ timer 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Networking" 
+    }
+
+    on Connection_To_Internet {
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.fullpath = object.process.guid
+
+        $direction = direction
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([lower(event_src.host), lower(dst.ip), string(dst.port)], "|")
+        $alert.context = "Connection from " + src.host + " to external address " + dst.host + " by " 
+        if (dst.port == 445 or dst.port == 139) then 
+            $reason = "SMB"
+            $alert.context = $alert.context + $reason
+        elif dst.port == 135 then
+            $reason = "RPC"
+            $alert.context = $alert.context + $reason 
+        endif
+    }
+
+    on Connection_From_Internet {
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.fullpath = object.process.guid
+
+        $direction = direction
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $direction = direction
+        
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([lower(event_src.host), lower(src.ip), string(dst.port)], "|")
+        $alert.context = "Connection from external address " + src.host + " to " + dst.host + " by " 
+        if (dst.port == 445 or dst.port == 139) then 
+            $reason = "SMB"
+            $alert.context = $alert.context + $reason
+        elif dst.port == 135 then
+            $reason = "RPC"
+            $alert.context = $alert.context + $reason 
+        endif 
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack" 
+    $category.high = "Initial Access"
+    $category.low = "External Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}
+

@@ -1,0 +1,143 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} 
+        {$Computer=HOSTNAME} 
+        {subject.process.name="php-fpm"}
+        {subject.process.id = NUMBER} - - /
+        {event_src.subsys=UNTIL(":")} 
+        Configuration Change: 
+        {subject.account.name=WORD}@{src.ip=IPV4|src.ip=IPV6} 
+        ({$database=UNTIL(")")}: {$message=REST}'
+
+COND = ((find_substr(lower($message), 'edited') != null 
+            or find_substr(lower($message), 'added') != null 
+            or find_substr(lower($message), 'saved') != null 
+            or find_substr(lower($message), 'applied') != null 
+            or find_substr(lower($message), 'uploaded') != null 
+            or (find_substr(lower($message), 'created') != null  
+        and find_substr(lower($message), 'bridge') != null)) 
+        and find_substr(lower($message), 'successfully') == null 
+        and find_substr(lower($message), 'settings') == null 
+        and find_substr(lower($message), 'configuration') == null)    
+
+subject = "account"
+if (find_substr($message, 'rule') != null) then
+    object = 'rule'
+else
+    object = "configuration"
+endif
+status = "success"
+
+datafield1 = $database # Belonging to the database
+object.state = 'saved/edited' # Real action, need for localisation
+
+if (find_substr($message, 'Captive portal') != null) then    #action for Captive portal
+    if find_substr($message, 'saved') != null then
+        object.state = 'deleted'
+    elif find_substr($message, 'added') != null then
+        object.state = 'added'
+    else
+        object.state = 'edited'
+    endif
+endif
+
+# removing common for all events words from $message
+if find_substr(lower($message), 'saved/edited') != null then
+    $message = strip($message, "saved/edited", '.')
+    $message = strip($message, "Saved/edited a ", null)
+elif find_substr(lower($message), 'edited') != null then
+    $message = strip($message, "edited", '.')
+    $message = strip($message, "Edited ", " edited")
+    $message = strip($message, "a ", null)
+    $message = strip($message, "New/Edited ", " was posted")
+    if ($message == 'IPsec Pre-Shared Keys') then
+        object.state = 'edited'
+    endif
+elif find_substr(lower($message), "saved") != null then
+    $message = strip($message, "Saved ", " saved")
+    $message = strip($message, null, " item")
+    if (find_substr($message, "CRL") != null) then
+        object.name = strip($message, "CRL ", null)
+        $message = "CRL"
+    endif
+elif find_substr(lower($message), 'created') != null then
+    $message = strip($message, null, " created")
+elif find_substr(lower($message), 'uploaded') != null then
+    $message = strip($message, null, " uploaded")
+    object.state = 'uploaded'
+else
+    $message = strip($message, "Added ", " added")
+    action = "create"
+    if ($message == 'IPsec Pre-Shared Keys') then
+        object.state = 'added'
+    endif
+endif 
+
+if (find_substr($message, ' - ') != null) then
+    $message = substr($message, 0, find_substr($message,'-') - 1)
+endif
+
+if (find_substr($message, 'Traffic Shaper') != null) then
+    object.state = 'added'
+    if find_substr(lower($message), 'applied') != null then
+        object.state = 'edited'
+    endif
+    $message = 'Traffic Shaper'
+elif (find_substr($message,'Captive portal') != null) then
+    datafield3 = "Services -> Captive portal"   # Path to object in menu
+    $message = strip($message, 'Captive portal ', null)
+    if find_substr($message, 'file') != null then
+        $message = 'file manager - file'
+        object = "file"
+    endif
+elif (find_substr($message, "OpenVPN") != null) then
+    object.state = 'added'
+    $csv_msg = csv($message, ' ', '*')
+    object.name = $csv_msg[length($csv_msg) - 1]
+    datafield2 = $csv_msg[length($csv_msg) - 2] # [ip/interface]:port of OpenVPN server
+    if (find_substr($message,"specific override") != null) then
+        $message = 'OpenVPN client specific override'
+        object.name = $csv_msg[length($csv_msg) - 2]
+        datafield2 = $csv_msg[length($csv_msg) - 1]     # description
+    else
+        $message = $csv_msg[0] + ' ' + $csv_msg[1]
+    endif
+endif
+
+if (($message == "VLAN interface") or ($message == "IGMP Proxy")) then
+    object.state = 'added'
+endif
+
+if ($message == 'PPPoE Server') then
+    object.state = 'configured'
+endif
+
+object.type = $message
+
+if object.type == "Firewall: Rules" then
+    importance = "medium"
+elif object.state == 'uploaded' then
+    importance =  'info'
+else
+    importance = "low"
+endif
+
+action = switch object.state
+    case "deleted" "remove"
+    case "added" "create"
+    case "configured" "configure"
+    case "edited" "modify"
+    case "saved/edited" "modify"
+    case "uploaded" "upload"
+endswitch 
+
+event_src.title = "php"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Opensource_PHP_syslog_item_edit_add"

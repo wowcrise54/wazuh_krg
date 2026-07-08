@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME} {STRING?}
+        CEF:0|RSA|Security Analytics ESA|10.4|{msgid="Module_esa000049_Alert"}|
+        {reason="File Transfer Using Non Standard Port"}|3|rt={STRING} id={STRING}
+        source={event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}:{REST}'
+
+action = "info"
+object = "alert"
+status = "success"
+
+importance = "low"
+
+event_src.vendor = "rsa"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esa"
+event_src.category = "Network security"
+
+id = "PT_RSA_Security_Analytics_ESA_syslog_use_non_standard_port"

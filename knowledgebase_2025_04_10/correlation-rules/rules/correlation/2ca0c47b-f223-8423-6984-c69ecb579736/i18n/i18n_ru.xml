@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля для устройства ViPNet IDS. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="6288e488-1d40-7b32-fc04-c0525317d0f4">Попытки распыления пароля (password spraying) на узле {event_src.host}. Количество попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="b603e03c-b502-6b89-0938-dcf35f2c046c">Успешное распыление пароля (password spraying) с узла {src.host} на узле {event_src.host}. Подобран пароль для следующих пользователей: {datafield2}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="e4af8351-5fbb-aba9-2296-f7fbc8780052">Успешное распыление пароля (password spraying) с узла {src.host} на узле {event_src.host}. Подобран пароль для пользователя {subject.account.name}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+  </EventDescriptions>
+</Localization>

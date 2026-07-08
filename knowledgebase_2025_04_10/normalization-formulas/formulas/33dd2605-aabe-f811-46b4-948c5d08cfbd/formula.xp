@@ -1,0 +1,32 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "KeyStore"
+
+subject = "account"
+
+action = switch $type
+    case "Create" "create"
+    case "Remove" "remove"
+endswitch
+
+object = "virtual_key"
+status = "success"
+
+subject.account.id = $author
+subject.account.name = $authorPresentation
+
+object.id = $targetId
+object.name = $targetPresentation
+object.type = lower($targetType)
+
+chain_id = $id
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "low"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_KeyStore_Manage"

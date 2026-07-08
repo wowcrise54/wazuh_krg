@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$host=HOSTNAME|}{":"?}
+        #ILO 4{":"?} {$additional_info=STRING+}
+        {logon_service="Virtual Serial Port"} {$event="started"|$event="stopped"} by: {$name=STRING} - 
+        {"::"|src.ip=IPV4|src.ip=IPV6}({$src_hostname_raw=REST}'
+
+subformula "get_real_time"
+    TEXT = '{$month=WORD}/{$day=WORD}/{$year=WORD} {$hour=WORD}:{$min=WORD}'
+    
+    time = $year + "-" + $month + "-" + $day + "T" + $hour + ":" + $min + ":00"
+endsubformula 
+        
+subject = "account"
+
+action = switch $event
+   case "started" "open"
+   case "stopped" "close"
+endswitch
+
+object = "session"
+status = "success"
+
+subject.account.name = lower($name)
+
+# Deleting the final character
+$src_hostname_raw = strip($src_hostname_raw, "", "\\u0000")
+
+if $src_hostname_raw != "DNS name not found)." then
+    src.hostname = strip($src_hostname_raw, "", ").")
+endif
+
+dst.ip = event_src.ip
+dst.hostname = lower($host)
+
+logon_auth_method = "remote"
+logon_service = lower(logon_service)
+
+if find_substr($additional_info, ":") != null then
+    submessage("TEXT", "get_real_time", $additional_info)
+endif
+
+importance = "info"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "ilo"
+event_src.hostname = lower($host)
+event_src.category = "Server management"
+
+id = "PT_Hewlett_Packard_Enterprise_iLO_syslog_virtual_serial_port_start_stop"

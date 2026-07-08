@@ -1,0 +1,186 @@
+event Access_Shares: 
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and lower(object.path) == "\\ipc$\\"
+        and not filter::Loopback_Address(src.ip)
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and subject.account.privileges == "%%4416\r\n\t\t\t\t%%4417"
+        and in_list(["netdfs", "efsrpc", "lsarpc", "spoolss", "fssagentrpc", "samr", "lsass", "netlogon"], lower(object.storage.name)) # Добавлены "samr", "lsass", "netlogon" (для PetitPotam)
+    }
+
+event Access_Msftewds: 
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and lower(object.path) == "\\ipc$\\"
+        and not filter::Loopback_Address(src.ip)
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and find_substr(subject.account.privileges, "%%4416\r\n\t\t\t\t%%4417") != null
+        and lower(object.storage.name) == "msftewds"
+    }
+
+event Attacker_Server: # Подключение атакующего к cерверу
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["3", "5156"], msgid)
+        and in_list(["sysmon", "windows"], event_src.title)
+        and dst.port == 445
+        and lower(object.process.name) == "system"
+        and object.process.id == "4"
+        and direction == "ingress" 
+    }
+
+rule Subrule_Coerce_Auth: ((Access_Shares[1,] or Access_Msftewds[1,]) and Attacker_Server[1,]) timer 90s
+
+    on Access_Shares {
+    
+        if $count_total_access == null then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.asset = src.asset
+            
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            
+            $alert.key = lower(join([event_src.host, subject.account.id, src.ip, object.storage.name], "|"))
+        endif
+
+        $count_total_access = $count_total_access + 1
+        
+        if not in_list($shares, lower(object.storage.name)) then
+            $shares = append($shares, lower(object.storage.name))
+        endif
+    }
+
+    on Access_Msftewds {
+    
+        if $count_total_access == null then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.asset = src.asset
+            
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            
+            $alert.key = lower(join([event_src.host, subject.account.id, src.ip, object.storage.name], "|"))
+        endif
+
+        $count_total_access = $count_total_access + 1
+        
+        if not in_list($shares, lower(object.storage.name)) then
+            $shares = append($shares, lower(object.storage.name))
+        endif
+    }
+    
+    on Attacker_Server {
+    
+        if $count_total_to_server == null then
+            $object.process.name = object.process.name
+            $object.process.id = object.process.id
+            $object.process.guid = object.process.guid
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+        endif
+        
+        $count_total_to_server = $count_total_to_server + 1
+        
+        # Может помочь для отлова потенциальных фолзов или чего-то необычного (to_server должен содержать один адрес, иначе фолз)
+        if not in_list($to_server, lower(src.host)) then
+            $to_server = append($to_server, lower(src.host))
+        endif
+    }
+
+emit {
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $correlation_type = "subrule"
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Forced Authentication" 
+    
+    # Определение техники
+    if in_list($shares, "netdfs") then
+        $technic = append($technic, "MS-DFSNM abuse (DFSCoerce)")
+    endif
+    if in_list($shares, "fssagentrpc") then
+        $technic = append($technic, "MS-FSRVP abuse (ShadowCoerce)")
+    endif
+    if in_list($shares, "spoolss") then
+        $technic = append($technic, "MS-RPRN abuse (PrinterBug)")
+    endif
+    if in_list($shares, "efsrpc") or in_list($shares, "lsarpc") or in_list($shares, "samr") or in_list($shares, "lsass") or in_list($shares, "netlogon")  then
+        $technic = append($technic, "MS-EFSR abuse (PetitPotam)")
+    endif
+    if in_list($shares, "msftewds") then
+        $technic = append($technic, "MS-WSP abuse (WSPCoerce)")
+    endif
+    # Определение возможного инструмента
+    if length($shares) == 1 then
+        $tool = switch $shares[0]
+            case "netdfs" "DFSCoerce"
+            case "fssagentrpc" "ShadowCoerce"
+            case "spoolss" "PrinterBug exploit"
+            case "msftewds" "WSPCoerce"
+        endswitch
+        if $tool == null then 
+            $tool = "PetitPotam"
+        endif
+    else
+        # В PetitPotam не используется netdfs и spoolss, поэтому упрощенное условие:
+        if not in_list($shares, "netdfs") and not in_list($shares, "spoolss") then
+            $tool = "PetitPotam"
+        else
+            $tool = "Coercer"
+        endif
+    endif
+    
+    # В reason - техника, в datafield8 - предположительный инструмент атаки
+    $reason = join($technic, ", ")
+    $datafield8 = $tool
+
+    # Небольшая визуализация с полезной информацией об атаке
+    $datafield6 = "pipe(s):" + join($shares, "|") + " | total access attempts:" + string($count_total_access)
+    $datafield7 = "attackers host(s):" + join($to_server, "|") + " | total connections to server:" + string($count_total_to_server)
+}

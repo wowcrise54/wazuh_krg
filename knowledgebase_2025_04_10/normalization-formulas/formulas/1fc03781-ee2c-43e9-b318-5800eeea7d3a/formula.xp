@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {msgid="CISE_Administrative_and_Operational_Audit"}
+        {NUMBER+} 0 {UNTIL(" NOTICE ")}System-Management: Started CRL/OCSP periodic certificate check {$kv=KEYVALUE}'
+
+action = "start"
+object = "check"
+status = "success"
+
+object.property = "certificates"
+object.value = "CRL/OCSP"
+
+importance = "info"
+
+event_src.title = "ise"
+event_src.vendor = "cisco"
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_Administrative_and_Operational_Audit_check_certificate_success"

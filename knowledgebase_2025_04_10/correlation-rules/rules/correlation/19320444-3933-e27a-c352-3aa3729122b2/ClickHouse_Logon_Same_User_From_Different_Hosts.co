@@ -1,0 +1,71 @@
+event Same_User_Login:
+    key:
+        event_src.host, subject.account.name, status
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "clickhouse"
+        and category.high == "Access Management"
+        and category.low == "Communication"
+        and src.host != null
+        and filter::CheckWL_Specific_Only("ClickHouse_Logon_Same_User_From_Different_Hosts", lower(subject.account.name))
+    }
+
+rule ClickHouse_Logon_Same_User_From_Different_Hosts: (Same_User_Login[3,] with different src.host) timer 30m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $first_event = true
+    }
+
+    on Same_User_Login {
+        if $first_event then
+            $status = status
+
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.privileges = subject.account.privileges
+    
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+            
+            $protocol = protocol
+            $logon_service = logon_service
+
+            $datafield1 = datafield1  # Тип аутентификации
+            $datafield2 = datafield2  # Различные применяемые настройки на пользователей и роли
+
+            $event_src.host = event_src.host
+            $event_src.title = event_src.title
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.ip = event_src.ip
+
+            $alert.key = lower(subject.account.name)
+
+            $first_event = false 
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "application"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Valid Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising" 
+    $incident.aggregation.timeout = 2h
+}

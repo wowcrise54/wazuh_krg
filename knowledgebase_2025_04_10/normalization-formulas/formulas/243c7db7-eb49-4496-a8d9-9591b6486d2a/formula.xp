@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER}: {"default"?}
+        {$tmp_subsys="AAA"} Message {NUMBER+} :"In update_aaa_cntr: Failed policy for user
+        {$user=STRING*} = {object.name=UNTIL("\\"")}'
+
+subject = "application"
+action = "info"
+object = "policy"
+status = "success"
+
+# datafield2 - account name
+# datafield6 - account domain
+if find_substr($user, "\\") != null then
+    datafield2 = csv($user, "\\", "")[1]
+    datafield6 = csv($user, "\\", "")[0]
+elif find_substr($user, "@") != null then
+    datafield2 = csv($user, "@", "")[0]
+    datafield6 = csv($user, "@", "")[1]
+else
+    datafield2 = $user
+endif
+
+time = $sys_time
+msgid = "AAA Message failed policy"
+importance = "low"
+
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "netscaler"
+event_src.category = "Terminal services"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Citrix_NetScaler_syslog_aaa_message_failed_policy"

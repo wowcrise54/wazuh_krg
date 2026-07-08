@@ -1,0 +1,81 @@
+!TABULAR = "Date,
+            Time,
+            clientip,
+            Clienthostname,
+            Serverhostname,
+            serverIP,
+            {datafield1 = RecipientAddress},
+            {msgid = EventID},
+            {object.id = MSGID},
+            NumberRecipients,
+            Encryption,
+            {object.value = SenderAddress}
+            "
+
+!COND = ($EventID) == "1041"
+
+subject = "application"
+action = "backup"
+object = "message"
+status = "success"
+
+#########################
+###Преобразование времени
+submessage ("TEXT", "parse_date", $Date)
+submessage ("TEXT", "parse_time", $Time)
+
+subformula "parse_date"
+  !TEXT = "{$y=NUMBER}-{$m=NUMBER}-{$d=NUMBER}"
+endsubformula
+
+subformula "parse_time"
+  !TEXT = "{$h=NUMBER}:{$min=NUMBER}:{$sec=NUMBER} {REST}"
+endsubformula
+
+if length(string($m))==1 then
+    $m = "0"+string($m)
+endif
+
+if length(string($d))==1 then
+    $d = "0"+string($d)
+endif
+
+if length(string($h))==1 then
+    $h = "0"+string($h)
+endif
+
+if length(string($min))==1 then
+    $min = "0"+string($min)
+endif
+
+if length(string($sec))==1 then
+    $sec = "0"+string($sec)
+endif
+
+time = string($y)+'-'+string($m)+'-'+string($d)+' '+string($h)+':'+string($min)+':'+string($sec)
+#########################
+#########################
+
+subject.name = "Intelligent Message Filtering"
+object.property = "sender"
+
+src.ip = maybe_ipv4($clientip)
+if $Clienthostname != "-" then
+    src.hostname = lower($Clienthostname)
+endif
+dst.ip = maybe_ipv4($serverIP)
+if $Serverhostname != "-" then
+    dst.hostname = lower($Serverhostname)
+endif
+
+reason = "Message archived"
+
+importance = "low"
+
+event_src.ip = dst.ip
+event_src.hostname = lower(dst.hostname)
+event_src.title = "exchange"
+event_src.vendor = "microsoft"
+event_src.category = "Mail server"
+
+id = "PT_Microsoft_Exchange_2003_filemonitor_Archived_Message"

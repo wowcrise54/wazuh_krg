@@ -1,0 +1,90 @@
+event Insecure_ACL_Assign:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "yandex_cloud"
+        and event_src.subsys == "network"
+        and action == "modify"
+        and object == "network"
+        and status == "success"
+        and in_list(["CreateSecurityGroup", "UpdateSecurityGroup"], msgid)
+        and regex(coalesce(object.new_value, object.value), "(?i)direction:\s+ingress[^\|]+cidr\s+blocks:\s+0\.0\.0\.0\/0", 0) != null
+        and filter::CheckWL_Specific_Only("Yandex_Cloud_Security_Group_Insecure_ACL_Assign", lower(join([src.ip, object.storage.fullpath, object.name, datafield5], "|"))) 
+    }
+
+rule Yandex_Cloud_Security_Group_Insecure_ACL_Assign: Insecure_ACL_Assign
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Insecure_ACL_Assign {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+
+        $subject.process.meta = subject.process.meta
+
+        $subject.state = subject.state
+        $subject.type = subject.type
+
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.new_value = object.new_value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $logon_auth_method = logon_auth_method
+
+        $datafield1 = datafield1  # Наименование организации
+        $datafield2 = datafield2  # Наименование облака
+        $datafield3 = datafield3  # Наименование каталога
+        $datafield4 = datafield4  # Идентификатор группы безопасности
+        $datafield5 = datafield5  # Наименование группы безопасности
+
+        $chain_id = chain_id
+
+        $alert.key = lower(join([src.ip, object.storage.fullpath, object.name, datafield5], "|"))
+        $alert.regex_match = regex(coalesce(object.new_value, object.value), "(?i)direction:\s+ingress[^\|]+cidr\s+blocks:\s+0\.0\.0\.0\/0", 0)
+        $alert.context = lower(join(remove([subject.account.name, src.ip, object.storage.fullpath, $alert.regex_match, object.name, datafield5], null), " | "))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "network"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Valid Accounts: Cloud Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id, $object.storage.fullpath, $object.name, $datafield5], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,109 @@
+query IsAddressWhitelisted($asset, $host, $user, $address) from SupplyChain_Gitlab_Subnets_Whitelist {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == "*"
+         and column::event_src_host == $host
+     )
+    )
+    and (column::user_id == $user or column::user_id == "*")
+    and in_subnet($address, column::subnet)
+}
+
+query GetUserInfo($userid) from SupplyChain_Gitlab_User_Roles_AssetGrid {
+    column::userid == $userid
+}
+    qhandler {
+        $login = column::login
+        $userid = column::userid
+     }
+
+query IsUserInAssignees($asset, $host, $user_id) from SupplyChain_Merge_Assignees {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::user_id == $user_id
+}
+
+query GetRecordTime($asset, $host, $user_id, $src_host) from SupplyChain_Gitlab_User_Roles_And_Addresses {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::user_id == $user_id
+    and column::src_host == $src_host
+}
+
+
+event Login:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::Login_except_Windows()
+        and event_src.title == "gitlab"
+        and object == "application"
+        and status == "success"
+        and object.type != "repository"
+        and logon_service != "two-factor"
+        and subject.account.id != null
+        and not filter::Loopback_Address(src.ip)
+        and not exec_query("IsAddressWhitelisted", [event_src.asset, event_src.host, subject.account.id, src.ip])
+    }
+
+
+enrichment SupplyChain_First_Login
+    enrich Login:
+
+        enrich_fields {
+            # TL SupplyChain_Gitlab_User_Roles_AssetGrid
+            $tl_data = exec_query("GetUserInfo", [subject.account.id])
+            $is_user_has_role = bool($tl_data["$userid"])
+
+            $user_id = number(subject.account.id)
+
+            if not $is_user_has_role then
+                # TL SupplyChain_Merge_Assignees
+                $is_user_in_assignees = exec_query("IsUserInAssignees", [event_src.asset,event_src.host, $user_id])
+            endif
+
+            if in_list([$is_user_has_role, $is_user_in_assignees], true) then
+                # TL SupplyChain_Gitlab_User_Roles_And_Addresses
+                $last_changed = select_query_first("GetRecordTime", [event_src.asset,
+                                                                     event_src.host,
+                                                                     $user_id,
+                                                                     src.host
+                                                                    ], "_last_changed")
+
+                if not bool($last_changed) then
+                    $insert_into_user_roles_and_addresses_tl = true
+
+                    if subject.account.name == null then
+                        subject.account.name = lower($tl_data["$login"])
+                    endif
+
+                    if datafield18 == null then
+                        datafield18 = "new login address"
+                    endif
+                else
+                    $ttl_tl = 2592000  # Default value is 30 days
+
+                    if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then  # If record older than ttl/2
+                        $insert_into_user_roles_and_addresses_tl = true
+                    endif
+                endif
+            endif
+        }
+
+        insert_into SupplyChain_Gitlab_User_Roles_And_Addresses if $insert_into_user_roles_and_addresses_tl {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::user_id = $user_id
+            column::user = lower(subject.account.name)
+            column::src_host = src.host
+        }

@@ -1,0 +1,41 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="dhcpd"}[{NUMBER}]: msg_id="{msgid="1600-0066"}"
+         DHCPREQUEST for {assigned_src_ip=IPV4} {"("?}{event_src.ip=IPV4|event_src.ip=IPV6|}{")"?}
+         from {src.mac=MACADDR} {"("?}{"Hostname Unsuitable for Printing"|src.hostname=HOSTNAME|}{")"?}
+         via {$temp_1=STRING} {$reas=REST}'
+
+action = "assign"
+object = "ip_address"
+if length($reas) == 0 then
+    status = "ongoing"
+else
+    status = "failure"
+    reason = $reas
+endif
+
+protocol = "DHCP"
+
+$temp = strip($temp_1, '', ':')
+
+if maybe_ipv4($temp) == null then
+    interface = $temp
+else
+    datafield4 = $temp
+endif
+
+# datafield4 - relay address
+
+importance = "info"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_16000066_DHCPrequest_message"

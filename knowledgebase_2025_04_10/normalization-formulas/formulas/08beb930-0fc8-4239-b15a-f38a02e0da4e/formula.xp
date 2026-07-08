@@ -1,0 +1,39 @@
+TABULAR = '{time=result_time_stamp},
+          key_path,
+          {datafield4=job_name},
+          job_id,
+          status'
+
+action = switch $status
+  case "added" "create"
+  case "modified" "modify"
+  case "deleted" "remove"
+endswitch
+object = "resource"
+status = "success"
+
+object.type = "registry key"
+object.path = upper($key_path)
+if $result_value != null then
+    object.property = "new value"
+    object.value = $result_value
+endif
+
+if $hostname != "" then
+    src.hostname = $hostname
+endif
+if $ip_address != "" then
+    src.ip = $ip_address
+endif
+
+datafield3 = $job_id                    # task id
+# datafield4                            # task name
+datafield8 = $etalon_value              # etalon checksum
+
+importance = "info"
+
+event_src.vendor = "altx_soft"
+event_src.title = "redcheck"
+event_src.category = "Host security"
+
+id = "PT_Altx_Soft_RedCheck_odbc_Registry_control"

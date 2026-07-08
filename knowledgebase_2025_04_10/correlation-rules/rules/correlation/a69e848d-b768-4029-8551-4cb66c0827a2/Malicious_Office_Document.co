@@ -1,0 +1,200 @@
+event Unusual_Child_Process:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows("*.exe")
+        and in_list(["winword.exe", "excel.exe", "powerpnt.exe", "visio.exe", "mspub.exe", "eqnedt32.exe", "outlook.exe", "acrord32.exe"], lower(object.process.parent.name))
+        and not in_list(["winword.exe",
+                         "excel.exe",
+                         "powerpnt.exe",
+                         "eqnedt32.exe",
+                         "outlook.exe",
+                         "msosync.exe",
+                         "chrome.exe",
+                         "firefox.exe",
+                         "msedge.exe",
+                         "launcher.exe", # opera browser
+                         "browser.exe",  # yandex browser
+                         "acrord32.exe",
+                         "acrobat.exe",
+                         "rdrcef.exe",
+                         "adobearm.exe",
+                         "splwow64.exe",
+                         "visio.exe"
+                ], lower(object.process.name))
+        and lower(object.process.parent.name) != lower(object.process.name)
+        and filter::CheckWL_Process_Creation("Malicious_Office_Document", lower(join([object.process.parent.name, object.process.fullpath], "|")))
+    }
+
+event Network_Connection_SMB:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                event_src.title == "windows"
+                and msgid == "5156"
+            ) or (
+                event_src.title == "sysmon"
+                and msgid == "3"
+            )
+        )
+        and dst.port == 445
+        and in_list(["winword.exe", "excel.exe", "powerpnt.exe", "visio.exe", "mspub.exe", "eqnedt32.exe", "outlook.exe"], lower(object.process.name))
+        and filter::CheckWL_Networking("Malicious_Office_Document", lower(join([object.process.name, dst.ip, string(dst.port)], "|")))
+    }
+
+rule Malicious_Office_Document: Unusual_Child_Process or Network_Connection_SMB
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Unusual_Child_Process {
+        $subject = subject  # account
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = regex(lower(object.process.parent.cmdline), "\\\\.+\\\\((.+)\.[a-z]{3,4})", 1)  # имя файла с макросом
+        $object.fullpath = regex(lower(object.process.parent.cmdline), "\.exe.*?\"([a-z]:\\\\.*?\.[a-z]{3,4})\\\\?\"", 1)  # полный путь до файла
+        $object.path = strip($object.fullpath, "", $object.name)
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([object.process.parent.name, object.process.fullpath], "|"))
+        $alert.context = subject.account.name + " | " + object.process.cmdline
+
+        if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+            $reason = "Service execution"
+        elif $object.process.parent.name == "scheduler.exe" then
+            $reason = "Task execution"
+        else
+            $reason = "User execution"
+        endif
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Network_Connection_SMB {
+        $subject = subject  # rule
+        $action = action  # detect
+        $object = object  # connection
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+
+        $object.property = object.property
+        $object.value = object.value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $direction = direction
+        $protocol = protocol
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $reason = "SMB Connection"
+
+        $alert.key = lower(join([object.process.name, dst.ip, string(dst.port)], "|"))
+        $alert.context = subject.account.name
+
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+emit {
+    if $reason == "SMB Connection" then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Phishing: Spearphishing Attachment"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, lower($object.process.name)], "|")
+    $incident.severity = $importance
+    $incident.category = "Phishing"
+    $incident.aggregation.timeout = 2h
+}

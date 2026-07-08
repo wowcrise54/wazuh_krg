@@ -1,0 +1,51 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           {subject.domain=user_domain},
+           {subject.name=user_name}
+           "
+
+COND = string($event_id) == "1050"
+       and (
+        $event_category == "Замкнутая программная среда"
+        or $event_category == "Application execution control"
+       )
+       and (
+        $event_type == "Failure Audit"
+        or $event_type == "Аудит отказов"
+        or $event_type == "Audit failure"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "start"
+object = "application"
+status = "failure"
+
+subformula "message"
+    TEXT = '{"Запрет запуска программы"|"Program start prohibition"}. {"Имя программы"|
+            "Program name"}: {object.name=STRING+} {"Процесс"|"Process"}: {STRING+?}
+            {"Причины отказа"|"Deny reason"}: {reason=REST}'
+endsubformula
+
+msgid = $event_id
+importance = "high"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Замкнутая программная среда" then
+    event_src.subsys = "application execution control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1050_program_startup_blocked"

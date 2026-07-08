@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Изменение обоев рабочего стола от имени одного из процессов: reg.exe, powershell.exe, powershell_ise.exe, pwsh.exe, rundll32.exe, regsvr32.exe, msiexec.exe, dllhost.exe, wscript.exe. Некоторые криптолокеры, например Rhysida, выполняют подобные действия (с помощью reg.exe), после чего устанавливают запрет на смену обоев с требованиями злоумышленников</Description>
+  <EventDescriptions>
+    <EventDescription id="98566b6c-0902-aaf4-0181-cb9beb3eb537">Пользователь {subject.account.name} изменил обои рабочего стола путем изменения реестра на узле {event_src.host}. Это может свидетельствовать об активности криптолокера</EventDescription>
+  </EventDescriptions>
+</Localization>

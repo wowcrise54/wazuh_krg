@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} Warning {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} 
+{NUMBER}*|{NUMBER}*|{subject.account.name=UNTIL("*|")}{$user_type=WORD+}*|FC_Manage*|{DATETIME}*|User logout*|
+{$temp_status="Success"|$temp_status="Fail"}*|{msgid="User logout"}{REST}'
+
+subject = "account"
+action = "logout"
+object = "application"
+
+if $temp_status == "Success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+if $user_type == "Local User"
+    or $user_type == "Interface interconnection User" then
+    subject.account.provider = "local"
+elif $user_type == "Domain User" then
+    subject.account.provider = "domain"
+else
+    subject.account.provider = "unknown"
+endif
+
+importance = "medium"
+
+category.high = "Access Management"
+category.generic = "Application"
+category.low = "Communication"
+
+event_src.vendor = "huawei"
+event_src.title = "fusioncompute"
+event_src.category = "Virtualization"
+
+id = "PT_Huawei_FusionCompute_syslog_user_logout"

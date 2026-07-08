@@ -1,0 +1,27 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}integration|{NUMBER}|cat=System:Configuration
+        {$kv=KEYVALUE(" ", "=", "\\"")}'
+          
+COND = $kv["act"] == "integration_smtp_on"
+       or $kv["act"] == "integration_smtp_off"
+           
+subject = "account"
+if $kv["act"] == "integration_smtp_on" then
+    action = "enable"
+elif $kv["act"] == "integration_smtp_off" then
+    action = "disable"
+endif    
+object = "service"
+status = "success"
+
+subject.account.name = $kv["suser"]
+
+time = recv_time  
+msgid = $kv["act"]
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_cef_smtp_activate"

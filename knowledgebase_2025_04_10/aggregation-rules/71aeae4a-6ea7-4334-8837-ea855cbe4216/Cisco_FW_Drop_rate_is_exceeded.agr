@@ -1,0 +1,8 @@
+event Drop_rate_is_exceeded:
+    key:
+        event_src.host, action, object, status, importance, category.generic, category.high, category.low,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Cisco_ASA_FWSM_PIX_syslog_733100_Drop_rate_is_exceeded"
+
+aggregate Cisco_FW_Drop_rate_is_exceeded: Drop_rate_is_exceeded[3,100] within 10m

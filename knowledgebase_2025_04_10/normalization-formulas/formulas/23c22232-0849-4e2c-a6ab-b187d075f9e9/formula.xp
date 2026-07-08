@@ -1,0 +1,21 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4} {event_src.hostname=HOSTNAME}
+        - {'Log'|'Alert'} [Fields@{STRING} UUid={STRING} description=\"{object.type=UNTIL('\"')} status=\"Finished\" {$kv=REST}"
+
+$kv = keyvalue($kv, ' ', '=', '\"')
+
+action = "download"
+object = "update"
+status = "failure"
+
+object.version = $kv["version"]
+
+reason = $kv["comment"]
+
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_SGM_Update_finish_not_found"

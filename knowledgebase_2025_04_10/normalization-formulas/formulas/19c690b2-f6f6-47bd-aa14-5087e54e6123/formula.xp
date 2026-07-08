@@ -1,0 +1,44 @@
+TEXT = '<{NUMBER}>[{time=DATETIME}]FW:CONN: prio={$prio=NUMBER} id={NUMBER} rev={NUMBER} event={msgid="conn_open"|
+        msgid="conn_close"|msgid="conn_close_natsat"|msgid="conn_open_natsat"} {"action=close"?}
+        {$kv=KEYVALUE(" ", "=", "")}'
+
+subject = "rule"
+action = if msgid == "conn_open" then "create" else "remove" endif
+object = "conntrack"
+status = "success"
+
+subject.name = $kv['rule']
+
+object.type = "nat"
+
+src.ip = $kv['connsrcip']
+src.port = $kv['connsrcport']
+
+dst.ip = $kv['conndestip']
+dst.port = $kv['conndestport']
+
+protocol = $kv['connipproto']
+
+assigned_src_ip = $kv['connnewsrcip']
+assigned_src_port = $kv['connnewsrcport']
+assigned_dst_ip = $kv['connnewdestip']
+assigned_dst_port = $kv['connnewdestport']
+
+datafield2 = $kv['connrecvif']  # ingress interface
+datafield4 = $kv['conndestif']  # egress interface
+
+importance = switch $prio
+    case 3 "high"
+    case 2 "medium"
+    case 1 "low"
+endswitch
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+event_src.title = "dfl-1660"
+event_src.vendor = "d-link"
+event_src.category = "Firewall"
+
+id = "PT_D_Link_DFL_1660_syslog_conn_open_close"

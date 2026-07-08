@@ -1,0 +1,259 @@
+/* -----------------------------------------------------------------------------
+  Component: Navigation bar
+
+  Style for the menu with links that are external to the documentation (the
+  menu in the top bar).
+----------------------------------------------------------------------------- */
+
+
+header {
+
+  #menu-top-right-corner {
+    margin-left: 10px;
+    li:last-of-type {
+      margin-right: 0;
+    }
+  }
+
+  .navbar-nav .nav-item {
+    .nav-link {
+      display: inline;
+      padding: 24px 10px;
+      font-weight: 500;
+    }
+    &.install,
+    &.login {
+      flex-grow: 0;
+      .nav-link {
+        display: flex;
+        align-items: center;
+      }
+    }
+    &.login {
+      svg {
+        transition: all .3s ease-out;
+        width: 13px;
+        height: 19px;
+      }
+      .nav-link {
+        height: 30px;
+        padding: 0 20px;
+        transition: all .3s ease-out;
+        // @include media-only(xl,wzh-xl) {
+        //   width: 111.5px;
+        // }
+        @include media-only(xl,xxl) {
+          width: 107px;
+        }
+        @include media-min(xxl) {
+          width: 112.1px;
+        }
+        &:hover,
+        &:focus {
+          border-color: $light-color-primary-lighter;
+          background-color: $light-color-primary-lighter;
+          color: #fff;
+          svg {
+            fill: #fff;
+          }
+        }
+        span {
+          transition: all .3s ease-out;
+          margin-left: 7px;
+        }
+      }
+    }
+    &.install {
+      .nav-link {
+        @include media-only(lg,xl) {
+          width: 160px;
+        }
+        @include media-min(xl) {
+          width: 180px;
+        }
+      }
+    }
+  }
+}
+
+.navbar-nav {
+  .nav-item {
+    .show {
+      svg {
+        transform: rotate(180deg);
+      }
+    }
+    svg {
+      width: 12px;
+      height: 12px;
+      transform: rotate(0);
+      position: relative;
+      @include media-max(lg) {
+        left: 8px;
+        bottom: -1px;
+      }
+    }
+  }
+
+  .nav-link {
+    padding: 0 10px;
+    font-size: 17px;
+    @include media-only(xl,wzh-xl) {
+      font-size: 15px;
+    }
+    @include media-only(wzh-xl,xxl) {
+      font-size: 16px;
+    }
+    &:hover,
+    &:focus {
+      text-decoration: none;
+      outline: none;
+    }
+    a:focus-visible {
+      text-decoration: underline;
+    }
+    &:active {
+      font-weight: 400;
+    }
+    &.dropdown-toggle {
+      padding-right: 27px;
+      &[aria-expanded="true"] {
+        text-decoration: none;
+      }
+      &::after {
+        content: none;
+      }
+    }
+  }
+  .dropdown-menu {
+    min-width: 100%;
+    padding: 20px;
+    margin-top: 0;
+    border: 1px solid;
+    border-radius: 10px;
+    position: absolute;
+    top: -4px!important;
+    &::before {
+      position: absolute;
+      top: -9px;
+      width: 18px;
+      height: 18px;
+      content: "";
+      border-top: 1px solid;
+      border-left: 1px solid;
+      transform: rotate(45deg);
+      clip-path: inset(-15px 0 0 -15px);
+    }
+    .nav-item {
+      @include media-min(xl) {
+        margin-bottom: 29px;
+      }
+      &:last-of-type {
+        margin-bottom: 0;
+      }
+    }
+    .dropdown-item {
+      padding: 0;
+      font-size: 17px;
+      font-weight: 500;
+      @include media-only(xl,wzh-xl) {
+        font-size: 15px;
+      }
+      @include media-only(wzh-xl,xxl) {
+        font-size: 16px;
+      }
+      &:hover {
+        text-decoration: none;
+      }
+    }
+  }
+}
+
+/* Light theme -------------------------------------------------------------- */
+
+.light-theme {
+  .navbar-nav {
+    .login {
+      .nav-link {
+        border-color: $light-color-primary;
+      }
+    }
+    .nav-link {
+      color: $light-color-main-text-extra;
+      &.active,
+      &:hover,
+      &:focus,
+      &:focus-visible {
+        color: $light-color-primary;
+        box-shadow: none;
+      }
+      &.dropdown-toggle {
+        &[aria-expanded="true"],
+        &:hover {
+          svg {
+            fill: $light-color-primary;
+          }
+        }
+        svg {
+          fill: $light-color-main-text-extra;
+        }
+      }
+    }
+    .dropdown-menu {
+      background-color: $light-color-base-space;
+      border-color: $light-color-primary-lighter;
+      &::before {
+        background-color: $light-color-base-space;
+        border-color: $light-color-primary-lighter;
+      }
+      .dropdown-item {
+        color: $light-color-main-text-extra;
+        &:hover {
+          color: $light-color-primary;
+          background-color: $light-color-base-space;
+        }
+      }
+    }
+  }
+}
+
+/* Dark- theme -------------------------------------------------------------- */
+
+.dark-theme {
+  .navbar-nav {
+    .nav-link {
+      color: $dark-color-main-text;
+      &.active,
+      &:hover,
+      &:focus {
+        color: $dark-color-primary;
+      }
+      &.dropdown-toggle {
+        &[aria-expanded="true"],
+        &:hover {
+          svg {
+            fill: $dark-color-primary;
+          }
+        }
+        svg {
+          fill: $dark-color-main-text;
+        }
+      }
+    }
+    .dropdown-menu {
+      background-color: $dark-color-index-header-background;
+      border-color: $dark-color-primary-lighter;
+      &::before {
+        background-color: $dark-color-index-header-background;
+        border-color: $dark-color-primary-lighter;
+      }
+      .dropdown-item {
+        color: $dark-color-main-text;
+        &:hover {
+          color: $dark-color-primary;
+          background-color: $dark-color-index-header-background;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,88 @@
+TABULAR = "{subject.account.name=user_name},
+           subsystem,
+           action,
+           status"
+
+COND = in_list([20090, 20091, 30090, 30091, 60090], $action)
+
+$kv = keyvalue($data, ' ', '=', '"')
+
+subject = "account"
+object = "configuration"
+
+switch $action
+    case 20090
+        action = "modify"
+
+        object.type = "update restrictions for group"
+        object.property = "group ID"
+        object.value = $kv['"GID"']
+
+        importance = "low"
+    case 20091
+        action = "remove"
+
+        object.type = "update restrictions for group"
+        object.property = "group ID"
+        object.value = $kv['"GID"']
+
+        importance = "medium"
+    case 30090
+        action = "modify"
+
+        object.type = "update restrictions for station"
+        object.property = "station ID"
+        object.value = $kv['"SID"']
+
+        importance = "low"
+    case 30091
+        action = "remove"
+
+        object.type = "update restrictions for station"
+        object.property = "station ID"
+        object.value = $kv['"SID"']
+
+        importance = "medium"
+    case 60090
+        action = "modify"
+
+        object.type = "update restrictions for policy"
+        object.property = "policy ID"
+        object.value = $kv['"PID"']
+
+        importance = "low"
+endswitch
+
+if $status == "success" then
+    status = "success"
+elif $status == "failure" then
+    status = "failure"
+else
+    drop
+endif
+
+if $src_host != "" then
+    submessage("TEXT", "get_address_port", $src_host)
+endif
+
+subformula "get_address_port"
+    TEXT = '{UNTIL("//")} {"["?} {event_src.ip=IPV4|event_src.ip=IPV6|
+             $Computer=HOSTNAME} {"] :"?}  {REST}'
+endsubformula
+
+time = string($createtime)
+msgid = $action
+
+event_src.vendor = "drweb"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "security_suite"
+event_src.subsys = lower($subsystem)
+event_src.category = "Anti-virus"
+
+id = "PT_DrWeb_Security_Suite_odbc_event_edit_update_restrictions"

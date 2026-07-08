@@ -1,0 +1,21 @@
+TEXT = '{$maybe_time=STRING*} dhcp,critical,{STRING+?} dhcp alert on {$temp=STRING|} discovered unknown dhcp server, mac {$mac=STRING} ip {src.ip=IPV4|src.ip=IPV6}'
+
+action = "detect"
+object = "resource"
+status = "success"
+
+object.type = "DHCP server"
+
+src.mac = strip($mac, "", ",")
+
+interface = strip($temp, "", ":")
+
+time = recv_time
+
+importance = "medium"
+
+event_src.vendor = "mikrotik"
+event_src.title = "routeros"
+event_src.category = "Network device"
+
+id = "PT_MikroTik_RouterOS_syslog_unknown_dhcp_server_is_discovered"

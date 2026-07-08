@@ -1,0 +1,13 @@
+filter Logout_Windows() {
+    event_src.vendor == "microsoft"
+    and event_src.title == "windows"
+    and action == "logout"
+    and msgid == "4634"
+    and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+    and src.host != null
+    and src.host != "-"
+    and dst.host != null
+    and category.high == "Access Management"
+    and category.low == "Communication"
+    and not in_list(["127.0.0.1", "::1", "-"], src.ip)
+}

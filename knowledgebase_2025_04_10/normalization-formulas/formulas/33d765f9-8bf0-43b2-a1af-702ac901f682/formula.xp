@@ -1,0 +1,62 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} confluence_audit: {$json=REST}"
+COND = (
+    find_substr($json, '"actionI18nKey":"personal.access.tokens.audit.log.summary.token.created') != null
+    or find_substr($json, '"actionI18nKey":"personal.access.tokens.audit.log.summary.token.deleted') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = switch $author["type"]
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = switch strip($auditType["actionI18nKey"], "personal.access.tokens.audit.log.summary.token.", "")
+    case "created" "create"
+    case "deleted" "revoke"
+endswitch
+
+object = "resource"
+status = "success"
+
+if $author["type"] == "user" then
+    subject.account.fullname = $author["name"]
+    subject.account.id = $author["id"]
+endif
+
+object.type = "personal_access_token"
+object.account.name =$affectedObjects[0]["name"]
+object.account.id =$affectedObjects[0]["id"]
+
+$s_name = find_substr($json, '"nameI18nKey":"personal.access.tokens.audit.log.extra.attribute.name","value":"')
+$e_name = find_substr(substr($json, $s_name, length($json)), '"}')
+$name = substr($json, $s_name+79, $e_name-79)
+    
+object.name = if length($name) != 0 then $name else null endif
+
+src.ip = $source
+
+msgid = $auditType["actionI18nKey"]
+time = epoch_to_datetime($timestamp["epochSecond"])
+importance = "info"
+
+category.generic = "Virtual Key"
+category.high = "Access Management"
+category.low = "Manipulation"
+
+event_src.vendor = "atlassian"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_syslog_Audit_Personal_Access_Tokens"

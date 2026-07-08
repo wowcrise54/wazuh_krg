@@ -1,0 +1,42 @@
+TABULAR = 'Duration,
+           __policy_id_tag,
+           {msgid=event_type},
+           {object.value=items_detected},
+           {datafield3=items_scanned},
+           {datafield4=items_treated},
+           {$tmp_subsys=product},
+           {object.name=scan_level},
+           {object.path=scanned_drives},
+           {event_src.ip=src},
+           {event_src.hostname=src_machine_name},
+           {subject.name=src_user_name},
+           {object.type=integrity_av_invoke_type},
+           {time=time}'
+
+COND = $product_family == "Endpoint"
+       and $product == "Anti-Malware"
+       and $event_type == "Scan Stop"
+       and $action_details == "Finished"
+
+subject = "account"
+action = "stop"
+object = "scan"
+status = "success"
+
+object.property = "detected items"
+duration = duration($Duration)
+
+$kv = keyvalue($__policy_id_tag, ";", "=")
+
+datafield1 = epoch_to_datetime(number($kv["date"]))                 # Дата последнего изменения сработавшей политики
+# datafield3                                                         # Кол-во отсканированных объектов
+# datafield4                                                         # Кол-во вылеченных объектов
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.category = "Host security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Anti_malware_Scan_stop"

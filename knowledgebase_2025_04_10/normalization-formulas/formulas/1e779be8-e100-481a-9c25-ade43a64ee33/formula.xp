@@ -1,0 +1,24 @@
+TABULAR = "name,
+           {event_src.hostname=machine},
+           {time=start_time},
+           {datafield1=guid},
+           {msgid=event_type}"
+
+COND = $event_type == "Removing_machine"
+
+action = "remove"
+object = "host"
+status = "success"
+
+object.type = "machine with acronis agent"
+object.name = csv($name, "'", "\"")[1]
+
+# datafield1 - GUID процесса, если использовать данный GUID в acrocmd, можно посмотреть весь лог
+
+importance = "info"
+
+event_src.vendor = "acronis"
+event_src.title = "backup"
+event_src.category = "Backup server"
+
+id = "PT_Acronis_Backup_customeventcollector_Removing_machine"

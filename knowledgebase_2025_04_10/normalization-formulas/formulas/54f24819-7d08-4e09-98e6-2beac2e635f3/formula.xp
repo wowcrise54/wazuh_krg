@@ -1,0 +1,20 @@
+TEXT = '<{NUMBER}>iplircfg[{NUMBER}]: [{$date1=WORDDASH} {$time1=STRING} CConfig.SetIpsForId: load natsettings for 
+        {object.id=WORD}: firewallip = {IPV4}, forwardip = {src.ip=IPV4}, port = {src.port=NUMBER}, timeout = {NUMBER}, 
+        virtualip = {$assigned_src_ip=WORD}, proxyid = {datafield1=WORD}, DRV_ALWAYS_USE_SERVER = {WORD} DRV_GREEN_NODE = {WORD} 
+        DRV_SECONDARY_VIRTUAL = {WORD} DRV_STOP_FIREWALL_IP= {WORD}'
+
+object = "session"
+action = "start"
+status = "success"
+
+assigned_src_ip = ipv4(number16($assigned_src_ip))
+
+time = recv_time
+importance = "low"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_coordinator"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "AST_Infotecs_VipNet_Coordinator_syslog_set_ip_for_id"

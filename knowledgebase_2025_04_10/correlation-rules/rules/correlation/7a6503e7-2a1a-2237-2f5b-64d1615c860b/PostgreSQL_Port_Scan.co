@@ -1,0 +1,91 @@
+event Port_Scan:
+    key:
+        event_src.host, src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and object == "request"
+        and event_src.title == "postgresql"
+        and regex(lower(object.query), "\\bdblink_connect\\b\s*\(.*?\)", 0) != null
+        and filter::CheckWL_Database_Actions("PostgreSQL_Port_Scan", 
+            lower(join([coalesce(subject.application.account.name, subject.application.account.id), object.query], "|"))
+        )
+    }
+
+rule PostgreSQL_Port_Scan: (Port_Scan[1, ] timer 5m)
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+        $firstEvent = true
+        $targetHosts = []
+    }
+
+    on Port_Scan {
+
+        if $firstEvent then
+            $status = status
+
+            $subject.application.account.name = subject.application.account.name
+            $subject.application.account.id = subject.application.account.id
+
+            $object.query = object.query
+            $object.path = object.path     # database name
+
+            $src.asset = src.asset
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.port = src.port
+            $src.mac = src.mac
+
+            $logon_service = logon_service     # application (driver) name
+            
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.key = lower(join([coalesce(subject.application.account.name, subject.application.account.id), object.query], "|"))
+
+            $count.subevents = 1
+            $firstEvent = false
+        endif 
+
+        $dblinkConnect = regex(lower(object.query), "\\bdblink_connect\\b\s*\(.*?\)", 0)
+        if $alert.regex_match == null then
+            $alert.regex_match = $dblinkConnect
+        endif 
+        
+        # Заполняем dst.host и dst.ip 
+        $host = regex($dblinkConnect, "host\s*=\s*(\S+)\s+", 1)
+        $port = regex($dblinkConnect, "port\s*=\s*(\d+)", 1)
+        $targetHosts = append($targetHosts, $host + ":" + $port)
+
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $reason = join($targetHosts, ", ")
+    $alert.context = "scanned hosts: " + $reason
+
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Network Service Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.application.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "NetworkScan"
+    $incident.aggregation.timeout = 2h
+}

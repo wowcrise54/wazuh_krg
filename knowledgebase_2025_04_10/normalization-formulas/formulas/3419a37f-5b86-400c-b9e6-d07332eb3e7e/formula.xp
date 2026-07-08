@@ -1,0 +1,31 @@
+TEXT = "{time=DATETIME},{subject.account.name=WORDDASH},{HOSTNAME},Execute command,{msgid='DeleteFile'},{$temp_csv=CSV}"
+
+subject = "account"
+action = "remove"
+object = "file_object"
+
+if $temp_csv[0] == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.fullpath = substr($temp_csv[9], 0, find_substr($temp_csv[9], " со статусом"))
+$fullpath = csv(object.fullpath, "\\", "")
+object.name = $fullpath[length($fullpath) - 1]
+if strip(object.fullpath, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+importance = "low"
+
+event_src.vendor = "accord"
+event_src.title = "sucu"
+event_src.category = "Host security"
+
+id = "PT_Accord_SUCU_filemonitor_Remove_file"

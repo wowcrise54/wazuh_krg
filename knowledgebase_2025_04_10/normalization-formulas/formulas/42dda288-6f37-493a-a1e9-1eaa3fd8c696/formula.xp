@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$title="ASA"|$title="PIX"|$title="FWSM"|$title="FTD"}{"-ip"?}-{NUMBER}-{msgid="313004"}:
+        Denied {protocol=WORD} type={datafield1=NUMBER}, from laddr {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} on interface {interface=WORDDASH+}
+        to {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}: {reason="no matching session"}'
+
+action = "deny"
+object = "connection"
+status = "success"
+
+# datafield1 - icmp type
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "cisco"
+event_src.title = lower($title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_313004_Denied_ICMP"

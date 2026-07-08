@@ -1,0 +1,211 @@
+# Проверяем режим сбора профиля и работы правила
+query AutoProfile($rule) from Auto_Profile {
+    rule == $rule
+}
+
+# Проверяем, если ли в профиле такой пользователь
+query CheckUsername($title, $username) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and dst_path == "/owa"
+}
+
+# Проверяем, использовал ли пользователь раньше этот адрес
+query CheckHost($title, $username, $src_host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_host == $src_host
+    and dst_path == "/owa"
+}
+
+query CheckProfile($access_type, $username, $src_ip, $src_host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $access_type
+    and login == $username
+    and src_ip == $src_ip
+    and src_host == $src_host
+    and dst_path == "/owa"
+}
+
+event Anomaly_Logon_Application:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "internet_information_services"
+        and action == "access"
+        and status == "success"
+        and subject.account.id != null
+        and lower(object.path) == "/owa/default.aspx"
+        and external_src.host != null
+        # Сверка с профилем
+        and not filter::Check_Profile(
+            event_src.title,
+            lower(subject.account.id),
+            lower(external_src.ip), 
+            lower(external_src.host), 
+            null, 
+            "/owa",
+            null
+        )
+        and filter::CheckWL_Profiling("Owa_Abnormal_Access", lower(join([external_src.host, subject.account.id,
+        event_src.host, event_src.title], "|")))
+    }
+    
+rule Owa_Abnormal_Access: Anomaly_Logon_Application
+
+    init {
+        $auto_profile = coalesce(select_query_first("AutoProfile", ["Owa_Abnormal_Access"], "auto_profiling"), 1)
+        $insert_into_cond = false
+        $ttl_tl = 7862400
+        $labels = "CheckWL_Profiling"
+    }
+    
+    on Anomaly_Logon_Application {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.query = object.query
+        $object.state = object.state
+
+        $object.process.meta = object.process.meta
+
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+        $datafield6 = datafield6
+        $datafield7 = datafield7
+        $datafield8 = datafield8
+        $datafield9 = datafield9
+        $datafield10 = datafield10
+        $datafield11 = datafield11
+        $datafield12 = datafield12
+        $datafield13 = datafield13
+        $datafield14 = datafield14
+        $datafield15 = datafield15
+        $datafield16 = datafield16
+        $datafield17 = datafield17
+        $datafield18 = datafield18
+        $datafield19 = datafield19
+        $datafield20 = datafield20
+
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.geo.org = src.geo.org
+        $src.geo.country = src.geo.country
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $assigned_src_ip = assigned_src_ip
+
+        $external_src.fqdn = external_src.fqdn
+        $external_src.geo.asn = external_src.geo.asn
+        $external_src.geo.city = external_src.geo.city
+        $external_src.geo.country = external_src.geo.country
+        $external_src.geo.org = external_src.geo.org
+        $external_src.host = external_src.host
+        $external_src.hostname = external_src.hostname
+        $external_src.ip = external_src.ip
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        # Проверка отличия от профиля
+
+        if not exec_query("CheckProfile", [$event_src.title, lower($subject.account.id), 
+        string($external_src.ip), string($external_src.host)]) then
+            if not exec_query("CheckUsername", [lower(event_src.title), lower(subject.account.id)]) then
+                $reason = "no_user"
+                $importance = "info"
+                $insert_into_cond = true
+            elif not exec_query("CheckHost", [lower(event_src.title), lower(subject.account.id), lower($src.host)]) then
+                $reason = "new_address"
+                $importance = "low"
+                $insert_into_cond = true
+            elif bool($last_changed) then         
+                if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) < div($ttl_tl, 2) then
+                    $importance = "info"
+                    $detect = "drop"
+                else
+                    $insert_into_cond = true
+                endif     
+            else
+                $importance = "info"
+                $detect = "drop"
+            endif
+        else
+            $last_changed = select_query_first("CheckProfile", [$event_src.title, lower($subject.account.id), 
+            string($external_src.ip), string($external_src.host)], "_last_changed")
+            if bool($last_changed) then         
+                    if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then          
+                            $insert_into_cond = true
+                    endif
+                endif
+                $importance = "info"
+                $detect = "drop"
+            
+        endif
+        
+        # Если правило работает в режиме сбора профиля, то emit не нужен
+        
+        if $auto_profile == 2 then
+            $importance = "info"
+            $detect = "drop"
+        endif 
+
+        $alert.key = lower(join([external_src.host, subject.account.id, event_src.host, event_src.title], "|"))
+        $alert.context = $reason
+    }
+
+    insert_into Risk_User_Logon_Correlation_Profile if ($auto_profile !=0 and $insert_into_cond == true) {        
+        access_type = $event_src.title
+        login = lower($subject.account.id)
+        src_ip = string($external_src.ip)
+        src_host = string($external_src.host)
+        dst_path = "/owa"
+    }
+   
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "application"
+    $status = "success"
+
+    $category.generic = "Anomaly"
+    $category.high = "Initial Access"
+    $category.low = "External Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host, $subject.account.id], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

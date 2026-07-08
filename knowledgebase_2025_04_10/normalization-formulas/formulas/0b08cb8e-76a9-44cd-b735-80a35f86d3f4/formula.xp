@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER":"?} {time=DATETIME?} {$host=HOSTNAME?} vpnsvc{":"?} 
+        {msgid="10002001"} {"<"NUMBER":"NUMBER">"} {$proto="IKECFG"} address {assigned_src_ip=IPV4}
+        assigned to peer {src.ip=IPV4|src.ip=IPV6}, id {$user=STRING} {REST}'
+
+subject = "account"
+action = "start"
+object = "session"
+status = "success"
+
+subject.account.dn = lower(strip($user, '"', '",'))
+
+$u_kv = keyvalue(subject.account.dn, ",", "=")
+
+subject.account.name = $u_kv["cn"]
+
+protocol = lower($proto)
+
+if time == null then
+    time = recv_time
+endif
+
+importance = "info"
+
+event_src.vendor = "s_terra"
+event_src.title = "csp_vpn_gate"
+event_src.subsys = "vpn-gateway"
+if ($host != null) and ($host != 'localhost') then 
+  event_src.hostname = $host 
+endif 
+event_src.category = "VPN"
+
+id = "PT_S_Terra_CSP_VPN_Gate_syslog_10002001_MSG_ID_IKE_IKECFG_ASSIGNED"

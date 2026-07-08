@@ -1,0 +1,188 @@
+event RunProcess:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows("rundll32.exe")
+        and (
+            regex(lower(object.process.cmdline), "\\b(minidump|#[0\^\+]+24)\s(\s+\d+|.*?\\blsass\\b)", 0) != null
+            or regex(lower(object.process.cmdline), "\\bcomsvcs\\b.*?\\bfull$", 0) != null
+        )
+        and filter::CheckWL_Process_Creation("Comsvcs_Minidump_Usage", lower(object.process.cmdline))
+    }
+
+event AccessProccessLsass:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        correlation_name == "LSASS_Memory_Access_SubRule"
+    }
+
+event LoadRenamedComsvcs:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "7"
+        and event_src.title == "sysmon"
+        and lower(object.process.original_name) == "comsvcs.dll"
+        and lower(object.process.name) != "comsvcs.dll"
+        and filter::CheckWL_Specific_Only("Comsvcs_Minidump_Usage", lower(join([subject.process.name, object.process.name], "|")))
+    }
+    
+rule Comsvcs_Minidump_Usage: ((LoadRenamedComsvcs or RunProcess) and AccessProccessLsass?) timer 30s
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on RunProcess {
+        $object = object  # process
+
+        $subject.account.name = object.account.name
+        $subject.account.domain = object.account.domain
+        $subject.account.session_id = object.account.session_id
+        $subject.account.id = object.account.id
+        $subject.account.privileges = object.account.privileges
+        
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.imphash = object.process.hash.imphash
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+        $subject.process.version = object.process.version
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.guid = object.process.guid
+        $subject.process.meta = object.process.meta
+        $subject.process.original_name = object.process.original_name
+        $subject.process.cwd = object.process.cwd
+        $subject.process.chain = object.process.chain
+        
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $subject.process.parent.id = object.process.parent.id
+        $subject.process.parent.name = object.process.parent.name
+        $subject.process.parent.path = object.process.parent.path
+        $subject.process.parent.fullpath = object.process.parent.fullpath
+        $subject.process.parent.guid = object.process.parent.guid
+        $subject.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline),"\\bminidump\\b(\s+\d+|.*?\\blsass\\b)", 0)
+        $alert.context = object.process.name
+        
+        $incident.aggregation.key = join([$event_src.host, $subject.account.name, $subject.process.parent.fullpath], "|")
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on AccessProccessLsass {
+        $datafield1 = object.process.name
+        $datafield2 = object.process.fullpath
+        $datafield3 = object.value          # GrantedAccess
+        $datafield4 = object.process.id
+        $datafield7 = object.process.guid
+
+        $datafield5 = datafield5            # Идентификатор потока субъекта
+        $datafield9 = datafield9            # Цепочка вызовов процесса
+
+        $alert.context = $alert.context + " | access to " +  object.process.name
+    }
+
+    on LoadRenamedComsvcs {
+        $object = object  # module
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.version = object.version
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([subject.process.name, object.process.name], "|"))
+        $alert.context = subject.process.name + " | " +  object.process.name + " is renamed " +  object.process.original_name
+        
+        $incident.aggregation.key = join([$event_src.host, $subject.process.name, $object.process.name], "|")
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit {
+    if find_substr($alert.context, "renamed") != null then
+        $subject = "process"
+    else
+        $subject = "account"
+    endif
+    $action = "start"
+    $status = "success"
+    
+    if find_substr($alert.context, "renamed") != null or $datafield9 != null or regex(lower($subject.process.cmdline), "\\blsass\\b", 0) != null then
+        $correlation_type = "incident"
+        $importance = "high"
+        $labels = $labels + "|lsass_cache_to_correlation"
+    else
+        $correlation_type = "event"
+        $importance = "medium"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+
+    $incident.aggregation.key = join([$correlation_name, $incident.aggregation.key], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

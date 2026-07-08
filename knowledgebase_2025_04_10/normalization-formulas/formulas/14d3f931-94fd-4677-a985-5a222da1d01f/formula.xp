@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        %{msgid="DAEMON-6-INFO"}: stunnel: LOG5[{NUMBER}:{NUMBER}]:
+        {object.type="https"} connected from {src.ip=IPV4}:{src.port=NUMBER}'
+
+action = "start"
+object = "session"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "extreme_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "wm3600"
+event_src.category = "Wireless"
+
+id = "PT_Extreme_Networks_WM3600_syslog_stunnel_https"

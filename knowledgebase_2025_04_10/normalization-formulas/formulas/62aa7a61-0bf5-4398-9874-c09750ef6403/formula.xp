@@ -1,0 +1,53 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and in_list(["modify mediaagent properties",
+                    "update client properties",
+                    "update audit trail properties",
+                    "update instance properties",
+                    "update user group properties",
+                    "update application properties",
+                    "update client group properties",
+                    "update library properties",
+                    "update commcell properties",
+                    "update storage policy properties",
+                    "update storage policy copy properties"
+                    ], lower($msgid)) == true
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+object.type = strip(strip(lower($msgid), "update ", " properties"), "modify ", "")
+
+# обработка сообщений от консолей о изменении конфигурации медиа-агента
+if find_substr(lower($data), 'for mediaagent [') != null then
+    $pos_start = find_substr(lower($data), 'for mediaagent [')
+    $trimmed = substr($data, number($pos_start) + 18, length($data))
+    object.name = substr($trimmed, 0, find_substr($trimmed, ']'))
+else
+    $pos_start = find_substr(lower($data), object.type + ':')
+    $trimmed = substr($data, number($pos_start) + length(object.type) + 2, length($data))
+    object.name = substr($trimmed, 0, find_substr($trimmed, '\"'))
+endif
+
+datafield1 = $display_user_name  # отображаемое имя пользователя
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "medium"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_properties_change"

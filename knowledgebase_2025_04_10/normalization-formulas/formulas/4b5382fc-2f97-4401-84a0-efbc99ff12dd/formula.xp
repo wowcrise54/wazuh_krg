@@ -1,0 +1,58 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "Content Awareness"
+        and $kv["data_type_name"] == "Executable File"
+
+subject = "application"
+action = "deny"
+object = "request"
+status = "success"
+
+subject.name = $kv["product"]
+
+object.name = $kv["fname"]
+object.id = $kv["fileId"]
+object.type = $kv["data_type_name"]
+object.property = "File size"
+object.value = $kv["fsize"]
+object.state = $kv["file_direction"]
+
+direction = switch lower($kv["conn_direction"])
+  case "internal" "ingress"
+  case "outgoing" "egress"
+endswitch
+
+interface = $kv["ifname"] # интерфейс, через который передовались пакеты на самом сетевом устройстве
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+if ($kv["act"] == "Block") then
+    reason = "An attempt: " + $kv["file_direction"]
+endif
+$cp_severity = $kv["cp_severity"]
+if ($cp_severity != null) then
+    importance = switch lower($cp_severity)
+        case "unknown" "info"
+        case "very low" "info"
+        case "very-low" "info"
+        case "low" "low"
+        case "medium" "medium"
+        case "high" "high"
+        case "very high" "high"
+        case "very-high" "high"
+        case "critical" "high"
+    endswitch
+else
+    importance = "medium"
+endif
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Content_Awareness_detect"

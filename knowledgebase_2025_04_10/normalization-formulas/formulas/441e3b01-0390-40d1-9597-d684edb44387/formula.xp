@@ -1,0 +1,31 @@
+!TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$Computer=WORDDASH} {event_src.subsys=WORD}:
+        {$level=LITERAL} {UNTIL("]")} {object.type=WORD} {object.id=WORDDASH}
+        on node {datafield1=WORDDASH} with capacity {object.value=WORD} {reason=REST}'
+
+action = "alert"
+object = "volume"
+status = "success"
+
+object.property = "size"
+
+# datafield1 - uuid узла кластера
+
+importance = switch $level
+    case "I" "info"
+    case "W" "low"
+    case "E" "medium"
+    case "F" "high"
+endswitch
+
+event_src.vendor = "nutanix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ahv"
+event_src.category = "Virtualization"
+
+id = "PT_Nutanix_AHV_syslog_disk_size_unsufficient"

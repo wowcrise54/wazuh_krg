@@ -1,0 +1,101 @@
+# {"class":"vim.event.EventEx","key":"10519","chainId":"10519","createdTime":"2022-02-11 12:19:49.362999+00:00","userName":"","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"Datacenter"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"10.125.4.3"},"host":{"class":"vim.event.HostEventArgument","name":"10.125.4.3"},"fullFormattedMessage":"Remote access for ESXi local user account 'test_user' has been locked for 900 seconds after 6 failed login attempts.","eventTypeId":"esx.audit.account.locked","severity":"","message":"","arguments":{"1":"test_user","2":"900","3":"6"},"objectId":"host-10","objectName":"10.125.4.3"}
+
+JSON = ''
+COND = (in_list([
+            "AccountRemovedEvent", 
+            "AccountCreatedEvent", 
+            "AccountUpdatedEvent", 
+            "UserPasswordChanged"
+        ], strip($class, "vim.event.", ""))
+        or in_list(["esx.audit.account.locked", "esx.audit.dcui.login.passwd.changed"], $eventTypeId)
+        )
+
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+action = switch strip(coalesce($eventTypeId, $class), "vim.event.", "")
+    case "AccountRemovedEvent" "remove"
+    case "AccountCreatedEvent" "create"
+    case "AccountUpdatedEvent" "modify"
+    case "UserPasswordChanged" "modify"
+    case "esx.audit.account.locked" "lock"
+    case "esx.audit.dcui.login.passwd.changed" "modify"
+endswitch
+
+object = "account"
+status = "success"
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+$obj_acct_name = coalesce($spec["id"], $account, $userLogin, $arguments["1"])
+$username = null
+$domain = null
+
+submessage("TEXT", "parse_user", $obj_acct_name)
+object.account.name = $username
+object.account.domain = $domain
+
+switch strip(coalesce($eventTypeId, $class), "vim.event.", "")
+    case "AccountUpdatedEvent"
+        object.property = "description"
+        object.value = $prevDescription
+        object.new_value = $spec["description"]
+    case "UserPasswordChanged" action = "modify"
+        object.property = "password"
+    case "esx.audit.account.locked"
+        duration = $arguments["2"]
+        numfield1 = $arguments["3"]  # Failed Login Attempts
+    case "esx.audit.dcui.login.passwd.changed"
+        object.property = "password"
+endswitch
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = coalesce($host["name"], $objectName)  # Entity Name
+datafield6 = coalesce($host["name"], $arguments["_sourcehost_"])  # Host Name
+datafield10 = coalesce(strip($host["host"], "vim.HostSystem:", ""), $objectId) # Internal Entity ID
+
+chain_id = $chainId
+
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "medium"
+
+if action != "lock" then
+    category.generic = "Account"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endif
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_Account_Management"

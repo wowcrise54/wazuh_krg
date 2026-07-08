@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {$dt=STRING} INFO 
+        [{UNTIL(",")} {$req_id=UNTIL("]")} utils.HttpRequestLogger -
+        {$req_type="Before"|$req_type="After"} request [{object.value=STRING} {$object_path_raw=UNTIL(", client=")}
+        {src.ip=IPV4|src.ip=IPV6}, payload={$payload=REST}'
+
+action = "receive"
+object = "request"
+status = "success"
+
+$proc_name_path = csv($object_path_raw, '/', '*')
+object.name = $proc_name_path[length($proc_name_path) - 1]
+object.fullpath = $object_path_raw
+object.path = strip(object.fullpath, "", object.name)
+
+if $req_id != '' then
+    object.id = $req_id # Operation id
+endif
+object.type = lower($req_type)
+object.property = "method"
+
+dst.ip = coalesce(recv_ipv4, recv_ipv6)
+
+$payload = strip($payload, '', ']')
+if $payload != 'null' then
+    datafield1 = $payload   # Payload for request
+endif
+
+time = datetime(replace($dt, ".", ","))
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_http_api"

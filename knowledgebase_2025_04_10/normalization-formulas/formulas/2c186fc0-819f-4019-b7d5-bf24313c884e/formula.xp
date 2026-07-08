@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$host=HOSTNAME|}{":"?}
+        #ILO 4{":"?} {$additional_info=STRING+}
+        {"S"|"s"}erver reset {"by:"?} {$subject_name_raw=STRING?}'
+        
+subformula "get_real_time"
+    TEXT = '{$month=WORD}/{$day=WORD}/{$year=WORD} {$hour=WORD}:{$min=WORD} {"Host"?}'
+    
+    time = $year + "-" + $month + "-" + $day + "T" + $hour + ":" + $min + ":00"
+endsubformula 
+
+if $subject_name_raw != "." then
+    subject = "account"
+endif
+action = "restart"
+object = "system"
+status = "success"
+
+# Deleting the final character
+$subject_name_raw = strip($subject_name_raw, "", "\\u0000")
+if subject != null then
+    subject.account.name = lower(strip($subject_name_raw, "", "."))
+endif
+
+reason = "server reset"
+
+if find_substr($additional_info, ":") != null then
+    submessage("TEXT", "get_real_time", $additional_info)
+endif
+
+importance = "high"
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "ilo"
+event_src.hostname = lower($host)
+event_src.category = "Server management"
+
+id = "PT_Hewlett_Packard_Enterprise_iLO_syslog_server_reset"

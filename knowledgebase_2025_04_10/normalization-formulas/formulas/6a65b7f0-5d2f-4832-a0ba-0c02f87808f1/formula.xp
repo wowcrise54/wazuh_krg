@@ -1,0 +1,148 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {"{"}\"kind\":\"Event\",\"apiVersion\":{$rest=REST}'
+
+COND = (
+        find_substr($rest, "\"resource\":\"ingresses\"") != null
+        or find_substr($rest, "\"resource\":\"ingressclasses\"") != null
+        or find_substr($rest, "\"resource\":\"services\"") != null
+        or find_substr($rest, "\"resource\":\"endpoints\"") != null
+        or find_substr($rest, "\"resource\":\"endpointslices\"") != null
+    ) and not (
+        find_substr($rest, "\"resource\":\"localsubjectaccessreviews\"") != null
+        or find_substr($rest, "\"resource\":\"selfsubjectaccessreviews\"") != null
+        or find_substr($rest, "\"resource\":\"selfsubjectrulesreviews\"") != null
+        or find_substr($rest, "\"resource\":\"subjectaccessreviews\"") != null
+    )
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", '{"kind":"Event","apiVersion":' + $rest)
+
+subject = "account"
+
+if (in_list(["create"], $verb)) then
+    action = "create"
+elif (in_list(["get", "list", "watch"], $verb)) then
+    action = "view"
+elif (in_list(["update", "patch"], $verb)) then
+    action = "modify"
+elif (in_list(["delete", "deletecollection"], $verb)) then
+    action = "remove"
+endif
+
+object = "resource"
+
+$status = $responseStatus["code"]
+if (in_list(["ResponseStarted", "RequestReceived"], $stage)) then 
+    status = "ongoing"
+elif ($stage == "ResponseComplete") then
+    if (number($status) == 101) or ((number($status) >= 200) and (number($status) < 300)) then
+        status = "success"
+    else
+        status = "failure"
+    endif
+else
+    status = "failure"
+endif
+
+# Реальный инициатор (со стороны ОС) никогда не известен
+subject.name = $user["username"]
+subject.group = join($user["groups"], " | ")
+subject.id = $user["uid"]
+
+object.type = $objectRef["resource"]
+if ($objectRef["subresource"] != null) then
+    object.type = object.type + "/" + $objectRef["subresource"]
+endif
+object.domain = $objectRef["namespace"]
+object.group = $objectRef["apiGroup"]
+object.name = coalesce($objectRef["name"], $responseObject["metadata"]["name"])
+object.id = coalesce($responseObject["metadata"]["uid"], $responseObject["details"]["uid"], $objectRef["uid"])
+object.version = coalesce($responseObject["metadata"]["resourceVersion"], $requestObject["metadata"]["resourceVersion"], $objectRef["resourceVersion"])
+$fullpath = coalesce($responseObject["metadata"]["selfLink"], $requestURI)
+if (find_substr($fullpath, "?") != null) then
+    $fullpath = substr($fullpath, 0, find_substr($fullpath, "?"))
+endif
+if (find_substr($fullpath, object.name) != null) then
+    object.path = substr($fullpath, 0, find_substr($fullpath, object.name))
+else
+    object.path = $fullpath + "/"
+endif
+
+if (in_list(["create", "modify"], action)) then
+    if (object.type == "ingresses")then
+        object.property = "number_of_rules"
+        $req = $requestObject["spec"]["rules"]
+        $resp = $responseObject["spec"]["rules"]
+        object.value = length(coalesce($resp, $req))
+    endif
+endif
+
+src.ip = $sourceIPs[0]
+
+$tmp = $objectRef["resource"]
+if (object.name != null) then
+    $tmp = $tmp + "/" + object.name
+else
+    $tmp = $tmp + "/?"
+endif
+if ($objectRef["subresource"] != null) then
+    $tmp = $tmp + "/" + $objectRef["subresource"]
+endif
+if not (in_list(["Status", null], $responseObject["kind"])) then
+    $tmp = $responseObject["kind"] + " (" + $tmp + ")"
+elif not (in_list(["DeleteOptions", null], $requestObject["kind"])) then
+    $tmp = $requestObject["kind"] + " (" + $tmp + ")"
+endif
+datafield1 = $tmp # сочетание типа ресурса и имени (используется в локализации)
+datafield2 = $responseObject["metadata"]["ownerReferences"][0]["kind"]  # тип ресурса-владельца
+datafield3 = $responseObject["metadata"]["ownerReferences"][0]["name"]  # имя ресурса-владельца
+datafield4 = $responseObject["metadata"]["ownerReferences"][0]["uid"]   # ID ресурса-владельца
+if not (in_list([null, ""], $annotations["authorization.k8s.io/reason"])) then
+    datafield5 = replace($annotations["authorization.k8s.io/reason"], "'", "\"")  # сообщение от authorization.k8s.io (RBAC Subsystem)
+endif
+datafield6 = $userAgent  # User-Agent источника запроса
+
+if not (in_list([null, ""], $responseObject["message"])) then
+    reason = replace($responseObject["message"], "'", "\"")
+elif not (in_list([null, ""], $responseStatus["reason"])) then
+    reason = replace($responseStatus["reason"], "'", "\"")
+else
+    reason = switch $responseStatus["code"]
+        case 307 "TemporaryRedirect"
+        case 400 "BadRequest"
+        case 401 "Unauthorized"
+        case 403 "Forbidden"
+        case 404 "NotFound"
+        case 405 "MethodNotAllowed"
+        case 409 "Conflict"
+        case 410 "Gone"
+        case 422 "UnprocessableEntity"
+        case 429 "TooManyRequests"
+        case 500 "InternalServerError"
+        case 503 "ServiceUnavailable"
+        case 504 "ServerTimeout"
+    endswitch
+endif
+time = datetime($stageTimestamp)
+msgid = "K8S_Service_Management"
+if (in_list(["create", "modify", "remove"], action)) then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "cncf"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kubernetes"
+event_src.subsys = "kube-apiserver"
+event_src.category = "Virtualization"
+
+id = "PT_CNCF_Kubernetes_syslog_Service_Management"

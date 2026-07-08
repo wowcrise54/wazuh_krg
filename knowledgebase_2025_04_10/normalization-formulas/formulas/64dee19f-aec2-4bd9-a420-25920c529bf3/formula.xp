@@ -1,0 +1,48 @@
+JSON = ''
+COND = $SLGTYPE.SUBID == "Z" and $SLGTYPE.AREA == "CU"
+
+action = "access"
+object = "table"
+status = "success"
+
+if $SLGUSER != "" then
+    subject = "account"
+    subject.account.name = $SLGUSER
+endif
+
+submessage("TEXT", "parameters_formula",$SLGDATA)
+
+subformula "parameters_formula"
+    TEXT = "{$temp=REST}"
+    $simbol = find_substr($temp, '&')
+    object.name = substr($temp, 0, $simbol)
+    object.state = substr($temp, $simbol + 1, length($temp) - $simbol - 1)
+endsubformula
+
+if maybe_ipv4($SLGLTRM2) == null && $SLGLTRM2 != "" then
+    src.hostname = $SLGLTRM2
+elif maybe_ipv4($SLGLTRM2) != null then
+    src.ip = $SLGLTRM2
+endif
+
+if $SLGMAND != "" then
+    datafield1 = $SLGMAND                                                               # Client or mandant
+endif
+datafield2 = $SLGPROC.UNIXPID + $SLGPROC.TASKTNO + $SLGPROC.SLGTTYP + $SLGPROC.SLGMODE  # Other information
+if $SLGTC != "" then
+    datafield3 = $SLGTC                                                                 # Transaction code
+endif
+if $SLGREPNA != "" then
+    datafield4 = $SLGREPNA                                                              # Report name
+endif
+
+time = $SLGDATTIM.DATE + $SLGDATTIM.TIME
+msgid = $SLGTYPE.AREA + $SLGTYPE.SUBID
+importance = "low"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_ABAP_filemonitor_Generic_table_access_by_RFC"

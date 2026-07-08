@@ -1,0 +1,92 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL(']')} {WORD} - {STRING} - 
+Agent {$rest=REST}"
+
+COND = (
+    substr($rest, 0, 20) == "has been registered:"
+    or find_substr($rest, "has been unregistered") != null
+    or find_substr($rest, "tries to register while another agent") != null
+)
+
+object = "resource"
+
+subformula "parse_agent"
+    TEXT = "\"{$agent_name=STRING+} {'{'}{$kv_agent=REST}"
+    
+    $agent_name = strip($agent_name, '', '"')
+    $kv_agent = keyvalue(strip($kv_agent, "", "}"), ",", "=")
+    $agent_id = $kv_agent["id"]
+    $agent_host = $kv_agent["host"]
+endsubformula
+
+subformula "parse_rest"
+    TEXT = "has been registered: {$agent=REST}"
+    
+    action = "create"
+    status = "success"
+    
+    $agent_end = find_substr($agent, "}")
+    $agent = substr($agent, 0, $agent_end)
+    
+    msgid = "agent_register"
+endsubformula
+
+subformula "parse_rest"
+    TEXT = "{$agent=STRING+} tries to register while {reason='another agent with the same authorization token and name is already registered'}: {$conflicted_agent=STRING+}  rejecting the registration attempt. Ensure that there is only one agent process started from the same installation directory."
+    
+    action = "create"
+    status = "failure"
+    
+    $conflicted_agent = replace($conflicted_agent, "", '"')
+    $conflicted_agent = strip($conflicted_agent, "", ",")
+    
+    object.property = "conflicted_agent"
+    object.value = $conflicted_agent
+    
+    msgid = "agent_register"
+endsubformula
+
+subformula "parse_rest"
+    TEXT = "{$agent=STRING+} has been unregistered. Reason: {reason=REST}"
+    
+    action = "remove"
+    status = "success"
+    
+    msgid = "agent_unregister"
+endsubformula
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+submessage("TEXT", "parse_rest", $rest)
+submessage("TEXT", "parse_agent", $agent)
+
+object.type = "build_agent"
+object.name = $agent_name
+object.id = $agent_id
+
+src.ip = csv($agent_host, ":", "")[0]
+
+datafield2 = $agent_name  # Agent Name
+numfield2 = $agent_id  # Agent ID
+
+time = replace($time, ".", ",")
+importance = "low"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Server_Agent_Register"

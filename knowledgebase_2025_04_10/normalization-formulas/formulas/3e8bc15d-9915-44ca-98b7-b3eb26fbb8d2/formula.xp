@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        %{msgid="DATAPLANE-5-IGMPSNOOP"}: Multicast group <{object.name=IPV4}>
+        {$object.value=REST}'
+
+action = "modify"
+object = "resource"
+status = "success"
+
+object.type = "multicast group"
+object.property = "configuration"
+object.value = strip(strip($object.value, "", "."), "", " ")
+
+importance = "low"
+
+event_src.vendor = "extreme_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "wm3600"
+event_src.category = "Wireless"
+
+id = "PT_Extreme_Networks_WM3600_syslog_DATAPLANE_5_IGMPSNOOP"

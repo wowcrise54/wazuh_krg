@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The MultiDump utility was used to dump SAM, SECURITY, and SYSTEM hives without triggering Defender alerts</Description>
+  <EventDescriptions>
+    <EventDescription id="61cbbfde-0e5b-cf83-e53b-1246b33adc74">User {subject.account.name} locally saved the contents of the SAM, SECURITY, and SYSTEM registry hives to files {datafield16} using utility {object.process.parent.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="7787639a-b1d0-5210-916d-46831988dc74">User {subject.account.name} saved the contents of the SAM, SECURITY, and SYSTEM registry hives using utility {object.process.parent.name} on host {event_src.host} and then sent it to remote host {dst.ip}:{dst.port}</EventDescription>
+  </EventDescriptions>
+</Localization>

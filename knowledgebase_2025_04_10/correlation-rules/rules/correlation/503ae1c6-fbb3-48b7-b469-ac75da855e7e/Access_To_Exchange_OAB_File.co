@@ -1,0 +1,104 @@
+event IIS_Request:
+    key:
+        subject.account.name, object.process.meta
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "internet_information_services"
+        and event_src.category == "Web server" 
+        and object.value == "GET" 
+        and regex(object.state, "2\d{2}", 0) != null
+        and regex(lower(object.path), "\/oab\/.*?\/oab\.xml", 0) != null
+        and filter::CheckWL_Web_Access("Access_To_Exchange_OAB_File", lower(join([subject.account.name, object.state, datafield1], "|")))
+    }
+
+rule Access_To_Exchange_OAB_File: IIS_Request+ timer 5s
+
+    init {
+        $labels = "w_auto|CheckWL_Web_Access"
+        $first_event = true
+    }
+
+    on IIS_Request {
+        if $first_event then 
+            $status = status
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+
+            $object.process.meta = object.process.meta
+            
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.value = object.value
+            $object.state = object.state
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.asset = src.asset
+
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.port = dst.port
+            $dst.asset = dst.asset
+            
+            $protocol.layer7 = protocol.layer7
+            $protocol = protocol
+
+            $datafield1 = datafield1  # Пользовательский агент
+            $datafield4 = datafield4  # Заголовок HTTP X-Forwarded-For
+            $datafield5 = datafield5  # <client> - первое значение заголовка HTTP X-Forwarded-For
+            $external_src.ip = datafield5
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = lower(join([subject.account.name, object.state, datafield1], "|"))
+            $alert.regex_match = regex(lower(object.path),"\/oab\/.*?\/oab\.xml", 0)
+            $alert.context = $alert.regex_match
+
+            $first_event = false
+        endif
+
+        if $datafield5 == null then
+            $datafield5 = datafield5  # <client> - первое значение заголовка HTTP X-Forwarded-For
+            $external_src.ip = datafield5
+        endif    
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "access"
+    $object = "resource"
+    
+    if regex(lower($object.process.meta), "^(microsoft\+bits|macoutlook|evolution)\\b", 0) != null then
+        $importance = "info"  
+    else
+        $importance = "low"  
+    endif
+    
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery: Email Account"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $datafield5], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h 
+}

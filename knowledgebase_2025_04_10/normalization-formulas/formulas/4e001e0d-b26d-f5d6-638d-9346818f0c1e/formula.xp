@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME} 
+{WORD}: {event_src.subsys="syslog_notifier"}.{object.type="detection"}: {$json=REST}'
+
+subject = "service"
+action = "send"
+object = "report"
+status = "success"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+object.id = $identity_key
+object.query = $filter 
+
+external_link = $detection_url
+duration = maybe_duration($duration)
+
+reason = $type["text"]
+
+msgid = $type["id"]
+importance = $criticality
+
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($hostname)
+    event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    event_src.hostname = lower($hostname)
+endif
+
+event_src.vendor = "positive_technologies"
+event_src.title = "nad"
+event_src.category = 'IDS/IPS'
+
+id = "PT_Positive_Technologies_NAD_syslog_activity"

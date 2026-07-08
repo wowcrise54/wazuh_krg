@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Возможная эксплуатация уязвимости CVE-2023-42793 в TeamCity, что позволит злоумышленникам создавать токены на предъявителя для любых пользователей и получать доступ к управлению проектами, агентами и пользователями TeamCity</Description>
+  <EventDescriptions>
+    <EventDescription id="15a632dd-ee75-3970-eed3-083189dd8ed3">Нелегитимный запрос токена "{object.name}" с узла {src.host} для пользователя с ID {object.account.id} на узле {event_src.host}</EventDescription>
+    <EventDescription id="c50e2910-04f0-aa67-b896-07d57d57cf07">Пользователь с ID {subject.account.id} отправил нелегитимный запрос токена "{object.name}" с узла {src.host} для пользователя с ID {object.account.id} на узле {event_src.host}</EventDescription>
+    <EventDescription id="c70beb83-c993-0908-bf9d-0c247d88f6a4">Пользователь с ID {subject.account.id} отправил нелегитимный запрос токена "{object.name}" с узла {src.host} для пользователя {object.account.name} на узле {event_src.host}</EventDescription>
+    <EventDescription id="e69e8eaa-8dc3-c93a-dd11-1b4fcaef4465">Нелегитимный запрос токена "{object.name}" с узла {src.host} для пользователя {object.account.name} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

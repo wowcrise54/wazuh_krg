@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The SharpHound (BloodHound) utility used to collect information about Active Directory objects was started using one of the following collection methods: DCOnly, LocalGroup (--Stealth), ComputerOnly (--Stealth), RDP (--Stealth), DCOM (--Stealth), GPOLocalGroup, LocalAdmin (--Stealth)</Description>
+  <EventDescriptions>
+    <EventDescription id="ca868531-0bef-de57-aaea-316336b033db">User {subject.account.name} from host {src.host} performed actions similar to the SharpHound (BloodHound) software activity to collect information from domain controller {event_src.host}</EventDescription>
+    <EventDescription id="d31bd54d-7f3d-cc45-796f-6cc56c23b399">User {subject.account.name} from host {src.host} started utility {object.process.name} whose behavior is specific to the SharpHound (BloodHound) software to collect information from domain controller {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

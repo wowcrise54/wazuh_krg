@@ -1,0 +1,147 @@
+query Check_If_Host_Is_DC_By_EventSrc($ip, $host) from List_Servers {
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            asset_ip == $ip
+            and asset_ip != null
+        )
+        or (
+            (
+                host == $ip
+                or host == $host
+            )
+            and host != null
+        )
+    )
+}
+
+query Check_If_Host_Is_DC_AssetGrid($fqdn, $ip, $asset) from AssetGrid_Servers {
+    (
+        asset_id == $asset
+        and asset_id != null
+    ) or (
+        asset_fqdn == $fqdn
+        and asset_fqdn != null
+    ) or (
+        asset_ip == $ip
+        and asset_ip != null
+    )
+}
+
+query Check_If_User_Is_Security_Admin($userid) from Sensitive_Users {
+    user_id == $userid
+}
+
+query Check_If_User_Is_Security_Admin_AssetGrid($userid) from AssetGrid_Critical_Domain_Accounts {
+    member_sid == $userid
+}
+
+event User_Add_In_Local_System:
+    key:
+        event_src.host, object.account.id
+    filter {
+        filter::NotFromCorrelator() 
+        and in_list(["4720", "624"], msgid)
+        and event_src.title == "windows"
+        and not (
+            match(subject.account.name,"*$") 
+            and find_substr(object.account.name, "healthmailbox") != null
+        )
+        and not (exec_query("Check_If_User_Is_Security_Admin", [lower(subject.account.id)])
+                or exec_query("Check_If_User_Is_Security_Admin_AssetGrid", [lower(subject.account.id)]))
+        and not (
+            match(lower(select_query_first("Check_If_Host_Is_DC_By_EventSrc", [event_src.ip, lower(event_src.fqdn)], "roles")), "*domain controller*")
+            or match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [lower(event_src.fqdn), event_src.ip, event_src.asset], "roles"), "*\"Domain Controller\"*")
+        )
+        and filter::CheckWL_Specific_Only("Account_Created_On_Local_System", lower(join([subject.account.id, object.account.name], "|")))
+    }
+
+event User_Add_In_Administrators_Group:
+    key:
+        event_src.host, object.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4732"
+        and (
+            object.name == "administrators"
+            or object.id == "S-1-5-32-544"
+        )
+    }
+
+rule Account_Created_On_Local_System: (User_Add_In_Local_System and User_Add_In_Administrators_Group?) timer 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on User_Add_In_Local_System {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $alert.key = lower(join([subject.account.id, object.account.name], "|"))
+        $alert.context = join([event_src.host, subject.account.name + " created " + object.account.name], " | ")
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+    on User_Add_In_Administrators_Group {
+        # group info
+        $object.name = object.name
+        $object.id = object.id
+        $object.domain = object.domain
+        $object.type = object.type
+        $object.property = object.property
+
+        $reason = "User added to Administrators group"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "create"
+    $object = "account"
+    $status = "success"
+
+    if $reason == "User added to Administrators group" then
+        $alert.context = $alert.context + " & added to Administrators group"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    if $object.account.domain != null and $object.account.domain != $event_src.hostname then
+        $category.low = "Domain Account"
+    else
+        $category.low = "Local Account"
+    endif    
+
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

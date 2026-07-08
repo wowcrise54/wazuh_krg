@@ -1,0 +1,88 @@
+event Public_Address_Creation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "yandex_cloud"
+        and event_src.subsys == "network"
+        and action == "create"
+        and object == "ip_address"
+        and lower(object.type) == "external"
+        and status == "success"
+        and datafield5 == null
+        and filter::CheckWL_Specific_Only("Yandex_Cloud_Public_Address_Without_DDoS_Protection_Creation", lower(join([src.ip, object.storage.fullpath], "|"))) 
+    }
+
+rule Yandex_Cloud_Public_Address_Without_DDoS_Protection_Creation: Public_Address_Creation
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Public_Address_Creation {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+
+        $subject.process.meta = subject.process.meta
+
+        $subject.state = subject.state
+        $subject.type = subject.type
+
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.id = object.id
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.version = object.version
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $logon_auth_method = logon_auth_method
+
+        $datafield1 = datafield1  # Наименование организации
+        $datafield2 = datafield2  # Наименование облака
+        $datafield3 = datafield3  # Наименование каталога
+        $datafield4 = datafield4  # Идентификатор зоны
+
+        $chain_id = chain_id
+
+        $alert.key = lower(join([src.ip, object.storage.fullpath], "|"))
+        $alert.context = lower(join(remove([subject.account.name, src.ip, object.storage.fullpath, "ddos protection disabled", object.value, datafield4], null), " | "))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "create"
+    $object = "ip_address"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "External Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $object.storage.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

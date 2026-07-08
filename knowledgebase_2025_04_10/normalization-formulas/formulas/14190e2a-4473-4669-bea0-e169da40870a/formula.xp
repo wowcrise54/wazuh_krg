@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {$syslog_time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} 
+        %%{NUMBER?} {$tmp_subsys=WORD}/{NUMBER}/{msgid="USER_OFFLINERESULT"}{"("WORD")"?}{"["NUMBER"]"?}
+        :[USER_INFO_OFFLINE] {$kv=KEYVALUE(";",":","")}'
+
+COND = $kv["RESULT"] == "User request to offline"
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+subject.account.name = $kv["USER"]
+
+object.account.name = subject.account.name
+
+if $kv["MAC"] != "ff-ff-ff-ff-ff-ff" then
+    src.mac = $kv["MAC"]
+endif
+src.ip = $kv["IPADDRESS"]
+dst.mac = $kv["DEVICEMAC"]
+dst.hostname = $kv["DEVICENAME"]
+protocol = lower($kv["ACCESS TYPE"])
+
+reason = $kv["RESULT"]
+
+time = coalesce(epoch_to_datetime(number($kv["TIME"])), $syslog_time)
+importance = "low"
+
+category.high = "Access Management"
+category.generic = "Operating System"
+category.low = "Communication"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Offline_result"

@@ -1,0 +1,25 @@
+TABULAR = "ID,
+           {time=ORIGIN},
+           MESSAGE_OWNER,
+           {msgid=MESSAGE_CODE},
+           {subject.account.name=STRPARAM1}"
+
+COND = $MESSAGE_CODE == 2
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+    
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_policy_manager"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_ViPNet_Policy_Manager_customeventcollector_user_logout"

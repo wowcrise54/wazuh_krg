@@ -1,0 +1,42 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and $msgid == "Control Services"
+
+subject = "account"
+if find_substr($data, "All services were restarted") != null then
+    action = "restart"
+else
+    drop
+endif
+object = "service"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.account.domain = $csv[0]
+    subject.account.name = $csv[1]
+else
+    subject.account.name = $csv[0]
+endif
+subject.account.fullname = $display_user_name
+
+submessage("TEXT", "get_data", $data)
+subformula "get_data"
+    TEXT = '{UNTIL("Client : [")}{dst.hostname=UNTIL("]")}
+            {REST}'
+endsubformula
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "low"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_control_services"

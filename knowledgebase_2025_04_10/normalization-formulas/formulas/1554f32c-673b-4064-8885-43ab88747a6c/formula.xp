@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        audit: [ID {NUMBER} audit.notice] {$type1="init"} {$type2=STRING}
+        {$stat=WORD} session {datafield2=NUMBER} by {subject.name=WORDDASH}
+        as {datafield3=WORDDASH}:{datafield4=WORDDASH} from
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} text
+        {$run_lvl="0"|$run_lvl="6"}'
+
+subject = "account"
+if $run_lvl == "0" then
+    action = "stop"
+else
+    action = "restart"
+endif
+object = "system"
+if $stat == "ok" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+datafield1 = $type1 + $type2  # тип события
+# datafield2 - id сессии
+# datafield3 - от чьего имени выполняется команда (username)
+# datafield4 - от чьего имени выполняется команда (group)
+
+importance = "medium"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_shutdown_system_by_user"

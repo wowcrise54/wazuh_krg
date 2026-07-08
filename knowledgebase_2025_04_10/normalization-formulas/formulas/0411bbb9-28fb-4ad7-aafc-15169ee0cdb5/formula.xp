@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {$product="KLMS"|$product="KSMG"}: {object.value=STRING+} {reason="bases are out of date"}:
+        {datafield1=STRING+}'
+
+action = "info"
+object = "application"
+status = "success"
+
+object.property = "component name"
+
+# datafield1 - время, которое прошло с момента последнего обновления
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = switch $product
+    case "KLMS" "kaspersky_security_for_linux_mail_server"
+    case "KSMG" "kaspersky_secure_mail_gateway"
+endswitch
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KLMS_KSMG_syslog_bases_are_out_of_date"

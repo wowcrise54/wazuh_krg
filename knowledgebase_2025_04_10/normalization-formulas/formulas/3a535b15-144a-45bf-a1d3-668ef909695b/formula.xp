@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER":"?} {time=DATETIME?} {$Computer=HOSTNAME?} vpnsvc{":"?}
+        {msgid="00650001"} User logged in'
+
+action = "login"
+object = "service"
+status = "success"
+
+time = coalesce($time, recv_time)
+importance = "info"
+
+event_src.vendor = "s_terra"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "csp_vpn_gate"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_S_Terra_CSP_VPN_Gate_syslog_00650001_MSG_ID_USER_LOGIN"

@@ -1,0 +1,7 @@
+filter ContainsBase64Encoding(string $value) {
+    bool(length($value) >= 32)
+    and table::Generic_Regexes {
+        column::regex_type == "base64"
+        and regex_match($value, column::regex_value)
+    }
+}

@@ -1,0 +1,46 @@
+query Get_Linux_Process_Chain($host, $pid) from Linux_Process_Chains {
+    host == $host
+    and proc_id == $pid
+} qhandler {
+    $parent_proc_name = column::parent_proc_name
+    $parent_proc_cmdline = column::second_cmdline
+}
+
+
+event Unix_correlated_event:
+    filter {
+        not filter::NotFromCorrelator()
+        and event_src.title == "unix_like"
+        and event_src.subsys == "auditd"
+        and (
+            subject.process.id != null
+            or object.process.id != null
+        )
+        # Запрос к списку с критичными узлами
+        and table::Critical_Linux_Hosts_For_Process_Chains {
+            column::host == event_src.host
+        }
+    }
+
+
+enrichment Bring_Linux_Parent_Process
+    enrich Unix_correlated_event:
+        enrich_fields {
+            $subject_proc_id = number(subject.process.id)
+            $object_proc_id = number(object.process.id)
+            
+            # Process
+            if $subject_proc_id != null then
+                $subject_result_process = exec_query("Get_Linux_Process_Chain", [event_src.host, $subject_proc_id])
+                
+                subject.process.parent.name = $subject_result_process["$parent_proc_name"]
+                subject.process.parent.cmdline = $subject_result_process["$parent_proc_cmdline"]
+            endif
+            
+            if $object_proc_id != null then
+                $object_result_process = exec_query("Get_Linux_Process_Chain", [event_src.host, $object_proc_id])
+                
+                object.process.parent.name = $object_result_process["$parent_proc_name"]
+                object.process.parent.cmdline = $object_result_process["$parent_proc_cmdline"]
+            endif
+        }

@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        postfix{"/"event_src.subsys=WORDDASH?}{"["NUMBER"]"?}:
+        connect to {$hostname=HOSTNAME}[{dst.ip=IPV4|dst.ip=IPV6}]{":"dst.port=NUMBER}: {reason=REST}'
+
+action = "open"
+object = "session"
+status = "failure"
+
+if $hostname != "unknown" and $hostname != "none" then
+    dst.hostname = $hostname
+endif
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "postfix"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Postfix_syslog_failed_to_open_connection_to_remote_server"

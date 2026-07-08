@@ -1,0 +1,55 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        KSMG: CEF:0|AO Kaspersky Lab|{subject.application.name="Kaspersky Secure Mail Gateway"}|2.{$ver=UNTIL("|") 
+        msgid="LMS_EV_SCAN_LOGIC_MESSAGE_BACKUP"}|message backup result|{$level=WORD}|{$kv=KEYVALUE(" ", "=")}'
+
+COND = $kv["outcome"] == null 
+        and in_list(["Rejected", "Attachment(s) deleted", "Disinfected", "Deleted", "Skipped"], $kv["act"])
+        
+subject = "application"
+action = "modify"
+object = "message"
+status = "success"
+
+subject.account.contact = lower($kv["suser"])
+$name_domain = csv(subject.account.contact, "@", "`")
+subject.account.name = $name_domain[0]
+subject.account.domain = $name_domain[1]
+
+subject.version = "2." + $ver
+ 
+object.account.contact = lower($kv["duser"])
+$name_domain = csv(object.account.contact, "@", "`")
+if length($name_domain) == 2 then
+    object.account.name = $name_domain[0]
+    object.account.domain = $name_domain[1]
+endif
+
+object.id = $kv["cs1"]
+object.type = "email"
+object.state = $kv["act"]
+
+reason = $kv["reason"]
+
+src.ip = $kv["src"]
+
+datafield1 = $kv["fsize"] # Размер сообщения
+
+importance = switch $level
+    case "Low" "low"
+    case "Medium" "medium"
+    case "High" "high"
+endswitch
+
+event_src.rule = $kv["cs2"]
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_secure_mail_gateway"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KSMG_syslog_v2_message_backup_result"

@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {$fallback_time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        CEF:0|Infotecs|ViPNet TIAS|{UNTIL("|")}
+        change status incident|{datafield3=UNTIL("|")}{NUMBER}|
+        {$values=KEYVALUE(" ", "=", "\\\"")}'
+
+subject = "account"
+action = "update"
+object = "alert"
+status = "success"
+
+subject.name = $values["InfTIASUser"]
+
+object.property = "TIAS recommendations"
+object.value = $values["InfTIASRecommendations"]
+object.state = $values["InfTIASStatus"]
+object.id = $values["eventId"]
+
+datafield1 = $values["InfTIASAffected"]  # список подверженных инциденту узлов
+datafield2 = $values["InfTIASSymptoms"]  # причина создания инцидента
+# datafield3 = степень достоверности инцидента
+
+if maybe_datetime($values["rt"]) != null then
+    time = $values["rt"]
+else
+    time = $fallback_time
+endif
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_tias"
+event_src.category = "IDS/IPS"
+event_src.id = $values["deviceExternalId"]
+
+id = "PT_Infotecs_VipNet_TIAS_syslog_change_incident_status"

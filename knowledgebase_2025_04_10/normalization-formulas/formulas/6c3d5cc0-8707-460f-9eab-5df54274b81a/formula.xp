@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        sshd{"["NUMBER"]"?}: {"%AUTH-5-LIBJNX_LOGIN_ACCOUNT_UNLOCKED"|"%-LIBJNX_LOGIN_ACCOUNT_UNLOCKED"|"%AUTH-5-LIBJNX_LOGIN_ACCOUNT_LOCKED"|"%-LIBJNX_LOGIN_ACCOUNT_LOCKED"}:
+        Account for user {$uname=STRING} has been {$act="unlocked"|$act="locked"} {"out"?} {"for"|"from"} logins'
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+action = switch $act
+    case "unlocked" "unlock"
+    case "locked" "lock"
+endswitch
+
+object.name = strip($uname, "'", "'")
+
+subject = "system"
+object = "account"
+status = "success"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_account_changemod"
+importance = "medium"

@@ -1,0 +1,53 @@
+!TABULAR = "id,
+            sensordataid,
+            prodname,
+            alertpriority,
+            alertflags,
+            sensorname,
+            sensorguid,
+            alerttypename,
+            alertname,
+            alertid,
+            alertdatetime
+            "
+!COND = ($alerttypename == "UpdatePkgAvailable")
+
+subject = "application"
+action = "info"
+object = "update"
+status = "success"
+
+subject.name = $sensorname
+subject.type = $prodname
+subject.id = $sensorguid
+
+datafield1 = $hostosname    # Имя OS узла с продуктом
+reason = "update available"
+
+time = $alertdatetime
+if $alertpriority == 1 then
+    importance = "high"
+elif $alertpriority == 2 then
+    importance = "medium"
+elif $alertpriority == 3 then
+    importance = "low"
+endif
+
+event_src.vendor = "ibm"
+if $prodname == "Proventia G-Series" then
+    event_src.title = "proventia_g_series"
+elif $prodname == "Event Collector" then
+    event_src.title = "event_collector"
+elif $prodname == "Update Server" then
+    event_src.title = "update_server"
+elif $prodname == "EventArchiver" then
+    event_src.title = "event_archiver"
+elif $prodname == "Endpoint Agent" then
+    event_src.title = "endpoint_agent"
+else
+    event_src.title = "siteprotector"
+endif
+event_src.ip = $sensoraddress_ip
+event_src.category = "Other"
+
+id = "PT_IBM_SiteProtector_odbc_Update_available"

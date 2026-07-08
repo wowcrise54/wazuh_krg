@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Запуск утилиты SharpHound (BloodHound) с использованием одного из методов сбора: ObjectProps, ACL, Trusts, Container. Метод ObjectProps собирает такие свойства объектов, как LastLogon или PwdLastSet; ACL — разрешения, которыми могут воспользоваться злоумышленники, для объектов в Active Directory; Trusts — доверительные отношения доменов; Container — древовидную структуру OU и ссылки групповой политики</Description>
+  <EventDescriptions>
+    <EventDescription id="7ec3973e-edfa-a1fb-089a-d143c85ea983">Пользователь {subject.account.name} с узла {src.host} запустил утилиту {object.process.name}, поведение которой характерно для программного обеспечения SharpHound (BloodHound), для сбора информации с контроллера домена {event_src.host}</EventDescription>
+    <EventDescription id="b0860b02-7ef9-77cf-7361-9ed99d3e5cfa">Пользователь {subject.account.name} с узла {src.host} выполнил действия, похожие на активность программного обеспечения SharpHound (BloodHound), для сбора информации с контроллера домена {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

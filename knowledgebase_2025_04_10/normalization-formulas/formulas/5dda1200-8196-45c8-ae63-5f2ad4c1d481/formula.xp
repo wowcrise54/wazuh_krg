@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {WORDDASH} waf_sync.services Config test
+        is unsuccessful: {WORDDASH}: [{WORDDASH}] {reason=STRING+} in {$file_path=REST}'
+
+action = "check"
+object = "configuration"
+status = "failure"
+
+$tmp = find_substr($file_path, ":")
+
+if $tmp != Null then
+    $file_path = substr($file_path, 0, $tmp)
+endif
+
+object.path = strip($file_path, "\"", "\"")
+
+importance = "medium"
+
+event_src.title = "application_firewall"
+event_src.subsys = "waf_sync"
+event_src.vendor = "positive_technologies"
+event_src.category = "Application security"
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_Config_file_is_uncorrect"

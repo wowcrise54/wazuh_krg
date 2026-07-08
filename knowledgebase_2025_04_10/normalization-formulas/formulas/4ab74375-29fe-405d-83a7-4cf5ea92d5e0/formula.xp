@@ -1,0 +1,44 @@
+!TABULAR = "{subject.account.name=job_owner},
+            {src.hostname=client_name},
+            {dst.hostname=destination_media_server_name},
+            master_server_key,
+            {time=start_time}"
+
+!COND = $job_type == 4
+
+subject = "account"
+action = "copy"
+object = "file_object"
+if $job_status == 0 then
+    status = "success"
+else
+    status = "failure"
+    reason = $job_status
+endif
+
+object.type = "backup"
+if $current_file != "" then
+    object.name = $current_file
+endif
+
+if $destination_storage_unit_name != "" then
+    datafield2 = $destination_storage_unit_name  # datafield2 - имя хранилища для бэкапа
+endif
+
+datafield1 = $master_server_key  # ID мастер-сервера
+
+duration = datetime_to_epoch(datetime($end_time)) - datetime_to_epoch(datetime($start_time))
+msgid = $job_type
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "veritas"
+event_src.title = "netbackup"
+event_src.subsys = "nbdb jobd"
+event_src.category = "Backup server"
+event_src.hostname = dst.hostname
+
+id = "PT_Veritas_Netbackup_NBDB_Jobd_odbc_4_Duplicate"

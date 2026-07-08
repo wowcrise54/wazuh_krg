@@ -1,0 +1,29 @@
+JSON = 'category = 35'
+
+COND = $data["ID"] == "ADD_IFACE_ENTRY"
+
+subject = "account"
+action = "assign"
+object = "ip_address"
+status = "success"
+
+subject.name = $data["AdminName"]
+
+object.property = "ip-address"
+object.value = $data["IfaceEntry"]["Addr"]
+
+interface = $data["IfaceEntry"]["Ifname"]
+
+datafield1 = $cg_name   # имя криптошлюза
+datafield2 = $cg_cssid  # id криптошлюза
+
+time = $time
+msgid = $data["ID"]
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+
+id = "PT_Security_Code_Kontinent_odbc_add_ip"

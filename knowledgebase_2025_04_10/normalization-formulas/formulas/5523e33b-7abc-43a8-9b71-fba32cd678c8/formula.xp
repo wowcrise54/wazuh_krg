@@ -1,0 +1,30 @@
+TEXT = '{$maybe_time=STRING*} {$otype="ovpn"|$otype="pptp"|$otype="l2tp"|$otype="sstp"},{$topics=STRING+}
+        {"<"?}{src.ip=IPV4|src.ip=IPV6}{">"?}: user {subject.name=STRING} authentication failed'
+
+subject = "account"
+action = "start"
+object = "session"
+status = "failure"
+
+object.property = "tunnel protocol"
+if $otype == "ovpn" then
+    object.value = "OpenVPN"
+else
+    object.value = $otype
+endif
+
+# $maybe_time - reserved for the future
+# $topics - reserved for the case of in_list() searches
+
+reason = "Authentication failed"
+
+time = recv_time
+
+importance = "medium"
+
+event_src.vendor = "mikrotik"
+event_src.title = "routeros"
+event_src.subsys = "vpn-gateway"
+event_src.category = "Network device"
+
+id = "PT_MikroTik_RouterOS_syslog_vpn_session_auth_failure"

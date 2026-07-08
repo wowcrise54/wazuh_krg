@@ -1,0 +1,37 @@
+TEXT = "{'<'NUMBER'>'}{NUMBER}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}{$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}{':'?}
+        mgd {NUMBER?} {'UI_CFG_AUDIT_SET_SECRET'}[junos@2636.{STRING} username=\"{subject.name=UNTIL('\"')}
+        action=\"{WORDDASH}\" pathname=\"{$objv=UNTIL('\"')} {REST}"
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+subject = "account"
+object = "configuration"
+action = "modify"
+status = "success"
+
+object.value = strip($objv, "[", "\\]")
+
+if find_substr ($objv, "[system login user") != null then
+    submessage ("TEXT", "parse_objectvalue", $objv)
+endif
+
+subformula "parse_objectvalue"
+  !TEXT = "{$csv=CSV(' ', '\"')}"
+  datafield1 = $csv[3]
+endsubformula
+
+if find_substr($objv, "[system login user") != null then
+    reason = "change user attributes"
+elif find_substr($objv, "[system root-authentication") != null then
+    reason = "change root authentication"
+else
+    reason = "set configuration value"
+endif
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_ui_cfg_audit_set_secret_structured"
+importance = "info"

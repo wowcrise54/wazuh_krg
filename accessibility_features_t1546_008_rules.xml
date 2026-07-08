@@ -1,0 +1,55 @@
+<!--
+  Native Wazuh port of MaxPatrol SIEM rules:
+  PT-CR-268 Windows_Accessibility_StickyKey_Modification
+  PT-CR-459 Accessibility_Feature_Tool_Abuse
+  MITRE ATT&CK T1546.008: Accessibility Features.
+-->
+<group name="windows,accessibility_features,t1546_008,">
+
+  <!-- PT-CR-268: IFEO modification for an accessibility executable. -->
+  <rule id="110260" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\CurrentVersion\\Image File Execution Options\\(?:osk|sethc|utilman|displayswitch|magnify|narrator|atbroker)\.exe(?:\\|$)</field>
+    <field name="win.eventdata.details" type="pcre2">(?i)\.exe(?:[&quot;'\s]|$)</field>
+    <description>Accessibility Feature IFEO modified by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.008</id>
+    </mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,accessibility_features,</group>
+  </rule>
+
+  <!-- PT-CR-459: an accessibility process starts a child process. -->
+  <rule id="110261" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\(?:osk|narrator|sethc|magnify|displayswitch|utilman|atbroker)\.exe$</field>
+    <description>Accessibility Feature abuse: $(win.eventdata.parentImage) started $(win.eventdata.image) with command line $(win.eventdata.commandLine), user $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.008</id>
+    </mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,accessibility_features,</group>
+  </rule>
+
+  <!-- PT-CR-459: Sysmon network connection from an accessibility process. -->
+  <rule id="110262" level="10">
+    <if_sid>61605</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(?:osk|narrator|sethc|magnify|displayswitch|utilman|atbroker)\.exe$</field>
+    <description>Accessibility Feature process $(win.eventdata.image) connected to $(win.eventdata.destinationIp):$(win.eventdata.destinationPort), user $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.008</id>
+    </mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,network_connection,accessibility_features,</group>
+  </rule>
+
+  <!-- PT-CR-459 alternative source: Windows Filtering Platform Event 5156. -->
+  <rule id="110263" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^5156$</field>
+    <field name="win.eventdata.application" type="pcre2">(?i)\\(?:osk|narrator|sethc|magnify|displayswitch|utilman|atbroker)\.exe$</field>
+    <description>Windows Filtering Platform allowed an Accessibility Feature process $(win.eventdata.application) connection to $(win.eventdata.destAddress):$(win.eventdata.destPort).</description>
+    <mitre>
+      <id>T1546.008</id>
+    </mitre>
+    <group>security_event,windows_security,attack,persistence,privilege_escalation,network_connection,accessibility_features,</group>
+  </rule>
+
+</group>

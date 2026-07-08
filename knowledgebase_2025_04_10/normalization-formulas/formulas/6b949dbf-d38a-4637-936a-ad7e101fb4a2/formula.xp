@@ -1,0 +1,26 @@
+EVENTLOG = 'EventID.text="1028"'
+COND = $Channel=="System" and $Provider["Name"]=="Microsoft-Windows-DHCP-Server"
+
+action = "initiate"
+object = "service"
+status = "failure"
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+reason = $Data[0]
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "DHCP server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1028_Service_failed_to_initialize_audit_log"
+importance = "medium"

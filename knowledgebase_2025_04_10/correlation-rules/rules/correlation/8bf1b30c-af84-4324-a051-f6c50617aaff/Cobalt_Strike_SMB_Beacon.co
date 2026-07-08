@@ -1,0 +1,173 @@
+event Pipe_MS_Agent:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and in_list(["17", "18"], msgid)
+        and (
+            regex(object.name, "(?i)^(msse-|postex_|status_|dsernamepipe\S{2}|msftewds\S{2}|pgmessagepipe\S{2})", 0) != null 
+            or find_substr(lower(object.name), "msagent_") != null
+            or lower(object.name) == "toteslegit"
+            or match(lower(subject.process.fullpath), "*\\admin$\\*.exe")
+        )
+        and filter::CheckWL_Specific_Only("Cobalt_Strike_SMB_Beacon", lower(join([subject.process.fullpath, object.name], "|")))
+    }
+
+event Access_Pipe_MS_Agent:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "5145"
+        and lower(object.storage.id) == "\\\\*\\ipc$"
+        and (
+             find_substr(lower(object.name), "msagent_") != null
+             or find_substr(lower(object.name), "msse-") != null
+        )
+       and filter::CheckWL_Windows_Shares("Cobalt_Strike_SMB_Beacon", lower(join([src.host, object.name], "|")))
+    }
+
+rule Cobalt_Strike_SMB_Beacon: Pipe_MS_Agent or Access_Pipe_MS_Agent
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Pipe_MS_Agent {
+        $object = "ds_object"
+        #Блок, проверяющий, что сработала проверка только на ADMIN$
+        if regex(object.name, "(?i)^(msse-|postex_|status_|dsernamepipe\S{2}|msftewds\S{2}|pgmessagepipe\S{2})", 0) == null then  
+            if find_substr(lower(object.name), "msagent_") == null then
+                if lower(object.name) != "toteslegit" then
+                    $object = "resource"
+                endif
+            endif
+        endif
+
+        $subject = subject
+        $action = action
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.type = object.type
+        $object.name = object.name
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        if match(lower($subject.process.fullpath), "*\\admin$\\*.exe") then
+            $reason = "adminshare_pipe" 
+        endif
+        $alert.key = lower(join([subject.process.fullpath, object.name], "|"))
+        $alert.regex_match = strip(join([regex(object.name, "(?i)(msagent_|msse-|postex_|status_|toteslegit|dsernamepipe\S{2}|msftewds\S{2}|pgmessagepipe\S{2})[a-z0-9\-_]+\\b", 0),regex(subject.process.fullpath, "(?i)\\\\admin\$\\\\.+\.exe",0)],"|"), "|", "|")
+        if $object == "ds_object" then
+            $alert.context = $subject.process.path
+        endif
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on Access_Pipe_MS_Agent {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.type = object.type
+        $object.name = object.name
+        $object.path = object.path
+        $object.state = object.state
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $datafield3 = datafield3  # путь к файлу с общим доступом
+        $datafield4 = datafield4  # имя объекта с общим доступом
+        $datafield6 = datafield6  # AccessMask
+        $datafield9 = datafield9  # Расшифровка поля subject.account.privileges
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([src.host, object.name], "|"))
+        $alert.context = object.name
+        $labels = $labels + "|CheckWL_Windows_Shares"
+    }
+
+
+emit {
+    if in_list(["ds_object", "file_object"], $object) then # Сработали pipe ms agent
+        $correlation_type = "incident"
+    elif $object == "resource" then
+        $correlation_type = "event" # Сработала только проверка на pipe из ADMIN$
+    endif
+
+    if match(lower($subject.process.fullpath), "*\\admin$\\*.exe") then
+        $importance = "high"
+        $category.generic = "Attack"
+        $category.high = "Lateral Movement"
+        $category.low = "Remote Services: SMB/Windows Admin Shares"
+    else
+        $importance = "medium"
+        $category.generic = "Attack"
+        $category.high = "Execution"
+        $category.low = "User Execution: Malicious File"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}
+
+insert_into Cobalt_Strike_Processes if $object.storage.name == null and $object != "resource" {
+    host = lower($event_src.host)
+    cobalt_executor_name = lower($subject.process.name)
+    cobalt_executor_id = lower($subject.process.id) 
+    pipe_name = lower($object.name) 
+}

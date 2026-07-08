@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and in_list(["0100044545", "0100044547"], $kv["logid"])
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+subject.account.name = $kv["user"]
+
+object.property = "scope"
+object.value = $kv["cfgpath"]
+
+$ui_src = csv(strip($kv["ui"], "", ")"), "(", "`")
+
+if maybe_ipv4($ui_src[1]) != null or maybe_ipv6($ui_src[1]) != null then
+    src.ip = $ui_src[1]
+endif
+
+interface = $ui_src[0]
+
+datafield2 = $kv["cfgobj"]                             # Configuration object
+datafield3 = $kv["vd"]                                 # Virtual domain name
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")  # Event type
+datafield11 = $kv["action"]                            # Action
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "medium"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = $kv["devname"]
+event_src.id = $kv["devid"]
+event_src.category = "Firewall"
+
+id = "PT_Fortinet_Fortigate_syslog_44545_44547_LOGID_EVENT_CONFIG_OBJ_OBJATTR"

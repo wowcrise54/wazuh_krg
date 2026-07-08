@@ -1,0 +1,215 @@
+query CheckCmdlet($commandline) from Malicious_Powershell_Cmdlets {
+    regex_match($commandline, column::cmdlet_value)
+}
+
+query CheckCmdlet_Qhandler($commandline) from Malicious_Powershell_Cmdlets {
+    regex_match($commandline, column::cmdlet_value)
+}
+    qhandler {
+        $event_importance = cmdlet_importance
+        $event_type = cmdlet_type
+        $event_description = cmdlet_description
+        $cmdlet_value = cmdlet_value
+    }
+
+event Run_Malicious_Cmdlet_In_Powershell_Pipeline:
+    key:
+        event_src.host, object.name
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and object == "command"
+        and event_src.title == "windows"
+        and exec_query("CheckCmdlet", [lower(object.process.cmdline)])
+        and filter::CheckWL_Powershell("Execute_Malicious_Powershell_Cmdlet", lower(object.process.cmdline))
+    }
+
+event Run_Malicious_Cmdlet_In_Powershell_Command:
+    key:
+        event_src.host, object.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and object == "command"
+        and event_src.title == "windows"
+        and exec_query("CheckCmdlet", [lower(object.process.cmdline)])
+        and filter::CheckWL_Powershell("Execute_Malicious_Powershell_Cmdlet", lower(object.process.cmdline))
+    }
+
+rule Execute_Malicious_Powershell_Cmdlet: (Run_Malicious_Cmdlet_In_Powershell_Pipeline+ or Run_Malicious_Cmdlet_In_Powershell_Command+) timer 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+        $first_event = true
+    }
+
+    on Run_Malicious_Cmdlet_In_Powershell_Pipeline {
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.process.cmdline = object.process.cmdline
+            $object.process.name = object.process.name
+
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $datafield8 = datafield8  # версия модуля
+
+            $chain_id = chain_id
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $alert.key = lower(object.process.cmdline)
+
+            $first_event = false
+        endif
+
+        $result = exec_query("CheckCmdlet_Qhandler", [lower(object.process.cmdline)])
+        if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+            $new_importance = join([$new_importance, lower($result["$event_importance"])], "|")
+        endif
+
+        if in_list(["event", "incident"], lower($result["$event_type"])) then
+            $new_corr_type = join([$new_corr_type, lower($result["$event_type"])], "|")
+        endif
+
+        $cmdlet_value = regex(lower(object.process.cmdline), $result["$cmdlet_value"], 0)
+        if find_substr($alert.regex_match, $cmdlet_value) == null then
+            if $alert.regex_match == null then
+                $alert.regex_match = $cmdlet_value
+            else
+                $alert.regex_match = join([$alert.regex_match, $cmdlet_value], " | ")
+            endif
+        endif
+        
+        if find_substr($alert.context, $result["$event_description"]) == null then
+            if $alert.context == null then
+                $alert.context = $result["$event_description"]
+            else
+                $alert.context = join([$alert.context, $result["$event_description"]], " | ")
+            endif
+        endif
+    }
+
+    on Run_Malicious_Cmdlet_In_Powershell_Command {
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.session_id = object.account.session_id
+            $object.account.privileges = object.account.privileges
+            $object.account.id = object.account.id
+
+            $object.process.cmdline = object.process.cmdline
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+
+            $object.id = object.id
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $alert.key = lower(object.process.cmdline)
+
+            $first_event = false
+        endif
+
+        $result = exec_query("CheckCmdlet_Qhandler", [lower(object.process.cmdline)])
+        if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+            $new_importance = join([$new_importance, lower($result["$event_importance"])], "|")
+        endif
+
+        if in_list(["event", "incident"], lower($result["$event_type"])) then
+            $new_corr_type = join([$new_corr_type, lower($result["$event_type"])], "|")
+        endif
+
+        $cmdlet_value = regex(lower(object.process.cmdline), $result["$cmdlet_value"], 0)
+        if find_substr($alert.regex_match, $cmdlet_value) == null then
+            if $alert.regex_match == null then
+                $alert.regex_match = $cmdlet_value
+            else
+                $alert.regex_match = join([$alert.regex_match, $cmdlet_value], " | ")
+            endif
+        endif
+        
+        if find_substr($alert.context, $result["$event_description"]) == null then
+            if $alert.context == null then
+                $alert.context = $result["$event_description"]
+            else
+                $alert.context = join([$alert.context, $result["$event_description"]], " | ")
+            endif
+        endif
+    }
+
+emit {
+    if find_substr($new_corr_type, "incident") != null then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    if find_substr($new_importance, "high") != null then
+        $importance = "high"
+    elif find_substr($new_importance, "medium") != null then
+        $importance = "medium"
+    elif find_substr($new_importance, "low") != null then
+        $importance = "low"
+    endif
+
+    $subject = "account"
+    $action = "execute"
+    $status = "success"
+    $object = "command"
+    
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: PowerShell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

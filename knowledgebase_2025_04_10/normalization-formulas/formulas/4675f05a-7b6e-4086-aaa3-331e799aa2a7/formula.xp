@@ -1,0 +1,26 @@
+id = "PT_Accord_SUCU_filemonitor_Remove_dir"
+
+!TEXT = "{time = DATETIME},{subject.name=WORDDASH},{HOSTNAME},Execute command,{msgid='DeleteDir'},{$csv=CSV}"
+
+submessage("TEXT","Command_param",$csv[9])
+subformula "Command_param"
+    !TEXT = "{object.name=STRING+} со статусом {REST}"
+endsubformula
+
+subject = "account"
+action = "remove"
+
+object = "resource"
+object.type = "directory"
+
+if $csv[0] == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+importance = "low"
+
+event_src.vendor = "accord"
+event_src.title = "sucu"
+event_src.category = "Host security"

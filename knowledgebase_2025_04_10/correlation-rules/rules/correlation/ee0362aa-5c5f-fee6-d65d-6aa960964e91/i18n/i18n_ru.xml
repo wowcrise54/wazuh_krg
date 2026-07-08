@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Запуск процесса от имени учетной записи базы данных может свидетельствовать о попытке злоумышленника, получившего возможность выполнять запросы к базе данных, повысить привилегии</Description>
+  <EventDescriptions>
+    <EventDescription id="edb2bb16-c7fa-e6a8-3fb6-33840b494af5">Запущен процесс {object.process.name} от имени пользователя {subject.account.name} (пользователь {subject.application.account.name} базы данных PostgreSQL) на узле {event_src.host} с записью результата в таблицу {object.name}</EventDescription>
+    <EventDescription id="f433b82e-bcce-0da7-01c7-a4beca6aed30">Попытка запустить процесс от имени пользователя {subject.application.account.name} базы данных PostgreSQL на узле {event_src.host} с записью результата в таблицу {object.name}</EventDescription>
+  </EventDescriptions>
+</Localization>

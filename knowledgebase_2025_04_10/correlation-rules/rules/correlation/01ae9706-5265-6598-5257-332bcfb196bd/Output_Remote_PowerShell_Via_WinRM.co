@@ -1,0 +1,138 @@
+event WSMAN_Handle_Requested:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4656"
+        and subject.process.name == "powershell.exe"
+        and match(lower(object.fullpath), "\\registry\\machine\\software\\microsoft\\windows\\currentversion\\wsman")
+    }
+
+event Remote_Command:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and regex(lower(object.process.cmdline), "-\\bcomputername\\b", 0) != null
+        and regex(lower(object.process.cmdline), "\\b(invoke-command|new-pssession|enter-pssession)\\b", 0) != null
+        and filter::CheckWL_Powershell("Output_Remote_PowerShell_Via_WinRM", join([lower(event_src.host), lower(object.process.cmdline)],"|"))
+    }
+
+event Connection_To_WinRm_Port:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "3"
+        and in_list([5985, 5986],dst.port)
+    }
+
+rule Output_Remote_PowerShell_Via_WinRM: WSMAN_Handle_Requested and Remote_Command and Connection_To_WinRm_Port
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+    }
+
+    on WSMAN_Handle_Requested {
+        # subject
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        
+        # event src host
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on Remote_Command {
+        # object
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        
+        $object.value = object.value
+        
+        $datafield1 = datafield1
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        # other
+        $alert.key = join([lower(event_src.host), lower(object.process.cmdline)],"|")
+    }
+
+    on Connection_To_WinRm_Port {
+        # src
+        $src.host = src.host
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.asset = src.asset
+        $src.port = src.port
+    
+        # dst
+        $dst.host = dst.host
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.asset = dst.asset
+        $dst.port = dst.port
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: Windows Remote Management"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

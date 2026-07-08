@@ -1,0 +1,33 @@
+!EVENTLOG = 'EventID.text="4"'
+!COND = $Provider["Name"]=="PT_WMI_subscriptions" and $Channel=="Application"
+
+action = "remove"
+object = "resource"
+status = "success"
+
+object.type = "event filter"
+object.name = strip($Data[1], "Name=", "")
+object.path = strip($Data[2], "EventNamespace=", "")
+object.property = "query"
+object.value = strip($Data[3], "Query=", "")
+
+datafield1 = strip($Data[4], "QueryLanguage=", "")    # Язык написания запроса
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Common_PT_WMI_subscriptions_4_WMI_event_filter_deleted"

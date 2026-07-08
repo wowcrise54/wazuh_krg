@@ -1,0 +1,57 @@
+EVENTLOG = ''
+!COND = in_list(["1116", "1117"], $EventID)
+        and $Channel=="Microsoft-Windows-Windows Defender/Operational"
+        and $Provider["Name"]=="Microsoft-Windows-Windows Defender"
+
+action = "detect"
+object = "malware"
+status = "success"
+
+object.state = switch $Data["Action Name"]
+    case "%%808" "removed"
+    case "%%809" "quarantined"
+    case "%%810" "cured"
+    case "%%811" "skipped"
+endswitch
+
+if object.state == null then
+    object.state = $Data["Action Name"]  # fallback
+endif
+
+object.name = $Data["Threat Name"]
+object.path = $Data["Path"]
+object.id = strip($Data["Detection ID"], "{", "}")
+object.property = "threat level"
+object.value = $Data["Severity Name"]
+
+datafield1 = $Data["Product Version"]      # Версия ПО
+datafield2 = $Data["Engine Version"]       # Версия модуля
+datafield3 = $Data["Signature Version"]    # Версия сигнатур
+datafield4 = $Data["Process Name"]
+$csv_user = csv($Data["Detection User"], "\\", "'")
+datafield6 = $csv_user[1]
+datafield7 = $csv_user[0]
+datafield8 = $Data["FWLink"]               # Ссылка на описание данного типа угроз
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "high"
+
+category.generic = "Malware"
+category.high = "Information Security"
+category.low = "Detection"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Host security"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1116_1117_Malware"

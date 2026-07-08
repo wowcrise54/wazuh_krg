@@ -1,0 +1,58 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|"localhost"|$Computer=HOSTNAME} /dga.py: {$json=REST}'
+
+subject = "application"
+action = "detect"
+object = "request"
+status = "success"
+
+subject.name = "TDS Sensor"
+
+object.property = "probability of infection, %"
+
+subformula "log"
+    # parse included JSON message
+    JSON = ''
+
+    COND = $domain_len != null
+
+    subject.version = $classifier_version
+
+    object.value = $confidence
+
+    src.ip = $src_ip
+    src.port = $src_port
+
+    dst.ip = $dst_ip
+    dst.port = $dst_port
+
+    reason = $msg
+
+    datafield1 = $payload                   # пейлоад запросов
+    datafield2 = join($queries_list, ", ")  # список опрошенных доменных имен
+    datafield3 = $query                     # web-запрос
+    datafield4 = $domain_lvl                # уровень домена
+
+    time = epoch_to_datetime(number($ts))
+
+endsubformula
+
+submessage("JSON", "log", $json)
+
+importance = "medium"
+
+category.high = "Information Security"
+category.generic = "Anomaly"
+category.low = "Detection"
+
+event_src.title = "bot_trek_tds"
+event_src.vendor = "group_ib"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network security"
+
+id = "PT_Group_IB_Bot_Trek_TDS_syslog_DGA_Anomaly"

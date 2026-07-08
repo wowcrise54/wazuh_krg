@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {msgid="CSCOacs_Administrative_and_Operational_Audit"|msgid="CISE_Administrative_and_Operational_Audit"}
+        {NUMBER+} 0 {UNTIL(" Administrator-Login: ")}{"Administrator logged off"|
+        "A CLI user has logged out from SSH"} {$kv=KEYVALUE}'
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+subject.account.name = $kv["AdminName"]
+
+src.ip = $kv["AdminIPAddress"]  # ip адрес администратора
+
+dst.hostname = event_src.hostname
+
+protocol.layer7 = switch $kv["AdminInterface"]
+    case "CLI" "ssh"
+    case "GUI" "http"
+endswitch
+
+logon_service = $kv["AdminInterface"]
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = switch msgid
+    case "CSCOacs_Administrative_and_Operational_Audit" "acs"
+    case "CISE_Administrative_and_Operational_Audit" "ise"
+endswitch
+event_src.vendor = "cisco"
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_Administrative_and_Operational_Audit_logout"

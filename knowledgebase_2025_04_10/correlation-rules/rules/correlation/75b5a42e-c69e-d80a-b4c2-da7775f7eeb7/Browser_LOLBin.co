@@ -1,0 +1,137 @@
+event Browser_Start:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::ProcessStart_Windows_any()
+            and regex(lower(object.process.name), 
+                "^(?:chrome|msedge|teams|msedgewebview2?|opera|vivaldi|brave|browser|slack|discord|code|atom|whatsapp|skype).exe$", 0) != null
+            or (
+                filter::ProcessStart_Linux()
+                and regex(lower(object.process.name), 
+                    "^(?:google-)?chrome|msedge|teams|opera|vivaldi|brave-browser|yandex-browser(?:-beta)?|slack|discord|code|atom|whatsapp-desktop|skype$", 0) != null
+            )
+        )
+        and (
+             find_substr(lower(object.process.cmdline), "--gpu-launcher") != null
+             or find_substr(lower(object.process.cmdline), "--utility-cmd-prefix") != null
+             or find_substr(lower(object.process.cmdline), "--browser-subprocess-path") != null
+             or find_substr(lower(object.process.cmdline), "--renderer-cmd-prefix") != null
+        )
+        and filter::CheckWL_Process_Creation("Browser_LOLBin", lower(join([object.process.name, object.process.cmdline], "|")))
+    }
+
+event Process_Start:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::ProcessStart_Windows_any()
+            and regex(lower(object.process.cmdline), 
+                "(?:chrome|msedge|teams|msedgewebview2?|opera|vivaldi|brave|browser|slack|discord|code|atom|whatsapp|skype).exe", 0) != null
+            or (
+                filter::ProcessStart_Linux()
+                and regex(lower(object.process.meta), 
+                    "(?:google-)?chrome|msedge|teams|opera|vivaldi|brave-browser|yandex-browser(?:-beta)?|slack|discord|code|atom|whatsapp-desktop|skype", 0) != null
+            )
+        )
+    }
+
+rule Browser_LOLBin: (Browser_Start -> Process_Start) within 3m
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Browser_Start {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.parent.id = object.process.id
+        $object.process.parent.name = object.process.name
+        $object.process.parent.path = object.process.path
+        $object.process.parent.fullpath = object.process.fullpath
+        $object.process.parent.guid = object.process.guid
+        $object.process.parent.cmdline = object.process.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([object.process.name, object.process.cmdline], "|"))
+    }
+
+    on Process_Start {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $datafield1 = coalesce(datafield1, subject.account.session_id)
+        $datafield2 = coalesce(datafield2, object.process.parent.id)
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        $datafield19 = datafield19  # цепочка имен процессов
+
+        $numfield2 = numfield2
+
+        if event_src.title == "unix_like" then
+            $alert.regex_match = regex(lower(object.process.meta), 
+                "(?:google-)?chrome|msedge|teams|opera|vivaldi|brave-browser|yandex-browser(?:-beta)?|slack|discord|code|atom|whatsapp-desktop|skype", 0)  
+        elif event_src.title == "windows" then
+            $alert.regex_match = regex(lower(object.process.cmdline), 
+                "(?:chrome|msedge|teams|msedgewebview2?|opera|vivaldi|brave|browser|slack|discord|code|atom|whatsapp|skype).exe", 0)
+        endif
+        $alert.context = lower(join([coalesce(subject.account.name, subject.account.id), $object.process.parent.name + " -> " + object.process.name], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Trusted Developer Utilities Proxy Execution"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

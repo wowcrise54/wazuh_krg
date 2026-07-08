@@ -1,0 +1,46 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id
+           "
+
+COND = string($event_id) == "1003"
+       and (
+        $event_category == "Общие события"
+        or $event_category == "Common events"
+       )
+       and (
+        $event_type == "Warning"
+        or $event_type == "Предупреждение"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+action = "info"
+object = "process"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Предупреждение"|"Warning"}. {"Имя процесса"|"Process name"}: {object.process.name=STRING+}
+            {"Данные"|"Data"}: {reason=REST}'
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Общие события" then
+    event_src.subsys = "common events"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1003_process_warning"

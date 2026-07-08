@@ -1,0 +1,40 @@
+TABULAR = '__policy_id_tag,
+           action,
+           cluster_info,
+           has_accounting,
+           i/f_dir,
+           {event_src.ip=orig},
+           origin_sic_name,
+           {time = time}'
+
+COND = $product == "VPN-1 & FireWall-1"
+       and find_substr($cluster_info, "(ClusterXL) member") != null
+
+object = "node"
+action = "info"
+status = "success"
+
+subformula 'sub1'
+    TEXT = '(ClusterXL) member {object.id=NUMBER} ({datafield2=IPV4|datafield2=IPV6}) is {object.state=WORD}
+            {$temp="."|$temp="("}{$reas=REST}'
+
+    if ($temp == "(") then
+        reason = substr($reas, 0, find_substr($reas, '.).'))
+    endif
+endsubformula
+
+submessage('TEXT', 'sub1', $cluster_info)
+
+object.type = "Cluster"
+
+#datafield2 - ip участника кластера
+datafield4 = $origin_sic_name  # полное доменное имя
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.category = "Network security"
+event_src.subsys = lower($product)
+
+id = "PT_Checkpoint_Gaia_opseclog_VPN_and_Firewall_Cluster_member_changed_state_success"

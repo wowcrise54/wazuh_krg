@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0103020302"
+
+action = "state"
+object = "resource"
+status = "success"
+
+subformula "Message"
+    TEXT = '{protocol=UNTIL(":")} %OSPF-5-ADJCHANGE: neighbor {interface=UNTIL(":")}{datafield1=IPV4|datafield1=IPV6}-
+            {datafield2=IPV4|datafield2=IPV6} {object.state=STRING}' 
+endsubformula
+
+submessage("TEXT", "Message", $kv["msg"])
+
+object.type = "routing adjacency"
+
+# datafield1 - interface ip-address
+# datafield2 - neighbor router-id
+datafield3 = $kv["vd"]                                 # Virtual domain name
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")  # Event type
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "info"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["devid"]
+event_src.category = "Firewall"
+
+id = "PT_Fortinet_Fortigate_syslog_20302_log_id_ospf_nb_stat_chg"

@@ -1,0 +1,26 @@
+TABULAR = "{msgid=event_id}"
+COND = $event_id == 903
+
+subject = "account"
+action = "validate"
+object = "resource"
+status = if $status == 0 then "success" else "failure" endif
+
+subject.account.name = $user
+
+object.type = "token"
+object.state = $status
+
+datafield1 = $guid  # guid
+datafield2 = csv(strip($obj_name, "Сервер \"","\""),':','')[0]  # the object in which the action takes place
+datafield3 = csv(strip($obj_name, "Сервер \"","\""), ':','')[1]  # port
+
+time = epoch_ms_to_datetime($unix_time + ($timezone * 60000))
+if $comment != "" then reason = $comment endif
+importance = "info"
+
+event_src.vendor = "confident"
+event_src.title = "ucc_dallas_lock"
+event_src.category = "Other"
+
+id = "PT_Confident_UCC_Dallas_Lock_odbc_token_checking"

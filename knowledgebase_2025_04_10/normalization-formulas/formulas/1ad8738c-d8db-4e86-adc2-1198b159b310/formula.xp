@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {"."NUMBER?}{event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="NBRCHGTRAP"|msgid="hwLldpInterfaceRemTablesChange"|msgid="lldpRemTablesChange"}
+        {"(l)"|"(t)"|}{"["NUMBER"]"?}{":OID"?}{":"?}{"CID="UNTIL(";")?}{STRING?}
+        {"LLDP neighbor information was changed."|"Neighbor information is changed."|
+        "Neighbor information of the interface was changed."}
+        ({$tmp=UNTIL(")")?}'
+
+$kv = keyvalue($tmp,",","=","~")
+
+action = "modify"
+object = "configuration"
+status = "success"
+
+src.ip = $kv["RemoteDeviceManageAddress"]
+src.mac = replace($kv["RemoteInterfaceName"],'.','-')
+interface = $kv["Interface"]
+protocol = "LLDP"
+
+$tmp_action = $kv["Action"]
+$tmp_added = "added: " + $kv["Added"] + $kv["LldpStatsRemTablesInserts"] + ", "
+$tmp_deleted = "deleted: " + $kv["Deleted"] + $kv["LldpStatsRemTablesDeletes"] + ", "
+$tmp_dropped = "dropped: " + $kv["Dropped"] + $kv["LldpStatsRemTablesDrops"] + ", "
+$tmp_aged = "aged: " + $kv["Aged"] + $kv["LldpStatsRemTablesAgeouts"] + ". "
+
+reason = "Change in quantity: " + $tmp_added + $tmp_deleted + $tmp_dropped + $tmp_aged
+
+importance = "info"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_LLDP_remote_tables_change"

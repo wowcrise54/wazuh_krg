@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["action"] == "Reject"
+       and $kv["fw_subproduct"] == "VPN-1"
+       and find_substr($kv["message"], "Suspected path traversal attack") != null
+
+subject = "rule"
+action = "detect"
+object = "attack"
+status = "success"
+
+submessage("TEXT","GET_info",strip($kv["message"], ':"', '"'))
+subformula "GET_info"
+    TEXT = "Suspected {object.type=UNTIL(' attack')} from: {src.ip=IPV4|src.ip=IPV6}. The following file was requested: {object.fullpath=REST}"
+endsubformula
+
+protocol = lower(strip($kv["scheme"], ':"', '"'))
+interface = $kv["ifname"]
+
+datafield8 = $kv["originsicname"]  # полное доменное имя
+datafield9 = $hostname             # имя устройства с LogExporter
+
+reason = strip($kv["message"], ':"', '"')
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = "vpn-gateway"
+event_src.ip = $kv["origin"]
+event_src.category = "VPN"
+event_src.hostname = $hostname
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_VPN_and_Firewall_Suspected_Attack"

@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        pdns[{NUMBER}]: Unable to feed record during incoming {LITERAL}XFR of \'{$z_name=STRING} {reason=REST}'
+
+action = "update"
+object = "resource"
+status = "failure"
+
+object.type = "DNS zone"
+object.path = substr(reason, find_substr(reason, "'") + 1, find_substr(reason, "':") - find_substr(reason, "'") - 1)
+object.property = "DNS zone name"
+object.value = strip($z_name, "'", "':")
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "powerdns_authoritative_server"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_PowerDNS_Authoritative_Server_syslog_zone_failed_to_save_to_file"

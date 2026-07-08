@@ -1,0 +1,20 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {object.name=zpolicy},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "1734803685"
+
+action = "bind"
+object = "policy"
+status = "success"
+
+msgid = string($zntf_status)
+
+importance = "info"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_add_policy"

@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$ev_src_host=HOSTNAME} 
+        {WORDDASH}[{NUMBER}]({WORDDASH}): 
+        {"AS"|"TGS"}_REQ ({UNTIL("})")} {src.ip=IPV4|src.ip=IPV6|$src_host=HOSTNAME}: 
+        {msgid="LOCKED_OUT"}:{UNTIL(")}, ")?}
+        {$name=WORDDASH}{"@"?}{$domain=HOSTNAME?} for {WORDDASH}/{HOSTNAME?}@{HOSTNAME} {REST}'
+
+action = "lock"
+object = "account"
+status = "success"
+
+object.account.name = lower($name)
+object.account.domain = lower($domain)
+
+if find_substr($src_host, ".") != null then
+    src.fqdn = $src_host
+    src.hostname = substr($src_host, 0, find_substr($src_host, "."))
+else
+    src.hostname = $src_host
+endif
+
+reason = "many failed sign-in attempts"
+
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "freeipa"
+event_src.title = "freeipa"
+event_src.category = "Directory service"
+
+if find_substr($ev_src_host, ".") != null then
+    event_src.fqdn = $ev_src_host
+    event_src.hostname = substr($ev_src_host, 0, find_substr($ev_src_host, "."))
+else
+    event_src.hostname = $ev_src_host
+endif
+
+id = "PT_FreeIPA_FreeIPA_syslog_AD_Account_blocking"

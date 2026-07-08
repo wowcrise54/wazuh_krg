@@ -1,0 +1,26 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         AlertCenter.Changes - {STRING} {STRING} ch_date={STRING?} {STRING?} ch_user={$user=STRING} {$rest=REST}'
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+subject.name = strip($user, "\"", "\"]")
+
+reason = strip($rest, "", "...")
+
+importance = "info"
+
+event_src.vendor = "searchinform"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kib"
+event_src.category = "DLP"
+
+id = "PT_SearchInform_KIB_syslog_Changes"

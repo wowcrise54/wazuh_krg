@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Подозрительный вход с помощью Keycloak. Данные аутентификации отличаются от собранного профиля</Description>
+  <EventDescriptions>
+    <EventDescription id="8b916bf7-5ff3-80de-b8a2-0862fdbedd3e">Новый пользователь {subject.account.name} с узла {src.host} получил маркер безопасности от Keycloak на узле {event_src.host}. Пользователь отсутствует в собранном профиле</EventDescription>
+    <EventDescription id="9c568033-1fa9-4276-afda-e34be936264b">Пользователь {subject.account.name} с узла {src.host} получил маркер безопасности от Keycloak для доступа к новому ресурсу {object.application.name} на узле {event_src.host}. Ресурс отсутствует в собранном профиле</EventDescription>
+    <EventDescription id="c2120f81-97b6-3ecf-dd38-469f668c875b">Пользователь {subject.account.name} с нового узла {src.host} получил маркер безопасности от Keycloak на узле {event_src.host}. Адрес отсутствует в собранном профиле</EventDescription>
+  </EventDescriptions>
+</Localization>

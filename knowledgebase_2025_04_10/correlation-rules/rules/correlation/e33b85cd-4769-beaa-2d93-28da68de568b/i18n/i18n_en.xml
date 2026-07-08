@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in Aria Operations for Logs. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="26b450fd-0365-8d07-78aa-3f31e7b5d25b">Password spraying attempts on Aria Operations for Logs host {event_src.host}. Number of login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="68703720-e2de-cfe9-c3fc-aa24a632b523">Password spraying on Aria Operations for Logs host {event_src.host}. The password of user {subject.account.name} is bruteforced. Number of failed login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="c37eed06-2d3c-74f1-f241-cb02a7b25b4e">Password spraying on Aria Operations for Logs host {event_src.host}. The passwords of users {datafield2} are bruteforced. Number of failed login attempts: {count.subevents}.</EventDescription>
+  </EventDescriptions>
+</Localization>

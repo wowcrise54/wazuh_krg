@@ -1,0 +1,37 @@
+TEXT='{"<"NUMBER">"} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$raw_hostname=HOSTNAME} {STRING}
+       {NUMBER?} {"SMTP"}-{object.id=NUMBER} ({$df1=UNTIL(")")} failed to connect to {dst.hostname=UNTIL(":")} 
+       [{$raw_src=IPV4|$raw_src=IPV6}]:{$raw_src_p=NUMBER}->
+       [{dst.ip=IPV4|dst.ip=IPV6}]:{dst.port=NUMBER}. Error Code={reason=REST}'
+
+action = "start"
+object = "session"
+status = "failure"
+
+if $raw_src != "0.0.0.0" then
+    if maybe_ipv4($raw_src) != null or maybe_ipv6($raw_src) != null then
+        src.ip = $raw_src
+    endif
+endif
+
+if $raw_src_p != 0 then
+    src.port = $raw_src_p
+endif 
+
+protocol = "SMTP"
+
+datafield1 = strip ($df1,'',')')  # mail domain name
+
+importance = "info"
+
+event_src.vendor = "communigate_systems"
+event_src.title = "communigate"
+$dot_pos = find_substr($raw_hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = $raw_hostname
+    event_src.hostname = substr($raw_hostname, 0, $dot_pos)
+else
+    event_src.hostname = $raw_hostname
+endif
+event_src.category = "Mail server"
+
+id = "PT_CommuniGate_Systems_CommuniGate_syslog_smtp_session_failure"

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Exploitation of vulnerability CVE-2024-4577 in PHP for Windows where PHP is used in CGI mode. The vulnerability allows an unauthorized attacker to remotely execute arbitrary code on a web server. At the time of developing this rule, the attack can be reproduced only in Windows operating systems with Chinese (both simplified and traditional) or Japanese languages installed. The vulnerability is due to incorrect handling of Unicode character 0xAD (soft hyphen) that is interpreted as a regular hyphen by the CGI engine. This allows attackers to specify additional command line arguments starting with a hyphen for PHP</Description>
+  <EventDescriptions>
+    <EventDescription id="1fe53040-af16-23e1-a955-1299312609fd">Exploitation of vulnerability CVE-2024-4577 that allows an unauthorized attacker to remotely execute arbitrary code on host {event_src.host}</EventDescription>
+    <EventDescription id="5567088f-8bee-c08f-9133-c6396bf7b226">Exploitation of vulnerability CVE-2024-4577 that allows an unauthorized attacker to remotely execute arbitrary code from host {src.host} on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

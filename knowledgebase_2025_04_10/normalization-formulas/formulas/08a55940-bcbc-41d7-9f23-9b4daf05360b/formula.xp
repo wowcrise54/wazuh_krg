@@ -1,0 +1,158 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        mwg: [{STRING} +{NUMBER}] \"{$username=STRING} {src.ip=IPV4|src.ip=IPV6} {datafield1=NUMBER} \"{datafield3=WORD}
+        {object.path=STRING} {STRING} \"{$cat_and_type=STRING+} {count.bytes_in=NUMBER} {count.bytes_out=NUMBER} \"{$other=STRING+}
+        \"{msgid=NUMBER}\" \"{$objname=REST}'
+
+# blocked beacuse of virus detection
+if msgid == "80" then
+    action = "detect"
+    object = "malware"
+    status = "success"
+    if length($username) != 1 then
+    datafield5 = strip($username, '', '"')
+    endif
+    importance = "medium"
+# blocked because of other reason
+else
+    if length($username) != 1 then
+        subject = "account"
+        subject.name = strip($username, '', '"')
+    endif
+    action = "access"
+    object = "resource"
+    if msgid == "0" then
+        $success_list = ["100","101","102","200","201","202","203","204",
+                         "205","206","207","226","300","302","304"]
+        if in_list($success_list, datafield1) then
+            status = "success"
+            importance = "info"
+        else
+            status = "failure"
+            importance = "low"
+        endif
+    else
+        status = "failure"
+        importance = "low"
+    endif
+
+    if length($objname) != 1 then
+        object.name = strip($objname, '', '"')
+    endif
+
+    $cat = substr($cat_and_type, 0, find_substr($cat_and_type, '" "'))
+    if length($cat) != 0 then
+        object.group = $cat
+    endif
+    $type_temp = substr($cat_and_type, find_substr($cat_and_type, '" "') + 1, length($cat_and_type))
+    $type = strip(substr($type_temp, find_substr($type_temp, '" "') + 2, length($cat_and_type)), '"', '"')
+    if length($type) != 0 then
+        object.type = $type
+    endif
+endif
+
+# datafield1 - HTTP status code
+# datafield2 - description of the status code
+switch datafield1
+    case "000" datafield2 = "Unassigned"
+    case "100" datafield2 = "Continue"
+    case "101" datafield2 = "Switching"
+    case "102" datafield2 = "Processing"
+    case "200" datafield2 = "OK"
+    case "201" datafield2 = "Created"
+    case "202" datafield2 = "Accepted"
+    case "203" datafield2 = "Non-Authoritative Information"
+    case "204" datafield2 = "No Content"
+    case "205" datafield2 = "Reset Content"
+    case "206" datafield2 = "Partial Content"
+    case "207" datafield2 = "Multi-Status"
+    case "226" datafield2 = "IM Used"
+    case "300" datafield2 = "Multiple Choices"
+    case "301" datafield2 = "Moved Permanently"
+    case "302" datafield2 = "Found"
+    case "303" datafield2 = "See Other"
+    case "304" datafield2 = "Not Modified"
+    case "305" datafield2 = "Use Proxy"
+    case "307" datafield2 = "Temporary Redirect"
+    case "308" datafield2 = "Permanent Redirect"
+    case "400" datafield2 = "Bad Request"
+    case "401" datafield2 = "Unauthorized"
+    case "402" datafield2 = "Payment Required"
+    case "403" datafield2 = "Forbidden"
+    case "404" datafield2 = "Not Found"
+    case "405" datafield2 = "Method Not Allowed"
+    case "406" datafield2 = "Not Acceptable"
+    case "407" datafield2 = "Proxy Authentication Required"
+    case "408" datafield2 = "Request Timeout"
+    case "409" datafield2 = "Conflict"
+    case "410" datafield2 = "Gone"
+    case "411" datafield2 = "Length Required"
+    case "412" datafield2 = "Precondition Failed"
+    case "413" datafield2 = "Payload Too Large"
+    case "414" datafield2 = "URI Too Long"
+    case "415" datafield2 = "Unsupported Media Type"
+    case "416" datafield2 = "Range Not Satisfiable"
+    case "417" datafield2 = "Expectation Failed"
+    case "418" datafield2 = "Unassigned, I'm a teapot"
+    case "420" datafield2 = "Unassigned, Method Failure (Spring Framework) or Enhance Your Calm (Twitter) - Unofficial codes"
+    case "421" datafield2 = "Misdirected Request"
+    case "422" datafield2 = "Unprocessable Entity"
+    case "423" datafield2 = "Locked"
+    case "424" datafield2 = "Failed Dependency"
+    case "425" datafield2 = "Unassigned, Unordered Collection"
+    case "426" datafield2 = "Upgrade Required"
+    case "428" datafield2 = "Precondition Required"
+    case "429" datafield2 = "Too Many Requests"
+    case "431" datafield2 = "Request Header Fields Too Large"
+    case "434" datafield2 = "Unassigned, Requested host unavailable"
+    case "440" datafield2 = "Unassigned, Login Timeout - Internet Information Services - Unofficial code"
+    case "444" datafield2 = "Unassigned, Connection Closed Without Response or No Response - nginx - Unofficial code"
+    case "449" datafield2 = "Unassigned, Retry With - Internet Information Services - Unofficial code"
+    case "450" datafield2 = "Unassigned, Blocked by Windows Parental Controls (Microsoft) - Unofficial code"
+    case "451" datafield2 = "Unavailable For Legal Reasons or Redirect - Internet Information Services - Unofficial code"
+    case "495" datafield2 = "Unassigned, SSL Certificate Error - nginx - Unofficial code"
+    case "496" datafield2 = "Unassigned, SSL Certificate Required - nginx - Unofficial code"
+    case "497" datafield2 = "Unassigned, HTTP Request Sent to HTTPS Port - nginx - Unofficial code"
+    case "498" datafield2 = "Unassigned, Invalid Token (Esri) - Unofficial code"
+    case "499" datafield2 = "Unassigned, Token Required (Esri) or Request has been forbidden by antivirus or Client Closed Request - nginx - Unofficial codes"
+    case "500" datafield2 = "Internal Server Error"
+    case "501" datafield2 = "Not Implemented"
+    case "502" datafield2 = "Bad Gateway"
+    case "503" datafield2 = "Service Unavailable"
+    case "504" datafield2 = "Gateway Timeout"
+    case "505" datafield2 = "HTTP Version Not Supported"
+    case "506" datafield2 = "Variant Also Negotiates"
+    case "507" datafield2 = "Insufficient Storage"
+    case "508" datafield2 = "Loop Detected"
+    case "509" datafield2 = "Unassigned, Bandwidth Limit Exceeded (Apache Web Server/cPanel) - Unofficial code"
+    case "510" datafield2 = "Not Extended"
+    case "511" datafield2 = "Network Authentication Required"
+    case "520" datafield2 = "Unassigned, Unknown Error - CloudFlare - Unofficial code"
+    case "521" datafield2 = "Unassigned, Web Server Is Down - CloudFlare - Unofficial code"
+    case "522" datafield2 = "Unassigned, Connection Timed Out - CloudFlare - Unofficial code"
+    case "523" datafield2 = "Unassigned, Origin Is Unreachable - CloudFlare - Unofficial code"
+    case "524" datafield2 = "Unassigned, A Timeout Occurred - CloudFlare - Unofficial code"
+    case "525" datafield2 = "Unassigned, SSL Handshake Failed - CloudFlare - Unofficial code"
+    case "526" datafield2 = "Unassigned, Invalid SSL Certificate - CloudFlare - Unofficial code"
+    case "530" datafield2 = "Unassigned, Site is frozen - Unofficial code"
+    case "599" datafield2 = "Network Connect Timeout Error"
+endswitch
+# datafield3 - HTTP method
+# datafield4 - HTTP useragent
+$user_agent=substr($other, 0, find_substr($other, '" "'))
+if length($user_agent) != 0 then
+    datafield4 = $user_agent
+endif
+# datafield5 - username
+
+event_src.category = "Web security"
+event_src.title = "web_gateway"
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_McAfee_Web_Gateway_syslog_plain_Resource_access"

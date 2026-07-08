@@ -1,0 +1,190 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+
+COND = in_list(["DatastoreFileCopiedEvent", "DatastoreFileMovedEvent", "DatastoreFileDeletedEvent"], $event_class)
+       or (
+           $event_class == "EventEx"
+           and (
+              substr($raw_message, 0, 22) == "[File upload to path '"
+              or substr($raw_message, 0, 26) == "[File download from path '"
+           )
+       )
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+object = "file_object"
+
+subformula "upload_download_file"
+    TEXT = '[File upload to path \'{$target_path=UNTIL("\' was initiated from \'")}{$source_of_operation=UNTIL("\' and completed with status \'")}{$succeeded=REST}'
+    
+    action = "upload"
+    msgid = "DatastoreFileUploadEvent"
+endsubformula
+
+subformula "upload_download_file"
+    TEXT = '[File download from path \'{$target_path=UNTIL("\' was initiated from \'")}{$source_of_operation=UNTIL("\' and completed with status \'")}{$succeeded=REST}'
+    
+    action = "download"
+    msgid = "DatastoreFileDownloadEvent"
+endsubformula
+
+subformula "copy_file"
+    TEXT = '[Copy of file or directory {$source_file=UNTIL(" from ")}{$source_datastore_name=STRING*} to {$datastore_name=STRING*} as {$target_file=UNTIL(" was initiated from \'")}{$source_of_operation=UNTIL("\' and completed with status \'")}{$succeeded=REST}'
+    
+    action = "copy"
+    msgid = $event_class
+endsubformula
+
+subformula "move_file"
+    TEXT = '[Move of file or directory {$source_file=UNTIL(" from ")}{$source_datastore_name=STRING*} to {$datastore_name=STRING*} as {$target_file=UNTIL(" was initiated from \'")}{$source_of_operation=UNTIL("\' and completed with status \'")}{$succeeded=REST}'
+    
+    msgid = $event_class
+endsubformula
+
+subformula "delete_file"
+    TEXT = '[Deletion of file or directory {$target_file=STRING+} from {$datastore_name=UNTIL(" was initiated from ")}\'{$source_of_operation=UNTIL("\' and completed with status \'")}{$succeeded=REST}'
+    
+    action = "remove"
+    msgid = $event_class
+endsubformula
+
+subformula "parse_fullpath"
+    TEXT = '[{$parsed_ds=UNTIL("]")}{$obj_fullpath=REST}'
+    
+    $obj_list = csv($obj_fullpath, "/", "'")
+    
+    if length($obj_list) > 1 then
+        $obj_name = $obj_list[length($obj_list)-1]
+        $obj_path = strip($obj_fullpath, "", $obj_name)
+    else
+        $obj_name = $obj_fullpath
+    endif
+endsubformula
+
+subformula "parse_fullpath"
+    TEXT = '{$obj_storage_fullpath=REST}'
+    
+    $obj_storage_list = csv($obj_storage_fullpath, "/", "'")
+    
+    if length($obj_storage_list) > 1 then
+        $obj_storage_name = $obj_storage_list[length($obj_storage_list)-1]
+        $obj_storage_path = strip($obj_storage_fullpath, "", $obj_storage_name)
+    else
+        $obj_storage_name = $obj_storage_fullpath
+    endif
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+switch $event_class
+    case "DatastoreFileCopiedEvent"
+        submessage("TEXT", "copy_file", $raw_message)
+    case "DatastoreFileMovedEvent"
+        submessage("TEXT", "move_file", $raw_message) 
+    case "DatastoreFileDeletedEvent"
+        submessage("TEXT", "delete_file", $raw_message)
+    case "EventEx"
+        submessage("TEXT", "upload_download_file", $raw_message)
+endswitch
+
+if in_list(["True", "Success"], strip($succeeded, "", "']")) then 
+    status = "success"
+else
+    status = "failure"
+endif
+
+if in_list(["DatastoreFileUploadEvent", "DatastoreFileDownloadEvent", "DatastoreFileDeletedEvent"], msgid) then
+    submessage("TEXT", "parse_fullpath", coalesce($target_path, $target_file))
+else
+    submessage("TEXT", "parse_fullpath", $source_file)
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+$source_list = csv($source_of_operation, "@", "")
+subject.process.meta = strip($source_of_operation, "", "@" + $source_list[length($source_list)-1])
+
+if ($obj_fullpath != null) then
+    object.name = $obj_name
+    object.path = $obj_path
+    object.fullpath = $obj_fullpath
+else
+    object.storage.name = $obj_storage_name
+    object.storage.path = $obj_storage_path
+    object.storage.fullpath = $obj_storage_fullpath
+    object.name = object.storage.name
+endif
+
+object.storage.id = coalesce($parsed_ds, $datastore_name)
+
+if in_list(["DatastoreFileCopiedEvent", "DatastoreFileMovedEvent"], msgid) then
+    $obj_name = null
+    $obj_path = null
+    $obj_fullpath = null
+    
+    $obj_storage_name = null
+    $obj_storage_path = null
+    $obj_storage_fullpath = null
+    
+    submessage("TEXT", "parse_fullpath", $target_file)
+endif
+
+if msgid == "DatastoreFileCopiedEvent" then
+    object.property = "datastore|fullpath"
+    object.value = $source_datastore_name + " | " + coalesce(object.fullpath, object.storage.fullpath)
+    object.new_value = $datastore_name + " | " + coalesce($obj_fullpath, $obj_storage_fullpath)
+elif msgid == "DatastoreFileMovedEvent" then
+    if (coalesce(object.path, object.storage.path) == coalesce($obj_path, $obj_storage_path)) and ($source_datastore_name == $datastore_name) then
+        action = "rename"
+        object.property = "name"
+        object.value = object.name
+        object.new_value = coalesce($obj_name, $obj_storage_name)
+    else
+        action = "move"
+        object.property = "datastore|fullpath"
+        object.value = $source_datastore_name + " | " + coalesce(object.fullpath, object.storage.fullpath)
+        object.new_value = $datastore_name + " | " + coalesce($obj_fullpath, $obj_storage_fullpath)
+    endif
+endif
+
+src.ip = $source_list[length($source_list)-1]
+
+datafield1 = $def_dc_name  # Datacenter Name
+datafield2 = coalesce($datastore_name, $parsed_ds)  # Datastore Name
+
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Datastore_Files_Management"

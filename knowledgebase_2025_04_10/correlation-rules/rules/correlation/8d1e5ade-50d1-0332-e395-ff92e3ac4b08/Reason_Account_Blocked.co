@@ -1,0 +1,158 @@
+event Account_Failed_To_Logon:
+    key:
+        event_src.host, subject.account.name, dst.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4625"
+        and filter::LoginAttempt_Windows_Endpoint()
+    }
+
+event User_Blocked:
+    key:
+        event_src.host, object.account.name, dst.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"    
+        and msgid == "4740"
+        and filter::CheckWL_Windows_Login("Reason_Account_Blocked", lower(join([src.host, object.account.id], "|")))
+    }
+
+rule Reason_Account_Blocked: (Account_Failed_To_Logon[5,] and User_Blocked) timer 2m
+
+    init {
+        $labels = "CheckWL_Windows_Login"
+        $first_event = true
+        $count_failed_logons = 0
+    }
+
+    on Account_Failed_To_Logon {
+        if $first_event then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+
+            $logon_type = logon_type
+            $logon_service = logon_service
+            $logon_auth_method = logon_auth_method
+            $reason = reason
+            
+            $src.asset = src.asset
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.port = src.port
+
+            $dst.asset = dst.asset
+            $dst.host = dst.host
+            $dst.ip = dst.ip
+            $dst.hostname = dst.hostname
+            $dst.fqdn = dst.fqdn
+            $dst.port = dst.port
+
+            $datafield6 = datafield6 # LogonType
+            $datafield7 = datafield7  # Reason
+            $datafield9 = datafield9 # AuthenticationPackageName
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $temp_substatus = regex(datafield7, ', (.+)', 1)
+            $alert.context = switch $temp_substatus
+                case "User name does not exist" "User not exist"
+                case "User name is correct but the password is wrong" "Password is wrong"
+                case "User is currently locked out" "User is locked"
+                case "Account is currently disabled" "Account is disabled"
+                case "User tried to logon outside his day of week or time of day restrictions" "Time restrictions"
+                case "Workstation restriction" "Workstation restriction"
+                case "An attempt was made to logon but the netlogon service was not started" "Netlogon service was not started"
+                case "Account expiration" "Account expiration"
+                case "Expired password" "Expired password"
+                case "Clocks between DC and other computer too far out of sync" "Clocks out of sync"
+                case "The machine you are logging onto is protected by an authentication firewall. The specified account is not allowed to authenticate to the machine" "Account is blocked by firewall"
+                case "User is required to change password at next logon" "Required to change password"
+                case "Object was not found" "Object was not found"
+                case "The user has not been granted the requested logon type (aka logon right) at this machine" "Requested logon type has not been granted"
+                case "This is either due to a bad username or authentication information" "Bad username or auth info"
+                case "User name and authentication information are valid, but some user account restriction has prevented successful authentication (such as time-of-day restrictions)" "Account restrictions"
+                case "The logon request failed because the trust relationship between the primary domain and the trusted domain failed" "Trust relationship failed between DCs"
+                case "There are currently no logon servers available to service the logon request" "No logon servers available"
+                case "Indicates the Sam Server was in the wrong state to perform the desired operation" "Sam Server was in wrong state"
+                case "An error occurred during Logon" "Logon error"
+                case "The certificate chain was issued by an trust anchor (CA) that is not trusted" "Cert chain from untrusted CA"
+                case "The kerberos protocol encountered an error while validating the KDC certificate during smart card logon" "KDC cert error during smart card logon"
+                case "Smart card logon is required and was not used" "Smart card logon is required"
+                case "A process has requested access to an object but has not been granted those access rights" "Access rights not granted"
+                case "Not enough virtual memory or paging file quota is available to complete the specified operation" "Virtual memory error"
+                case "An incorrect PIN was presented to the smart card" "Incorrect PIN to smart card"
+                case "The token supplied to the function is invalid" "Invalid token"
+                case "The function requested is not supported" "The function requested is not supported"
+                case "No credentials are available in the security package" "Credentials not found"
+                case "Indicates an invalid value has been provided for the logontype requested" "Invalid value for logontype"
+                case "The logon request failed because the trust relationship between this workstation and the primary domain failed" "Trust relationship between workstation and domain failed"
+                case "The context has expired and can no longer be used" "Context has expired"
+                case "On applicable Windows Server releases the SAM database does not have a computer account for this workstation trust relationship" "SAM DB doesn't have a computer account"
+                case "The message supplied for verification is out of sequence" "Message supplied for verification is out of sequence"
+                case "An invalid HANDLE was specified" "Invalid HANDLE"
+                case "The revocation status of the smart card certificate that is used for authentication could not be determined" "Revocation status of the smart card cert could't be determined"
+                case "The requested key container does not exist on the smart card" "Key container doesn't exist on smart card"
+                case "A specified authentication package is unknown" "Authentication package is unknown"
+                case "The name provided is not a properly formed account name" "Badly formed account name"
+                case "The specified directory service attribute or value does not exist" "DS attribute or value doesn't exist"
+                case "The stub received bad data" "The stub received bad data"
+                case "The smart card is blocked" "Smart card is blocked"
+                case "The client's supplied SSPI channel bindings were incorrect" "SSPI channel bindings incorrect"
+                case "The revocation status of the domain controller certificate used for smart card authentication could not be determined" "Revocation status of DC cert could't be determined"
+                case "status OK" "status OK"
+            endswitch
+            
+            if $alert.context == "status OK" then
+                $alert.context = regex(datafield7, '(.+),', 1)
+            endif
+            
+            $first_event = false
+        endif
+
+        $count_failed_logons = $count_failed_logons + 1
+    }
+
+    on User_Blocked {
+        $alert.key = lower(join([src.host, object.account.id], "|"))
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "failure"
+
+    $numfield1 = $count_failed_logons # Count of attempts
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Brute Force"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "BruteForce"
+    $incident.aggregation.timeout = 1h
+}

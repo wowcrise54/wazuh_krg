@@ -1,0 +1,212 @@
+event Payload_Service_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "7045"
+        and regex(lower(object.process.cmdline), "%comspec%\s\/b\s\/c\sstart\s\/b\s\/min", 0) != null
+    }
+
+event Payload_Start_Powershell:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::ProcessStart_Windows("powershell.exe")
+            or filter::ProcessStart_Windows("powershell_ise.exe")
+            or filter::ProcessStart_Windows("pwsh.exe")
+        )
+        and find_substr(lower(object.process.cmdline), "-nop") != null
+        and find_substr(lower(object.process.cmdline), "-w hidden") != null
+        and find_substr(lower(object.process.cmdline), "-noni") != null
+        and find_substr(lower(object.process.cmdline), "-c") != null
+        and filter::CheckWL_Process_Creation("Metasploit_Payload", lower(object.process.cmdline))
+    }
+
+event PS_Check_Arch_And_Run_Encoded_Script:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4104"
+        and action == "execute"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "if\(\[intptr\]::size -eq 4\)\{\$b=.*?powershell\.exe'\}else\{\$b=.*?powershell\.exe'?\}.*?frombase64string", 0) != null
+    }
+
+event Default_Template_Meta:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "1"
+        and match(object.process.meta, "*apachebench command line utility*")
+        and object.process.original_name == "ab.exe"
+        and filter::CheckWL_Process_Creation("Metasploit_Payload", lower(object.process.fullpath))
+    }
+
+rule Metasploit_Payload: Default_Template_Meta or (Payload_Service_Created? and Payload_Start_Powershell and PS_Check_Arch_And_Run_Encoded_Script) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Payload_Service_Created {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.name = object.name
+        $object.value = object.value
+        $object.type = object.type
+        $object.property = object.property
+        $object.path = object.process.cmdline
+        $object.fullpath = object.fullpath
+
+        $alert.context = join([$alert.context, "%COMSPEC%"], " | ")
+    }
+
+    on Payload_Start_Powershell {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.context = join([$alert.context, "-nop -w hidden -noni -c"], " | ")
+    }
+
+    on PS_Check_Arch_And_Run_Encoded_Script {
+        $alert.regex_match = regex(lower(object.process.cmdline), "frombase64string", 0)
+        $alert.context = $alert.context
+    }
+
+    on Default_Template_Meta {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.fullpath)
+        $alert.context = join([object.process.original_name, object.process.meta], " | ")
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $alert.context = strip($alert.context, " | ", "")
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

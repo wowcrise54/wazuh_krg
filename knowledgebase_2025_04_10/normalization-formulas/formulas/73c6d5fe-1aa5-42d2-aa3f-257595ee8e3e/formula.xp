@@ -1,0 +1,88 @@
+JSON = 'TIMESTAMP1'
+COND = $CHANGE_REQUEST != ""
+
+subject = "account"
+action = "configure"
+object = "system"
+if $RETURN_CODE == "0000" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subject.account.name = $SAP_USER
+object.name = substr($SAP_SYSTEM,0,3)
+object.property = "Change Request"
+object.value = $CHANGE_REQUEST
+object.state = switch $TRANSPORT_STEP
+    case "A" "ABAP Dictionary Activation"
+    case "B" "Inactive import"
+    case "C" "C Correction Release"
+    case "D" "Import Application-Defined Objects"
+    case "E" "Export"
+    case "e" "Pre-Export Methods"
+    case "F" "C Transport Release"
+    case "f" "Checks at Operating System Level"
+    case "G" "Generation of Programs and Screens"
+    case "H" "Import ABAP Dictionary Objects"
+    case "I" "Import"
+    case "K" "R3trans Shadow Import"
+    case "L" "Import Request Piece List"
+    case "M" "Matchcode and Enqueue Activation"
+    case "m" "Generate Transport Information File"
+    case "O" "Trace SPAM"
+    case "P" "Test Import"
+    case "p" "Request waiting for QA approval"
+    case "Q" "QA approval given"
+    case "R" "Method Execution"
+    case "r" "Copy File Between Transport Group"
+    case "T" "Deployment"
+    case "V" "Check Versions"
+    case "v" "Create Versions After Import"
+    case "W" "Routing"
+    case "w" "Create Versions Before Import"
+    case "X" "Export of application-defined objects"
+    case "Y" "Transport Again with Merge Request"
+    case ">" "Deleted from buffer"
+    case "<" "Selection for Import"
+    case "|" "Import not approved"
+    case ")" "Transferring System"
+    case "(" "-> Continue: Other Transport Group"
+    case ":" "-> Other Domain"
+    case "#" "Change ADO Code Page"
+    case "Z" "Unknown Step"
+endswitch
+
+datafield1 = substr($SAP_SYSTEM,4,3)  # название компонента подсистемы
+datafield5 = $OS_USER                 # имя системного пользователя
+reason = switch $RETURN_CODE
+    case "0000" "Successfully Completed"
+    case "0002" "Waiting (C Queue)"
+    case "0004" "Ended with Warning"
+    case "0006" "Follow-Up Actions Required"
+    case "0008" "Ended with errors"
+    case "8996" "n process: Requires update"
+    case "8997" "n process: Requires update"
+    case "8998" "n process: Requires update"
+    case "8999" "n process: Requires update"
+    case "9997" "Not yet executed"
+    case "9998" "Not yet executed"
+    case "9999" "Not yet executed"
+endswitch
+
+time = $TIMESTAMP1
+start_time = maybe_datetime($TIMESTAMP2)
+if start_time != null then
+    $field1 = datetime_to_epoch(time)
+    $field2 = datetime_to_epoch(start_time)
+    duration = number($field1) - number($field2)
+endif
+importance = "info"
+
+event_src.hostname = $HOST
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.subsys = "transport log (alog)"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAPASABAP_filemonitor_Transport_log_alog_event"

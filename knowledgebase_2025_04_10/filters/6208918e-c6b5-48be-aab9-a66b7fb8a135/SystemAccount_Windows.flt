@@ -1,0 +1,5 @@
+filter SystemAccount_Windows(string $id) {
+    event_src.vendor == "microsoft"
+    and in_list(["windows", "sysmon"], event_src.title)
+    and in_list(["s-1-5-18","synthetic:system@nt authority", "synthetic:система@nt authority"], lower($id))
+}

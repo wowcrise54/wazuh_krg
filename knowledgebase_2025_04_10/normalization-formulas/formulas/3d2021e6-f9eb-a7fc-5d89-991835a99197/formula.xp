@@ -1,0 +1,30 @@
+TABULAR = "ID,
+           {time=ORIGIN},
+           MESSAGE_OWNER,
+           {msgid=MESSAGE_CODE},
+           {subject.account.name=STRPARAM1},
+           {$depo_path=STRPARAM2},
+           {$depo_name=STRPARAM3},
+           {$host_name=NEWSTRPARAM}"
+           
+COND = $MESSAGE_CODE == 305
+
+subject = "account"
+action = "modify"
+object = "resource"
+status = "success"
+
+object.name = $depo_name
+object.type = "подразделение"                   
+object.path = $depo_path + "\\" + $depo_name
+
+datafield3 = $host_name                      # Имя добавляемого узла
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_policy_manager"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_ViPNet_Policy_Manager_customeventcollector_add_host_in_department"

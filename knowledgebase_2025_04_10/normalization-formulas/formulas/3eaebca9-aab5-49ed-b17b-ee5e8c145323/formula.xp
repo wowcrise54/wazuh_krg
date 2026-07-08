@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {$time_raw=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?}
+        sshd{"["?}{object.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+        User {subject.account.name=WORDDASH} authorized keys {$filename=STRING} is not a regular file'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+object.property = "authorized keys filename"
+object.value = $filename
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+logon_auth_method = "remote"
+logon_service = "sshd"
+
+reason = object.value + " is not a regular file"
+
+time = coalesce($time_raw, recv_time)
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "openssh"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Opensource_OpenSSH_syslog_ssh_login_auth_refused_bad_file"

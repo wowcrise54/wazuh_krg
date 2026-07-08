@@ -1,0 +1,50 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1212"
+       and (
+        $event_category == "ЦУ КЦ-ЗПС"
+        or $event_category == "IC-AEC"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+action = "modify"
+object = "task"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Добавлена учетная запись к заданию ЗПС"|"Adding account to AEC task"}. {"Имя задания"|"Job name"}:
+            {object.name=STRING+} {"Тип субъекта"|"Subject type"}: {STRING+?} {"Учетная запись"|"Account"}:
+            {object.value=REST}'
+    object.property = "account"
+endsubformula
+
+reason = "account added"
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "ЦУ КЦ-ЗПС" then
+    event_src.subsys = "ic-aec"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1212_locked_software_environment_task_user_added"

@@ -1,0 +1,18 @@
+!TABULAR = "{object.name=name},
+            {reason=description},
+            {object.id=alertuid},
+            {time=nodetime}"
+
+!COND = $id != null
+
+action = "detect"
+object = "alert"
+status = "success"
+
+importance = "high"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.category = "Other"
+
+id = "PT_Netwrix_Netwrix_Auditor_odbc_Alert_detected"

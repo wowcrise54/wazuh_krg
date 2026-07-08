@@ -1,0 +1,33 @@
+EVENTLOG = 'EventID="802"'
+COND =  $Channel == "Microsoft-Windows-TerminalServices-SessionBroker/Admin"
+        and $Provider["Name"] == "Microsoft-Windows-TerminalServices-SessionBroker"
+
+subject = "application"
+action = "initiate"
+object = "session"
+status = "failure"
+
+subject.name = "Connection Broker"
+subject.id = $UserData["EventXML"]["param3"]
+$temp.domain = lower($UserData["EventXML"]["param1"])
+$temp.name = lower($UserData["EventXML"]["param2"])
+object.name = $temp.domain + "\\" + $temp.name
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "high"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Terminal services"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_802_Failed_process_connection_request_for_user"

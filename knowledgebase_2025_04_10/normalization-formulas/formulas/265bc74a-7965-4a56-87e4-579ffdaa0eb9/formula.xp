@@ -1,0 +1,68 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {NUMBER+},{DATETIME},
+        {event_src.id=WORD?},THREAT,vulnerability,{$csv=CSV}'
+
+# Threat/Content Type : vulnerability — Vulnerability exploit detected via a Vulnerability Protection profile.
+
+# $csv[26] URL/Filename
+# $csv[27] Threat Content Name
+
+action = "detect"
+object = "vulnerability"
+status = "success"
+if length($csv[26]) != 0 then
+    object.path = $csv[26]
+endif
+object.name = $csv[27]
+
+if $csv[2] != '0.0.0.0' then
+    src.ip = $csv[2]           # Source Address - Original session source IP address
+endif
+if $csv[3] != '0.0.0.0' then
+    dst.ip = $csv[3]           # Destination Address - Original session destination IP address
+endif
+if $csv[4] != '0.0.0.0' then
+    assigned_src_ip = $csv[4]  # NAT Source IP - If source NAT performed, the post-NAT source IP address
+endif
+if $csv[5] != '0.0.0.0' then
+    assigned_dst_ip = $csv[5]  # NAT Destination IP - If destination NAT performed, the post-NAT destination IP address
+endif
+if $csv[19] != '0' then
+    src.port = $csv[19]        # Source Port - Source port utilized by the session
+endif
+if $csv[20] != '0' then
+    dst.port = $csv[20]        # Destination Port - Destination port utilized by the session
+endif
+protocol = upper($csv[24])     # IP Protocol - IP protocol associated with the session
+if $csv[30] == "client-to-server" then
+    direction = "ingress"
+else
+    direction = "egress"
+endif
+
+if length($csv[6]) != 0 then
+    datafield1 = $csv[6]       # Rule Name (rule) - Name of the rule that the session matched
+endif
+datafield2 = $csv[9]           # Application - Application associated with the session
+datafield3 = $csv[25]          # Action - Action taken for the session
+
+time = $csv[1]
+importance = switch $csv[29]
+    case "informational" "info"
+    case "low" "low"
+    case "medium" "medium"
+    case "high" "high"
+    case "critical" "high"
+endswitch
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_Events_Threat_vulnerability"

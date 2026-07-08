@@ -1,0 +1,39 @@
+!JSON = 'EventIdentifier=628'
+!COND = $Logfile=="Security" and $Category==7
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.account.name = lower($InsertionStrings[3])
+subject.account.domain = lower($InsertionStrings[4])
+subject.account.id = subject.account.name + "@" + subject.account.domain
+
+object.account.name = lower($InsertionStrings[0])
+object.account.domain = lower($InsertionStrings[1])
+object.account.id = strip($InsertionStrings[2], "%{","}")
+
+object.property = "password"
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_628_A_user_password_was_set"

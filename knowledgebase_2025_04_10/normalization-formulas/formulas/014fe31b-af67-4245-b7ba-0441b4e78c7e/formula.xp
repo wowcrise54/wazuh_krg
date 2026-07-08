@@ -1,0 +1,129 @@
+TABULAR = "user_name,
+           subsystem,
+           action,
+           status"
+
+COND = in_list([10200, 10201, 10202, 10400, 10401, 10402, 11000, 11001, 11002,
+                20020, 20021, 20022, 30020, 30021, 30112, 30022, 30400, 30401,
+                60020, 60021, 60022, 70000, 70001, 70002, 80020, 80021, 80022], $action)
+
+$kv = keyvalue($data, ' ', '=', '"')
+
+if $user_name != "" then
+    subject = "account"
+    subject.account.name = $user_name
+endif
+
+if in_list([10200, 10400, 11000, 20020, 30020, 30401, 60020, 70000, 80020], $action) then
+    action = "create"
+elif in_list([10201, 10401, 11002, 20021, 30021, 30112, 60021, 70001, 80021], $action) then
+    action = "modify"
+elif in_list([10202, 10402, 11001, 20022, 30022, 30400, 60022, 70002, 80022], $action) then
+    action = "remove"
+endif
+
+if find_substr(string($action), "1020") != null then
+    object = "account"
+
+    object.type = "administrator"
+    object.account.name = $kv['"Name"']
+    object.account.id = $kv['"ID"']
+elif find_substr(string($action), "1040") != null then
+    object = "resource"
+
+    object.type = "neighbor control server"
+    object.name = $kv['"Name"']
+    object.id = $kv['"LID"']
+elif find_substr(string($action), "1100") != null then
+    object = "resource"
+
+    object.type = "trusted application group"
+    object.name = $kv['"Name"']
+    object.id = $kv['"ID"']
+elif find_substr(string($action), "2002") != null then
+    object = "resource"
+
+    object.type = "client group"
+    object.name = $kv['"Name"']
+    object.id = $kv['"GID"']
+elif find_substr(string($action), "3002") != null then
+    object = "resource"
+
+    object.type = "station"
+    object.name = $kv['"Name"']
+    object.id = $kv['"SID"']
+elif $action == 30112 then
+    object = "resource"
+
+    object.type = "station"
+    object.name = $kv['"SID"']
+    object.id = $kv['"SID"']
+    object.state = "united from other stations"
+elif $action == 30400 then
+    object = "resource"
+
+    object.type = "station"
+    object.name = $kv['"Name"']
+    object.id = $kv['"SID"']
+    object.state = "removed from Deleted"
+elif $action == 30401 then
+
+    object = "resource"
+    object.type = "station"
+    object.name = $kv['"Name"']
+    object.id = $kv['"SID"']
+    object.state = "restored from Deleted"
+elif find_substr(string($action), "6002") != null then
+    object = "policy"
+
+    object.type = "settings summary"
+    object.name = $kv['"Name"']
+    object.id = $kv['"PID"']
+elif find_substr(string($action), "7000") != null then
+    object = "module"
+
+    object.type = "proxy server"
+    object.name = $kv['"Name"']
+    object.id = $kv['"PID"']
+elif find_substr(string($action), "8002") != null then
+    object = "profile"
+
+    object.type = "application control settings"
+    object.name = $kv['"ProfileName"']
+    object.id = $kv['"ProfileId"']
+endif
+
+if $status == "success" then
+    status = "success"
+elif $status == "failure" then
+    status = "failure"
+else
+    drop
+endif
+
+if $src_host != "" then
+    submessage("TEXT", "get_address_port", $src_host)
+endif
+
+subformula "get_address_port"
+    TEXT = '{UNTIL("//")} {"["?} {event_src.ip=IPV4|event_src.ip=IPV6|
+             $Computer=HOSTNAME} {"] :"?}  {REST}'
+endsubformula
+
+time = string($createtime)
+msgid = $action
+importance = "medium"
+
+event_src.vendor = "drweb"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "security_suite"
+event_src.subsys = lower($subsystem)
+event_src.category = "Anti-virus"
+
+id = "PT_DrWeb_Security_Suite_odbc_event_object_operation"

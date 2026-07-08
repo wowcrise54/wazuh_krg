@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A user changed group membership or role in TeamCity. Attackers can perform such actions to maintain access</Description>
+  <EventDescriptions>
+    <EventDescription id="43360d22-09c6-f8f6-21f2-3fa838d1bb82">User {subject.account.name} with ID {subject.account.id} added user "{object.new_value}" to critical group {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="5b740eb6-9022-36d3-2f82-2ea3a5222988">User {subject.account.name} with ID {subject.account.id} assigned role "{object.new_value}" to critical group {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="62291aa4-bed4-06d7-2cd7-d6ba1ee49e0b">User {subject.account.name} with ID {subject.account.id} added user "{object.new_value}" to group {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="67202a67-2b8c-8b4c-7434-481f8aad465b">User {subject.account.name} with ID {subject.account.id} assigned role "{object.new_value}" to group {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="763accd1-e728-d745-ac97-eb92eef14f00">User {subject.account.name} with ID {subject.account.id} added group {object.name} to critical group "{object.new_value}" on host {event_src.host}</EventDescription>
+    <EventDescription id="eb6c5b35-7eb2-1263-cda2-b86ce5803821">User {subject.account.name} with ID {subject.account.id} added group {object.name} to group "{object.new_value}" on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

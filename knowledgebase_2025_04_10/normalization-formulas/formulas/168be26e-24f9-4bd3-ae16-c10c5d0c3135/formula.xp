@@ -1,0 +1,16 @@
+!TEXT = '{time=DATETIME} {UNTIL("]")} ERROR Umbraco.{msgid=STRING} -
+         {"An unhandled"|"Unhandled controller"} exception occurred'
+
+action = "alert"
+object = "service"
+status = "success"
+
+msgid = "Umbraco." + msgid
+importance = "medium"
+reason = "unhandled exception"
+
+event_src.vendor = "opensource"
+event_src.title = "umbraco_cms"
+event_src.category = "Other"
+
+id = "PT_Opensource_Umbraco_CMS_filemonitor_Unhandled_exception"

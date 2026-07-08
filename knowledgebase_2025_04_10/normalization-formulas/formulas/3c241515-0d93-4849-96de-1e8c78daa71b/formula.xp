@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"}CEF:0|NetIQ|AA|6.{NUMBER}.{NUMBER}.{NUMBER}|{msgid="802"}|{reason="No rights to change policy"}|8|
+        component_id={datafield1=WORD} obj_id={object.id=WORD} obj_name={object.account.name=WORD} obj_type={object.type=WORD} 
+        scope=global session_id={subject.account.session_id=WORD} tenant_name={datafield2=WORD} user_name={$temp_subject=STRING}'
+
+subject = "account"
+action = "modify"
+object = "policy"
+status = "failure"
+
+$temp_csv = csv($temp_subject, "\\\\", "`")  
+subject.account.domain = $temp_csv[0]
+subject.account.name = $temp_csv[1]
+
+# datafield1 - component id
+# datafield2 - tenant name
+
+time = recv_time
+
+importance = "low"
+
+event_src.vendor = "netiq"
+event_src.title = "advanced_authentication"
+event_src.category = "AAA"
+
+id = "PT_NetIQ_AA_syslog_No_rights_to_change_policy"

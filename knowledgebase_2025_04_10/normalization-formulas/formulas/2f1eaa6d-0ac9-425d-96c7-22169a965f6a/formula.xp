@@ -1,0 +1,28 @@
+EVENTLOG = 'EventID="4957"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+action = "apply"
+object = "rule"
+status = "failure"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Firewall"
+event_src.id = $Provider["Name"]
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+
+object.name = $Data["RuleName"]
+object.id = strip($Data["RuleId"], "{", "}")
+
+id = "PT_Microsoft_Windows_eventlog_4957_Windows_Firewall_did_not_apply_the_following_rule"
+importance = "info"

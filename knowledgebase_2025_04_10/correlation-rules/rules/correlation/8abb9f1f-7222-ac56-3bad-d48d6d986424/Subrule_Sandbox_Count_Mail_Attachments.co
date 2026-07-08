@@ -1,0 +1,60 @@
+event PTSandbox_File_Result:
+    key:
+        chain_id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "multiscanner" 
+        and msgid == "scan_machine.file_result.melded"
+        and object.storage.name != null
+    }
+
+rule Subrule_Sandbox_Count_Mail_Attachments: (PTSandbox_File_Result+) timer 3s
+    init {
+        $labels = "w_auto"
+        $first_event = true
+        $count.subevents = 0
+    }
+    
+    on PTSandbox_File_Result {
+        if $first_event then
+            $datafield8 = object.storage.name   # имя вложения
+            $datafield9 = object.hash   # хэш вложения
+            $datafield12 = datafield12  # поле network_objects
+            $datafield13 = object.hash.md5
+            $datafield14 = object.hash.sha1
+            $datafield15 = object.hash.sha256
+
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+
+            $first_event = false
+        else
+            $datafield8 = join(remove([$datafield8, object.storage.name], null), " | ")
+            $datafield9 = join(remove([$datafield9, object.hash], null), " | ")
+            $datafield12 = join(remove([$datafield12, datafield12], null), " | ")
+            $datafield13 = join(remove([$datafield13, object.hash.md5], null), "|")
+            $datafield14 = join(remove([$datafield14, object.hash.sha1], null), "|")
+            $datafield15 = join(remove([$datafield15, object.hash.sha256], null), "|")
+
+            $event_src.hostname = join([$event_src.hostname, event_src.hostname], " | ")
+        endif
+        
+        $chain_id = chain_id
+
+        $count.subevents = $count.subevents + 1
+    }
+    
+emit {
+    $correlation_type = "subrule"
+    
+    $subject = "account"
+    $action = "send"
+    $object = "message"
+    $status = "success"
+    
+    $importance = "info"
+    
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Phishing"
+}

@@ -1,0 +1,159 @@
+query Check_If_Host_Is_DC($ip, $host) from List_Servers {
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            asset_ip == $ip
+            and asset_ip != null
+        )
+        or (
+            (
+                host == $ip
+                or host == $host
+            )
+            and host != null
+        )
+    )
+}
+
+query Check_If_Host_Is_DC_AssetGrid($fqdn, $ip, $asset) from AssetGrid_Servers {
+    (
+        asset_id == $asset
+        and asset_id != null
+    )
+    or (
+        asset_fqdn == $fqdn
+        and asset_fqdn != null
+    )
+    or (
+        asset_ip == $ip
+        and asset_ip != null
+    )
+}
+
+event Network_Account_Login:
+    key:
+        event_src.host, subject.account.id, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and (
+                (
+                    match(lower(select_query_first("Check_If_Host_Is_DC", [event_src.ip, lower(event_src.fqdn)], "roles")), "*domain controller*")
+                    and not match(lower(select_query_first("Check_If_Host_Is_DC", [src.ip, lower(src.fqdn)], "roles")), "*domain controller*")
+                )
+            or (
+                match(select_query_first("Check_If_Host_Is_DC_AssetGrid",[event_src.fqdn, event_src.ip, event_src.asset], "roles"), "*\"Domain Controller\"*")
+                and not match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [src.fqdn, src.ip, src.asset], "roles"), "*\"Domain Controller\"*")
+            )
+        )
+        and filter::LoginAttempt_Windows_Endpoint_All_Accounts()
+        and not filter::Loopback_Address(src.ip)
+        and src.host != dst.host
+        and status == "success"
+        and logon_type == 3      
+    }
+
+event gMSA_Password_Read:
+    key:
+        event_src.host, subject.account.id, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and event_src.subsys == "directory service"
+        and msgid == "2946"
+    }
+
+event LDAP_Attribute_Query:
+    key:
+        event_src.host, subject.account.id, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "1644"
+        and (
+            regex(lower(object.query), "mskds-provrootkey|msds-groupmanagedserviceaccount", 0) != null
+            or (
+                regex(lower(object.value), "msds-managedpassword", 0) != null
+                and regex(lower(object.query), "msds-groupmsamembership", 0) != null
+            )
+        )
+        and (
+            src.asset == null
+            or event_src.asset == null
+            or src.asset != event_src.asset
+        )
+    }
+
+rule Subrule_GMSA_LDAP_Query: (Network_Account_Login and LDAP_Attribute_Query? and gMSA_Password_Read?) timer 10s
+
+    on Network_Account_Login {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+
+        $logon_type = logon_type
+
+        $reason = "remote_access"
+    }
+
+    on LDAP_Attribute_Query {
+        $object.account.name = object.account.name
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+    
+        $object.query = object.query
+        $object.value = object.value
+        $object.property = object.property
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $alert.key = join([lower(object.account.name), lower(src.host), lower(object.query)], "|")
+        $alert.regex_match = regex(lower(object.query), "mskds-provrootkey|msds-groupmanagedserviceaccount|msds-groupmsamembership", 0)
+    }
+
+    on gMSA_Password_Read {
+        $alert.context = "gMSA_read_success"
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $action = "access"
+    $object = "ds_object"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Credentials from Password Stores"
+}

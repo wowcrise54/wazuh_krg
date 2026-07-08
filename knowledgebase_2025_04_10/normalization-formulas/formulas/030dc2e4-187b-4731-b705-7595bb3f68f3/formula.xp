@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        {STRING} {NUMBER} - - Node.{numfield1=NUMBER}-Unit.{numfield2=NUMBER}:PRI [event], Dell EMC (OS10) 
+        %{msgid="LACP_PORT_GROUPED"|msgid="LACP_PORT_UNGROUPED"}: Interface {$join="joined"|$exit="exited"} 
+        port-channel {object.value=UNTIL(" :")} {object.name=STRING}'
+
+action = "modify"
+object = "interface"
+status = "success"
+
+object.state = coalesce($join, $exit)
+object.property = "port-channel"
+
+# numfield1 - node
+# numfield2 - unit
+
+importance = "info"
+
+event_src.vendor = "dell"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "s4128"
+event_src.category = "Network device"
+
+id = "PT_Dell_S4128_syslog_LACP_group_changes"

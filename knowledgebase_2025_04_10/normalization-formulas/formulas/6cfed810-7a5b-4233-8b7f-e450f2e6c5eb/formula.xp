@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {$subsys=WORDDASH} - - -{STRING?}
+        [{$keyvalue_data=UNTIL(" - User logged in")}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+$kv = keyvalue($keyvalue_data, " [", "] ", "")
+
+subject.account.name = $kv['User']
+
+src.ip = $kv['IPv4']
+src.hostname = $kv['Hostname']
+$csv_mac = csv($kv['MAC'], " (", "")
+src.mac = $csv_mac[0]
+
+datafield1 = strip($csv_mac[1], "", ")")  # Вендор устройства узла источника
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "kerio_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kerio_control"
+event_src.subsys = lower($subsys) 
+event_src.category = "Network security"
+
+id = "PT_Kerio_Technologies_Kerio_Control_syslog_login_to_network"

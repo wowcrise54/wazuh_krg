@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["operation"] == "Install Policy" 
+       and $kv["audit_status"] == "Success"
+
+subject = "account"
+action = "update"
+object = "policy"
+status = "success"
+
+subject.account.name = $kv["administrator"]
+
+object.name = csv($kv["additional_info"], ":", "'")[1]
+object.id = strip($kv["uid"], "{", "}")
+
+src.ip = $kv["client_ip"] # ip-адрес клиента
+
+dst.hostname = $kv["objectname"]
+                                                   
+if maybe_ipv4($kv["machine"]) == null and maybe_ipv6($kv["machine"]) == null then
+    src.hostname = $kv["machine"] # имя устройства администратора
+endif
+
+if $kv["origin_sic_name"] != null then datafield4 = $kv["origin_sic_name"] endif # полное доменное имя 
+if $kv["originsicname"] != null then datafield4 = $kv["originsicname"] endif # полное доменное имя                                   
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+msgid = $kv["operation"]
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.category = "Network security"
+event_src.hostname = $hostname # имя устройства с LogExporter
+event_src.ip = recv_ipv4
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Install_policy"

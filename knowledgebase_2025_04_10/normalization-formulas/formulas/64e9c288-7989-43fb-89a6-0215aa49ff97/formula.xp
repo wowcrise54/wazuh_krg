@@ -1,0 +1,38 @@
+!TABULAR = ".1.3.6.1.2.1.1.3.0,
+            {msgid = .1.3.6.1.6.3.1.1.4.1.0},
+            .1.3.6.1.4.1.318.2.3.3.0,
+            .1.3.6.1.6.3.18.1.3.0,
+            .1.3.6.1.6.3.18.1.4.0,
+            .1.3.6.1.6.3.1.1.4.3.0
+            "
+# .1.3.6.1.4.1.318.0.47 - accessViolationHTTP
+!COND = $.1.3.6.1.6.3.1.1.4.1.0 == ".1.3.6.1.4.1.318.0.47"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+submessage("TEXT", "parse_msg", $.1.3.6.1.4.1.318.2.3.3.0)
+subformula "parse_msg"
+    !TEXT = "System: {reason = 'Detected an unauthorized user attempting to access the Web interface'} from {src.ip=IPV4|src.ip=IPV6} {REST}"
+endsubformula
+
+dst.ip = strip($.1.3.6.1.6.3.18.1.3.0, 'IpAddress: ', '')
+
+logon_auth_method = "remote"
+
+time = recv_time
+
+importance = "high"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.ip = dst.ip
+event_src.vendor = "apc"
+event_src.title = "smart_ups_rt"
+event_src.category = "Other"
+
+id = "PT_APC_SMART_UPS_RT_snmp_accessViolationHTTP"

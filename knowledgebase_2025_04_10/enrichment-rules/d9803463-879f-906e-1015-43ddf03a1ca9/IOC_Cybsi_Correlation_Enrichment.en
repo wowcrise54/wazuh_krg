@@ -1,0 +1,200 @@
+# Правило обогащения для отслеживания корреляций по IOC's от Cybsi
+# IOC's category:hash, ip, domain
+# ----------------------------------------------------------------------------------------------------------
+
+# Hash
+# Простой поиск по хешу
+query Tracker_hash($hash) from repListHashes {
+    (hash_md5 == $hash and hash_md5 != null)
+    or (hash_sha1 == $hash and hash_sha1 != null)
+    or (hash_sha256 == $hash and hash_sha256 != null)
+}
+
+# ----------------------------------------------------------------------------------------------------------
+# Ip
+# Простой поиск по IP
+query Tracker_ip($ip, $src.ip, $dst.ip, $external_src.ip, $external_dst.ip) from repListIP {
+    ip == $ip
+    or ip == $src.ip
+    or ip == $dst.ip
+    or ip == $external_src.ip
+    or ip == $external_dst.ip
+}
+    
+# ----------------------------------------------------------------------------------------------------------
+# Fqdn & IP in cmdline
+# Прострой поиск по ip в командной строке
+query Tracker_ip_cmdline($ip) from repListIP {
+    ip == $ip   
+}
+
+query Tracker_fqdn_cmdline($fqdn) from repListMasks {
+    mask == $fqdn   
+}
+
+# ----------------------------------------------------------------------------------------------------------
+# Events enrichment
+# Hash
+event enrich_hash:
+    filter {
+        correlation_type != null
+        and find_substr(lower(alert.context), "ioc_cybsi_hash:") == null
+        and (
+                (object.hash != null and exec_query("Tracker_hash", [lower(object.hash)]))
+            or 
+                (object.process.hash != null and exec_query("Tracker_hash", [lower(object.process.hash)]))
+            or 
+                (object.process.hash.sha256 != null and exec_query("Tracker_hash", [lower(object.process.hash.sha256)]))
+            or 
+                (object.process.hash.sha1 != null and exec_query("Tracker_hash", [lower(object.process.hash.sha1)]))
+            or 
+                (object.process.hash.md5 != null and exec_query("Tracker_hash", [lower(object.process.hash.md5)]))
+            or 
+                (object.process.hash.imphash != null and exec_query("Tracker_hash", [lower(object.process.hash.imphash)]))
+        )     
+    }
+    
+# ----------------------------------------------------------------------------------------------------------
+# Ip
+event enrich_ip:
+    filter {
+        correlation_type != null
+        and find_substr(lower(alert.context), "ioc_cybsi_ip:") == null
+        and (
+            src.ip != null 
+            or dst.ip != null
+            or external_src.ip != null
+            or external_dst.ip != null
+            or event_src.ip != null
+        )
+        and exec_query("Tracker_ip",[event_src.ip, src.ip, dst.ip, external_src.ip, external_dst.ip])        
+    }
+
+# ----------------------------------------------------------------------------------------------------------    
+# IP or FQDN in Commandline
+event enrich_commandline:
+    filter {
+        correlation_type != null
+        and find_substr(lower(alert.context), "ioc_cybsi_commandline:") == null
+        and object.process.cmdline != null
+        and 
+        (  
+            exec_query("Tracker_fqdn_cmdline",[regex(lower(object.process.cmdline), "(https?:\/\/|@)([a-z0-9-\.]+)(\/|:|\\b)", 2)])
+            or exec_query("Tracker_ip_cmdline",[regex(lower(object.process.cmdline),"\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b", 0)])
+        )
+    }
+
+# ----------------------------------------------------------------------------------------------------------
+# Enrichment
+# ----------------------------------------------------------------------------------------------------------
+enrichment IOC_Cybsi_Correlation_Enrichment
+    enrich enrich_hash:
+        enrich_fields {
+            # Escalate
+            if correlation_type == "event" then
+                correlation_type = "incident"
+                if incident.aggregation.key == null then 
+                    incident.aggregation.key = join([correlation_name, event_src.host, subject.account.id], "|")
+                endif
+                if importance == "info" then
+                    importance = "low"
+                endif
+                incident.severity = importance
+                if incident.category == null then 
+                    incident.category = "Undefined"
+                endif
+                if incident.aggregation.timeout == null then 
+                    incident.aggregation.timeout = 2h
+                endif 
+            endif
+            
+            $result = select_query_first("Tracker_hash", [lower(object.hash)], "description")
+            if $result != null then
+                alert.ioc_value = lower(object.hash)
+                alert.context = "ioc_cybsi_hash:" + $result + " | " + alert.context
+                alert.ioc_provider = "Cybsi"
+            endif
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash)], "description")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash)
+                alert.context = "ioc_cybsi_hash:" + $result + " | " + alert.context
+                alert.ioc_provider = "Cybsi"
+            endif 
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash.md5)], "description")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash.md5)
+                alert.context = "ioc_cybsi_hash:" + $result + " | " + alert.context
+                alert.ioc_provider = "Cybsi"
+            endif 
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash.sha1)], "description")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash.sha1)
+                alert.context = "ioc_cybsi_hash:" + $result + " | " + alert.context
+                alert.ioc_provider = "Cybsi"
+            endif
+
+            $result = select_query_first("Tracker_hash", [lower(object.process.hash.sha256)], "description")
+            if $result != null then
+                alert.ioc_value = lower(object.process.hash.sha256)
+                alert.context = "ioc_cybsi_hash:" + $result + " | " + alert.context
+                alert.ioc_provider = "Cybsi"
+            endif
+
+        }
+        
+    enrich enrich_ip:
+        enrich_fields {
+            # Escalate
+            if correlation_type == "event" then
+                correlation_type = "incident"
+                if incident.aggregation.key == null then 
+                    incident.aggregation.key = join([correlation_name, event_src.host, subject.account.id], "|")
+                endif
+                if importance == "info" then
+                    importance = "low"
+                endif
+                incident.severity = importance
+                if incident.category == null then 
+                    incident.category = "Undefined"
+                endif
+                if incident.aggregation.timeout == null then 
+                    incident.aggregation.timeout = 2h
+                endif
+            endif
+            
+            # Marking
+            $result = select_query_first("Tracker_ip", [event_src.ip, src.ip, dst.ip, external_src.ip, external_dst.ip], "ip")
+            alert.ioc_provider = "Cybsi"
+            alert.ioc_value = $result
+            alert.context = "ioc_cybsi_ip:" + alert.ioc_value + " | " + alert.context
+        }
+    
+    enrich enrich_commandline:
+        enrich_fields {
+            # Escalate
+            if correlation_type == "event" then
+                correlation_type = "incident"
+                if incident.aggregation.key == null then 
+                    incident.aggregation.key = join([correlation_name, event_src.host, subject.account.id], "|")
+                endif
+                if importance == "info" then
+                    importance = "low"
+                endif
+                incident.severity = importance
+                if incident.category == null then 
+                    incident.category = "Undefined"
+                endif
+                if incident.aggregation.timeout == null then 
+                    incident.aggregation.timeout = 2h
+                endif
+            endif
+            
+            # Marking
+            alert.ioc_value = coalesce(select_query_first("Tracker_fqdn_cmdline",[regex(lower(object.process.cmdline), "(https?:\/\/|@)([a-z0-9-\.]+)(\/|:|\\b)", 2)], "mask"), select_query_first("Tracker_ip_cmdline",[regex(lower(object.process.cmdline),"\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b", 0)], "ip"))
+            alert.ioc_provider = "Cybsi"
+            alert.context = "ioc_cybsi_commandline:" + alert.ioc_value + " | " + alert.context
+        }
+     

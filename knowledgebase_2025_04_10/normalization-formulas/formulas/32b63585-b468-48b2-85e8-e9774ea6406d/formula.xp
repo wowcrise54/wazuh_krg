@@ -1,0 +1,29 @@
+TEXT = '[{time=DATETIME}] INFO Kernel: A group is renamed. Group: [{NUMBER}]
+        {$tmp_object.name=STRING+} Old name: {$old_name=STRING+} Caller: [{NUMBER}]
+        {$tmp_subject.name=REST}'
+
+subject = "account"
+action = "modify"
+object = "user_group"
+status = "success"
+
+object.name = strip($tmp_object.name, "", ",")
+
+# разбиваем имя субъекта на домен и имя пользователя
+if find_substr($tmp_subject.name, "\\") != null then
+    $slash = find_substr($tmp_subject.name, "\\")
+    subject.domain = substr($tmp_subject.name, 0, $slash)
+    subject.name = substr($tmp_subject.name, $slash+1, length($tmp_subject.name))
+else
+    subject.name = $tmp_subject.name
+endif
+
+datafield1 = strip($old_name, "", ",")  # старое название группы
+
+importance = "low"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_rename_group"

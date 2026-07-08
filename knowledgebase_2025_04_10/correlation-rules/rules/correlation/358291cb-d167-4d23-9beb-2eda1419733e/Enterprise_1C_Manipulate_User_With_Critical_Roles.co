@@ -1,0 +1,104 @@
+query MatchCriticalRole($privileges, $event_src_title) from Applications_Critical_Roles {
+    regex_match($privileges, role_regex)
+    and event_src_title == $event_src_title
+}
+
+event Modify_User_Critical:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "1c_enterprise"
+        and category.generic == "Account"
+        and category.high == "Users And Rights Management"
+        and category.low == "Manipulation"
+        and in_list(["modify", "remove"], action)
+        and status == "success"
+        and exec_query("MatchCriticalRole", [lower(object.application.account.privileges), event_src.title])
+        and filter::CheckWL_Specific_Only("Enterprise_1C_Manipulate_User_With_Critical_Roles", lower(object.application.account.name))
+    }
+
+rule Enterprise_1C_Manipulate_User_With_Critical_Roles: Modify_User_Critical
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Modify_User_Critical {
+        $action = action
+
+        $subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.session_id = subject.application.account.session_id
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+
+        $object.application.account.name = object.application.account.name
+        $object.application.account.privileges = object.application.account.privileges
+
+        $object.state = object.state
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $datafield2 = datafield2
+        $datafield4 = datafield4  # Is password changed
+        $datafield5 = datafield5  # Is password set
+
+        $alert.key = lower(object.application.account.name)
+        $alert.regex_match = select_query_first("MatchCriticalRole", [lower(object.application.account.privileges), event_src.title], "role_regex")
+
+        if subject.account.name != null then
+            $os_account = join(remove([subject.account.name, subject.account.domain], null), "@")
+        endif
+
+        $alert.context = join(remove([subject.application.account.name,
+                                      $os_account,
+                                      src.host,
+                                      dst.host,
+                                      object.application.account.name,
+                                      object.application.account.privileges], null), " | ")
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit { 
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $object = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.application.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        ru: "Проверяет специфичное значение для сетевых событий по системе вайтлистинга"
+        en: "Checks a specific value for network eventts against the whitelisting system"
+    Description:
+        ru: "Данный фильтр используется для сокращения повторяющейся части проверки через систему табличных списков"
+        en: "This filter is used to reduce the repetitive part of the check through the table list system"
+    UseAsEventName: False
+Args:
+    rule_name:
+        Type: string
+        Name:
+            en: "correlation rule name"
+            ru: "название правила корреляции"
+    specific_value:
+        Type: string
+        Name:
+            ru: "проверяемое специфическое значение"
+            en: "specific value"
+ObjectId: PT-RF-89
+Origin: PT

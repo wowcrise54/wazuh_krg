@@ -1,0 +1,23 @@
+TEXT = '{time=DATETIME} [{WORD}] info:     Изменение параметров сбора статистики {datafield6="freesa"}: {"{"} {$raw_kv=STRING+}'
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.property = "измененные параметры"
+object.value = strip(strip(strip($raw_kv, "", "\"}"), "", subject.name), "",  ",\"user\":\"")
+
+# datafield6 - сервис, который поддается конфигурации
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_modify_stats_collection_params"

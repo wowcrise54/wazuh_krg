@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Running a process under a database account may indicate an attempt of an attacker who gained the ability to execute queries to the database to escalate privileges</Description>
+  <EventDescriptions>
+    <EventDescription id="edb2bb16-c7fa-e6a8-3fb6-33840b494af5">Process {object.process.name} is run as user {subject.account.name} (PostgreSQL database user {subject.application.account.name}) with the result written to table {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="f433b82e-bcce-0da7-01c7-a4beca6aed30">An attempt to run a process as user {subject.application.account.name} of the PostgreSQL database on host {event_src.host} with the result written to table {object.name}</EventDescription>
+  </EventDescriptions>
+</Localization>

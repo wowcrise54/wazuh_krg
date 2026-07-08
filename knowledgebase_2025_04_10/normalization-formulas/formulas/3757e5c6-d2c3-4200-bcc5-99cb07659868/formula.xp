@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {event_src.ip=IPV4|event_src.ip=IPV6|}: {time=DATETIME}: {"#"|"%"}
+        {msgid="UC_CALLMANAGER-3-EndPointTransientConnection"}: %[ConnectingPort={NUMBER}][DeviceName=
+        {subject.name=HOSTNAME}]{UNTIL("MACAddress=")}{src.mac=WORD}{UNTIL("NodeID=")}{event_src.hostname=HOSTNAME}]:
+        {reason=REST}'
+
+subject = "host"
+action = "start"
+object = "session"
+status = "failure"
+
+importance = "low"
+
+event_src.vendor = "cisco"
+event_src.title = "cucm"
+event_src.category = "Telecom"
+
+id = "PT_Cisco_CUCM_syslog_UC_CALLMANAGER_3_EndPointTransientConnection"

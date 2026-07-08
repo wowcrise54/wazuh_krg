@@ -1,0 +1,68 @@
+TABULAR = "ID,
+           {time=ORIGIN},
+           MESSAGE_OWNER,
+           {msgid=MESSAGE_CODE},
+           {subject.account.name=STRPARAM1},
+           {object.account.name=STRPARAM2},
+           {$user_roles_tmp=STRPARAM3},
+           OLDSTRPARAM,
+           NEWSTRPARAM"
+
+           
+COND = $MESSAGE_CODE == 102 or $MESSAGE_CODE == 103 or $MESSAGE_CODE == 104
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+$user_roles = []
+
+if find_substr($user_roles_tmp, "1") != null then
+    $user_roles = append($user_roles, "Управление пользователями")
+endif    
+if find_substr($user_roles_tmp, "2") != null then
+    $user_roles = append($user_roles, "Управление ролями пользователей")
+endif
+if find_substr($user_roles_tmp, "3") != null then
+    $user_roles = append($user_roles, "Управление подразделениями") 
+endif    
+if find_substr($user_roles_tmp, "4") != null then
+    $user_roles = append($user_roles, "Управление шаблонами")
+endif    
+if find_substr($user_roles_tmp, "5") != null then
+    $user_roles = append($user_roles, "Назначение шаблонов")
+endif    
+if find_substr($user_roles_tmp, "6") != null then
+    $user_roles = append($user_roles, "Отправка политик")
+endif    
+if find_substr($user_roles_tmp, "7") != null then
+    $user_roles = append($user_roles, "Аудит")
+endif
+
+if $MESSAGE_CODE == 102 then
+    object.property = "account name"
+    object.value = $OLDSTRPARAM
+    object.new_value = $NEWSTRPARAM
+    
+    importance = "low"
+elif $MESSAGE_CODE == 103 then
+    object.property = "account password"
+
+    importance = "low"    
+elif $MESSAGE_CODE == 104 then
+    object.property = "account privileges"
+    object.new_value = join($user_roles, ", ")
+    importance = "medium"
+endif    
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_policy_manager"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_ViPNet_Policy_Manager_customeventcollector_modify_user"

@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME},{NUMBER}:{WORD}:am_collector.processors.activity:main:Activity
+        {"("$kv=KEYVALUE(", ", "=", "\'")}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = if $kv["status"] == "errors" then "failure" else "success" endif
+
+subformula "parse_rest"
+    TEXT = '[\"Logging in account {STRING} {UNTIL("AccountName")} \": \"
+            {subject.account.name=UNTIL("\\"")} {REST}'
+endsubformula
+submessage("TEXT", "parse_rest", $kv["description"])
+
+start_time = epoch_to_datetime(number($kv["start_ts"]))
+
+if $kv["error_message"] != "None" then 
+    reason = $kv["error_message"]
+endif
+
+importance = "info"
+
+category.high = "Access Management"
+category.generic = "Operating System"
+category.low = "Communication"
+
+event_src.vendor = "acronis"
+event_src.title = "backup"
+event_src.category = "Backup server"
+
+id = "PT_Acronis_Backup_syslog_Login_in_account"
+

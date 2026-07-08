@@ -1,0 +1,60 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} audit: [ID {NUMBER} audit.notice] {datafield1="open(2) - read"} {$stat=WORD} session {datafield2=NUMBER} by {subject.name=WORDDASH} as {datafield3=WORDDASH}:{datafield4=WORDDASH} from {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} obj {object.path=STRING}'
+
+$critical_file_list = ["/etc/passwd", "/etc/shadow", "/etc/group", "/etc/user_attr", "/etc/resolv.conf", "/etc/inittab", "/etc/pam.conf", "/etc/sudoers", "/etc/ssh/sshd_config", "/etc/inetd.conf"]
+
+subject = "account"
+action = "open"
+object = "file"
+if $stat == "ok" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+# datafield1 - тип события (в данном случае всегда "open(2) -read")
+# datafield2 - id сессии
+# datafield3 - от чьего имени выполняется команда (username)
+# datafield4 - от чьего имени выполняется команда (group)
+
+if in_list($critical_file_list, object.path) then
+    importance = "high"
+elif find_substr(object.path, "/etc/user_attr.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/security/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/init.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/pam.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/inet/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/rc0.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/rc1.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/rc2.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/rc3.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/rc4.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/rc5.d/") != null then
+    importance = "high"
+elif find_substr(object.path, "/etc/rcS.d/") != null then
+    importance = "high"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_read_file_attempt"

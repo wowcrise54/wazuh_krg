@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in Vault. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="7cd373f1-35b2-adcb-f142-b5d2ecf9df37">Successful password spraying from host {src.ip} in Vault on host {event_src.host}. Attackers obtained the passwords of the following users: "{datafield2}". Number of failed login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="8615c279-860c-764e-bba2-2ee1568bafce">Password spraying attempts from host {src.ip} in Vault on host {event_src.host}. Number of login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="f063b3da-c7e5-6f41-1f07-ab5d525dd847">Successful password spraying from host {src.ip} in Vault on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {count.subevents}.</EventDescription>
+  </EventDescriptions>
+</Localization>

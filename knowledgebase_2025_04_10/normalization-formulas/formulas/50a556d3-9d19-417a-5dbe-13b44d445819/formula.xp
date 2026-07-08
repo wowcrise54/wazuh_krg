@@ -1,0 +1,26 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{event_src.hostname=HOSTNAME}{STRING}%SHELL-5:The configuration file is 
+        successfully transferred through {protocol=WORD}.
+        (UserName={subject.account.name=WORD?}, OperateType={WORD}, SrcFile={object.fullpath=UNTIL(",")} 
+        DstFile={datafield1=UNTIL(",")} DstHost={dst.ip=IPV4|dst.ip=IPV6}, VrfName={datafield2=WORD})'
+
+if (subject.account.name != null) then
+    subject = "account"
+endif
+action = "copy"
+object = "configuration"
+status = "success"
+
+$temp = csv(object.fullpath, "/", "")
+object.name = $temp[length($temp) - 1]
+object.type = "configuration"
+
+# datafield1 - Destination fullpath for config file
+# datafield2 - VRF name
+
+importance = "low"
+
+event_src.vendor = "yarus_networks"
+event_src.title = "yn"
+event_src.category = "Network device"
+
+id = "PT_Yarus_Networks_YN_syslog_config_transfered"

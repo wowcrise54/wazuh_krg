@@ -1,0 +1,49 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "ACTION_PERFORM - Sending action to Collector succeeded") != null
+       
+subject = "account"
+action = "send"
+object = "task"
+status = "success"
+
+subformula "parse_category"
+    TEXT = "ACTION_PERFORM - Sending action to Collector succeeded. MethodKey: \"{$method_key=UNTIL('\"')}" 
+    
+    datafield1 = $method_key    # Method key
+endsubformula
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+object.id = strip($kv["TaskId"], '"', '".')
+object.type = "collector action"
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+submessage("TEXT", "parse_category", $kv["Category"])
+
+$collector_act = strip($kv["Action"], '"', '"')
+datafield2 = $collector_act     # Action to be performed on a collector
+
+time = datetime(replace($dt, ".", ","))
+msgid = "ACTION_PERFORM"
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_collector_action_perform"

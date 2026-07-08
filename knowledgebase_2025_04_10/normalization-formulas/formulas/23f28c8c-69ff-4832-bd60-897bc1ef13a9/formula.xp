@@ -1,0 +1,30 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "3882287229"
+
+action = "access"
+object = "resource"
+status = "failure"
+
+submessage("TEXT", "SPLIT", $zntf_srcmsg)
+
+object.type = "directory"
+
+msgid = string($zntf_status)
+
+subformula "SPLIT"
+    # Извлечение object.path и reason из $zntf_srcmsg
+    TEXT = 'Нет доступа к папке общего доступа {$csv = CSV(":", "\'")}'
+    object.path = $csv[0]
+    reason = strip($csv[1],"",".")
+endsubformula
+
+importance = "info"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_no_access_to_share"

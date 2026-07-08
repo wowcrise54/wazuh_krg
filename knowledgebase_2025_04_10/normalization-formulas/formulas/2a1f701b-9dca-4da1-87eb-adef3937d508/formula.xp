@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME} {IPV4|IPV6|HOSTNAME} {NUMBER?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} dfwpktlogs: {NUMBER} INET{"6"?} {"match"|"spoofguard"}
+        {$act="DROP"|$act="PASS"} {$rule_group=WORDDASH}/{subject.id=NUMBER} {$direction=WORD} {NUMBER} {$proto=WORD} {$proto_number=NUMBER?}
+        {src.ip=IPV4|src.ip=IPV6}{"/"src.port=NUMBER?}->{dst.ip=IPV4|dst.ip=IPV6}{"/"dst.port=NUMBER?} {$flags=WORD?}'
+
+subject = "rule"
+if $act == "DROP" then
+    action = "deny"
+else
+    action = "allow"
+endif
+object = "connection"
+status = "success"
+
+if $rule_group != "NULL" then
+    subject.group = $rule_group
+endif
+
+protocol = lower($proto)
+
+if $direction == "OUT" then
+    direction = "egress"
+else
+    direction = "ingress"
+endif
+
+tcp_flag = lower($flags)
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nsx"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_NSX_syslog_connection_drop_pass"

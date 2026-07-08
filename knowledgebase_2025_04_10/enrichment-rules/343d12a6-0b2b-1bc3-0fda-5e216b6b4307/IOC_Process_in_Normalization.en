@@ -1,0 +1,116 @@
+query Get_process_info($value_1, $value_2, $value_3, $value_4) from IOCs_Value {
+    (
+        value == $value_1
+        or value == $value_2
+        or value == $value_3
+        or value == $value_4
+    ) and (
+        category == "meta" 
+        or category == "hash"
+        or category == "binary"
+    )
+}
+    qhandler {
+        $value = value
+        $category = category
+    }  
+ 
+event enrich_by_process_meta:
+    filter {
+        filter::NotFromCorrelator()
+        and object.process.meta != null
+        and find_substr(alert.ioc_provider,"ioc:meta") == null
+    }
+    
+event enrich_by_process_hash:
+    filter {
+        filter::NotFromCorrelator()
+        and not match(lower(msgid),"scan_machine.*")
+        and coalesce(object.process.hash, object.hash) != null
+        and find_substr(alert.ioc_provider,"ioc:hash") == null
+    }
+    
+event enrich_by_process_binary:
+    filter {
+        filter::NotFromCorrelator()
+        and (
+             object.process.name != null
+             or subject.process.name != null
+             or object.process.original_name != null
+        )
+        and find_substr(alert.ioc_provider,"ioc:binary") == null
+    }
+    
+enrichment IOC_Process_in_Normalization
+ 
+enrich enrich_by_process_meta:
+    enrich_fields {
+        $ioc_info = exec_query("Get_process_info", [lower(object.process.meta), regex(lower(object.process.meta), "description:(.*?)\s\|", 1), regex(lower(object.process.meta), "product:(.*?)\s\|", 1), regex(lower(object.process.meta), "company:(.*?)$", 1)])
+       
+       if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:meta"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:meta"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }
+    
+enrich enrich_by_process_hash:
+    enrich_fields {
+        $ioc_info = exec_query("Get_process_info", [lower(coalesce(object.process.hash, object.hash)), regex(lower(coalesce(object.process.hash, object.hash)), "sha256:([a-z0-9]+)\\b", 1), regex(lower(coalesce(object.process.hash, object.hash)), "md5:([a-z0-9]+)\\b", 1), regex(lower(coalesce(object.process.hash, object.hash)), "imphash:([a-z0-9]+)\\b", 1)])
+        
+        if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:hash"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:hash"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }
+    
+enrich enrich_by_process_binary:
+    enrich_fields {
+        $ioc_info = exec_query("Get_process_info", [object.process.name, subject.process.name, object.process.original_name, ""])
+        
+        if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+            
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:binary"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:binary"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }

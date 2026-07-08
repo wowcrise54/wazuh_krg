@@ -1,0 +1,84 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER}: {"default"?}
+        {msgid = "SSLVPN LOGOUT"} {NUMBER+} : {$kv=KEYVALUE("- ", " ", "\\"")}'
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+if find_substr($kv["User"], "\\") != null then
+    subject.account.name = csv($kv["User"], "\\", "")[1]
+    subject.account.domain = csv($kv["User"], "\\", "")[0]
+elif find_substr($kv["User"], "@") != null then
+    subject.account.name = csv($kv["User"], "@", "")[0]
+    subject.account.domain = csv($kv["User"], "@", "")[1]
+else
+    subject.account.name = $kv["User"]
+endif
+
+subject.account.group = join(csv($kv["Group(s)"], ",", ""), "|")
+subject.account.session_id = $kv["SessionId:"]
+
+src.ip = $kv["Client_ip"]
+
+dst.ip = csv($kv["Vserver"], ":", "")[0]
+dst.port = csv($kv["Vserver"], ":", "")[1]
+
+count.bytes_in = $kv["Total_bytes_recv"]
+count.bytes_out = $kv["Total_bytes_send"]
+
+$start_time = strip($kv["Start_time"], " ", " ")
+# Converting time to mm/dd/yyyy:hh:mm:ss format
+if find_substr($start_time, "/") == 4 then
+    $yyyy = substr($start_time, 0, 4)
+    $mm_dd = substr($start_time, 5, 5)
+    $start_time = $mm_dd + "/" + $yyyy + substr($start_time, 10, 20)
+endif
+# Adding\removing a space in $start_time depending on the time zone format
+if find_substr($start_time, " ") != null and (find_substr($start_time, "+") != null or find_substr($start_time, "-") != null) then
+    $start_time = substr($start_time, 0, 19) + substr($start_time, 20, 10)
+elif find_substr($start_time, " ") == null and find_substr($start_time, "+") == null and find_substr($start_time, "-") == null then
+    $start_time = substr($start_time, 0, 19) + " " + substr($start_time, 19, 10)
+endif
+
+start_time = $start_time
+duration = duration($kv["Duration"])
+
+if find_substr($kv["LogoutMethod"], 'TimedOut') != null then
+    reason = "timeout"
+endif
+
+$ev_time = coalesce(strip($kv["End_time"], " ", " "), $sys_time)
+# converting time to mm/dd/yyyy:hh:mm:ss format
+if find_substr($ev_time, "/") == 4 then
+    $yyyy = substr($ev_time, 0, 4)
+    $mm_dd = substr($ev_time, 5, 5)
+    $ev_time = $mm_dd + "/" + $yyyy + substr($ev_time, 10, 20)
+endif
+# adding\removing a space in $start_time depending on the time zone format
+if find_substr($ev_time, " ") != null and (find_substr($ev_time, "+") != null or find_substr($ev_time, "-") != null) then
+    $ev_time = substr($ev_time, 0, 19) + substr($ev_time, 20, 10)
+elif find_substr($ev_time, " ") == null and find_substr($ev_time, "+") == null and find_substr($ev_time, "-") == null then
+    $ev_time = substr($ev_time, 0, 19) + " " + substr($ev_time, 19, 10)
+endif
+
+time = $ev_time
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "netscaler"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Citrix_NetScaler_syslog_sslvpn_logout_success"

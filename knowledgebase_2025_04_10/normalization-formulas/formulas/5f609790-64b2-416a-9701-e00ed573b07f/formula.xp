@@ -1,0 +1,35 @@
+# This event is logged whenever you set the security descriptor used to delegate access to the audit policy.
+# It is always logged when an audit policy is disabled, regardless of the "Audit Policy Change" sub-category setting.
+
+EVENTLOG = 'EventID="4715"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "policy"
+status = "success"
+
+subject.account.id = $Data["SubjectUserSid"]
+subject.account.name = lower($Data["SubjectUserName"])
+subject.account.domain = lower($Data["SubjectDomainName"])
+subject.account.session_id = maybe_number16($Data["SubjectLogonId"])
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_4715_Audit_policy_on_object_changed"

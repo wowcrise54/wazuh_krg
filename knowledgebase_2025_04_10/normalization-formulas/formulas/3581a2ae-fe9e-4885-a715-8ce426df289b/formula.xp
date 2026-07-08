@@ -1,0 +1,38 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "271"
+       and (
+        $event_category == "Системные"
+        or $event_category == "System"
+       )
+       and (
+        $event_type == "Failure Audit"
+        or $event_type == "Аудит отказов"
+        or $event_type == "Audit failure"
+       )
+
+action = "alert"
+object = "computer"
+status = "success"
+
+msgid = $event_id
+importance = "high"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Системные" then
+    event_src.subsys = "system"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_271_computer_emergency_mode_start"

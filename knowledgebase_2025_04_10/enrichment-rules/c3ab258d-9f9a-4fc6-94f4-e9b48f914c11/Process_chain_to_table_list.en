@@ -1,0 +1,235 @@
+query Check_host_not_enabled_for_chains($host, $obj, $parent) from Disable_Process_Chain { 
+    (host == $host or host == '*')
+    and (
+        value == '*'
+        or (property == 'msgid-1_obj' and value == $obj)
+        or (property == 'msgid-1_parent' and value == $parent)
+    )
+}
+
+query Check_similar($host, $proc_id, $proc_name) from Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and proc_name == $proc_name
+}
+
+query Check_all_process_chains($host, $parent_proc_id, $parent_proc_name) from Process_Chains{
+    host == $host
+    and proc_id == $parent_proc_id
+    and proc_name == $parent_proc_name
+}
+    qhandler {
+        $step = step
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $first_cmdline = first_cmdline
+        $object_session_id = object_session_id
+    }
+    
+query Check_if_new_file($host, $file_fullpath, $type) from Windows_File_Created {
+    host == $host
+    and filename == $file_fullpath
+    and type == $type
+}
+    qhandler {
+        $subj_proc_names = subj_proc_names
+        $subj_proc_info = subj_proc_info
+        $process_name = process_name
+        $process_id = process_id
+        $session = session
+    } 
+
+event Start_process:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and object.process.parent.name != null
+        and object.process.parent.id != null
+        and not in_list([
+            "c:\\windows\\system32\\conhost.exe", 
+            "c:\\program files\\docker\\docker\\resources\\bin\\com.docker.cli.exe",
+            "c:\\program files\\docker\\docker\\resources\\bin\\docker.exe",
+            "c:\\program files\\rancher desktop\\resources\\resources\\win32\\bin\\docker.exe",
+            "c:\\program files\\docker\\docker.exe",
+            "c:\\windows\\system32\\svchost.exe",
+            "c:\\windows\\system32\\wsl.exe",
+            "c:\\windows\\system32\\lxss\\wslhost.exe",
+            "c:\\program files\\git\\mingw64\\bin\\git.exe",
+            "c:\\program files\\google\\chrome\\application\\chrome.exe",
+            "c:\\program files\\git\\cmd\\git.exe",
+            "c:\\program files (x86)\\microsoft\\edge\\application\\msedge.exe",
+            "c:\\windows\\system32\\werfault.exe",
+            "c:\\windows\\system32\\backgroundtaskhost.exe",
+            "c:\\program files\\git\\mingw64\\libexec\\git-core\\git.exe",
+            "c:\\program files\\zabbix\\zabbix_sender.exe",
+            "c:\\windows\\system32\\searchfilterhost.exe",
+            "c:\\windows\\system32\\searchprotocolhost.exe",
+            "c:\\program files\\git\\bin\\git.exe",
+            "c:\\windows\\system32\\runtimebroker.exe",
+            "c:\\program files (x86)\\google\\chrome\\application\\chrome.exe",
+            "c:\\program files\\wsl\\wsl.exe",
+            "c:\\program files\\wsl\\wslhost.exe"
+        ],  object.process.fullpath)
+        and not match(object.process.fullpath, "*\\mingw64\\*\\git.exe")
+        and not match(object.process.fullpath, "*\\cmd\\git.exe")
+        and not match(object.process.fullpath, "*\\bin\\git.exe")
+        and not match(object.process.fullpath, "*\\bin\\postgres.exe")
+        and not match(object.process.fullpath, "c:\\program files\\jetbrains\\*\\bin\\runnerw.exe")
+        and not match(object.process.fullpath, "c:\\program files (x86)\\google\\googleupdater\\*\\updater.exe")
+        and not match(object.process.fullpath, "c:\\windows\\systemtemp\\google*\\bin\\updater.exe")
+        and not match(object.process.fullpath, "c:\\users\\*\\appdata\\*\\*\\updater.exe")
+        and not match(object.process.fullpath, "c:\\program files\\windowsapps\\microsoftcorporationii.windowssubsystemforlinux_*\\wslhost.exe")
+        and not match(object.process.fullpath, "c:\\program files\\windowsapps\\microsoftcorporationii.windowssubsystemforlinux_*\\wsl.exe")
+        and not match(object.process.fullpath, "c:\\users\\*\\appdata\\local\\yandex\\yandexbrowser\\application\\browser.exe")
+        and not match(object.process.fullpath, "c:\\windows\\microsoft.net\\framework*\\v*\\mscorsvw.exe")
+        and not match(object.process.fullpath, "c:\\users\\*\\appdata\\local\\*\\bin\\runnerw.exe")
+        and not match(object.process.fullpath, "c:\\windows\\temp\\sdwra_*\\browser.exe")
+        and not match(object.process.fullpath, "*yandexbrowser\\application\\browser.exe")
+        and not match(object.process.fullpath, "c:\\users\\*\\appdata\\local\\*\\chrome-win\\chrome.exe")
+        and not exec_query("Check_host_not_enabled_for_chains", [lower(event_src.host), lower(object.process.name), lower(object.process.parent.name)])
+        # Следующая проверка сделана чтобы исключить дублирование событий от разных методов сбора событий, дабы не грузить систему
+        # например: 4688 (основной хост) → 1 sysmon (основной хост) → 4688 (WEC) → 1 sysmon (WEC)
+        # Сделано в связи с отсутствием агрегатора, который умел бы склеивать поля и наполнял бы пустые.
+        # Проблема данного метода в том, что мы хотели бы получать информацию из 4688 (реальный пользователь только там) 
+        # и 1 sysmon (метаинформация процесса, хеш)
+        and (
+            event_src.title == "sysmon"
+            or datetime_to_epoch(time) - datetime_to_epoch(select_query_first("Check_similar", [lower(event_src.host), number(object.process.id), lower(object.process.name)], "_last_changed")) > 300
+        )
+    }
+    
+enrichment Process_chain_to_table_list
+    enrich Start_process:
+        enrich_fields {
+            $host = lower(event_src.host)
+            $proc_id = number(object.process.id)
+            $proc_name = lower(object.process.name)
+            $proc_name_for_chain_info = if find_substr(object.process.name, " ") != null then '"' + object.process.name + '"' else object.process.name endif
+            if subject.account.domain != null then 
+                $subject_account = lower(subject.account.domain) + "\\" + lower(subject.account.name)
+            else 
+                $subject_account = lower(subject.account.name)
+            endif
+            $subject_session_id = number(subject.account.session_id)
+            
+            if object.account.domain != null then 
+                $object_account = lower(object.account.domain) + "\\" + lower(object.account.name)
+            else 
+                $object_account = lower(object.account.name)
+            endif
+            $object_session_id = number(object.account.session_id)
+            
+            $parent_proc_id = number(object.process.parent.id)
+            $parent_proc_name = object.process.parent.name
+            $proc_meta = object.process.meta
+            if object.process.hash != null then
+                $proc_hash = object.process.hash
+            else
+                if regex(object.process.hash, "(IMPHASH|MD5|SHA1|SHA256)", 0) == null then
+                    if object.process.hash.imphash != null then
+                        $proc_hash = $proc_hash + " IMPHASH:" + object.process.hash.imphash
+                    endif
+                    if object.process.hash.md5 != null then
+                        $proc_hash = $proc_hash + " MD5:" + object.process.hash.md5
+                    endif
+                    if object.process.hash.sha1 != null then
+                        $proc_hash = $proc_hash + " SHA1:" + object.process.hash.sha1
+                    endif
+                    if object.process.hash.sha256 != null then
+                        $proc_hash = $proc_hash + " SHA256:" + object.process.hash.sha256
+                    endif
+                    $proc_hash = strip($proc_hash, " ", "")
+                endif
+            endif
+
+            $first_cmdline = object.process.cmdline
+            $second_cmdline = object.process.parent.cmdline
+           
+            $result_if_new_file = exec_query("Check_if_new_file", [lower(event_src.host), lower(object.process.fullpath), "executable"])
+            if $result_if_new_file["$subj_proc_names"] != null then
+                if $result_if_new_file["$process_name"] == lower(object.process.parent.name) and $result_if_new_file["$process_id"] == number(object.process.parent.id) then
+                    $creator_names = " (file creator: is executor)"
+                    $creator_info = " (file (" + lower(object.process.fullpath) + ") creator: is executor)"
+                    $creator_names_short = $creator_names
+                    $creator_info_short = $creator_info
+                else
+                    $creator_names = " (file creator: " + $result_if_new_file["$subj_proc_names"] + ")"
+                    $creator_names_short = " (file creator: " + $result_if_new_file["$process_name"] + ")"
+                    $s_name = if find_substr($result_if_new_file["$process_name"], " ") != null then '"' + $result_if_new_file["$process_name"] + '"' else $result_if_new_file["$process_name"] endif
+                    $creator_info = " (file (" + lower(object.process.fullpath) + ") creator: " + $result_if_new_file["$subj_proc_info"] + ")"
+                    $creator_info_short = " (file (" + lower(object.process.fullpath)+ ") creator: " + $s_name + " (" + string($result_if_new_file["$process_id"]) + ") [" + string($result_if_new_file["$session"]) + "])"
+                endif
+            else
+                $creator_names = ""
+                $creator_info = ""
+                $creator_names_short = ""
+                $creator_info_short = ""
+            endif
+
+            $result_check_all = exec_query("Check_all_process_chains", [lower(event_src.host), number(object.process.parent.id), lower(object.process.parent.name)])
+
+            if $result_check_all["$step"] != null then
+                
+                $step = number($result_check_all["$step"]) + 1
+                
+                $chain_proc_names = object.process.name + $creator_names  + " ← " + $result_check_all["$chain_proc_names"]
+
+                if length($chain_proc_names) > 1000 then 
+                    $chain_proc_names = object.process.name + $creator_names_short + " ← " + object.process.parent.name + " ← ... "
+                endif
+
+                $chain_proc_info = $proc_name_for_chain_info + ' (' + object.process.id + ') [' + object.account.session_id + ']' + $creator_info + " ← " + $result_check_all["$chain_proc_info"]
+                if length($chain_proc_info) > 1300 then
+                    datafield16 = $creator_info
+                    $chain_proc_info = $proc_name_for_chain_info + ' (' + object.process.id + ') [' + object.account.session_id + ']' + $creator_info_short + " ← " + object.process.parent.name + ' (' + object.process.parent.id + ') [' + subject.account.session_id + '] ← ... '
+                endif
+                
+                if $second_cmdline == null then
+                    $second_cmdline = $result_check_all["$first_cmdline"]
+                    object.process.parent.cmdline = $second_cmdline
+                endif
+                if $subject_session_id == null or ($subject_session_id == 999 and $result_check_all["$object_session_id"] != 999) then
+                    $subject_session_id = $result_check_all["$object_session_id"]
+                    subject.account.session_id = string($subject_session_id)
+                endif
+            else
+                $step = 2
+                $chain_proc_names = object.process.name + $creator_names + " ← " + object.process.parent.name
+                $chain_proc_info = $proc_name_for_chain_info + ' (' + object.process.id + ') [' + object.account.session_id + ']' + $creator_info + " ← " + object.process.parent.name + ' (' + object.process.parent.id + ') [' + subject.account.session_id + ']'
+            endif
+            
+            if length($first_cmdline) > 700 then
+                $first_cmdline = substr($first_cmdline, 0, 700) + '...'
+            endif
+
+            if length($second_cmdline) > 500 then
+                $second_cmdline = substr($second_cmdline, 0, 500) + '...'
+            endif
+            
+            object.process.chain = $chain_proc_names
+            datafield19 = $chain_proc_info
+            numfield5 = $step
+        }
+
+insert_into Process_Chains if $host != null and $proc_id != null and $proc_name != null and uuid != null and $step != null and $chain_proc_names != null and $chain_proc_info != null {
+    host = $host
+    proc_id = $proc_id
+    proc_name = $proc_name
+    time_like_number = datetime_to_epoch(time)
+    subject_account = $subject_account
+    subject_session_id = $subject_session_id
+    object_account = $object_account
+    object_session_id = $object_session_id
+    proc_meta = $proc_meta
+    proc_hash = $proc_hash
+    parent_proc_id = $parent_proc_id
+    parent_proc_name = $parent_proc_name
+    step = $step
+    chain_proc_names = $chain_proc_names
+    chain_proc_info = $chain_proc_info
+    first_cmdline = $first_cmdline
+    second_cmdline = $second_cmdline
+    last_event_uuid = uuid
+}

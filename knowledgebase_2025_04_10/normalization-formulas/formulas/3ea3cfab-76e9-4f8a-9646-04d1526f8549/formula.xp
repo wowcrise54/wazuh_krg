@@ -1,0 +1,278 @@
+JSON = ''
+
+COND = in_list(["yandex.cloud.audit.iam.SetServiceAccountAccessBindings",
+                "yandex.cloud.audit.iam.UpdateServiceAccountAccessBindings"], $event_type)
+
+subject = "account"
+action = "modify"
+object = "account"
+
+status = switch $event_status
+    case "DONE" "success"
+    case "STARTED" "ongoing"
+    case "ERROR" "failure"
+    case "CANCELLED" "failure"
+endswitch
+
+subformula "item_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $next = bool($array[$current + 1])   
+endsubformula
+
+subject.account.id = $authentication["subject_id"]
+
+$at_sign = find_substr($authentication["subject_name"], "@")
+if $at_sign != null then
+    $account = substr($authentication["subject_name"], 0, $at_sign)
+    subject.account.name = $account
+    subject.account.domain = strip($authentication["subject_name"], $account + "@", "")
+else
+    subject.account.name = $authentication["subject_name"]
+endif
+
+subject.account.group = $authentication["federation_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+$cloud = $resource_metadata["path"][1]["resource_name"] 
+$folder = $resource_metadata["path"][2]["resource_name"]
+object.storage.fullpath = join([$organization, $cloud, $folder], "|")
+
+object.property = "access bindings"
+
+$operation = strip($event_type, "yandex.cloud.audit.iam.", "")
+
+if $operation == "SetServiceAccountAccessBindings" then
+
+    $array = $request_parameters["access_bindings"]
+    $current = -1
+    submessage("TEXT", "item_handler", "")
+    if bool($item) then
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["subject"]["type"] + ":" + $item["subject"]["id"] + " " + $item["role_id"])
+    endif
+
+    object.new_value = lower(join($values, "|"))
+
+elif $operation == "UpdateServiceAccountAccessBindings" then
+
+    $array = $details["access_binding_deltas"]
+    $current = -1
+    submessage("TEXT", "item_handler", "")
+    if bool($item) then
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, $item["action"] + " " + $item["access_binding"]["subject_type"] + ":" + $item["access_binding"]["subject_id"] + " " + $item["access_binding"]["role_id"])
+    endif
+
+    object.new_value = lower(join($values, "|"))
+endif
+
+$remote_address = coalesce(ipv4($request_metadata["remote_address"]), ipv6($request_metadata["remote_address"]))
+if $remote_address != null then
+    src.ip = $remote_address
+else
+    logon_service = $request_metadata["remote_address"]
+endif
+
+datafield1 = $organization                     # Наименование организации
+datafield2 = $cloud                            # Наименование облака
+datafield3 = $folder                           # Наименование каталога
+datafield4 = $details["service_account_id"]    # Идентификатор сервисной учетной записи
+datafield5 = $details["service_account_name"]  # Наименование сервисной учетной записи
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = $operation
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = $event_source
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_IAM_Account_Access_Manage"

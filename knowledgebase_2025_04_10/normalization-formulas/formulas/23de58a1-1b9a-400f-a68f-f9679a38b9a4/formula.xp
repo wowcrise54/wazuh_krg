@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {DATETIME} {$Computer=HOSTNAME} {"tionix_acess_log"|"TionixVdiLog"}:
+        [{WORD} {time=DATETIME}] [error] No project name sent in request. Found first available
+        VDI project {$oname=STRING+} in domain {$odomain=REST}'
+
+action = "info"
+object = "resource"
+status = "success"
+
+object.type = "project VDI"
+object.name = strip($oname, '"', '"')
+object.domain = strip($odomain, '"', '"')
+
+importance = "info"
+
+event_src.vendor = "tionix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vdi"
+event_src.category = "Virtualization"
+
+id = "PT_Tionix_VDI_syslog_found_project"

@@ -1,0 +1,61 @@
+query Get_Log_Name($name) from Log_Names {
+    name == $name
+}
+
+event Log_Was_Cleared:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and in_list(["104", "1102", "517"], msgid)
+        and action == "clean"    # проверки не избыточны,
+        and object == "log"  # т.к. в Windows есть и другие события с ID 104
+        and exec_query("Get_Log_Name", [upper(object.name)])
+        and filter::CheckWL_Specific_Only("Windows_Eventlog_Cleaning", lower(join([event_src.host, subject.account.name, object.name], "|")))
+    }
+
+rule Windows_Eventlog_Cleaning: Log_Was_Cleared
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Log_Was_Cleared {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $object.name = object.name
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+
+        $alert.key = lower(join([event_src.host, subject.account.name, object.name], "|"))
+        $alert.context = lower(subject.account.name + " cleared the " + object.name + " log")
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "clean"
+    $object = "log"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Indicator Removal: Clear Windows Event Logs"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

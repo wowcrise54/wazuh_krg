@@ -1,0 +1,108 @@
+event Obfuscated_Commandline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4104"
+        and object == "command"
+        and (
+            # Escape chars
+            regex(object.process.cmdline, "(?i)(\`[a-z]{1,7}){5,}", 0) != null
+            # Get-Command Invocation to hide malicious Cmdlet
+            or regex(object.process.cmdline, "(?i)(&|\.)\s*\(\s*get-command", 0) != null
+            # String concatenation
+            or regex(object.process.cmdline, "(?i)(\'|\")\s*\+\s*(\'|\").{1,7}(\'|\")\s*\+\s*(\'|\")", 0) != null
+            #or regex(lower(object.process.cmdline), "(\'|\")\s*\+\s*(\'|\").{1,7}(\'|\")\s*\+\s*(\'|\")|-split\\b.*?-join\\b|-join\\b.*?-split\\b|string\.concat\(|string\.join\(", 0) != null
+            # String Format
+            or regex(object.process.cmdline, "(?i)(\{\d\}\s*){2,}.{1,2}\s-f\\b", 0) != null
+            # Reversed Strings
+            or regex(object.process.cmdline, "(?i)-join\\b.{,20}\[\d+..0\]|\[array\]::reverse|righttoleft", 0) != null
+            # Char Convert
+            or regex(object.process.cmdline, "(?i)\[char\]\(.*?\[char\]\(.*?\[char\]\(|\[byte\].*?\[byte\].*?\[byte\]|foreach.{1,20}\(\[convert\]::|\[char\[\]\]\(", 0) != null
+            # SecureString (AES) Encoding
+            or regex(object.process.cmdline, "(?i)[^\"]convertfrom-securestring[^\"]", 0) != null
+            # Hardcore
+            or regex(object.process.cmdline, "(?i)\$\{.{1,3}\}.{0,3}\$\{.{1,3}\}", 0) != null
+        )
+        and (
+             (
+                object.name != null
+                and filter::CheckWL_Powershell("Obfuscated_Powershell", lower(join([object.name, object.process.cmdline], "|")))
+            )
+            or (
+                object.name == null
+                and filter::CheckWL_Powershell("Obfuscated_Powershell", lower(object.process.cmdline))
+            )
+        )
+    }
+
+rule Obfuscated_Powershell: Obfuscated_Commandline
+
+    init {
+        $labels = "w_auto|CheckWL_Powershell"
+    }
+
+    on Obfuscated_Commandline {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.cmdline = object.process.cmdline
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield1 = datafield1
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+    
+        if $object.name != null then
+            $alert.key = lower(join([object.name, object.process.cmdline], "|"))
+        else
+            $alert.key = lower(object.process.cmdline)
+        endif
+        $alert.regex_match = regex(object.process.cmdline, "(?i)(\`[a-z]{1,7}){5,}|(&|\.)\s*\(\s*get-command|(\'|\")\s*\+\s*(\'|\").{1,7}(\'|\")\s*\+\s*(\'|\")|(\{\d\}\s*){2,}.{1,2}\s-f\\b|-join\\b.{,20}\[9..0\]|\[array\]::reverse|righttoleft|\[char\].*?\[char\].*?\[char\]|\[byte\].*?\[byte\].*?\[byte\]|foreach.*?\[char\]\(\[convert\]::|\$\{.{1,3}\}.{0,3}\$\{.{1,3}\}|[^\"]convertfrom-securestring[^\"]", 0)
+        $alert.context = $subject.account.name
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Obfuscated Files or Information: Command Obfuscation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

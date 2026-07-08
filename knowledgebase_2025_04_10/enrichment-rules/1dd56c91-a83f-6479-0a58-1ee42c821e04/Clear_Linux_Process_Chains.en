@@ -1,0 +1,29 @@
+query Host_Booted_Recently($host) from Booted_Linux_Hosts {
+    host == $host
+}
+
+
+event Reboot_event:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "unix_like"
+        and event_src.subsys == "auditd"
+        and (
+            msgid == "SYSTEM_BOOT"
+            or (
+                msgid == "SYSTEM_RUNLEVEL"
+                and datetime_to_epoch(time) - datetime_to_epoch(select_query_first("Host_Booted_Recently", [event_src.host], "time")) > 10
+            )
+        )
+        # Запрос к списку с критичными узлами
+        and table::Critical_Linux_Hosts_For_Process_Chains {
+            column::host == lower(event_src.host)
+        }
+    }
+
+
+enrichment Clear_Linux_Process_Chains
+    enrich Reboot_event:
+        remove_from Linux_Process_Chains {
+            column::host == lower(event_src.host)
+        }

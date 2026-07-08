@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="PROC_Execute"} {subject.name=WORDDASH} {$status="OK"|"FAIL"|"FAILURE"} sh
+        euid{":"?} {subject.id=NUMBER} egid {":"?} {NUMBER} epriv{":"?} {STRING} name {STRING}
+        {STRING} {"-i"|"--install"} {object.name=STRING}'
+
+subject = "account"
+action = "install"
+object = "application"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_proc_execute_install_package_rpm"
+importance = "info"

@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}-1-{msgid="104001"}:
+        ({WORD}) Switching to ACTIVE - {$re=REST}'
+
+action = "info"
+object = "node"
+status = "success"
+
+object.type = "Failover"
+object.state = "active"
+
+reason = strip($re, "", ".")
+
+importance = "high"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_104001_Failover_unit_switched_to_active"

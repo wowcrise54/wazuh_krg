@@ -1,0 +1,32 @@
+event Instance_Manage:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "yandex_cloud"
+        and event_src.subsys == "compute"
+        and (
+             in_list(["create", "remove"], action)
+             or msgid == "UpdateInstanceNetworkInterface"
+        )
+        and object == "virtual_machine"
+        and status == "success"
+        and find_substr(datafield9, "|") == null
+    }
+
+enrichment Yandex_Cloud_Virtual_Machine_IP_Address_Assign
+    enrich Instance_Manage:
+
+        enrich_fields {
+            if action == "remove" or (msgid == "UpdateInstanceNetworkInterface" and datafield9 == null) then
+                $id_to_remove = object.id
+            endif
+        }
+
+        insert_into Yandex_Cloud_Virtual_Machine_Addresses if in_list(["create", "modify"], action) and datafield9 != null {
+            column::ip_address = datafield9
+            column::instance_id = object.id
+        }
+
+        remove_from Yandex_Cloud_Virtual_Machine_Addresses {
+            column::instance_id == $id_to_remove
+        }

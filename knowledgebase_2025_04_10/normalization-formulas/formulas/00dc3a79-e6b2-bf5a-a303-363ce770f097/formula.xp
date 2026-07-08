@@ -1,0 +1,95 @@
+JSON = ''
+COND = (
+    $eventid != null
+    and $node != null
+    and $timestamp != null
+    and $items["DAEMON_START"] != null
+)
+
+$kv_main = keyvalue($items["DAEMON_START"][0], " ", "=", "'")
+
+if $kv_main["auid"] != "4294967295" then
+    subject = "account"
+endif
+
+action = "start"
+object = "service"
+status = "success"
+
+# Декодируем HEX, если требуется
+$auid_en = strip($kv_main["AUID"], '"', '"')
+if $auid_en == $kv_main["AUID"] then
+    $auid_en = hex_to_string($kv_main["AUID"])
+endif
+
+$auid_list = csv($auid_en, "@", "")
+
+# Декодируем HEX, если требуется
+$uid_en = strip($kv_main["UID"], '"', '"')
+if $uid_en == $kv_main["UID"] then
+    $uid_en = hex_to_string($kv_main["UID"])
+endif
+
+$uid_list = csv($uid_en, "@", "")
+
+if $kv_main["auid"] != "4294967295" then
+    subject.account.name = $auid_list[0]
+    subject.account.domain = $auid_list[1]
+
+    subject.account.id = $kv_main["auid"]
+else
+    subject.account.name = $uid_list[0]
+    subject.account.domain = $uid_list[1]
+
+    subject.account.id = $kv_main["uid"]
+endif
+
+subject.account.session_id = $kv_main["ses"]
+subject.account.privileges = $kv_main["uid"]
+
+object.name = "auditd"
+object.id = $kv_main["pid"]
+object.version = $kv_main["ver"]
+
+object.property = "event_format"
+object.value = $kv_main["format"]
+
+object.account.id = $kv_main["uid"]
+object.account.name = $uid_list[0]
+object.account.domain = $uid_list[1]
+
+chain_id = $eventid  # AuditD Event ID
+
+time = epoch_ms_to_datetime(number($timestamp + $timestampfractional))
+msgid = "DAEMON_START"
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.subsys = "auditd"
+event_src.category = "Operating system"
+
+if $node != "" then
+    if maybe_ipv4($node) != null or maybe_ipv6($node) != null then
+        if (in_subnet($node, "127.0.0.0/8") == False and $node != "::1") then
+            event_src.ip = $node
+            labels = "node_contains_ext_ip"
+        endif
+    else
+        $first_dot = find_substr($node, ".")
+        if $first_dot != null then
+            event_src.fqdn = $node
+            event_src.hostname = substr($node, 0, $first_dot)
+        else
+            event_src.hostname = $node
+        endif
+    endif
+else
+    event_src.ip = recv_ipv4
+endif
+
+id = "PT_UNIX_like_auditd_syslog_structured_daemon_start"

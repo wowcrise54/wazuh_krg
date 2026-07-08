@@ -1,0 +1,38 @@
+EVENTLOG = 'EventID.text="1040"'
+COND = lower($Channel) == "application" and $Provider["Name"] == "MsiInstaller"
+
+action = "start"
+object = "process"
+status = "ongoing"
+
+$csv = csv($Data[0], "\\", "")
+object.fullpath = lower($Data[0])
+object.name = lower($csv[length($csv) - 1])
+object.path = strip(lower($Data[0]), "", object.name)
+object.process.id = $Data[1]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.generic = "Process"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1040_Begining_a_Windows_Installer_transaction"
+

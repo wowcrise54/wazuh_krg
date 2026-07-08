@@ -1,0 +1,56 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Управление усиленной аутентификацией"
+       and $event_id == 654311429
+
+# action differs: bind / unbind
+object = "resource"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение $objid и $objname из $event_message
+    TEXT = "Группа сообщений усиленной аутентификации\n\r\n\rtoken_mgr: token with serial
+            number '{object.id=WORD}' successfully bound to user {$objname=REST}"
+
+    action = "bind"
+
+    object.property = "account"
+    object.value = strip($objname, "'", "'")
+
+    importance = "info"
+endsubformula
+
+subformula "message"
+    # Извлечение object.id из $event_message
+    TEXT = "Группа сообщений усиленной аутентификации\n\r\n\rtoken_mgr: binding file
+            successfully removed from token with serial number '{object.id=WORD}'{'\n'?}"
+
+    action = "unbind"
+
+    importance = "low"
+endsubformula
+
+object.type = "token"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_action_token"

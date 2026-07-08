@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        kernel: {STRING?} nfsd: connect from {src.ip=IPV4|src.ip=IPV6}, port={src.port=NUMBER}'
+
+action = "open"
+object = "connection"
+status = "success"
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+direction = "ingress"
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nfs"
+event_src.category = "File service"
+
+id = "PT_Opensource_NFS_syslog_debug_incoming_mount_connection"

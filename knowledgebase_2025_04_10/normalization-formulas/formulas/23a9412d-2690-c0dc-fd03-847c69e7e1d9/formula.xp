@@ -1,0 +1,53 @@
+TABULAR = "recordid,
+           {datafield5=module_name},
+           severity,
+           {msgid=event_id},
+           {time=time},
+           {datafield1=site_code},
+           hostname,
+           {datafield2=component},
+           params,
+           product
+           "
+
+COND = $event_id == 30052 and $product == "MECM"
+
+subject = "account"
+action = "modify"
+object = "task"
+status = "success"
+
+submessage ("TEXT", "add_info", $params)
+subformula "add_info"
+    TEXT = "{$csv=CSV}"     
+    if find_substr($csv[0], "\\") != null then
+        subject.account.domain = lower(csv($csv[0], "\\", "")[0])
+        subject.account.name = lower(csv($csv[0], "\\", "")[1]) 
+    else
+        subject.account.name = lower($csv[0])
+    endif
+    
+    object.name = $csv[4]
+
+    datafield9 = $csv[2] # Modified site code. In hierarhy can be many site codes
+endsubformula
+
+# datafield1 - mecm site code
+# datafield2 - component of mecm (how the event was generated)
+# datafield5 - module name of mecm 
+
+importance = "low"
+
+event_src.vendor = "microsoft"
+event_src.title = "mecm"
+event_src.category = "Network monitoring system"
+
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($hostname)
+    event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    event_src.hostname = lower($hostname)
+endif
+
+id = "PT_Microsoft_MECM_odbc_30052_user_modified_sql_task"

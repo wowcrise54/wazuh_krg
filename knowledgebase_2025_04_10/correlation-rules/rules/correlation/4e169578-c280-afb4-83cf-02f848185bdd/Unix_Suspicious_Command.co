@@ -1,0 +1,104 @@
+query CheckCommand($commandline) from Unix_Suspicious_Commands {
+    regex_match($commandline, column::command)
+}
+
+query CheckCommand_Qhandler($commandline) from Unix_Suspicious_Commands {
+    regex_match($commandline, column::command)
+}
+    qhandler {
+        $description = description
+        $cmdline = command
+        $event_type = event_type
+        $event_importance = event_importance
+    }
+
+event Execve_Syscall:
+    key:
+        event_src.host, object.process.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and not filter::Legitimate_Processes_Linux()
+        and object.process.cmdline != null
+        and exec_query("CheckCommand",[lower(object.process.cmdline)])
+        and filter::CheckWL_Linux_Process_Creation("Unix_Suspicious_Command", lower(join([subject.account.name, object.process.cmdline, object.process.cwd], "|")))
+    }
+
+rule Unix_Suspicious_Command: Execve_Syscall+ timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+        $first_event = true
+    }
+
+    on Execve_Syscall {
+        if $first_event then
+            $first_event = false
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.cmdline = object.process.cmdline
+            $object.process.meta = object.process.meta
+            $object.process.cwd = object.process.cwd 
+            $object.process.parent.id = object.process.parent.id
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.asset = event_src.asset
+            $event_src.host = event_src.host
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.rule = event_src.rule
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            
+            $alert.key = lower(join([subject.account.name, object.process.cmdline, object.process.cwd], "|"))
+            $result = exec_query("CheckCommand_Qhandler", [lower(object.process.cmdline)])
+            $alert.regex_match =  regex(lower(object.process.cmdline), $result["$cmdline"], 0)
+            $alert.context = $result["$description"]
+
+            if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+                $importance = $result["$event_importance"]
+            else
+                $importance = "medium"
+            endif
+            if in_list(["event", "incident"], lower($result["$event_type"])) then
+                $correlation_type = $result["$event_type"]
+            else
+                $correlation_type = "event"
+            endif
+        endif
+    }  
+
+emit {
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Unix Shell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

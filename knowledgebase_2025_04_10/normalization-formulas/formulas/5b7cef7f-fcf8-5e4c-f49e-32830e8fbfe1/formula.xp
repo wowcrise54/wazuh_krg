@@ -1,0 +1,41 @@
+EVENTLOG = 'EventID="5380"'
+COND = $Channel == "Security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "access"
+object = "db_object"
+status = "success"
+
+subject.account.name = lower($Data["SubjectUserName"])
+subject.account.domain = lower($Data["SubjectDomainName"])
+subject.account.id = $Data["SubjectUserSid"]
+subject.account.session_id = maybe_number16($Data["SubjectLogonId"])
+subject.process.id = $Data["ClientProcessId"] 
+
+datafield1 = $Data["SchemaFriendlyName"]  # Schema friendly name
+datafield2 = $Data["SearchString"]  # Search String
+datafield3 = $Data["CountOfCredentialsReturned"]  # Count of credentials returned
+datafield4 = strip($Data["Schema"], '{', '}')  # Schema
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "low"
+
+category.generic = "Database Object"
+category.high = "Database Management"
+category.low = "Manipulation"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "AAA"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_5380_user_find_credentials_in_vault"

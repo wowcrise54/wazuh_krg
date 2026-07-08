@@ -1,0 +1,40 @@
+query GetRiskAsset($asset_access, $asset_id) from AssetGrid_Servers {
+    os_type == $asset_access
+    and asset_id == $asset_id
+}
+
+event Windows_Session:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows" 
+        and msgid == "4624"
+        and filter::LoginAttempt_Windows_Endpoint()
+        and logon_type == 3
+        and src.ip != null
+        and not filter::Loopback_Address(src.ip)
+        and (
+             in_list(["svchost.exe", "winlogon.exe"], subject.process.name)
+             or (
+                  subject.process.name == null
+                  and regex(lower(select_query_first("GetRiskAsset", [event_src.title, event_src.asset], "roles")), "domain controller|mail server", 0) == null
+                )
+            ) 
+        and not filter::CheckWL_WhiteListValue("Write_Windows_Session", lower(event_src.host), lower(subject.account.id), src.ip) # src.ip для снижения нагрузки
+    }
+    
+enrichment Write_Windows_Session
+    enrich Windows_Session:
+        # Записываем сессию в ТС
+        insert_into Windows_Logon_Sessions {
+            host = lower(event_src.host)
+            src_ip = src.ip
+            src_host = lower(src.host)
+            src_asset = src.asset
+            dst_ip = dst.ip
+            dst_host = lower(dst.host)
+            logon_type = string(logon_type)
+            session_id = subject.account.session_id
+            username = lower(subject.account.name)
+            user_domain = lower(subject.account.domain)
+            user_sid = lower(subject.account.id)
+        }

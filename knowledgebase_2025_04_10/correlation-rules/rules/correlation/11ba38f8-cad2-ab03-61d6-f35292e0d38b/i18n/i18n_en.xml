@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Detecting the launch of the SharpHound (BloodHound) tool using one of the methods - ObjectProps, ACL, Trusts, Container.ObjectProps - performs Object Properties collection for properties such as LastLogon or PwdLastSet; ACL - collects abusable permissions on objects in Active Directory; Trusts - collects domain trusts; Container - collects OU tree structure and Group Policy links</Description>
+  <EventDescriptions>
+    <EventDescription id="7ec3973e-edfa-a1fb-089a-d143c85ea983">User {subject.account.name} from host {src.host} launched the utility {object.process.name}, which behaves like SharpHound (BloodHound) software, to collect information from domain controller ({event_src.host})</EventDescription>
+    <EventDescription id="b0860b02-7ef9-77cf-7361-9ed99d3e5cfa">User {subject.account.name} from host {src.host} performed activities similar to SharpHound (BloodHound) software activity to collect information from domain controller ({event_src.host})</EventDescription>
+  </EventDescriptions>
+</Localization>

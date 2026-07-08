@@ -1,0 +1,53 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER}: {"default"?}
+        {$tmp_subsys="AAA"} Message {NUMBER+} : "Authentication is rejected for {$user=STRING*} (client ip :
+        {src.ip=IPV4|src.ip=IPV6}, vserver ip: {dst.ip=IPV4|dst.ip=IPV6}), extended error, if any : {$reason=NUMBER}"'
+
+action = "info"
+object = "account"
+status = "success"
+
+if find_substr($user, "\\") != null then
+    object.account.name = csv($user, "\\", "")[1]
+    object.account.domain = csv($user, "\\", "")[0]
+elif find_substr($user, "@") != null then
+    object.account.name = csv($user, "@", "")[0]
+    object.account.domain = csv($user, "@", "")[1]
+else
+    object.account.name = $user
+endif
+
+reason = switch $reason
+    case 4001 "Invalid credentials"
+    case 4002 "Login not permitted"
+    case 4003 "Server timeout"
+    case 4004 "System error"
+    case 4005 "Socket error talking to authentication server"
+    case 4006 "Bad (format) user passed to nsaaad"
+    case 4007 "Bad (format) password passed to nsaaad"
+    case 4008 "Password mismatch (when entering new password)"
+    case 4009 "User not found"
+    case 4010 "Restricted login hours"
+    case 4011 "Account disabled"
+    case 4012 "Password expired"
+    case 4013 "No dial-in permission (RADIUS specific)"
+    case 4014 "Error changing password"
+    case 4015 "Account locked"
+endswitch
+
+time = $sys_time
+msgid = "AAA Message authentication rejected"
+importance = "low"
+
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "netscaler"
+event_src.category = "Terminal services"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Citrix_NetScaler_syslog_aaa_message_authentication_rejected"

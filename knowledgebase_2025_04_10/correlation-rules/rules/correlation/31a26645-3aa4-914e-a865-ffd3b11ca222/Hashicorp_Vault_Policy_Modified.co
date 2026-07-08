@@ -1,0 +1,62 @@
+event Vault_Policy_Modified:
+    key:
+        event_src.host, event_src.title, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "vault"
+        and action == "modify"
+        and object == "policy"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("Hashicorp_Vault_Policy_Modified", lower(join([src.host, coalesce(subject.account.name, subject.account.id), object.name], "|")))
+    }
+
+rule Hashicorp_Vault_Policy_Modified: Vault_Policy_Modified
+    
+    init {
+        $labels = "CheckWL_Specific_Only"
+     }
+
+    on Vault_Policy_Modified {
+        $subject.account.name = subject.account.name
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.name = object.name
+
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.port = src.port
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([src.host, coalesce(subject.account.name, subject.account.id), object.name], "|"))
+        $alert.context = "Policy created or modified"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "policy"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, coalesce($subject.account.name, $subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

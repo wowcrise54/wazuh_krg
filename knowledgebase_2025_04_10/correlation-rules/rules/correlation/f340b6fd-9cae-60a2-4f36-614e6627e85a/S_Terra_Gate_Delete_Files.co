@@ -1,0 +1,64 @@
+event Delete_Files:
+    key:
+        event_src.host
+    filter {   
+        filter::NotFromCorrelator()
+        and event_src.title == "csp_vpn_gate"
+        and msgid == "00727001" 
+        and match(object.process.cmdline, "delete file*")
+        and filter::CheckWL_Specific_Only("S_Terra_Gate_Delete_Files", lower(join([subject.account.name, object.process.cmdline, src.host], "|")))
+
+    }
+rule S_Terra_Gate_Delete_Files: Delete_Files
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Delete_Files {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+        
+        $object.process.cmdline = object.process.cmdline
+        $object.fullpath = regex(object.process.cmdline, "delete file: (.+)", 1)
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline, src.host], "|"))
+        $alert.context = event_src.host + " | " + $object.fullpath
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "remove"
+    $object = "file"
+    $status = "success"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Data Destruction"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $object.process.cmdline, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataDeletion"
+    $incident.aggregation.timeout = 3h
+}

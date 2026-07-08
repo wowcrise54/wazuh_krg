@@ -1,0 +1,136 @@
+event Upload_Service:
+    key:
+        event_src.host, subject.account.id
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and datafield6 == "0x2" # WriteData (or AddFile)
+        and match(lower(object.storage.fullpath), "*.exe")
+        and lower(object.storage.id) == "\\\\*\\admin$"
+        and filter::CheckWL_Windows_Shares("Remoting_Impacket_PsExec", lower(join([src.ip, subject.account.id, object.storage.fullpath], "|")))
+    }
+
+event Install_Service:
+    key:
+        event_src.host, subject.account.id
+    filter {
+        filter::NotFromCorrelator() 
+        and (msgid == "4697" or msgid == "7045")
+        and event_src.title == "windows"
+        # %systemroot%\\pIDyGeCR.exe
+        and match(lower(object.process.fullpath), "*.exe")
+    }
+
+event Created_Input_Pipe:
+    key:
+        event_src.host, subject.account.id
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and match(lower(object.name), "remcom_stdin*")
+    }
+
+rule Remoting_Impacket_PsExec: (Upload_Service and Install_Service and Created_Input_Pipe) within 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Windows_Shares" 
+    }
+
+    on Upload_Service {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+            
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $alert.key = lower(join([src.ip, subject.account.id, object.storage.fullpath], "|"))
+    }
+
+    on Install_Service {
+        $object = object
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.process.id = subject.process.id
+        $subject.process.parent.id = subject.process.parent.id
+        
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        
+        $object.name = object.name
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.regex_match = string(regex(lower(object.process.cmdline), "-e\s+\"(cat|cp|load)", 0))
+        $alert.context = lower(join(remove([subject.account.name, object.name], null), "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $category.generic = "Attacks"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: SMB/Windows Admin Shares"
+
+    $importance = "high"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

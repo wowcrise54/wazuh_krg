@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {$time_1=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?}
+        php{"["?}{object.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+        {$time_2=DATETIME?} {"host"?} CEF:0|Passwork|On premise|{NUMBER}|{msgid="gp-link-create"}|created vault\'s link|{NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+subject = "account"
+action = "grant"
+object = "resource"
+status = "success"
+
+subject.account.id = $kv['suid']
+subject.account.name = $kv['suser']
+
+object.id = $kv['passworkGroupId']
+object.name = $kv['passworkGroupName']
+object.type = "vault"
+
+src.ip = $kv['passworkIp']
+
+if $kv["passworkGroupIsPrivate"] != null then
+    datafield1 = "private vault"    # Vault type
+else 
+    datafield1 = "common vault"
+endif
+datafield2 = $kv['passworkGroupId']    # Vault ID
+datafield3 = $kv['passworkGroupName']  # Vault name
+      
+time = coalesce(datetime($time_2),datetime($time_1))
+importance = "info"
+
+event_src.title = "passwork"
+event_src.vendor = "passwork"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Passwork_Passwork_syslog_vault_link_create"

@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="SSHS_IP_BLOCK_CLIENT"}
+        {"(l)"|"(s)"|}{"["NUMBER"]"?}:{"CID="UNTIL(";")?}
+        SSH client IP blocked due to authentication failure in last
+        {numfield2=NUMBER}hour.({$tmp=UNTIL(")")}{"."?}'
+
+$kv = keyvalue($tmp,", ","=","~")
+
+subject = "system"
+action = "lock"
+object = "host"
+status = "success"
+
+src.ip = $kv["IpAddress"]
+dst.hostname = event_src.hostname
+protocol.layer7 = "ssh"
+
+#datafield3 - номер инстанса VPN
+datafield3 = $kv["VpnName"]
+#numfield1 - количество блокировок адреса в течении периода
+numfield1 = $kv["BlockCount"]
+#numfield2 - продолжительность периода неудачных попыток входа в минутах
+
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_SSHS_ip_block_client"

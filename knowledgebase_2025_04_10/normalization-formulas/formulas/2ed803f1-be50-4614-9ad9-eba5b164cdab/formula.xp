@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %ACLLOG-{NUMBER}-{msgid="ACLLOG_FLOW_INTERVAL"}: {"SGT:"?} {NUMBER?}{","?} {"Source"?}{"Src"?} IP: {src.ip=IPV4},
+        {"Destination"?}{"Dst"?} IP: {dst.ip=IPV4}, {"Source"?}{"Src"?} Port: {src.port=NUMBER}, {"Destination"?}{"Dst"?} Port: {dst.port=NUMBER},
+        {"Source Interface"?}{"Src Intf"?}: {$ifname=STRING} Protocol: "{$proto=WORD}"({NUMBER}), {"ACL Name"?}{":"?} {subject.name=WORD?}{","?} 
+        {"ACE Action"?}{":"?} {$action=WORD?}{","?} {"Appl Intf"?}{":"?} {STRING?}{","?} Hit-count{":"?} {"="?} {count.packets=NUMBER}'
+
+if subject.name != null and subject.name != "" then
+    subject = "rule"
+endif
+if lower($action) == "deny" then
+    action = "deny"
+else
+    action = "allow"
+endif
+object = "connection"
+status = "success"
+
+interface = strip($ifname, "", ",")
+protocol = $proto
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.category = "Network device"
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+
+id = "PT_Cisco_Nexus_syslog_ACLLOG_FLOW_INTERVAL"

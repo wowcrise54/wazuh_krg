@@ -1,0 +1,52 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Аутентификация и идентификация"
+       and $event_id == 67108870
+       and (find_substr($event_message, "xdm:session : session opened") != null
+            or find_substr($event_message, "sshd:session : session opened") != null)
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение $catlow, subject.name и subject.id из $event_message
+    TEXT = "Группа событий аутентификации\n\r\n\r{$catlow='xdm'|$catlow='sshd'}:session : session
+    opened for user {subject.account.name=WORDDASH} by {WORDDASH?}(uid={subject.account.id=NUMBER}){'\n'?}"
+
+    logon_auth_method = switch $catlow
+        case "xdm" "local"
+        case "sshd" "remote"
+    endswitch
+endsubformula
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    dst.fqdn = $station
+    dst.hostname = substr($station, 0, $dot_pos)
+else
+    dst.hostname = $station
+endif
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+event_src.hostname = dst.hostname
+event_src.fqdn = dst.fqdn
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_login_system"

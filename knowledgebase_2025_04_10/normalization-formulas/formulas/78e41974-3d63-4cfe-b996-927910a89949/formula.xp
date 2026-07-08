@@ -1,0 +1,70 @@
+EVENTLOG = 'EventID="40"'
+COND =  $Channel == "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational"
+        and $Provider["Name"] == "Microsoft-Windows-TerminalServices-LocalSessionManager"
+
+subject = "account"
+action = "disconnect"
+object = "system"
+status = "success"
+
+subject.account.session_id = $UserData["EventXML"]["Session"]
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    dst.fqdn = lower($Computer)
+    dst.hostname = lower(substr($Computer, 0, $dot_pos))
+else
+    dst.hostname = lower($Computer)
+endif
+
+reason = switch $UserData["EventXML"]["Reason"]  
+    case "0" "No additional information is available"
+    case "1" "An application initiated the disconnection"
+    case "2" "An application logged off the client"
+    case "3" "The server has disconnected the client because the client has been idle for a period of time longer than the designated time-out period"
+    case "4" "The server has disconnected the client because the client has exceeded the period designated for connection"
+    case "5" "The client's connection was replaced by another connection"
+    case "6" "No memory is available"
+    case "7" "The server denied the connectio"
+    case "8" "The server denied the connection for security reasons"
+    case "9" "The server denied the connection for security reasons"
+    case "10" "Fresh credentials are required"
+    case "11" "User activity has initiated the disconnect"
+    case "12" "The user logged off, disconnecting the session"
+    case "256" "Internal licensing error"
+    case "257" "No license server was available"
+    case "258" "No valid software license was available"
+    case "259" "The remote computer received a licensing message that was not valid"
+    case "260" "The hardware ID does not match the one designated on the software license"
+    case "261" "Client license error"
+    case "262" "Network problems occurred during the licensing protocol"
+    case "263" "The client ended the licensing protocol prematurely"
+    case "264" "A licensing message was encrypted incorrectly"
+    case "265" "The local computer's client access license could not be upgraded or renewed"
+    case "266" "The remote computer is not licensed to accept remote connections"
+    case "267" "An access denied error was received while creating a registry key for the license store"
+    case "768" "Invalid credentials were encountered"
+endswitch
+
+if reason == null then reason = $UserData["EventXML"]["Reason"] endif 
+
+logon_auth_method = "remote"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.fqdn = dst.fqdn
+event_src.hostname = dst.hostname
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Terminal services"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_40_RD_disconnected_by_reason"

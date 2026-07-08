@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER}: {"default"?}
+        SSLVPN Message {NUMBER+} : "Cookie mismatch detected, expected {datafield9=UNTIL(",")}
+        incoming {datafield10=UNTIL(",")} continuing with incoming cookie"'
+
+subject = "application"
+action = "check"
+object = "message"
+status = "success"
+
+object.property = "cookie"
+
+# datafield9 - expected cookie
+# datafield10 - received cookie
+
+time = $sys_time
+msgid = "SSLVPN Message cookie mismatch detect"
+importance = "info"
+
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "netscaler"
+event_src.category = "VPN"
+
+id = "PT_Citrix_NetScaler_syslog_sslvpn_message_cookie_mismatch_detect"

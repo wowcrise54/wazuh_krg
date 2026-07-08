@@ -1,0 +1,56 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type
+           "
+
+COND = (
+            string($event_id) == "2049"
+            or string($event_id) == "257"
+        )
+        and (
+            $event_category == "Системные"
+            or $event_category == "Служба контроля"
+            or $event_category == "System"
+            or $event_category == "Monitoring Service"
+        )
+        and (
+            $event_type == "Information"
+            or $event_type == "Информация"
+        )
+
+action = "start"
+object = "module"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Служба"?}{$object=UNTIL("запущена")?}{$object=UNTIL(" started")?}.'
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+object.name = strip($object, '"', '" ')
+
+msgid = $event_id
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Executable Module"
+category.low = "Control"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Системные" then
+    event_src.subsys = "system"
+elif $event_category == "Служба контроля" then
+    event_src.subsys = "monitoring service"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_2049_257_service_started"

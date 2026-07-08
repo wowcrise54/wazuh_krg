@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0100020025"
+
+action = "create"
+object = "report"
+status = "success"
+
+$csv_path = csv($kv["file"], "/", "")
+$name = $csv_path[length($csv_path) - 1]
+object.name = $name
+object.path = strip($kv["file"], "", $name)
+object.fullpath = $kv["file"]
+object.property = "size"
+object.value = $kv["filesize"]
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "info"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["devid"]
+event_src.category = "Firewall"
+
+id = "PT_Fortinet_Fortigate_syslog_20025_LOG_ID_REPORTD_REPORT_SUCCESS"

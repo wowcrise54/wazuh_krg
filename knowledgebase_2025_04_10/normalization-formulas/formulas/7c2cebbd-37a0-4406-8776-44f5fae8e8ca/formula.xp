@@ -1,0 +1,56 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {DATETIME}
+       {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+       PT_SIEM: [ID {NUMBER} {STRING} {$rest=UNTIL("</record>")}{REST}'
+
+COND = find_substr($rest, 'event="fork') != null
+
+$rest = $rest + "</record>"
+
+subformula "parse_xml"
+   XML = 'record'
+endsubformula
+
+submessage("XML", "parse_xml", $rest)
+
+subject = "account"
+action = "start"
+object = "process"
+if find_substr($record/return/@errval, "failure") != null then
+    status = "failure"
+elif find_substr($record/return/@errval, "success") != null then
+    status = "success"
+endif
+
+subject.account.name = $record/subject/@ruid
+subject.account.group = $record/subject/@rgid
+subject.account.privileges = $record/subject/@uid
+subject.account.session_id = $record/subject/@sid
+subject.process.id = $record/subject/@pid
+
+object.process.parent.id = $record/subject/@pid
+
+object.process.id = number16($record/argument/@value)
+
+if status == "failure" then
+    reason = $record/return/@retval
+endif
+
+time = datetime($record["@iso8601"])
+importance = "low"
+
+category.generic = "Process"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_process_clone_xml"

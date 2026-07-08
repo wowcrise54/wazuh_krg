@@ -1,0 +1,55 @@
+!TABULAR = 'Version,
+            DateTime,
+            Severity,
+            MessageID'
+
+!COND = $Location == "com.sap.engine.services.security.authentication.logincontext.table"
+        and find_substr($MsgText, "LOGOUT.OK") != null
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+submessage("TEXT", "parse_msg_text", $MsgText)
+subformula "parse_msg_text"
+    TEXT = 'LOGOUT.OK User: {$username=STRING} Authentication Stack: service.telnet {REST}'
+    
+    subject.account.id = lower($username)
+endsubformula
+if $Session != '' then
+    subject.account.session_id = $Session
+endif
+
+protocol = "telnet"
+
+if $Application != '' then
+    datafield1 = $Application   # application
+endif
+if $Transaction != '' then
+    datafield2 = $Transaction   # transaction id
+endif
+if $ThreadName != '' then
+    datafield3 = $ThreadName    # thread name
+endif
+if $DsrComponent != '' then
+    datafield5 = $DsrComponent  # component name
+endif
+
+if ($TimeZone != null) then
+    time = $DateTime + "#" + $TimeZone
+else
+    time = $DateTime
+endif
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "sap"
+event_src.title = "sap_as_java"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_JAVA_Security_Audit_filemonitor_Telnet_usage_Version_20"

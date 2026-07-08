@@ -1,0 +1,52 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        CEF:0|IT-Bastion LLC|SKDPU-NT|{datafield5=UNTIL("|")}
+        {msgid="SKDPUNT.INCIDENT.00002"}|{chain_id=WORDDASH}|{NUMBER}|act=IncidentChange {$kv=KEYVALUE(" ", "=")}'
+
+COND = $kv["cat"] == "Incident"
+        
+action = "detect"
+object = "alert"
+status = "success"
+
+if find_substr($kv["suser"], "@") != null then
+    $temp_acc = csv($kv["suser"], "@", "")
+    subject.application.account.name = $temp_acc[length($temp_acc) - 1]
+    subject.application.account.domain = $temp_acc[0]
+else
+    subject.application.account.name = $kv["suser"]
+endif
+
+object.type = "anomaly detector incident"
+
+dst.hostname = $kv["dhost"]
+dst.ip = $kv["dst"]
+
+if coalesce(maybe_ipv4($kv["src"]),maybe_ipv6($kv["src"])) != null then
+    src.ip = $kv["src"]
+else    
+    src.hostname = $kv["src"]
+endif
+
+logon_service = $kv["app"]
+
+datafield1 = $kv["cat"]      # incident category
+datafield8 = $kv["dvchost"]  # gateway name
+datafield9 = $kv["cnt"]      # incident impact
+# datafield5 skdpu nt version
+
+reason = $kv["reason"]
+
+importance = "medium"
+
+event_src.vendor =  "it_bastion"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "skdpu_nt"
+event_src.category = "Other"
+
+id = "PT_IT_Bastion_SKDPU_NT_cef_incident_changed"

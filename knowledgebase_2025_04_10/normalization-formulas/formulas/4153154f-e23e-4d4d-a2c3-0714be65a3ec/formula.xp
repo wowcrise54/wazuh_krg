@@ -1,0 +1,19 @@
+TEXT = ":T={$timestamp=NUMBER}; :R={subject.name=UNTIL(';')} :M={NUMBER} {NUMBER};
+        [INFO] :A={src.ip=IPV4}; :I={datafield1=UNTIL(';')} :S={WORD}; Завершение сеанса связи"
+
+subject = "account"
+action = "stop"
+object = "session"
+status = "success"
+
+# datafield1 - информация о клиентском ПО
+
+time = epoch_to_datetime($timestamp)
+importance = "info"
+
+event_src.vendor = "elvis_plus"
+event_src.title = "zastava"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Elvis_plus_Zastava_filemonitor_Session_stop"

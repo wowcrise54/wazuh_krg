@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"}{NUMBER?} {DATETIME} {$Computer=HOSTNAME} communicator - - [NXLOG@14506 
+        {$until=UNTIL("]")} [{$tmp_subsys=WORDDASH*}] Текущий режим узла: {object.value=WORD}, 
+        новый режим: {object.new_value=WORD}'
+
+$kv = keyvalue($until, " ", "=", "\"")
+
+action = "state"
+object = "host"
+status = "success"
+
+object.property = "host mode"
+
+time = $kv["timestamp"] 
+importance = "info"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kontinent"
+event_src.subsys = lower($tmp_subsys)
+event_src.ip = strip($kv["SourceModuleName"], "syslog_dbi_in_", "")
+event_src.category = "Network security" 
+
+id = "PT_Security_code_Kontinent_4_1_syslog_node_mode_change"

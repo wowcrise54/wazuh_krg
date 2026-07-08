@@ -1,0 +1,81 @@
+event Insufficient_Audit_Params:
+    key:
+        event_src.host
+    filter {
+        msgid == "612"
+        and event_src.title == "windows"
+        and not match(object.value, "*Detailed tracking success*Detailed tracking failure*Policy change success*Policy change failure*Account management success*Account management failure*Account logon success*Account logon failure*")
+        and filter::CheckWL_Specific_Only("Audit_XP_Params_Change", lower(object.value))
+    }
+
+rule Audit_XP_Params_Change: Insufficient_Audit_Params
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Insufficient_Audit_Params {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $object.property = object.property
+        $object.value = object.value
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        
+        $alert.key = lower(object.value)
+        
+        if find_substr(object.value, "Detailed tracking success") == null then
+            $alert.context = $alert.context + "Detailed tracking success | "
+        endif
+        if find_substr(object.value, "Detailed tracking failure") == null then
+            $alert.context = $alert.context + "Detailed tracking failure | "
+        endif
+        if find_substr(object.value, "Policy change success") == null then
+            $alert.context = $alert.context + "Policy change success | "
+        endif
+        if find_substr(object.value, "Policy change failure") == null then
+            $alert.context = $alert.context + "Policy change failure | "
+        endif
+        if find_substr(object.value, "Account management success") == null then
+            $alert.context = $alert.context + "Account management success | "
+        endif
+        if find_substr(object.value, "Account management failure") == null then
+            $alert.context = $alert.context + "Account management failure | "
+        endif
+        if find_substr(object.value, "Account logon success") == null then
+            $alert.context = $alert.context + "Account logon success | "
+        endif
+        if find_substr(object.value, "Account logon failure") == null then
+            $alert.context = $alert.context + "Account logon failure | "
+        endif
+        
+        $alert.context = strip($alert.context, "", " | ")  # политики, отличные от рекомендаций
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Indicator Blocking"
+
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

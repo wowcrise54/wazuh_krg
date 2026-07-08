@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {event_src.ip=IPV4|event_src.ip=IPV6|}: {time=DATETIME}: {"#"|"%"}
+        {msgid="UC_RTMT-2-RTMT_ALERT"}: %[AlertName=CriticalServiceDown][AlertDetail= Service operational status is DOWN.
+        \\n {object.name=WORDDASH+}.{UNTIL("NodeID=")}
+        {event_src.hostname=HOSTNAME}]{REST}'
+
+action = "terminate"
+object = "service"
+status = "success"
+
+importance = "low"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "cisco"
+event_src.title = "cucm"
+event_src.category = "Telecom"
+
+id = "PT_Cisco_CUCM_syslog_CriticalServiceDown"

@@ -1,0 +1,133 @@
+event Syscall_Accept:
+    key:
+        event_src.host, subject.process.id, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "solaris"
+        and event_src.category == "Operating system"
+        and action == "open"
+        and object == "connection"
+        and direction == "ingress"
+        and src.port != null
+        and not filter::Loopback_Address(src.ip)
+    }
+
+event Syscall_Execve_Pid:
+    key:
+        event_src.host, object.process.id, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "solaris"
+        and event_src.category == "Operating system"
+        and action == "execute"
+        and object == "command"
+        and regex(object.process.fullpath, ".*?bin/(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh(\s+-i)?$", 0) != null
+        and filter::CheckWL_Linux_Process_Creation("Solaris_Detect_Bind_Shell", lower(join([subject.account.name, object.process.fullpath, object.process.cmdline], "|")))
+    }
+
+event Syscall_Execve_Ppid:
+    key:
+        event_src.host, object.process.parent.id, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "solaris"
+        and event_src.category == "Operating system"
+        and action == "execute"
+        and object == "command"
+        and regex(object.process.fullpath, ".*?bin/(c|tc|sc|k|z|fi|da|ba|a|b|pdk)?sh(\s+-i)?$", 0) != null
+        and filter::CheckWL_Linux_Process_Creation("Solaris_Detect_Bind_Shell", lower(join([subject.account.name, object.process.fullpath, object.process.cmdline], "|")))
+    }
+
+rule Solaris_Detect_Bind_Shell: (Syscall_Accept and (Syscall_Execve_Pid or Syscall_Execve_Ppid)) within 5s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Syscall_Accept {
+        $status = status
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $subject.account.session_id = subject.account.session_id
+        $subject.process.id = subject.process.id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on Syscall_Execve_Pid {
+        $subject.account.name = subject.account.name
+        $subject.account.group = subject.account.group
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.cmdline = subject.process.cmdline
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+    }
+
+    on Syscall_Execve_Ppid {
+        $subject.account.name = subject.account.name
+        $subject.account.group = subject.account.group
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.cmdline = subject.process.cmdline
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "connect"
+    $object = "socket"
+
+    $alert.key = lower(join([$subject.account.name, $object.process.fullpath, $object.process.cmdline], "|"))
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Unix Shell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

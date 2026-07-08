@@ -1,0 +1,67 @@
+TABULAR = 'journal_id,
+          {time=event_date},
+          {$Computer=client_name}'
+
+COND = $journal_id == "ACCESS"
+       and in_list([16,55], $action)
+
+if $user_name != "" then
+    subject = "account"
+
+    if find_substr($user_name, "\\") != null then
+        $csv_acc = csv($user_name, "\\", "")
+        subject.account.name = $csv_acc[1]
+        subject.account.domain = $csv_acc[0]
+    else
+        subject.account.name = $user_name
+    endif
+endif
+
+action = "modify"
+
+if $action == 16 then
+    object = "file_object"
+
+    category.generic = "File System Object"
+elif $action == 55 then
+    object = "reg_object"
+
+    category.generic = "Registry Object"
+endif
+
+status = "success"
+
+subject.process.fullpath = $process_name
+$csv_process = csv($process_name, "\\", "")
+subject.process.name = $csv_process[length($csv_process) - 1]
+if length($csv_process) > 1 then
+    subject.process.path = strip($process_name, "", subject.process.name)
+endif
+
+object.fullpath = lower($resource)
+$temp_csv = csv(object.fullpath, "\\", "")
+object.name = $temp_csv[length($temp_csv) - 1]  # New value
+if length($temp_csv) > 1 then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+importance = "info"
+
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "confident"
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+if $computer_name != "" then
+    $Computer = $computer_name
+endif
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_Confident_Dallas_Lock_odbc_access_resource_changed"

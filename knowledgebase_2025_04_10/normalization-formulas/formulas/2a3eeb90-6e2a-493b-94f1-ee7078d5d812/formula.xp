@@ -1,0 +1,105 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} {WORD} hostd[{WORD}] [Originator@{NUMBER} {$kv=UNTIL("]")} Event {NUMBER} :
+{"A"|"The"|} vSphere Distributed Switch {$rest=REST}'
+
+subject = "account"
+object = "resource"
+status = "success"
+
+subformula "parse_rest"
+    TEXT = '{$dvs_name=STRING+} was created in {$datacenter_name=REST}'
+    
+    action = "create"
+    msgid = "DvsCreatedEvent"
+endsubformula
+
+subformula "parse_rest"
+    TEXT = '{$old_name=STRING+} in {$datacenter_name=STRING+} was renamed to {$new_name=REST}'
+    
+    action = "modify"
+    object.property = "name"
+    object.value = $old_name
+    object.new_value = strip($new_name, "", ".")
+    msgid = "DvsRenamedEvent"
+endsubformula
+
+subformula "parse_rest"
+    TEXT = '{$dvs_name=STRING+} in {$datacenter_name=STRING+} was reconfigured.'
+    
+    action = "configure"
+    msgid = "DvsReconfiguredEvent"
+endsubformula
+
+subformula "parse_rest"
+    TEXT = '{$dvs_name=STRING+} in datacenter {$datacenter_name=STRING+} was upgraded.'
+    
+    action = "upgrade"
+    msgid = "DvsUpgradedEvent"
+endsubformula
+
+subformula "parse_rest"
+    TEXT = '{$dvs_name=STRING+} in {$datacenter_name=STRING+} was deleted.'
+    
+    action = "remove"
+    msgid = "DvsDestroyedEvent"
+endsubformula
+
+subformula "parse_rest"
+    TEXT = '{$src_dvs_name=STRING+} was merged into {$dst_dvs_name=STRING+} in {$datacenter_name=REST}'
+    
+    action = "modify"
+    object.property = "dst_dvs_name"
+    object.value = $dst_dvs_name
+    msgid = "DvsMergedEvent"
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+submessage("TEXT", "parse_rest", $rest)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = "vswitch"
+object.name = coalesce($old_name, $dvs_name, $src_dvs_name)
+
+datafield1 = strip($datacenter_name, "", ".")  # Datacenter Name
+datafield8 = coalesce($old_name, $dvs_name, $src_dvs_name)  # vSphere Distributed Switch Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_DvSwitch_Management"

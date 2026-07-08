@@ -1,0 +1,59 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.fqdn=HOSTNAME} {$product_name=UNTIL("|")} 
+        {NUMBER}.{NUMBER}.{NUMBER}.{NUMBER} -      
+        {msgid="000000d5"}
+        [event@{NUMBER} {$raw_kv=UNTIL("]")} {$data=REST}'
+
+subject = "application"
+action = "deny"
+object = "application"
+status = "success"
+
+$description = replace($data, " ", "\\\\n")
+$kv = keyvalue($description, "\\r ", ":")
+$kv_extra = keyvalue($raw_kv, " ", "=", "\"")
+
+$bracket = find_substr($kv["Пользователь"], "(")
+$domain_user = substr($kv["Пользователь"], 0, $bracket - 1)
+$domain_user = csv($domain_user, "\\", "'")
+if length($domain_user) == 2 then
+    subject.account.name = lower($domain_user[1])
+    subject.account.domain = lower($domain_user[0])
+else
+    subject.account.name = lower($domain_user)
+endif
+
+subject.process.fullpath = lower($kv["Объект"])
+$name_path = csv(subject.process.fullpath, "\\", "`")
+subject.process.name = $name_path[length($name_path) - 1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+
+object.process.name = lower($kv["Название"])
+object.process.path = lower($kv["Путь к приложению"])
+object.process.id = $kv["ID процесса"]
+
+# datafield1 - имя группы, в которую входит узел-источник
+datafield5 = $kv_extra["tdn"] # обозначение типа действия или категории события
+
+importance = "high"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $product_name
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+if $kv_extra["hip"] != "127.0.0.1" then
+    event_src.ip = $kv_extra["hip"]
+endif
+event_src.hostname = lower($kv_extra["hdn"])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_plain_OTHER_EV_ACTION_DENIED"

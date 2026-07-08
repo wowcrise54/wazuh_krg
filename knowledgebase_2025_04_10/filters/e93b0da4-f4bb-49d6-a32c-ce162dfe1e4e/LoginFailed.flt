@@ -1,0 +1,18 @@
+filter LoginFailed() {
+    filter::LoginFailed_Windows()
+    or filter::LoginFailed_Unix()
+    or (
+        filter::NotFromCorrelator()
+        and category.generic == "Access"
+        and category.high == "Authentication"
+        and action == "login"
+        and status == "failure"
+        and not (
+            (
+                event_src.vendor == "microsoft"
+                and event_src.title == "windows"
+            )
+            or filter::OperatingSystem_UNIXLike()
+        )
+    )
+}

@@ -1,0 +1,55 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and in_list(["Force Suspend Job",
+                    "Force Kill Job",
+                    "Kill Job",
+                    "Suspend Job"
+                   ], $msgid) == true
+
+subformula "get_data"
+    TEXT = '{UNTIL("Job ID: ")}{datafield2=UNTIL("\\";")}
+            {UNTIL("Job Suspend Reason set to [")?}{reason=UNTIL("] ")?}
+            {REST}'
+endsubformula
+
+subject = "account"
+
+switch $msgid
+    case "Force Suspend Job"
+        action = "stop"
+        object.state = "force suspended"
+    case "Force Kill Job"
+        action = "terminate"
+        object.state = "force killed"
+    case "Suspend Job"
+        action = "stop"
+    case "Kill Job"
+        action = "terminate"
+endswitch
+
+object = "task"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+submessage("TEXT", "get_data", $data)
+
+datafield1 = $display_user_name  # отображаемое имя пользователя
+# datafield2 - список идентификаторов задач, которые были остановлены в рамках данного действия
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "low"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_job_operation"

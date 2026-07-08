@@ -1,0 +1,27 @@
+!JSON = "EventCode=23"
+!COND = $Logfile=="System" and $SourceName=="Microsoft-Windows-WindowsUpdateClient"
+
+action = "uninstall"
+object = "update"
+status = "success"
+
+object.name = $InsertionStrings[0]
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "medium"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Operating system"
+event_src.title = "windows"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_23_Windows_successfully_uninstalled_the_following_update"

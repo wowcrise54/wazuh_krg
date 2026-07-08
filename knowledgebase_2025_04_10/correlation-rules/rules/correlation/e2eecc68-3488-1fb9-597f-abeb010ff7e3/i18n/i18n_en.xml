@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Execution of certain SQL commands may indicate reconnaissance of the internal structure of the PostgreSQL database, which may indicate attacker activity</Description>
+  <EventDescriptions>
+    <EventDescription id="257841fa-1dfe-07bc-64f0-3c89bc64b66f">User {subject.application.account.name} executed an SQL command to retrieve information about PostgreSQL database version on host {event_src.host}</EventDescription>
+    <EventDescription id="2aa9886c-eb3a-af20-4e50-919085b4f5d8">User {subject.application.account.name} executed an SQL command to retrieve information about table access permissions in the PostgreSQL database on host {event_src.host}</EventDescription>
+    <EventDescription id="8b4141df-4d8a-ac37-a62e-60f02f3c5106">User {subject.application.account.name} executed an SQL command to retrieve information about PostgreSQL database table owners on host {event_src.host}</EventDescription>
+    <EventDescription id="b379f52e-e8e8-277e-fef6-ec6b47f41efb">User {subject.application.account.name} executed an SQL command to retrieve information about the available PostgreSQL database languages on host {event_src.host}</EventDescription>
+    <EventDescription id="d7ab2b37-d71e-1e10-0867-a58d093f0bef">User {subject.application.account.name} executed an SQL command to retrieve information about PostgreSQL database schemas on host {event_src.host}</EventDescription>
+    <EventDescription id="ef97da70-8bbd-5a58-1b7b-3f87a22d6c59">User {subject.application.account.name} executed an SQL command to get information about PostgreSQL extensions on the host {event_src.host}</EventDescription>
+    <EventDescription id="f4afae38-d571-67a3-9ade-f4730aa14464">User {subject.application.account.name} received information about the PostgreSQL database on host {event_src.host} using an SQL command</EventDescription>
+    <EventDescription id="f5f312f4-ca56-8376-6c27-9228b83d5811">User {subject.application.account.name} executed an SQL command to get information about available PostgreSQL databases on the host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

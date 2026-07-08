@@ -1,0 +1,79 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} api_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"method":"POST"') != null
+    and find_substr($json, '"route":"/api/:version/internal/lfs_authenticate"') != null
+)
+
+subject = "account"
+action = "login"
+object = "application"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $['meta.user']
+if substr($['meta.client_id'], 0, 5) == "user/" then
+    subject.account.id = strip($['meta.client_id'], "user/", "")
+endif
+subject.process.meta = $ua
+
+$s_key_id = find_substr($json, '{"key":"key_id","value":"')
+$e_key_id = find_substr(substr($json, $s_key_id, length($json)), '"}')
+$key_id = substr($json, $s_key_id + 25, $e_key_id - 25)
+subject.account.privileges = if length($key_id) != 0 then "SSH:" + $key_id else null endif  # SSH Key ID
+
+object.type = "repository"
+
+$s_project = find_substr($json, '{"key":"project","value":"')
+$e_project = find_substr(substr($json, $s_project, length($json)), '"}')
+$project = substr($json, $s_project + 26, $e_project - 26)
+object.name = if length($project) != 0 then $project else null endif
+
+$meta_project = coalesce($['meta.project'], strip($project, "", ".git"))
+$project_list = csv($meta_project, "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($meta_project, "", "/" + $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = $project_namespace_fullpath  # Namespace Fullpath
+
+chain_id = $correlation_id
+external_link = "https://docs.gitlab.com/ee/development/internal_api.html#lfs-authentication"
+
+time = $time
+
+$s_operation = find_substr($json, '{"key":"operation","value":"')
+$e_operation = find_substr(substr($json, $s_operation, length($json)), '"}')
+$operation = substr($json, $s_operation + 28, $e_operation - 28)
+msgid = if length($operation) != 0 then $operation else null endif
+
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "api"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_API_JSON_LFS_Auth"

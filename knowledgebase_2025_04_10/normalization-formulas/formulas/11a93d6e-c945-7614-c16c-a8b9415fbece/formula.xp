@@ -1,0 +1,65 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "Project"
+
+if $authorType == "User" then
+    subject = "account"
+
+    subject.account.id = $author
+    subject.account.name = $authorPresentation
+
+elif $authorType == "Service" then
+    subject = "service"
+
+    subject.id = $author
+    subject.name = $authorPresentation
+endif
+
+action = switch $type
+    case "Create" "create"
+    case "Update" "modify"
+    case "Remove" "remove"
+endswitch
+
+object = "resource"
+status = "success"
+
+object.id = $targetId
+object.name = $targetPresentation
+object.type = "project"
+
+if $change["type"] == "LinkChangeJSON" then
+    object.property = join([$change["operation"], $change["fieldName"]], " ")
+    object.value = $change["presentation"]
+
+    datafield2 = $change["id"]  # ID subresource
+
+elif $change["type"] == "PrimitiveChangeJSON" then
+    object.property = $change["fieldName"]
+    object.value = $change["oldValue"]
+    object.new_value = $change["newValue"]
+
+elif $type == "Remove" and $change["resources"] != null then
+    object.property = "linked resources"
+    $csv_resources = csv($change["resources"]["removed"]["presentation"], ",", "")
+    object.value = join($csv_resources, "|")
+
+    datafield2 = $change["organization"]["removed"]["presentation"]  # Organization name
+    datafield3 = $change["organization"]["removed"]["id"]            # Organization ID
+endif
+
+start_time = epoch_ms_to_datetime(number($change["creationTime"]))
+
+chain_id = $id
+
+datafield1 = $change["key"]  # Key
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "info"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_Project_Manage"

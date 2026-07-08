@@ -1,0 +1,8 @@
+filter UnixSU_Success() {
+    filter::NotFromCorrelator()
+    and filter::OperatingSystem_UNIXLike()
+    and subject == "account"
+    and in_list(["login", "elevate", "escalate"], action)
+    and object == "account"
+    and status == "success"
+}

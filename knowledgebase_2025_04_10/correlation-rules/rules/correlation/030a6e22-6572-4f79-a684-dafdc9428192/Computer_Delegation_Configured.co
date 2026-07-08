@@ -1,0 +1,204 @@
+event Unconstrained_Delegation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and lower(object.type) == "computer"
+        and lower(object.state) == "value added"
+        and lower(object.property) == "useraccountcontrol"        
+        and number(object.value) >= 524288
+        and number(object.value) < 1048576
+        and status == "success"
+        and filter::CheckWL_Specific_Only("Computer_Delegation_Configured", join([lower(subject.account.name),lower(object.name)], "|"))
+    }
+    
+event Constrained_Delegation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and lower(object.type) == "computer"
+        and lower(object.state) == "value added"
+        and lower(object.property) == "msds-allowedtodelegateto"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("Computer_Delegation_Configured", join([lower(subject.account.name),lower(object.value)], "|"))
+    }
+
+event Constrained_Delegation_Any_Proto:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and lower(object.type) == "computer"
+        and lower(object.state) == "value added"
+        and lower(object.property) == "useraccountcontrol"
+        and number(object.value) >= 16777216
+        and number(object.value) < 67108864
+        and status == "success"
+    }
+  
+event Resource_Based_Constrained_Delegation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and lower(object.type) == "computer"
+        and lower(object.state) == "value added"
+        and lower(object.property) == "msds-allowedtoactonbehalfofotheridentity"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("Computer_Delegation_Configured", join([lower(subject.account.name),lower(object.value)], "|"))
+    }
+    
+rule Computer_Delegation_Configured: Unconstrained_Delegation or (Constrained_Delegation and Constrained_Delegation_Any_Proto?) timer 2m or Resource_Based_Constrained_Delegation
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Unconstrained_Delegation {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.state = object.state
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $reason = "unconstrained"
+
+        $src.hostname = regex(lower(object.name), "^cn=(.*?),", 1)
+        
+        $alert.key = join([lower(subject.account.name),lower(object.name)], "|")   
+        $alert.context = "Unconstrained Delegation from " + $src.hostname
+    }
+    
+    on Constrained_Delegation {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.state = object.state
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $reason = "constrained"
+
+        $src.hostname = regex(lower(object.name), "cn=(.*?),", 1)
+        $dst.hostname = regex(lower(object.value), "\/(.*?)$", 1)
+        
+        $alert.key = join([lower(subject.account.name),lower(object.value)], "|")     
+        $alert.context = "Constrained Delegation from " + $src.hostname + " to " + $object.value + $alert.context
+    }
+    
+    on Constrained_Delegation_Any_Proto {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.state = object.state
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.context = $alert.context + " with any protocol"
+    }
+    
+    on Resource_Based_Constrained_Delegation {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.state = object.state
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $reason = "rbcd"
+
+        $src.hostname = regex(lower(object.name), "cn=(.*?),", 1)
+        
+        $alert.key = join([lower(subject.account.name),lower(object.value)], "|")       
+        $alert.context = "Resource-based Constrained Delegation to " + $src.hostname
+    }
+    
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "ds_object"
+    $status = "success"
+    
+    $importance = "medium"
+
+    if $reason == "unconstrained" then 
+        $importance = "high"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Abuse Elevation Control Mechanism"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareInstallationPolicyViolation"
+    $incident.aggregation.timeout = 2h        
+}

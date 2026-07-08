@@ -1,0 +1,51 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = ($kv["product"] != "Endpoint Security Console"
+        and $kv["subject"] == "Object Manipulation"
+        and in_list(["Delete Object", "Delete Rule"], $kv["operation"]))
+
+if $kv["administrator"] != "localhost" then
+    subject = "account"
+    subject.account.name = $kv["administrator"]
+    subject.account.session_id = $kv["session_uid"]
+    subject.process.name = $kv["session_name"]
+endif
+action = "remove"
+object = "resource"
+status = "success"
+
+if $kv["objectname"] == "Static Routes" then
+    object.type = $kv["objectname"]
+else
+    object.name = $kv["objectname"]
+    object.type = $kv["objecttype"]
+endif
+
+$fieldschanges = $kv["fieldschanges"]
+if csv($fieldschanges, " ", "")[0] != null then
+    object.property = "fields changes"
+    object.new_value = $fieldschanges
+endif
+
+$src_tmp = $kv["src"]
+if $src_tmp != "0.0.0.0" and $src_tmp != "127.0.0.1" and $src_tmp != "::" then
+    src.ip = $src_tmp
+endif
+
+datafield4 =  $kv["originsicname"] # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+msgid = $kv["operation"]
+importance = "low"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Configuration_Delete_object"

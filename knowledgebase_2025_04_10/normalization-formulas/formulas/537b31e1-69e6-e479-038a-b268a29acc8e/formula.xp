@@ -1,0 +1,36 @@
+TABULAR = "ID,
+           {time=ORIGIN},
+           MESSAGE_OWNER,
+           {msgid=MESSAGE_CODE},
+           {subject.account.name=STRPARAM1},
+           {$group_name=STRPARAM2},
+           {$group_code=INTPARAM}"
+           
+COND = $MESSAGE_CODE == 602
+
+subject = "account"
+action = "remove"
+object = "resource"
+status = "success"
+
+object.name = $group_name               
+if $group_code == 0 then
+    object.type = "группа интерфейсов"  
+elif $group_code == 1 then    
+    object.type = "группа ip адресов"   
+elif $group_code == 2 then
+    object.type = "группа протоколов"   
+elif $group_code == 3 then
+    object.type = "группа расписаний"   
+elif $group_code == 4 then
+    object.type = "группа ViPNet"           
+endif    
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_policy_manager"
+event_src.subsys = "vpn"
+event_src.category = "VPN"           
+           
+id = "PT_Infotecs_ViPNet_Policy_Manager_customeventcollector_remove_object_group"

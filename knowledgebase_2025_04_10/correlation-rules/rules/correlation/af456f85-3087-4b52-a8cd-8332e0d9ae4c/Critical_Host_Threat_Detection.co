@@ -1,0 +1,238 @@
+query CriticalHost($ip, $fqdn) from Critical_Hosts {
+    (
+        (ip != null and ip == $ip)
+        or (fqdn != null and fqdn == $fqdn)
+    )
+}
+
+query CriticalHost_Manual($ip, $fqdn) from Critical_Hosts_Manual {
+    (
+        (ip != null and ip == $ip)
+        or (fqdn != null and fqdn == $fqdn)
+    )
+}
+
+event Malware_Detected_Src:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["Detection", "Epidemic"], category.low)
+        and category.generic == "Malware"
+        and in_list(["medium", "high"], importance)
+        and action == "detect"
+        and (
+            src.ip != null
+            or src.fqdn != null
+        )
+        and (
+            exec_query("CriticalHost", [src.ip, src.fqdn])
+            or exec_query("CriticalHost_Manual", [src.ip, src.fqdn])
+        )
+        and filter::CheckWL_Specific_Only("Critical_Host_Threat_Detection", lower(src.host))
+    }
+
+event Malware_Detected_Event_Src:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["Detection", "Epidemic"], category.low)
+        and category.generic == "Malware"
+        and in_list(["medium", "high"], importance)
+        and action == "detect"
+        and src.host == null
+        and (
+            event_src.ip != null
+            or event_src.fqdn != null
+        )
+        and (
+            exec_query("CriticalHost", [event_src.ip, event_src.fqdn])
+            or exec_query("CriticalHost_Manual", [event_src.ip, event_src.fqdn])
+        )
+        and filter::CheckWL_Specific_Only("Critical_Host_Threat_Detection", lower(event_src.host))
+    }
+
+event Attack_Detected_Dst:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and category.generic == "Attacks & Recon"
+        and in_list(["medium", "high"], importance)
+        and (
+            dst.ip != null
+            or dst.fqdn != null
+        )
+        and (
+            exec_query("CriticalHost", [dst.ip, dst.fqdn])
+            or exec_query("CriticalHost_Manual", [dst.ip, dst.fqdn])
+        )
+        and filter::CheckWL_Specific_Only("Critical_Host_Threat_Detection", lower(dst.host))
+    }
+
+event Attack_Detected_Event_Src:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and category.generic == "Attacks & Recon"
+        and in_list(["medium", "high"], importance)
+        and dst.host == null
+        and (
+            event_src.ip != null
+            or event_src.fqdn != null
+        )
+        and (
+            exec_query("CriticalHost", [event_src.ip, event_src.fqdn])
+            or exec_query("CriticalHost_Manual", [event_src.ip, event_src.fqdn])
+        )
+        and filter::CheckWL_Specific_Only("Critical_Host_Threat_Detection", lower(event_src.host))
+    }
+
+rule Critical_Host_Threat_Detection: Malware_Detected_Src or Malware_Detected_Event_Src or Attack_Detected_Dst or Attack_Detected_Event_Src
+    
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Malware_Detected_Src {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $object.name = object.name
+        $object.storage.fullpath = object.storage.fullpath
+
+        $dst.host = src.host  # For localization
+        $dst.fqdn = src.fqdn
+        $dst.hostname = src.hostname
+        $dst.ip = src.ip
+        $dst.asset = src.asset
+
+        $category.generic = category.generic
+        $category.high = category.high
+        $category.low = category.low
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(src.host)
+    }
+
+    on Malware_Detected_Event_Src {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $object.name = object.name
+        $object.storage.fullpath = object.storage.fullpath
+        
+        $dst.host = event_src.host
+        $dst.fqdn = event_src.fqdn
+        $dst.hostname = event_src.hostname
+        $dst.ip = event_src.ip
+        $dst.asset = event_src.asset
+
+        $category.generic = category.generic
+        $category.high = category.high
+        $category.low = category.low
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(event_src.host)
+    }
+
+    on Attack_Detected_Dst {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $category.generic = category.generic
+        $category.high = category.high
+        $category.low = category.low
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(dst.host)
+    }
+
+    on Attack_Detected_Event_Src {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $dst.host = event_src.host
+        $dst.fqdn = event_src.fqdn
+        $dst.hostname = event_src.hostname
+        $dst.ip = event_src.ip
+        $dst.asset = event_src.asset
+
+        $category.generic = category.generic
+        $category.high = category.high
+        $category.low = category.low
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(event_src.host)
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $importance = "high"
+
+    $incident.aggregation.key = join([$correlation_name], "|")
+    $incident.severity = $importance
+    $incident.category = switch regex(lower($object.name), '(trojan|worm|^virus|hacktool|exploit)', 1)
+        case "trojan" "TrojanHorseDetection"
+        case "worm" "WormDetection"
+        case "hacktool" "HackToolsDetection"
+        case "exploit" "VulnerabilityExploitation"
+        case "virus" "VirusDetection"
+        case null "MaliciousResources"
+    endswitch
+    $incident.aggregation.timeout = 2h
+}

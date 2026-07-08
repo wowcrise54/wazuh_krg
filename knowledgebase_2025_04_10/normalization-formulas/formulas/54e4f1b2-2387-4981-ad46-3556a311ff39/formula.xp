@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} audit:
+        [ID {NUMBER} audit.notice] {datafield1="recvfrom(2)"} {$stat=WORD}
+        session {subject.account.session_id=NUMBER} by {subject.account.name=WORDDASH} as
+        {subject.account.privileges=WORDDASH}:{datafield4=WORDDASH} from
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}'
+
+subject = "account"
+action = "receive"
+object = "message"
+if $stat == "ok" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+# datafield1 - тип события (в данном случае всегда "recvfrom(2)")
+# datafield4 - от чьего имени выполняется команда (group)
+
+importance = "info"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_recieve_data"

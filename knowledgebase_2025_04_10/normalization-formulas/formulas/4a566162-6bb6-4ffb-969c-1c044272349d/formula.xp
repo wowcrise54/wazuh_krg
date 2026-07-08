@@ -1,0 +1,197 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = (
+    in_list([
+        "VmBeingMigratedEvent",
+        "VmBeingHotMigratedEvent",
+        "VmMigratedEvent",
+        "VmFailedMigrateEvent",
+        "VmEmigratingEvent"
+    ], $event_class)
+    or ($event_class == "EventEx" and substr($raw_message, 0, 15) == "[Hot migrating ")
+)
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+action = "move"
+object = "virtual_machine"
+
+if $event_class == "VmMigratedEvent" then
+    status = "success"
+elif $event_class == "VmFailedMigrateEvent" then
+    status = "failure"
+else
+    status = "ongoing"
+endif
+
+subformula "migrating"
+    # VmBeingMigratedEvent
+    TEXT = '[Relocating {$vm_name=STRING+} from {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}, {$ds_name=STRING+} in {$datacenter_name=STRING+} to {$dest_host_name=HOSTNAME|$dest_host_name=IPV4|$dest_host_name=IPV6}, {$dest_datastore_name=STRING+} in {$dest_datacenter_name=REST}'
+    
+    $dest_datacenter_name = strip($dest_datacenter_name, "", "]")
+endsubformula
+
+subformula "hot_migrating"
+    # VmBeingHotMigratedEvent_6.x
+    TEXT = '[Relocating {$vm_name=STRING+} from {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}, {$ds_name=STRING+} to {$dest_host_name=HOSTNAME|$dest_host_name=IPV4|$dest_host_name=IPV6}, {$dest_datastore_name=STRING+} in {$datacenter_name=REST}'
+    
+    $datacenter_name = strip($datacenter_name, "", "]")
+endsubformula
+
+subformula "hot_migrating"
+    # VmBeingHotMigratedEvent_7.x
+    TEXT = '[Migrating {$vm_name=STRING+} from {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}, {$ds_name=STRING+} in {$datacenter_name=STRING+} to {$dest_host_name=HOSTNAME|$dest_host_name=IPV4|$dest_host_name=IPV6}, {$dest_datastore_name=STRING+} in {$dest_datacenter_name=REST}'
+    
+    $dest_datacenter_name = strip($dest_datacenter_name, "", "]")
+endsubformula
+
+subformula "hot_migrate_encrypt"
+    # com.vmware.vc.vm.VmHotMigratingWithEncryptionEvent_7.x
+    TEXT = '[Hot migrating {$vm_name=STRING+} from {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}, {$ds_name=STRING+} in {$datacenter_name=STRING+} to {$dest_host_name=HOSTNAME|$dest_host_name=IPV4|$dest_host_name=IPV6}, {$dest_datastore_name=STRING+} in {$dest_datacenter_name=STRING+} with encryption]'
+    
+    $event_class = "com.vmware.vc.vm.VmHotMigratingWithEncryptionEvent"
+endsubformula
+
+subformula "migrated"
+    # VmMigratedEvent_6.x
+    TEXT = '[Migration of virtual machine {$vm_name=STRING+} from {$source_host_name=IPV4|$source_host_name=IPV6|$source_host_name=HOSTNAME}, {$source_datastore_name=STRING+} to {$host_name=IPV4|$host_name=IPV6|$host_name=HOSTNAME}, {$ds_name=STRING+} completed]'
+endsubformula
+
+subformula "migrated"
+    # VmMigratedEvent_7.x
+    TEXT = '[Virtual machine {$vm_name=STRING+} was migrated from host {$source_host_name=IPV4|$source_host_name=IPV6|$source_host_name=HOSTNAME}, {$source_datastore_name=STRING+} in {$source_datacenter_name=STRING+} to {$host_name=IPV4|$host_name=IPV6|$host_name=HOSTNAME}, {$ds_name=STRING+} in {$datacenter_name=REST}'
+    
+    $datacenter_name = strip($datacenter_name, "", "]")
+endsubformula
+
+subformula "migrate_failed"
+    # VmFailedMigrateEvent_6.x
+    TEXT = '[Cannot migrate {$vm_name=STRING+} from {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}, {$ds_name=STRING+} to {$dest_host_name=HOSTNAME|$dest_host_name=IPV4|$dest_host_name=IPV6}, {$dest_datastore_name=STRING+} in {$datacenter_name=REST}'
+    
+    $datacenter_name = strip($datacenter_name, "", "]")
+endsubformula
+
+subformula "migrate_failed"
+    # VmFailedMigrateEvent_7.x
+    TEXT = '[Cannot migrate {$vm_name=STRING+} from {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}, {$ds_name=STRING+} in {$datacenter_name=STRING+} to {$dest_host_name=HOSTNAME|$dest_host_name=IPV4|$dest_host_name=IPV6}, {$dest_datastore_name=STRING+} in {$dest_datacenter_name=REST}'
+    
+    $dest_datacenter_name = strip($dest_datacenter_name, "", "]")
+endsubformula
+
+subformula "emigrating"
+    # VmEmigratingEvent
+    TEXT = '[Migrating {$vm_name=STRING+} off host {$host_name=HOSTNAME} in {$datacenter_name=REST}'
+    
+    $datacenter_name = strip($datacenter_name, "", "]")
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+switch $event_class
+    case "VmMigratedEvent"
+        submessage("TEXT", "migrated", $raw_message)
+    case "VmFailedMigrateEvent"
+        submessage("TEXT", "migrate_failed", $raw_message)
+    case "VmBeingMigratedEvent"
+        submessage("TEXT", "migrating", $raw_message)
+    case "VmBeingHotMigratedEvent"
+        submessage("TEXT", "hot_migrating", $raw_message)
+    case "VmEmigratingEvent"
+        submessage("TEXT", "emigrating", $raw_message)
+    case "EventEx"
+        submessage("TEXT", "hot_migrate_encrypt", $raw_message)
+endswitch
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+
+$obj_property = ""
+$obj_value = ""
+$obj_new_value = ""
+
+if ($dest_host_name != null) or ($source_host_name != null) then
+    $src_host = coalesce($source_host_name, $host_name)
+    $dst_host = coalesce($dest_host_name, $host_name)
+    $obj_property = $obj_property + "host"
+    $obj_value = $obj_value + $src_host
+    $obj_new_value = $obj_new_value + $dst_host
+endif
+if ($dest_datastore_name != null) or ($source_datastore_name != null) then
+    $obj_property = $obj_property + "|datastore"
+    $obj_value = $obj_value + " | " + coalesce($source_datastore_name, $ds_name)
+    $obj_new_value = $obj_new_value + " | " + coalesce($dest_datastore_name, $ds_name)
+endif
+if ($dest_datacenter_name != null) or ($source_datacenter_name != null) then
+    $obj_property = $obj_property + "|datacenter"
+    $obj_value = $obj_value + " | " + coalesce($source_datacenter_name, $datacenter_name)
+    $obj_new_value = $obj_new_value + " | " + coalesce($dest_datacenter_name, $datacenter_name)
+endif
+
+object.property = if $obj_property == "" then null else strip($obj_property, "|", "") endif
+object.value = if $obj_value == "" then null else strip($obj_value, " | ", "") endif
+object.new_value = if $obj_new_value == "" then null else strip($obj_new_value, " | ", "") endif
+
+if coalesce(ipv4($src_host), ipv6($src_host)) != null then
+    src.ip = coalesce(ipv4($src_host), ipv6($src_host))
+else
+    src.hostname = $src_host
+endif
+
+if $event_class == "VmEmigratingEvent" then
+    if coalesce(ipv4($host_name), ipv6($host_name)) != null then
+        src.ip = coalesce(ipv4($host_name), ipv6($host_name))
+    else
+        src.hostname = $host_name
+    endif
+endif
+
+if coalesce(ipv4($dst_host), ipv6($dst_host)) != null then
+    dst.ip = coalesce(ipv4($dst_host), ipv6($dst_host))
+else
+    dst.hostname = $dst_host
+endif
+
+datafield1 = coalesce($datacenter_name, $def_dc_name)  # Datacenter Name
+datafield2 = $ds_name  # Datastore Name
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $host_name  # Host Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Migrate_VM"

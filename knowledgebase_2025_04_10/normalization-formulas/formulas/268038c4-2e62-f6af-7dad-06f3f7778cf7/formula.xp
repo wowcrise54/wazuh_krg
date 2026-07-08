@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{$Computer=HOSTNAME}
+        CMDLOGGER emWeb - [origin ip={"\\""}{event_src.ip=IPV4|src.ip=IPV6}
+        {$f1=UNTIL("cmd_logger_api.c")}{"("NUMBER")"} {NUMBER} %% {"["WORD"]"}
+        CLI:{src.ip=IPV4|src.ip=IPV6}:{subject.account.name=UNTIL("[")}{NUMBER"]"}:
+        {$cmd = REST}'
+        
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"        
+
+object.process.cmdline = $cmd
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "eltex"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fastpath"
+event_src.category = "Network device"
+
+id = "PT_Eltex_MES5448_syslog_cmd_execute"        
+        

@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{WORD}|{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "Security Gateway/Management"
+       and $kv["outcome"] == "Finished"
+       and $kv["comment"] == "No update was found"
+       and $kv["failure_impact"] == null
+
+action = "download"
+object = "update"
+status = "failure"
+
+object.type = $kv["msg"]
+
+datafield8 = $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+reason = $kv["comment"]
+time = epoch_ms_to_datetime(number($kv["rt"]))
+importance = "info"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_SGM_Update_finish_not_found"

@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="CRON_Start"} {subject.name=WORDDASH} {$status="OK"|"FAIL"|"FAILURE"} cron
+        event = start cron job cmd = {STRING} {"time ="?} {REST}'
+
+subject = "account"
+action = "start"
+object = "task"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_start_job_cron"
+importance = "info"

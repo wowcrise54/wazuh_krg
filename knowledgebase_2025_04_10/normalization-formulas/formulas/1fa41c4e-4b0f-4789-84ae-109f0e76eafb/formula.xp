@@ -1,0 +1,53 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}{$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}{":"?}
+        mgd{"["NUMBER"]"?}: {"%CHANGE-6-UI_CFG_AUDIT_SET"|"UI_CFG_AUDIT_SET"}:
+		User \'{$uname = STRING} {WORDDASH}: {$re = REST}'
+
+subject.name = strip ($uname, "", "\'")
+
+datafield2 = strip(substr($re, find_substr($re, "->"), length($re)),'-> \"', '\"')
+object.value = strip(substr($re, find_substr($re, "["), find_substr($re, "]")), '[', ']')
+
+if find_substr ($re, "[system login user")!=null then
+    submessage ("TEXT", "parse_rest", $re)	
+elif find_substr ($re, "[interfaces")!=null and find_substr ($re, "arp")!=null then
+    submessage ("TEXT", "parse_rest2", $re)
+endif
+
+subformula "parse_rest"
+  !TEXT = "{$csv=CSV(' ', '\"')}"
+  datafield1 = $csv[3]
+endsubformula
+
+subformula "parse_rest2"
+  !TEXT = '[interfaces {$iface=WORD} unit {$subiface=NUMBER} family {WORD} address {IPV4}/{NUMBER} arp {dst.ip=IPV4} mac]
+           {\'"\'?}{MACADDR|"<unconfigured>"}{\'"\'?} -> {\'"\'?}{dst.mac=MACADDR|dst.mac="<unconfigured>"}{\'"\'?}'
+           interface = $iface + "." + string($subiface)
+		   reason = "arp info overwritten"
+endsubformula
+
+
+if find_substr($re, "[system login user")!= null and find_substr($re, "class]")!= null then
+    reason = "change user class"
+elif find_substr($re, "[system login user")!= null then
+    reason = "change user attributes"
+elif find_substr($re, "[system root-authentication")!= null then
+    reason = "change root authentication"
+elif reason == null then
+    reason = "set configuration value"
+endif
+
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+		
+subject = "account"
+object = "configuration"
+action = "modify"
+status = "success"	
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+
+importance = "info"
+
+id = "PT_Juniper_Junos_syslog_ui_cfg_audit_set"

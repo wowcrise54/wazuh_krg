@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} fnp[{NUMBER}]:
+        I-{msgid="1011"}-Изменение правила фильтрации - {object.type=WORD} {object.id=NUMBER}
+        ({subject.name=UNTIL(",")} {src.ip=IPV4|src.ip=IPV6})'
+
+subject = "account"
+action = "modify"
+object = "rule"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "npo_fraktel"
+event_src.title = "sspt_2"
+event_src.category = "Firewall"
+
+id = "PT_NPO_Fraktel_SSPT_2_1011_change_filter_rule"

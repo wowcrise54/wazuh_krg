@@ -1,0 +1,42 @@
+!TEXT = '{time=DATETIME}|INFO|{$tpm_subsys="altxLogger"}|[RedCheckWebClient Api]|{$subject_domain_name=NTUSER?}|
+         {object.value=UNTIL("|")} HttpMethod.{$temp_object_type="Get"|$temp_object_type="Post"} | HttpStatusCode.{datafield1=REST}'
+
+action = "send"
+object = "request"
+status = "success"
+
+if $subject_domain_name != null then
+    subject = "account"
+    if find_substr($subject_domain_name, "\\") != null then
+        $csv_subject_domain_name = csv($subject_domain_name, "\\", "'")
+        subject.domain = $csv_subject_domain_name[0]
+        subject.name = $csv_subject_domain_name[1]
+    else
+        subject.name = $subject_domain_name
+    endif
+endif
+
+object.type = upper($temp_object_type)
+object.property = "request"
+
+$take_dst = csv(object.value, "/", "'")
+$address = csv($take_dst[2], ":", "'")
+dst.ip = maybe_ipv4($address[0])
+if dst.ip == null then
+    dst.ip = maybe_ipv6($address[0])
+    if dst.ip == null then
+        dst.hostname = $address[0]
+    endif
+endif
+dst.port = $address[1]
+
+# datafield1 - результат выполнения запроса
+
+importance = "info"
+
+event_src.vendor = "altx_soft"
+event_src.title = "redcheck"
+event_src.category = "Host security"
+event_src.subsys = lower($tpm_subsys)
+
+id = "PT_Altx_soft_RedCheck_filemonitor_Get_Post"

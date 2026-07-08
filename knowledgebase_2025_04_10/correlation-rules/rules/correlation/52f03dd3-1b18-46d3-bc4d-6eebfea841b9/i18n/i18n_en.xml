@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The use of the msds-keycredentiallink attribute to authorize a machine account in a domain without using a password was detected. This is a sign of using KrbRelayUp to locally elevate privileges using Shadow Credentials. An attacker can use this to obtain the credentials of other users and horizontally move to other infrastructure nodes</Description>
+  <EventDescriptions>
+    <EventDescription id="2c99af72-b7eb-4911-85f8-7a2339ea0f2b">A change of {object.property} attribute of directory service object {src.hostname} is detected on host {event_src.host}. It is a sign that KrbRelayUp is used to locally escalate privileges using Shadow Credentials.</EventDescription>
+    <EventDescription id="470162b5-470a-473e-8be6-85ed6c0259dd">Issuance of a TGT with parameters {datafield8} requested by host {subject.account.name} with logon type {logon_type} and CertIssuerName {datafield7} is detected on host {event_src.host}. It is a sign that KrbRelayUp is used to locally escalate privileges using Shadow Credentials.</EventDescription>
+  </EventDescriptions>
+</Localization>

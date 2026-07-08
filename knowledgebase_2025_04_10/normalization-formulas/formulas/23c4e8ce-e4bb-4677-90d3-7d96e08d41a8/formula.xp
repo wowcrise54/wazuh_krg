@@ -1,0 +1,40 @@
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Compliance_Compliance_check_not_met"
+
+TABULAR = ' event_type,
+            product,
+            product_family,
+            src,
+            src_machine_name,
+            src_user_name,
+            time,
+            check_details,
+            check_name,
+            check_requirement,
+            check_type'
+
+COND = ($product == "Compliance" and $product_family == "Endpoint" and $event_type == "Compliance Check Not Met")
+
+msgid = $event_type
+time = $time
+
+subject = "account"
+action = "check"
+object = "compliance"
+status = "failure"
+
+subject.name = $src_user_name
+
+object.name = $check_name
+object.property = $check_details
+object.type = $check_type
+
+importance = "high"
+
+reason = $check_requirement
+
+event_src.ip = $src
+event_src.hostname = $src_machine_name
+event_src.subsys = lower($product)
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.category = "Host security"

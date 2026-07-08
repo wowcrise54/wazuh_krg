@@ -1,0 +1,57 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        Vaultize - - [origin software= {datafield2=STRING} version= {datafield3=STRING} src= {src.ip=IPV4|src.ip=IPV6}]
+        [userid user= {subject.id=UNTIL("][")} client url=https:// {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}  {"/"?}
+        userAgent={datafield1=UNTIL("][")} path filename= {$tmp_obj_name=UNTIL("]")} LINK SHARE
+        {$act="Created"|$act="Deleted"|$act="Email"|$act="Edited"|$act="Resend"}'
+
+subject = "account"
+action = switch $act
+    case "Created" "create"
+    case "Deleted" "remove"
+    case "Email" "send"
+    case "Edited" "modify"
+    case "Resend" "send"
+endswitch
+object = "link"
+status = "success"
+
+if $act == "Resend" then
+    object.state = "resend"
+endif
+
+$csv = csv(replace($tmp_obj_name,'|',' filename=',0), "|","'")
+datafield4 = $csv[0]
+if find_substr(datafield4,"\\") != null then
+    $csv2 = csv(datafield4, "\\", "'")
+else
+    $csv2 = csv(datafield4, "/", "'")
+endif
+if length($csv) == 1 then
+    object.type = "directory"
+    datafield5 = $csv2[length($csv2) - 2]
+elif length($csv) == 2 then
+    object.type = "file"
+    datafield5 = $csv2[length($csv2) - 1]
+endif
+
+# datafield1 - user agent
+# datafield2 - application name
+# datafield3 - application version
+# datafield4 - path to file or directory
+# datafield5 - name of file or directory
+
+importance = "info"
+
+event_src.vendor = "vaultize_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vdr"
+event_src.category = "Application server"
+
+id = "PT_Vaultize_Technologies_VDR_syslog_action_on_link_share"
+

@@ -1,0 +1,54 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} 
+{$subsys="vobd:""[netCorrelator]" WORD":" "[esx.audit.net.firewall.port."WORD"]"?}
+{$subsys="vobd:""[netCorrelator]" WORD":" "[esx.problem.net.firewall.port."WORD"]"?}
+{$subsys="vobd:""[netCorrelator]" WORD":" "[vob.net.firewall.port."WORD"]"?}
+{$subsys="Hostd:" WORD "hostd["WORD"] [Originator@"NUMBER $kv=UNTIL("]") "Event" NUMBER ":"?}
+{"Port"|$prefix="Adding port"}{$arguments_1=STRING}{$rest=REST}'
+
+action = "info"
+object = "interface"
+
+if ($prefix == "Adding port") then
+    status = "failure"
+else
+    status = "success"
+endif
+
+object.type = "vmknic"
+object.name = $arguments_1
+
+if (find_substr($rest, " is now protected ") != null) then
+    object.property = "protection_by_firewall"
+    object.value = "on"
+    msgid = "esx.audit.net.firewall.port.hooked"
+elif (find_substr($rest, " is no longer protected ") != null) then
+    object.property = "protection_by_firewall"
+    object.value = "off"
+    msgid = "esx.audit.net.firewall.port.removed"
+else
+    msgid = "esx.problem.net.firewall.port.hookfailed"
+endif
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "medium"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = lower(strip($subsys, "", ":"))
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_Firewall_port_protection"

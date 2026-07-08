@@ -1,0 +1,24 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {NUMBER+},{DATETIME},{event_src.id=WORD?},SYSTEM,general,{NUMBER},{time=DATETIME},{UNTIL(',')}general,
+        {UNTIL(',')}{NUMBER},{NUMBER},{WORD},{WORD},{'\"'?}{subject.name='Auto update agent'} failed
+        to download {object.name=WORD} version {object.version=WORDDASH} {REST}"
+
+subject = "application"
+action = "download"
+object = "update"
+status = "failure"
+
+importance = "medium"
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_System_Auto_update_download_failed"

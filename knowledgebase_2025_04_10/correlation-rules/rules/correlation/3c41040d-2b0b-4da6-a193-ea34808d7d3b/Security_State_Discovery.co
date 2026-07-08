@@ -1,0 +1,227 @@
+event Get_Security_Application_Info_In_Commandline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and in_list(["wmic.exe", "cmd.exe", "powershell.exe", "powershell_ise.exe", "pwsh.exe", "netsh.exe", "reg.exe"], lower(object.process.name))
+        and regex(lower(object.process.cmdline), "\\b(antivirusproduct|advfirewall\s+((firewall\s+show)|show|export)|query\\b.*?\\bsysmon)\\b", 0) != null
+        and filter::CheckWL_Process_Creation("Security_State_Discovery", lower(object.process.cmdline))
+    }
+
+event Get_Security_Application_Info_In_PS_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "\\b(hnetcfg\.fwpolicy2|get-wmiobject\\b.*?\\bantivirusproduct|advfirewall\s+((firewall\s+show)|show|export)|netfirewallrule|\\\\winevt\\\\chanels\\\\|hkey_current_user\\\\software\\\\sysinternals|get-ciminstance\\b.*?\\bsystem\+smonitor\s+service|antispywareproduct|firewallproduct|securitycenter(2)?|antivirusproduct|get-mpcomputerstatus)\\b", 0) != null
+        and filter::CheckWL_Powershell("Security_State_Discovery", lower(object.process.cmdline))
+    }
+
+event Get_Security_Application_Info_In_PS_Command:
+    key:
+        event_src.host, object.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "\\b(hnetcfg\.fwpolicy2|(cmd|powershell|powershell_ise|pwsh|netsh|reg|wmic)(\.exe)?\\b.*?\\b(antivirusproduct|advfirewall\s+((firewall\s+show)|show|export)|query\\b.*?\\bsysmon)|(get-wmiobject|gwmi)\\b.*?\\bantivirusproduct|advfirewall\s+(firewall|show|export)|\\bget-netfirewallrule\\b|\\\\winevt\\\\chanels\\\\|hkey_current_user\\\\software\\\\sysinternals|get-ciminstance\\b.*?\\bsystem\s+monitor\s+service|antispywareproduct|firewallproduct|securitycenter(2)?|antivirusproduct|get-mpcomputerstatus)\\b", 0) != null
+        and filter::CheckWL_Powershell("Security_State_Discovery", lower(object.process.cmdline))
+    }
+
+rule Security_State_Discovery: Get_Security_Application_Info_In_Commandline
+                               or Get_Security_Application_Info_In_PS_Pipeline
+                               or (Get_Security_Application_Info_In_PS_Command+ timer 1s)
+
+    init {
+         $labels = "w_auto"
+         $first_event = true
+    }
+
+    on Get_Security_Application_Info_In_Commandline {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "\\b(antivirusproduct|advfirewall\s+((firewall\s+show)|show|export)|query\\b.*?\\bsysmon)\\b", 0)
+        $alert.context = join([coalesce(object.process.parent.name, "ppid: " + object.process.parent.id), object.process.name, "regex_match: " + $alert.regex_match], " | ")
+        $incident_fullpath = object.process.parent.fullpath
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Get_Security_Application_Info_In_PS_Pipeline {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+        
+        $datafield8 = datafield8  # версия модуля
+
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(lower(object.process.cmdline), "\\b(hnetcfg\.fwpolicy2|get-wmiobject\\b.*?\\bantivirusproduct|advfirewall\s+(firewall|show|export)|netfirewallrule|\\\\winevt\\\\chanels\\\\|hkey_current_user\\\\software\\\\sysinternals|get-ciminstance\\b.*?\\bsystem\+smonitor\s+service|antispywareproduct|firewallproduct|securitycenter(2)?|antivirusproduct|get-mpcomputerstatus)\\b", 0)
+        $alert.context = lower(join([object.account.name, object.fullpath], " | "))
+        $incident_fullpath = object.fullpath
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Get_Security_Application_Info_In_PS_Command {
+        if $first_event then
+            $action = action  # execute
+            $object = object  # command
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.process.id = object.process.id
+            $object.process.cmdline = object.process.cmdline
+
+            $object.id = object.id
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.regex_match = regex(lower(object.process.cmdline), "\\b(hnetcfg\.fwpolicy2|(cmd|powershell|netsh|reg|wmic)(\.exe)?\\b.*?\\b(antivirusproduct|advfirewall\s+((firewall\s+show)|show|export)|query\\b.*?\\bsysmon)|(get-wmiobject|gwmi)\\b.*?\\bantivirusproduct|advfirewall\s+(firewall|show|export)|netfirewallrule|\\\\winevt\\\\chanels\\\\|hkey_current_user\\\\software\\\\sysinternals|get-ciminstance\\b.*?\\bsystem\s+monitor\s+service|antispywareproduct|firewallproduct|securitycenter(2)?|antivirusproduct|get-mpcomputerstatus)\\b", 0)
+            $alert.context = lower(join([coalesce(object.account.name, object.account.id), object.fullpath, "regex_match: " + $alert.regex_match], " | "))
+            
+            $labels = $labels + "|CheckWL_Powershell"
+
+            $first_event = false
+        endif
+
+        if $object.fullpath == null and object.fullpath != null then
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $incident_fullpath = object.fullpath
+        endif        
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Software Discovery: Security Software Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.name, $incident_fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

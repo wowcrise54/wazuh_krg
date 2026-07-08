@@ -1,0 +1,29 @@
+TEXT = '{time=DATETIME} [{WORD}] info: Изменение {$con_type=STRING} соединения \'{object.name=UNTIL("\'")}: {"{"} {$raw_kv=STRING}'
+
+subject = "account"
+action = "modify"
+object = "resource"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.type = "L2TP/PPTP соединение"
+object.property = "параметры соединения"
+
+if $con_type == "L2TP" then
+    object.value =  "mppe: " + $kv['"mppe"'] + ", " + "save_route: " + $kv['"save_route"'] + ", " + "def_via_vpn: " + $kv['"def_via_vpn"'] + ", " + "persist: " + $kv['"persist"'] + ", " + "server: " + $kv['"server"'] + ", " + "onboot: " + $kv['"onboot"'] + ", " + "maxfail: " + $kv['"maxfail"'] + ", " + "holdoff: " + $kv['"holdoff"']
+else
+    object.value =  "input_server: " + $kv['"input_server"'] + ", " + "input_username: " + $kv['"input_username"'] + ", " + "list_possible_hosts: " + $kv['"list_possible_hosts"'] + ", " + "bool_default_route: " + $kv['"bool_default_route"'] + ", " + "bool_auto_start: " + $kv['"bool_auto_start"']
+endif
+
+interface = coalesce($kv['"list_possible_hosts"'], $kv['"iface"']) 
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_modify_connection"

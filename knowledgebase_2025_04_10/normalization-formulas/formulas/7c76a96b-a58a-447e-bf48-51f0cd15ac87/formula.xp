@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {"."NUMBER?}{event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="SCP_FILE_DOWNLOAD_FAIL"}{"(l)"|"(s)"|}{"["NUMBER"]"?}:
+        {"CID="UNTIL(";")?}The SCP server failed to send the file
+        {object.storage.fullpath=STRING?}to a client.({$tmp=UNTIL(")")}'
+
+$kv = keyvalue($tmp,", ","=","~")
+
+subject = "account"
+action = "download"
+object = "file_object"
+status = "failure"
+
+subject.account.name = $kv["UserName"]
+$temp_path = csv(object.storage.fullpath, '/', '')
+if ($temp_path == null) then
+    reason = "Information about file don't received"
+else
+    object.storage.name = $temp_path[length($temp_path) - 1]
+    object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+endif
+
+src.ip = $kv["IpAddress"]
+dst.hostname = event_src.hostname
+protocol.layer7 = "scp"
+count.bytes_in = $kv["Transfer length"]
+
+#datafield10 - номер инстанса VRF
+datafield10 = $kv["VpnInstanceName"]
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_SCP_file_download_fail"

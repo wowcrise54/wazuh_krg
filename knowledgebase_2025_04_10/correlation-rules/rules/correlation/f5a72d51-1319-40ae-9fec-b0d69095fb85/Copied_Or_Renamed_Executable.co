@@ -1,0 +1,132 @@
+query CheckKnownExecutable($meta_description, $hash) from Known_Executables {
+    # совпадает метаописание или hash с системным файлом
+    meta_description == $meta_description
+    or hash == $hash
+}
+
+query CheckFullpath($filename, $original_filename, $filepath) from Known_Executables {
+    # Но не совпадает имя или исходное имя, и путь
+    (filepath == $filepath or filepath == '*')
+    and (filename == $filename or filename == $original_filename)
+}
+
+query GetRealName($meta_description, $hash) from Known_Executables {
+    (meta_description == $meta_description or meta_description == "*")
+    and (hash == $hash or hash == "*")
+}
+    qhandler {
+        $real_name = filename
+        $real_path = filepath
+    }
+
+event Run_Copied_System_Executable:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "1"
+        and exec_query("CheckKnownExecutable", [
+                lower(object.process.meta),
+                lower(object.process.hash)
+            ])
+        and not exec_query("CheckFullpath", [ 
+                lower(object.process.name),
+                lower(object.process.original_name),  
+                lower(object.process.path)  
+            ])
+        and filter::CheckWL_Process_Creation("Copied_Or_Renamed_Executable", lower(object.process.fullpath))
+}
+
+rule Copied_Or_Renamed_Executable: Run_Copied_System_Executable
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Run_Copied_System_Executable {
+        $get_real_name = exec_query("GetRealName", [
+                lower(object.process.meta),
+                lower(object.process.hash)
+            ])
+
+        $real_path = $get_real_name["$real_path"]
+        if not in_list(["", "*"], $real_path) then
+            $datafield3 = $real_path  # Путь по которому должно лежать исходный файл процесса
+        else
+            $datafield3 = "Non-standard path for executable"
+        endif
+        $datafield4 = $get_real_name["$real_name"] # Имя исходного исполняемого файла
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(object.process.fullpath)
+        $alert.context = object.process.parent.path + object.process.parent.name
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Masquerading: Rename System Utilities"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

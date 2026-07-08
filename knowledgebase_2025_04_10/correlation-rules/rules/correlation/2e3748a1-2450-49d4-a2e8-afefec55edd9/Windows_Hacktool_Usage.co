@@ -1,0 +1,159 @@
+query Check_Hacktool($process_name, $process_name_original, $process_description, $process_hash, $commandline) from Windows_Hacktools {
+    (binary_name == $process_name or binary_name == $process_name_original)
+    or regex_match($process_description, column::binary_description)
+    or regex_match($process_hash, column::hash)
+    or regex_match($commandline, column::commandline)
+}
+
+query Check_Hacktool_Qhandler($process_name, $process_name_original, $process_description, $process_hash, $commandline) from Windows_Hacktools {
+    (binary_name == $process_name or binary_name == $process_name_original)
+    or regex_match($process_description, column::binary_description)
+    or regex_match($process_hash, column::hash)
+    or regex_match($commandline, column::commandline)
+}
+
+qhandler {
+    $binary_name = binary_name
+    $binary_description = binary_description
+    $commandline = commandline
+    $hash = hash
+    $event_type = event_type
+    $event_importance = event_importance
+    $event_description = event_description
+}
+
+event Run_Process:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and exec_query("Check_Hacktool", [
+            coalesce(lower(object.process.name), "*"),
+            coalesce(lower(object.process.original_name), "*"),
+            coalesce(lower(object.process.meta), "*"),
+            coalesce(lower(object.process.hash), "*"),
+            coalesce(lower(object.process.cmdline), "*")
+        ])
+        and filter::CheckWL_Process_Creation("Windows_Hacktool_Usage", lower(join([object.process.name, object.process.cmdline], "|")))
+    }
+
+rule Windows_Hacktool_Usage: Run_Process
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Run_Process {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([object.process.name, object.process.cmdline], "|"))
+
+        $result = exec_query("Check_Hacktool_Qhandler",[
+            coalesce(lower(object.process.name), "*"),
+            coalesce(lower(object.process.original_name), "*"),
+            coalesce(lower(object.process.meta), "*"),
+            coalesce(lower(object.process.hash), "*"),
+            coalesce(lower(object.process.cmdline), "*")
+        ])
+
+        $datafield1 = $result["$event_description"]  # Здесь будет описание для локализации
+        $datafield6 = datafield6    # Идентификатор сессии субъекта в формате UUID
+
+        if lower($result["$binary_name"]) == lower(object.process.name) then
+            $reason = "binary_match"
+            $alert.context = object.process.name
+        elif lower($result["$binary_name"]) == lower(object.process.original_name) then
+            $reason = "renamed_binary_match"
+            $alert.context = join([object.process.original_name, object.process.name], " | ")
+        elif regex(lower(object.process.meta), $result["$binary_description"], 0) != null then
+            $reason = "binary_description_match"
+            $alert.regex_match = regex(lower(object.process.meta), $result["$binary_description"], 0)
+            $alert.context = $subject.account.name
+        elif regex(lower(object.process.hash), $result["$hash"], 0) != null then
+            $reason = "hash_match"
+            $alert.regex_match = regex(lower(object.process.hash), $result["$hash"], 0)
+            $alert.context = $subject.account.name
+        else
+            $reason = "commandline_match"
+            $alert.regex_match = regex(lower(object.process.cmdline), $result["$commandline"], 0)
+            $alert.context = $subject.account.name
+        endif
+
+        $alert.context = join([$reason, $result["$event_description"], $alert.context], " | ")
+        
+        if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+            $importance = $result["$event_importance"]
+        else
+            $importance = "medium"
+        endif
+        if in_list(["event", "incident"], lower($result["$event_type"])) then
+            $correlation_type = $result["$event_type"]
+        else
+            $correlation_type = "event"
+        endif
+    }
+
+emit {
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $object.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

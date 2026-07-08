@@ -1,0 +1,33 @@
+<!--
+  Native Wazuh port of MP SIEM PT-CR-270 / Windows_Screensaver_Modification.
+  Data sources: Sysmon Event ID 13 and Windows Security Event ID 4657.
+-->
+<group name="windows,windows_screensaver_modification,">
+
+  <!-- Sysmon: Registry value set. Stock Wazuh rule 61615 is Sysmon Event ID 13. -->
+  <rule id="110220" level="10">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Control Panel\\Desktop\\SCRNSAVE\.EXE$</field>
+    <field name="win.eventdata.details" type="pcre2">(?i)\.(?:scr|exe|cmd|ps1|bat)</field>
+    <description>Possible screensaver persistence: $(win.eventdata.image) set $(win.eventdata.targetObject) to $(win.eventdata.details) as $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.002</id>
+    </mitre>
+    <group>sysmon,attack,persistence,event_triggered_execution,screensaver,</group>
+  </rule>
+
+  <!-- Windows Security auditing: A registry value was modified. -->
+  <rule id="110221" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4657$</field>
+    <field name="win.eventdata.objectName" type="pcre2">(?i)\\Control Panel\\Desktop$</field>
+    <field name="win.eventdata.objectValueName" type="pcre2">(?i)^SCRNSAVE\.EXE$</field>
+    <field name="win.eventdata.newValue" type="pcre2">(?i)\.(?:scr|exe|cmd|ps1|bat)</field>
+    <description>Possible screensaver persistence: $(win.eventdata.processName) set $(win.eventdata.objectName)\$(win.eventdata.objectValueName) to $(win.eventdata.newValue) as $(win.eventdata.subjectUserName).</description>
+    <mitre>
+      <id>T1546.002</id>
+    </mitre>
+    <group>security_event,windows_security,attack,persistence,event_triggered_execution,screensaver,</group>
+  </rule>
+
+</group>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Выполнение некоторых SQL-команд может свидетельствовать о разведке внутренней структуры базы данных MySQL, что может быть признаком активности злоумышленника</Description>
+  <EventDescriptions>
+    <EventDescription id="10fcf781-df4a-4011-8701-50d48a64215a">Пользователь {subject.account.name} выполнил SQL-команду, чтобы получить информацию о доступных функциях MySQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="1b7b8d02-2bae-461a-9ed8-81e9fe24db38">Пользователь {subject.account.name} выполнил SQL-команду, чтобы получить информацию о схемах базы данных MySQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="f949f415-40c7-485f-b412-8140a01dcb01">Пользователь {subject.account.name} выполнил SQL-команду, чтобы получить информацию о версии базы данных MySQL на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

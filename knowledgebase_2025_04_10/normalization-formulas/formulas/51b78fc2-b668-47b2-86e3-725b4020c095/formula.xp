@@ -1,0 +1,55 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} {UNTIL(" - - ")}
+        The following event has occurred: Event type: {STRING} (8); Computer: {STRING}
+        ({$evsrcip=UNTIL(";")} Date_Time: {UNTIL(";")} Source: {UNTIL(";")} Action: {UNTIL(";")}
+        Name: {$path_raw=UNTIL(";")} Info: ; Reason: {UNTIL(";")} User name: {$sname=UNTIL(";")}
+        User SID: {subject.id=WORDDASH}; Process name: {$process_raw=UNTIL(";")}
+        Process Id: {NUMBER}; Event id: {msgid="11"}'
+
+subject = "account"
+action = "remove"
+object = "file_object"
+status = "success"
+
+$tmp = find_substr($sname,"\\")
+subject.account.name = strip(substr($sname, $tmp + 1, length($sname)), "\\", ";")
+subject.account.domain = substr($sname, 0, $tmp)
+
+$process_raw = strip($process_raw, "", ";")
+$csv_path = csv($process_raw, "\\", "'")
+subject.process.name = $csv_path[length($csv_path) - 1]
+if strip($process_raw, "", subject.process.name) != '' then
+    subject.process.path = strip($process_raw, "", subject.process.name)
+endif
+subject.process.fullpath = $process_raw
+
+$path_raw = strip($path_raw, "", ";")
+$csv_path = csv($path_raw, "\\", "'")
+object.name = $csv_path[length($csv_path) - 1]
+if strip($path_raw, "", object.name) != '' then
+    object.path = strip($path_raw, "", object.name)
+endif
+object.fullpath = $path_raw
+
+$intf_list = strip($evsrcip, '', ')')
+$csv_intf_list = csv($intf_list, ", ", "\'")
+datafield6 = $intf_list                           # все интерфейсы источника
+
+importance = "low"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "smart_line"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "devicelock"
+event_src.ip = maybe_ipv4($csv_intf_list[0])
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_syslog_Delete_file"

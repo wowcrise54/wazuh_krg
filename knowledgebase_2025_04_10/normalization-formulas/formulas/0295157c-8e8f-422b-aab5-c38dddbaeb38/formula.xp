@@ -1,0 +1,135 @@
+TEXT = '{"<"NUMBER">"?}{$dtime=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        CEF:{NUMBER}|Palo Alto Networks|PAN-OS|
+        {NUMBER}{"."?}{NUMBER?}{"."?}{NUMBER?}{WORDDASH?}|
+        {object.type=WORD}{$obj_name=UNTIL("|")}THREAT|{UNTIL("|")}{$kv=REST}'
+
+$kv = keyvalue($kv, " ", "=", "~")
+$tmp_act = lower($kv['act'])
+
+subject = "rule"
+action = switch $tmp_act
+    case 'alert' 'detect'
+    case 'allow' 'detect'
+    case 'drop-all-packets' 'detect'
+    case 'deny' 'deny'
+    case 'drop' 'disconnect'
+    case 'reset-client' 'disconnect'
+    case 'reset-server' 'disconnect'
+    case 'reset‐both' 'disconnect'
+    case 'block‐url—URL' 'deny'
+endswitch
+object = "alert"
+status = "success"
+
+subject.name = $kv['cs1']
+object.name = coalesce($obj_name, $kv['cat'])
+object.account.name = $kv['suser']
+object.property = "Number of times the event was observed" 
+object.num_value =  $kv['cnt']
+object.query = strip($kv['request'], "\"", "\"")
+
+if (object.type == 'data') then
+    datafield7 = 'Data pattern matching a Data Filtering profile.'
+elif (object.type == 'file') then
+    datafield7 = 'File type matching a File Blocking profile.'
+elif (object.type == 'flood') then
+    datafield7 = 'Flood detected via a Zone Protection profile.'
+elif (object.type == 'file') then
+    datafield7 = 'Packet‐based attack protection triggered by a Zone Protection profile.'
+elif (object.type == 'scan') then
+    datafield7 = 'Scan detected via a Zone Protection profile.'
+elif (object.type == 'spyware') then
+    datafield7 = 'Spyware detected via an Anti‐Spyware profile.'
+elif (object.type == 'url') then
+    datafield7 ='URL filtering log.'
+elif (object.type == 'virus') then
+    datafield7 ='Virus detected via an Antivirus profile.'
+elif (object.type == 'vulnerability') then
+    datafield7 ='Vulnerability exploit detected via a Vulnerability Protection profile.'
+elif (object.type == 'wildfire') then
+    datafield7 ='WildFire verdict generated when the firewall submits a file to WildFire per a WildFire Analysis profileand a verdict is logged in the WildFire Submissions log.'
+elif (object.type == 'wildfire‐virus') then
+    datafield7 ='Virus detected via an Antivirus profile.'
+endif
+
+src.ip = coalesce(ipv4($kv['src']), ipv6($kv['src']))
+assigned_src_ip = coalesce(ipv4($kv['sourceTranslatedAddress']), ipv6($kv['sourceTranslatedAddress']))
+assigned_src_port = $kv['sourceTranslatedPort']
+src.port = $kv['spt']
+
+dst.ip = coalesce(ipv4($kv['dst']), ipv6($kv['dst']))
+assigned_dst_ip = coalesce(ipv4($kv['destinationTranslatedAddress']), ipv6($kv['destinationTranslatedAddress']))
+assigned_dst_port = $kv['destinationTranslatedPort']
+dst.port = $kv['dpt']
+
+protocol = $kv['proto']
+
+count.bytes = $kv['flexNumber1']
+count.bytes_in = $kv['in']
+count.bytes_out = $kv['out']
+
+# datafield1 - Ingress zone. Destination zone
+# datafield2 - Ingress interface. Destination interface
+# datafield3 - Egress zone. Source zone
+# datafield4 - Egress interface. Source interface
+# datafield5 - идентификатор пользователя назначения, также может быть почта
+# datafield6 - направление атаки
+# datafield8 - Application associated with the session
+# numfield1 -  поле Flags детали сессии
+datafield1 = $kv['cs5']
+datafield2 = $kv['deviceOutboundInterface']
+datafield3 = $kv['cs4']
+datafield4 = $kv['deviceInboundInterface']
+datafield5 = $kv['duser']
+datafield6 = $kv['flexString2']
+datafield8 = $kv['app']
+numfield1 = strip($kv['flexString1'], '0x', '')
+
+$threat_id = number(substr(object.name, find_substr(object.name , "(")+1, 5))
+if ((8000 <= $threat_id) && ($threat_id <= 8099)) then
+    datafield7 = datafield7 + "Scan detection"
+elif ((8500 <= $threat_id) && ($threat_id <= 8599)) then
+    datafield7 = datafield7 + " Flood detection"
+elif ($threat_id == 9999) then
+    datafield7 = datafield7 + "URL filtering log"
+elif ((10000 <= $threat_id) && ($threat_id <= 19999)) then
+    datafield7 = datafield7 + " Spyware phone-home detection or beacon out to external command-and-control (C2) servers"
+elif ((20000 <= $threat_id) && ($threat_id <= 29999)) then
+    datafield7 = datafield7 + "Spyware download detection"
+elif ((30000 <= $threat_id) && ($threat_id <= 44999)) then
+    datafield7 = datafield7 + " Vulnerability exploit detection"
+elif ((52000 <= $threat_id) && ($threat_id <= 52999)) then
+    datafield7 = datafield7 + " Filetype detection"
+elif ((60000 <= $threat_id) && ($threat_id <= 69999)) then
+    datafield7 = datafield7 + " Data filtering detection"
+endif
+
+time = coalesce(datetime($kv['rt']), $dtime)
+
+reason = switch $tmp_act
+    case 'alert' 'Threat or URL detected but not blocked'
+    case 'allow' 'Flood detection alert'
+    case 'deny—flood' 'Detection mechanism activated and deny traffic based on configuration'
+    case 'drop—threat' 'Detected and associated session was dropped'
+    case 'drop-all-packets—threat' 'Detected and session remains, but drops all packets'
+    case 'reset-client—threat' 'Detected and a TCP RST is sent to the client'
+    case 'reset-server—threat' 'Detected and a TCP RST is sent to the server'
+    case 'reset-both—threat' 'Detected and a TCP RST is sent to both the client and the server'
+    case 'block-url—URL' 'Request was blocked because it matched a URL category that was set to be blocked'
+endswitch
+
+importance = "high"
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_CEF_Events_Threat"

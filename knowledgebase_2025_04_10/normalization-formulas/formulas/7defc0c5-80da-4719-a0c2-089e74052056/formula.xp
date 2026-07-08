@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        CEF:{NUMBER}|Cyber-Ark|Vault|10.{NUMBER}.{NUMBER}|{msgid="316"|msgid="317"}|Reset User Password
+        {"Detailed Information"?}|{NUMBER}|{$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.name = $kv["suser"]
+object.name = $kv["cs1"]
+
+if maybe_ipv4($kv["shost"]) != null or maybe_ipv6($kv["shost"]) != null then
+    if in_list(["0.0.0.0", "::"], $kv["shost"]) != null then
+        src.ip = $kv["shost"]
+    endif
+else
+    src.hostname = $kv["shost"]
+endif
+
+reason = "password reset"
+
+importance = "info"
+
+event_src.vendor = "cyberark"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "enterprise_password_vault"
+event_src.category = "Other"
+
+id = "PT_CyberArk_Enterprise_Password_Vault_syslog_CEF_316_317_Reset_user_password"

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Эксплуатация уязвимости CVE-2024-27198 в TeamCity. Уязвимость позволяет злоумышленнику обойти процесс аутентификации, чтобы создать нового пользователя TeamCity с правами администратора или токен доступа для пользователя. Это может быть использовано для удаленного выполнения команд</Description>
+  <EventDescriptions>
+    <EventDescription id="49855d05-82b0-7bd8-825f-5c725b870f0e">Эксплуатация уязвимости {detect} в TeamCity. Создан пользователь с ID {object.account.id} и правами администратора на узле {event_src.host}</EventDescription>
+    <EventDescription id="56182d4b-5bdb-07be-b338-f482622d495c">Эксплуатация уязвимости {detect} в TeamCity. Создан токен доступа {object.value} для пользователя с ID {object.account.id} на узле {event_src.host}</EventDescription>
+    <EventDescription id="799a5b72-bd1a-8299-9fb6-8a4cb901d254">Возможная эксплуатация уязвимости {detect} в TeamCity. Выполнены команды от имени пользователя TeamCity с ID {subject.account.id} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

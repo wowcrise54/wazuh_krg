@@ -1,0 +1,83 @@
+TABULAR = "{chain_id=audit_id}, action_int, resource_type_int, unix_time"
+
+COND = $action_int == 7
+       and $resource_type_int == 25
+
+subject = "account"
+action = "execute"
+object = "command"
+
+subformula "script_info_v6"
+    JSON = ''
+    
+    if $['script.output'] != null then
+        $raw_status = "success"
+    elif $['script.error'] != null then
+        $raw_status = "failure"
+        reason = $['script.error'][1]
+    endif
+    
+    object.process.cmdline = $['script.command'][1]
+    object.value = $['script.command'][1]
+    
+    datafield2 = $['script.hostid'][1]  # Host ID
+endsubformula
+
+subject.account.name = $user_alias
+subject.account.id = $user_id
+subject.account.privileges = switch $user_role_type
+    case 1 "User"
+    case 2 "Admin"
+    case 3 "Super admin"
+endswitch
+
+object.type = "script"
+
+object.property = $field_name
+
+if $field_name == "command" then
+    object.value = $new_value
+else
+    object.new_value = $new_value
+endif
+
+if (find_substr($details, '"script.command":') != null) and (find_substr($details, '"script.execute_on":') != null) then
+    submessage("JSON", "script_info_v6", $details)
+else
+    if $field_name == "output" then
+        $raw_status = "success"
+    elif $field_name == "error" then
+        $raw_status = "failure"
+    else
+        $raw_status = "ongoing"
+    endif
+
+    object.id = $resource_id
+    object.name = if $resource_name != "" then $resource_name else null endif
+    
+    if $field_name == "error" then
+        reason = $new_value
+    endif
+endif
+
+status = $raw_status
+
+src.ip = $ip
+
+if not in_list(["", "0"], $details) then
+    datafield1 = replace($details, "'", '"')  # additional info about action
+endif
+
+time = epoch_to_datetime($unix_time)
+msgid = "ACTION_EXECUTE"
+importance = "info"
+
+category.high = "System Management"
+category.generic = "Command"
+category.low = "Manipulation"
+
+event_src.vendor = "zabbix"
+event_src.title = "zabbix"
+event_src.category = "Network monitoring system"
+
+id = "PT_Zabbix_Zabbix_odbc_Execute_script"

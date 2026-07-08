@@ -1,0 +1,8 @@
+event Configuration_sync:
+    key:
+        event_src.host, event_src.vendor, event_src.title,
+        event_src.category, object, action
+
+    id = "PT_Ruijie_networks_oem_Rgos_syslog_PARAM_6_CONFIG_SYNC"
+
+aggregate Ruijie_oem_Configuration_sync: Configuration_sync[0,10] within 10s

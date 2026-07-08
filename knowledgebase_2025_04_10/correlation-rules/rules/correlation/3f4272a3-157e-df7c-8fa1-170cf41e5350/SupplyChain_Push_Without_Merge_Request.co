@@ -1,0 +1,130 @@
+query GetMergeRequestsCount($asset, $host, $repo, $branch) from SupplyChain_Merge_Requests {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::target_branch == $branch
+}
+    qhandler {
+        $get_mr_count = count()
+    }
+
+
+event Merge_Request_Apply:
+    key:
+        event_src.asset, event_src.host, datafield1, datafield2, object.new_value
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "apply"
+        and object.type == "merge_request"
+        and status == "success"
+    }
+
+event Branch_Push:
+    key:
+        event_src.asset, event_src.host, datafield1, datafield2, object.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "modify"
+        and object.type == "branch"
+        and status == "success"
+        and msgid == "POST /api/:version/internal/post_receive"
+        and datafield16 == "branch is important"
+        and datafield17 == "new pusher"
+        and filter::CheckWL_Gitlab_Repositories("SupplyChain_Push_Without_Merge_Request",
+                lower(join([subject.account.id, object.name, join([datafield2, datafield1], "/"), event_src.host], "|"))
+        )
+    }
+
+
+rule SupplyChain_Push_Without_Merge_Request: (Merge_Request_Apply? and Branch_Push) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Gitlab_Repositories"
+    }
+
+    on Merge_Request_Apply {
+        if $branch_pushed then
+            close  # Activity is legitimate
+        else
+            $mr_is_applied = true
+        endif
+    }
+
+    on Branch_Push {
+        $branch_pushed = true
+
+        if not $mr_is_applied then
+            # TL SupplyChain_Merge_Requests
+            $tl_data = exec_query("GetMergeRequestsCount", [event_src.asset, event_src.host,
+                                                            join([datafield2, datafield1], "/"), object.name])
+
+            $treshhold = 3  # May be changed
+        endif
+
+        if $tl_data["$get_mr_count"] > $treshhold then
+            $subject.account.id = subject.account.id
+            $subject.account.name = coalesce(subject.account.name, subject.account.fullname)
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.meta = subject.process.meta
+
+            $object.name = object.name
+            $object.type = object.type
+            $object.property = object.property
+            $object.value = object.value
+            $object.new_value = object.new_value
+
+            $chain_id = chain_id
+            $external_link = external_link
+
+            $datafield1 = datafield1    # Project Slug
+            $datafield2 = datafield2    # Namespace Fullpath
+            $datafield3 = datafield3    # Branch Name
+            $datafield16 = datafield16  # Is branch important
+            $datafield17 = datafield17  # New pusher
+
+            $numfield1 = numfield1    # Project ID
+
+            $alert.key = lower(join([subject.account.id, object.name, join([datafield2, datafield1], "/"), event_src.host], "|"))
+            $alert.context = coalesce(subject.account.name, subject.account.fullname)
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        else
+            close  # Branch is used for pushes without MR or MR is applied
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "resource"
+    $status = "success"
+
+    $importance = "high"
+    
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Supply Chain Compromise: Compromise Software Supply Chain"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

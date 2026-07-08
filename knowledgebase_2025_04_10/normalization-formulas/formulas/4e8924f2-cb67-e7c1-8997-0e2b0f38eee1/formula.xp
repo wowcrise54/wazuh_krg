@@ -1,0 +1,53 @@
+TEXT = '{UNTIL("CEF:0")}|AO Kaspersky Lab|{subject.name="Kaspersky Anti Targeted Attack Platform"}|5.{$ver=UNTIL("|")}{msgid="dns"}|
+        DNS request detected|{$level=WORD}| {"dvc"|"dvchost"}={event_src.ip=IPV4|$Computer=HOSTNAME} {$kv=KEYVALUE(" ", "=")}'
+
+subject = "application"
+action = "detect"
+object = "alert"
+status = "success"
+
+subject.version = "5." + $ver
+object.name = $kv["cs2"]
+object.type = "DNS " + $kv["requestMethod"]
+object.property = "suspicious resource"
+object.value = $kv["dhost"]
+
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+
+$dot_pos = find_substr($kv["shost"], '.')
+
+if $dot_pos != null then
+    src.fqdn = lower($kv["shost"])
+    src.hostname = lower(substr($kv["shost"], 0, $dot_pos))
+else
+    src.hostname = lower($kv["shost"])
+endif
+
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+
+time = datetime($kv["rt"])
+
+importance = switch $level
+    case "Low" "low"
+    case "Medium" "medium"
+    case "High" "high"
+endswitch
+
+if importance == null then
+    importance = "info"
+endif
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v5_dns"

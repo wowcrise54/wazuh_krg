@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|}
+        {":"?} {$tmp_subsys=WORDDASH} [{NUMBER}]: { "%" WORD ?} - {NUMBER} : {object.name=WORDDASH} 
+        exiting on signal {object.value=NUMBER}'
+
+object = "service"
+action = "terminate"
+status = "success"
+
+object.property = "signal"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.subsys = lower($tmp_subsys)
+# If the message without PREFIX, hostname or ip-address will be in $host_pref var
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_services_state_exit_on_sig"

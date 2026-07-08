@@ -1,0 +1,67 @@
+!TEXT = 'CEF:0|Netwrix|{$tmp_subsys="Logon Activity"}|1.0|{$act="Successful Logon"|$act="Logoff"}|
+        {"Successful Logon"|"Logoff"} Interactive logon|0|shost={event_src.ip=IPV4|$hostname=HOSTNAME}
+        {$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+
+action = switch $act
+    case "Successful Logon" "login"
+    case "Logoff" "logout"
+endswitch
+
+object = "system"
+status = "success"
+
+subformula "get_duration"
+    TEXT = 'Session duration: {$hours=NUMBER} hour {$mins=NUMBER} minutes.'
+    $dur = "0d " + string($hours) + "h:" + string($mins) + "m:" + "0s"
+    duration = duration($dur)
+endsubformula
+
+$user_csv = csv($kv["suser"], "\\", "*")
+if length($user_csv) == 1 then
+    subject.account.name = $user_csv[0]
+else
+    subject.account.domain = $user_csv[0]
+    subject.account.name = $user_csv[2]
+endif
+
+$dot_pos = find_substr($kv["filePath"], '.')
+if maybe_ipv4($kv["filePath"]) != null then
+    src.ip = $kv["filePath"]
+    dst.ip = src.ip
+elif $dot_pos != null then
+    src.fqdn = $kv["filePath"]
+    dst.fqdn = src.fqdn
+    src.hostname = substr($kv["filePath"], 0, $dot_pos)
+    dst.hostname = src.hostname
+elif ($kv["filePath"] != "unknown") and ($kv["filePath"] != "N/A") then
+    src.hostname = $kv["filePath"]
+    dst.hostname = src.hostname
+endif
+
+submessage("TEXT", "get_duration", $kv["msg"])
+
+time = $kv["start"]
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($hostname)
+        event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+    elif $hostname != "unknown" then
+        event_src.hostname = lower($hostname)
+    endif
+endif
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Other"
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_User_login_logout"

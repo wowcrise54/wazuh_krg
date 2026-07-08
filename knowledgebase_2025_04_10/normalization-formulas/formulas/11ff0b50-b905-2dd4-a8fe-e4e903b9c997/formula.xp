@@ -1,0 +1,75 @@
+JSON = 'source="octavia"'
+
+COND = in_list(["create-load-balancer", "remove-load-balancer"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "create-load-balancer" "create"
+    case "remove-load-balancer" "remove"
+endswitch
+
+object = "resource"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subformula "parse_response"
+    TEXT = '{UNTIL("\\\"id\\\"")}: \"{object.id=UNTIL("\\\"")} {REST}'
+endsubformula
+
+subformula "parse_response"
+    TEXT = '{REST}'
+endsubformula
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $request_body["loadbalancer"]
+
+if $response_body["loadbalancer"]["id"] != null then
+    object.id = $response_body["loadbalancer"]["id"]
+
+elif $response_body != "" then
+    submessage("TEXT", "parse_response", $response_body)
+else
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[4]
+endif
+
+object.name = $properties["name"]
+object.type = "load balancer"
+
+datafield1 = $method                       # Method
+datafield2 = $uri                          # URL
+datafield5 = $properties["vip_subnet_id"]  # The ID of the subnet for the Virtual IP
+
+if $properties["description"] != "" then
+    datafield9 = $properties["description"]  # A human-readable description for the resource
+endif
+
+time = $timestamp
+msgid = $action
+importance = "low"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Octavia_Load_balancer_operations"

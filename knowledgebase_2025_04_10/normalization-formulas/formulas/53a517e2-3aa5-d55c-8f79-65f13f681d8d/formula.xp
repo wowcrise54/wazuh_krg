@@ -1,0 +1,39 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{WORDDASH|STRING} vault[{NUMBER}]: {$json=REST}' 
+COND = find_substr($json, "sys/mounts/") != null 
+       and find_substr($json, "\"operation\":\"update\"") != null 
+       and find_substr($json, "tune") != null
+
+submessage("JSON","json_in_syslog_engine_tuned", $json)
+
+subformula 'json_in_syslog_engine_tuned'
+    JSON = ''
+    
+    if $error != null then
+        status = "failure"
+        reason = $error
+        importance = "low"
+    else
+        status = "success"
+        importance = "medium"
+    endif
+    
+    subject.account.name = $auth["display_name"]
+    subject.account.privileges = join($auth["policies"], ", ")
+    
+    object.name = csv($request["path"], "/", " ")[2]
+    object.path = csv($request["path"], "/", " ")[0] + "/" + csv($request["path"], "/", " ")[1]
+    object.fullpath = $request["path"]
+    
+    src.ip = $request["remote_address"]
+    src.port = $request["remote_port"]
+endsubformula
+
+subject = "account"
+action = "modify"
+object = "module"
+
+event_src.vendor = "hashicorp"
+event_src.title = "vault"
+event_src.category = "Application security"
+
+id = "PT_Hashicorp_Vault_syslog_Engine_tuned"

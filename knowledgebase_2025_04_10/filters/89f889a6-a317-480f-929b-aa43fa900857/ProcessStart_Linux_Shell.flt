@@ -1,0 +1,12 @@
+filter ProcessStart_Linux_Shell() {
+    (
+        filter::ProcessStart_Linux()
+        and regex(object.process.fullpath, "bin/(c|tc|sc|k|z|fi|da|ba)?sh$", 0) != null
+        and regex(object.process.cmdline, "(c|tc|sc|k|z|fi|da|ba)?sh\s+--(help|version)$", 0) == null
+    )
+    or (
+        filter::ProcessStart_Linux()
+        and match(object.process.fullpath, "*bin/capsh")
+        and regex(object.process.cmdline, "capsh\s+--(help|print)$", 0) == null
+    )
+}

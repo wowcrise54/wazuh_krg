@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?} PINsafe[{STRING} INFO
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} {datafield1=STRING*} - Session start failed
+        for user: {$user=STRING} error: {$reas=REST}'
+
+subject = "account"
+action = "start"
+object = "session"
+status = "failure"
+
+subject.name = strip($user, "", ",")
+
+# datafiled1 - peer or group peer name
+
+reason = strip($reas, '', '.')
+
+time = recv_time
+importance = "medium"
+
+event_src.vendor = "swivel_secure"
+event_src.title = "pinsafe"
+event_src.category = "AAA"
+
+id = "PT_Swivel_Secure_PINsafe_syslog_session_start_failed"

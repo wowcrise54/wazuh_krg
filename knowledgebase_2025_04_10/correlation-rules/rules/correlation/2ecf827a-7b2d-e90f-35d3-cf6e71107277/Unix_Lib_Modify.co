@@ -1,0 +1,128 @@
+query Check_File_Creation($host, $file_name) from Unix_Suspicious_Created_Files {
+    host == $host
+    and file_name == $file_name
+}
+    qhandler {
+        $cmdline = cmdline
+        $process_name = process_name
+        $file_name = file_name
+    }
+
+event Syscall_Lib_Modify:
+    key:
+        event_src.host, subject.account.id, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::FileModify_Linux("^(\/usr)?\/lib(32|64)?\/")
+        and status == "success"
+        and action != "remove"
+        and subject.process.fullpath != "/usr/bin/dpkg" # dpkg создает много файлов в папке с библиотеками
+        and event_src.subsys == "auditd"
+        and filter::CheckWL_Linux_File_Operations("Unix_Lib_Modify", 
+            lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|")))
+    }
+
+rule Unix_Lib_Modify: Syscall_Lib_Modify+ timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+        $count.subevents = 0
+        $first_event = true
+        $change_files = ""  # Файлы, с которыми выполнялись действия
+    }
+
+    on Syscall_Lib_Modify {
+        if $first_event then
+            $action = action  # create, access, modify
+            
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.name = subject.process.name
+            $subject.process.id = subject.process.id
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.cmdline = subject.process.cmdline
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.meta = subject.process.meta
+            $subject.process.parent.id = subject.process.parent.id
+            $subject.type = subject.type
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+
+            $result = exec_query("Check_File_Creation", [event_src.host, object.name])
+            
+            $object.process.name = $result["$process_name"]
+            $object.process.cmdline = $result["$cmdline"]
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.id = object.id
+            $object.type = object.type
+            $object.state = object.state
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+  
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $change_files = object.name # Файлы, с которыми выполнялись действия
+
+            $reason = $result["$file_name"]
+
+            $alert.key = lower(join([subject.process.fullpath, subject.process.meta, object.fullpath], "|"))
+
+            $first_event = false
+        else
+            $change_files = join([$change_files, object.name], "|") # Файлы, с которыми выполнялись действия
+        endif
+        $count.subevents = $count.subevents + 1
+        if $count.subevents >= 5 then
+            close
+        endif
+    }
+
+emit {
+    $subject = "account"
+    $object = "file_object"
+    $status = "success"
+
+    if $reason != null then
+        $correlation_type = "incident"
+        $alert.context = join([$result["$process_name"] + " created " + $reason + " → " + $object.account.name + ": " + $subject.process.fullpath + " " + $object.fullpath + " " + $change_files], "|")
+    else
+        $correlation_type = "event"
+        $alert.context = join([$object.account.name + ": " + $subject.process.fullpath + " " + $change_files], "|")
+    endif    
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Compromise Client Software Binary"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,50 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} {event_src.subsys="vsftpd"}
+        [{NUMBER}]: [{subject.account.name=UNTIL("]")} OK {$act="DOWNLOAD"|$act="DELETE"|$act="RENAME"}: Client
+        "{src.ip=IPV4}", "{$st=UNTIL("\\"")} {REST}'
+
+subject = "account"
+
+action = switch $act
+    case "DOWNLOAD" "download"
+    case "DELETE" "remove"
+    case "RENAME" "rename"
+endswitch
+
+object = "file_object"
+status = "success"
+
+if find_substr($st," ") != null then
+    $pathes = csv($st, " ", "*")
+    object.property = "fullpath"
+    object.new_value = $pathes[length($pathes) - 1]
+
+    $path_raw = $pathes[0]
+else
+    $path_raw = $st
+endif
+
+object.fullpath = $path_raw
+$csv_path = csv($path_raw, "/","\'")
+object.name = $csv_path[length($csv_path) - 1]
+if strip(object.fullpath, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "File service"
+
+id = "PT_UNIX_like_vsftpd_syslog_file_download_delete_rename"

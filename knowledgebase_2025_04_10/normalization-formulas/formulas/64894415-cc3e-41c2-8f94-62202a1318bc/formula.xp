@@ -1,0 +1,32 @@
+!TABULAR = 'keyvalue,
+           {time=date_time},
+           component_name,
+           event_description,
+           event_id'
+
+COND = in_list([590116,590117,590144,590145], $event_id)
+
+action = "info"
+object = "account"
+status = "success"
+
+object.state = switch $event_id
+    case 590116 "enter failed"
+    case 590117 "exit failed"
+    case 590144 "enter"
+    case 590145 "exit"
+endswitch
+
+object.name = $last_name + " " + $first_name + " " + $middle_name
+object.id = $user_table_number
+
+datafield1 = $component_name  # Имя компонента системы СКУД
+reason = $event_description
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "parsec"
+event_src.title = "parsecnet_3"
+event_src.category = "Physical security"
+
+id = "PT_Parsec_ParsecNET_3_odbc_user_login_logout"

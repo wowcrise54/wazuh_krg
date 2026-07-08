@@ -1,0 +1,105 @@
+event Critical_VM_Operation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and event_src.subsys == "nova"
+        and (
+             (
+                 in_list(["vm-start", "vm-reboot", "vm-stop", "update-vm", "delete-vm", "vm-attach-interface", "vm-detach-interface"], msgid)
+                 and table::VK_Cloud_Important_Objects {column::object_id == object.id and column::object_type == "vm"}
+             )
+             or (
+                 in_list(["vm-add-floating-ip", "vm-remove-floating-ip"], msgid)
+                 and table::VK_Cloud_Important_Objects {column::object_id == datafield7 and column::object_type == "vm"}
+             )
+        )
+        and status == "success"
+        and not table::Applications_Significant_Users {
+            column::user == subject.account.id
+            and column::event_src_title == event_src.title
+        }
+        and filter::CheckWL_Specific_Only("VK_Cloud_Critical_VM_Operation", lower(join([subject.account.id, coalesce(datafield7, object.id), event_src.host], "|")))
+    }
+
+rule VK_Cloud_Critical_VM_Operation: Critical_VM_Operation
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Critical_VM_Operation {
+        $subject = subject  # account, service
+        $action = action    # stop, assign, unassign, restart, start, modify, remove
+        $object = object    # virtual_machine, ip_address
+        $status = status    # success
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.contact = subject.account.contact
+
+        $subject.process.meta = subject.process.meta
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.state = object.state
+        $object.property = object.property
+        $object.value = object.value
+
+        $datafield1 = datafield1  # Method
+        $datafield2 = datafield2  # URL
+        $datafield3 = datafield3  # The ID of the network
+        $datafield4 = datafield4  # Fixed IP addresses
+        $datafield6 = datafield6  # The UUID of the tenant in a multi-tenancy cloud
+        $datafield7 = datafield7  # Server ID
+        $datafield9 = datafield9  # A human-readable description for the resource
+
+        $operation = msgid
+        $datafield10 = $operation # Operation type
+
+        $alert.key = lower(join([subject.account.id, coalesce(datafield7, object.id), event_src.host], "|")) 
+        $alert.context = join(remove([subject.account.name, $operation], null), " | ")
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+
+    if in_list(["vm-add-floating-ip", "vm-remove-floating-ip", "vm-attach-interface", "vm-detach-interface", "update-vm"], $operation) then
+        $category.high = "Defense Evasion"
+        $category.low = "Modify Cloud Compute Infrastructure"
+        $incident.category = "HostOrSoftCompromising"
+    elif in_list(["vm-reboot", "vm-stop"], $operation) then
+        $category.high = "Impact"
+        $category.low = "System Shutdown/Reboot"
+        $incident.category = "ServiceMalfunction"
+    elif $operation == "vm-start" then
+        $category.high = "Defense Evasion"
+        $category.low = "Hide Artifacts: Run Virtual Instance"
+        $incident.category = "HostOrSoftCompromising"
+    else
+        $category.high = "Defense Evasion"
+        $category.low = "Modify Cloud Compute Infrastructure: Delete Cloud Instance"
+        $incident.category = "UnauthorizedDataDeletion"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

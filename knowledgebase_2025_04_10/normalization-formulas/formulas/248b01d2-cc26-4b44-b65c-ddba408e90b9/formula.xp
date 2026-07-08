@@ -1,0 +1,56 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} SI-{STRING} 1 {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        auditor {NUMBER} - - {$msgid_raw_1="4202"}{$msgid_raw_2="Disconnected"}, {"Hound: Cafall/"datafield3=WORD","?} {"Rule: "datafield1=WORD","?}
+        {"Src: "src.ip=IPV4","?} {"Src Port: "src.port=NUMBER","?} {"Dst: "dst.ip=IPV4","?} {"Dst: ,"?}
+        {"Dst Port: "dst.port=NUMBER","?} {"Username: "subject.account.name=WORD","?} {"Username: "object.account.name=WORD","?}
+        {"Protocol-session-Id: "datafield4=WORD","?} {"Session-Id: "subject.account.session_id=NUMBER","?}
+        {"Channel Id: "object.value=NUMBER","?} {"Hound: Cafall/"datafield3=WORD","?} {"Rule: "datafield1=WORD","?}
+        {"Reason: "$reason_raw_1=UNTIL("Syslog")?} {"\\""?}{WORD?}{WORD?}{".\\","?}{"\\","?} {"\\""?}{$reason_raw_2=UNTIL("Syslog")?}{REST}'
+
+subject = "account"
+action = "disconnect"
+object = "session"
+status = "success"
+
+if object.value != null then
+    object.property = "channel id"
+endif
+
+# datafield1 - имя правила
+# datafield3 - имя коллектора
+# datafield4 - protocol session id
+
+reason = strip(replace($reason_raw_1, "", "\""), "", "., ")
+reason = strip(reason, "", ", , ")
+reason = strip(reason, "", ", ")
+if reason == null then
+    reason = strip($reason_raw_2, "", "\", ")
+    reason = strip(reason, "", ": ")
+endif
+if reason == '' then
+    reason = null
+endif
+
+if find_substr(reason, "Logon error") != null then
+    importance = "low"
+elif find_substr(reason, "No password given") != null then
+    importance = "low"
+elif find_substr(reason, "Login grace-time exceeded") != null then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+
+event_src.title = "safeinspect"
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_4_syslog_4202_disconnected"

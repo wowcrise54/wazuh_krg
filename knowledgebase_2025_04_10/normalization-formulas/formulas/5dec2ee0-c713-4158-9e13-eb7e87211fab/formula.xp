@@ -1,0 +1,33 @@
+EVENTLOG = 'EventID.text="18511"'
+COND = (($Channel=="Kaspersky Security for Exchange Servers" and $Provider["Name"]=="KSE") 
+        or ($Channel=="Application" and $Provider["Name"] == "KSCM8"))
+
+action = "start"
+object = "scan"
+status = "failure"
+
+submessage("TEXT", "SPLIT", $Data[0])
+
+object.type = "email"
+object.state = "not checked"
+
+subformula "SPLIT"
+    # Извлечение datafield1, object.value, reason, object.version и datafield1 из $Data[0]
+    TEXT='{UNTIL("\r\n")}Нарушение лицензии на сервере {UNTIL(".")} Сообщение не будет проверено. Подробная информация об ошибке:{reason=REST}'
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "medium"
+
+category.generic = "Executable Module"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_microsoft_exchange_servers"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Kaspersky_Security_for_Exchange_eventlog_18511_cannot_check_mail"

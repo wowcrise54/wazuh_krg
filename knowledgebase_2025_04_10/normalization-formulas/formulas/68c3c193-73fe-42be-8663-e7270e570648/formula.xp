@@ -1,0 +1,57 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Контроль доступа к файлам"
+       and ($event_id == 131136
+            or $event_id == 65600)
+
+subject = "account"
+action = "create"
+object = "resource"
+status = switch $event_type
+    case "Аудит успеха" "success"
+    case "Аудит отказа" "failure"
+endswitch
+
+subject.id = $user_id
+subject.name = $user_name
+subject.domain = $user_domain
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение $kv из $event_message
+    TEXT = "Создание {$kv=REST}"
+
+    $kv = keyvalue($kv, "\n\r\n\r", ":")
+
+    $tmp_list = csv($kv["Объект"], "/", "")
+    object.name = $tmp_list[length($tmp_list) - 1]
+    object.path = strip($kv["Объект"], "", object.name)
+
+    $tmp_app = csv($kv["Приложение"], "/", "")
+    datafield3 = $tmp_app[length($tmp_app) - 1]                 # Имя родительского процесса
+    datafield2 = strip($kv["Приложение"], "", datafield3)       # Путь к родительскому процессу
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_131136_65600_create_resource"

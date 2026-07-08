@@ -1,0 +1,49 @@
+# INFO  [Native-Transport-Requests-1] 2023-11-20 18:45:41.646 FileAuditLogger.java:51 - user:dba|host:10.0.2.238:7000|source:/127.0.0.1|port:35240|timestamp:1700495141646|type:CREATE_TABLE|category:DDL|ks:cqlkeyspace|scope:t|operation:CREATE TABLE t (cqid int,k int,v text, PRIMARY KEY (id));
+
+TEXT = '{$source_tag="AOFL"|}INFO  [Native-Transport-Requests-{NUMBER}] {$ct=DATETIME} FileAuditLogger.java:{NUMBER} - 
+        user:{subject.application.account.name=WORD}|host:{"localhost/"|"/"|}{dst.ip=UNTIL(":")}{dst.port=NUMBER?}|
+        source:{"/"?}{src.ip=IPV4}|port:{src.port=NUMBER}|timestamp:{$ts=NUMBER}|{$kv=KEYVALUE("|",":")}'
+COND = ($kv['type']=='CREATE_TABLE')
+
+subject = "account"
+action = "create"
+object = "table"
+status = "success"
+
+subformula "parse_query"
+    TEXT = 'create table {"if not exists"?} {$ks_name=UNTIL(".")?}{$table_name=WORD}{REST}'
+endsubformula
+
+if $kv['scope'] != null then  
+    object.name = $kv['scope']
+else
+    submessage('TEXT', 'parse_query', lower($kv['operation']))
+    object.name = $table_name
+endif 
+
+if $kv['ks'] != null then  
+    object.path = $kv['ks']
+    object.fullpath = object.path + "." + object.name
+else
+    submessage('TEXT', 'parse_query', lower($kv['operation']))
+    object.fullpath = object.path + "." + object.name
+endif 
+
+object.property = "table"
+object.query = $kv['operation']
+
+datafield4 = $source_tag     # Дополнительная информация о источнике
+
+time = epoch_ms_to_datetime($ts)
+msgid = $kv['type']
+importance = "info"
+
+if dst.ip != "127.0.0.1" then
+    event_src.ip = dst.ip
+endif
+
+event_src.vendor = "opensource"
+event_src.title = "apache_cassandra"
+event_src.category = "Database server"
+
+id = "PT_Opensource_Apache_Cassandra_syslog_Create_table" 

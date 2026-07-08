@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} pfsp: {object.type="anomaly"} {object.name=WORDDASH}
+        id {datafield1=NUMBER} status {object.state="ongoing"|object.state="done"} severity
+        {NUMBER} classification {importance="low"|importance="medium"|importance="high"} impact
+        {$tmp_impact=STRING+} ipVer {"4"|"6"} src {src.ip=IPV4}/{NUMBER} {STRING} dst {dst.ip=IPV4}
+        /{NUMBER} {$tmp_managed_object=STRING} start {DATETIME} {STRING?} duration {duration=NUMBER}
+        percent {$tmp_pct=STRING} rate {$tmp_rate=STRING} rateUnit {$tmp_rate_unit=WORD} protocol
+        {$tmp_protocol_type=WORDDASH} flags {$tmp_flags_type=STRING} {REST}'
+
+action = "detect"
+object = "alert"
+status = "success"
+
+# datafield1 - ID
+datafield2 = strip($tmp_managed_object, "\"", "\"")     # managed object
+datafield3 = strip($tmp_impact, "\"", "\"")             # impact
+datafield4 = $tmp_pct + "%"                             # pct
+datafield5 = $tmp_rate + " " + $tmp_rate_unit           # rate
+
+if $tmp_flags_type != "nil" then
+    tcp_flag = $tmp_flags_type
+endif
+if $tmp_protocol_type != "nil" then
+    protocol = $tmp_protocol_type
+endif
+
+event_src.title = "peakflow_sp"
+event_src.vendor = "arbor_networks"
+event_src.category = "Network security"
+
+id = "PT_Arbor_Networks_Peakflow_SP_syslog_anomaly"

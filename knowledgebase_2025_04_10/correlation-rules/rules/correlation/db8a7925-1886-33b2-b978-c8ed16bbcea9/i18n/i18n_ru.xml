@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>В домене настроено ограниченное делегирование на основе ресурсов. Злоумышленник может использовать эту настройку для получения TGS-билета атакуемой учетной записи для доступа с правами администратора к серверу, предназначенному для функционирования сервиса. После этого злоумышленник может повысить привилегии и выполнить горизонтальное перемещение на другие узлы инфраструктуры</Description>
+  <EventDescriptions>
+    <EventDescription id="70b81cbf-ce96-cebc-9d17-7d0a31c222b8">Пользователь {subject.account.name} с узла {src.host} настроил ограниченное делегирование на основе ресурсов для узла {object.account.name}</EventDescription>
+    <EventDescription id="c7fb8767-4928-cd0a-3b53-ef6d85cbcdeb">Пользователь {subject.account.name} с узла {src.host} настроил ограниченное делегирование на основе ресурсов для учетной записи {object.account.name}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,465 @@
+query GetURLRegex() from Generic_Regexes {
+    column::regex_type == "common_url"
+}
+
+
+event Object_process_with_URL:
+    filter {
+        filter::FromCorrelator()
+        and correlation_type != "subrule"
+        and (
+             (
+                 event_src.vendor == "microsoft"
+                 and in_list(["sysmon", "windows"], event_src.title)
+             )
+             or (
+                 event_src.title == "unix_like"
+                 and event_src.subsys == "auditd"
+             )
+        )
+        and not match(labels, "*url_extracted_from_obj_cmdline*")
+        and filter::ContainsURL(object.process.cmdline)
+    }
+
+event Object_process_parent_with_URL:
+    filter {
+        filter::FromCorrelator()
+        and correlation_type != "subrule"
+        and (
+             (
+                 event_src.vendor == "microsoft"
+                 and in_list(["sysmon", "windows"], event_src.title)
+             )
+             or (
+                 event_src.title == "unix_like"
+                 and event_src.subsys == "auditd"
+             )
+        )
+        and not match(labels, "*url_extracted_from_obj_parent_cmdline*")
+        and filter::ContainsURL(object.process.parent.cmdline)
+    }
+
+event Subject_process_with_URL:
+    filter {
+        filter::FromCorrelator()
+        and correlation_type != "subrule"
+        and (
+             (
+                 event_src.vendor == "microsoft"
+                 and in_list(["sysmon", "windows"], event_src.title)
+             )
+             or (
+                 event_src.title == "unix_like"
+                 and event_src.subsys == "auditd"
+             )
+        )
+        and not match(labels, "*url_extracted_from_subj_cmdline*")
+        and subject.process.cmdline != object.process.cmdline
+        and filter::ContainsURL(subject.process.cmdline)
+    }
+
+event Subject_process_parent_with_URL:
+    filter {
+        filter::FromCorrelator()
+        and correlation_type != "subrule"
+        and (
+             (
+                 event_src.vendor == "microsoft"
+                 and in_list(["sysmon", "windows"], event_src.title)
+             )
+             or (
+                 event_src.title == "unix_like"
+                 and event_src.subsys == "auditd"
+             )
+        )
+        and not match(labels, "*url_extracted_from_subj_parent_cmdline*")
+        and subject.process.parent.cmdline != object.process.parent.cmdline
+        and filter::ContainsURL(subject.process.parent.cmdline)
+    }
+
+
+enrichment Extract_URL_from_Cmdline
+    
+    enrich Object_process_with_URL:
+
+        enrich_fields {
+            $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+
+            $cmdline = object.process.cmdline
+
+            $url = regex($cmdline, $url_pattern, 1)
+
+            $url_pos = find_substr($cmdline, $url)
+            $prefix = substr($cmdline, $url_pos - 1, 1)
+
+            if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                if $prefix == "(" then
+                    $postfix = ")"
+                elif $prefix == "[" then
+                    $postfix = "]"
+                elif $prefix == "{" then
+                    $postfix = "}"
+                else
+                    $postfix = $prefix
+                endif
+
+                $url_to_rest = substr($cmdline, $url_pos, length($cmdline))
+                $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                if $url_to_postfix != null then
+                    $url = substr($url_to_rest, 0, $url_to_postfix)
+                endif
+            endif
+
+            if find_substr($url, ";") != null then
+                $bytenum = find_substr($url, ";")
+                $first_url = substr($url, 0, $bytenum)
+                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                    $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                endif
+            elif find_substr($url, ",") != null then
+                $bytenum = find_substr($url, ",")
+                $first_url = substr($url, 0, $bytenum)
+                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                    $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                endif
+            endif
+
+            if external_link == null then
+                external_link = $url
+
+            elif not (match(external_link, $url) or match(external_link, "*" + $url + " | *")) then
+                external_link = join([external_link, $url], " | ")
+            endif   
+
+            $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+            $ipv4_in_url = ipv4($domain)
+
+            if ($ipv4_in_url != null
+                and external_dst.ip == null
+                and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                external_dst.ip = $domain
+
+            elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                $at = find_substr($domain, ".")
+
+                if $at != null then
+                    external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                    external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                else
+                    external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                endif
+            endif
+
+            external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+            labels = if labels == null then "url_extracted_from_obj_cmdline" else labels + "|url_extracted_from_obj_cmdline" endif
+        }
+
+        insert_into URLs_Extraction_Stats if $url != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+    enrich Object_process_parent_with_URL:
+
+        enrich_fields {
+            $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+
+            $cmdline = object.process.parent.cmdline
+
+            $url = regex($cmdline, $url_pattern, 1)
+
+            $url_pos = find_substr($cmdline, $url)
+            $prefix = substr($cmdline, $url_pos - 1, 1)
+ 
+            if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                if $prefix == "(" then
+                    $postfix = ")"
+                elif $prefix == "[" then
+                    $postfix = "]"
+                elif $prefix == "{" then
+                    $postfix = "}"
+                else
+                    $postfix = $prefix
+                endif
+
+                $url_to_rest = substr($cmdline, $url_pos, length($cmdline))
+                $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                if $url_to_postfix != null then
+                    $url = substr($url_to_rest, 0, $url_to_postfix)
+                endif
+            endif
+
+            if find_substr($url, ";") != null then
+                $bytenum = find_substr($url, ";")
+                $first_url = substr($url, 0, $bytenum)
+                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                    $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                endif
+            elif find_substr($url, ",") != null then
+                $bytenum = find_substr($url, ",")
+                $first_url = substr($url, 0, $bytenum)
+                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                    $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                endif
+            endif
+
+            if external_link == null then
+                external_link = $url
+
+            elif not (match(external_link, $url) or match(external_link, "*" + $url + " |*")) then
+                external_link = join([external_link, $url], " | ")
+            endif   
+
+            $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+            $ipv4_in_url = ipv4($domain)
+
+            if ($ipv4_in_url != null
+                and external_dst.ip == null
+                and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                external_dst.ip = $domain
+
+            elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                $at = find_substr($domain, ".")
+
+                if $at != null then
+                    external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                    external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                else
+                    external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                endif
+            endif
+
+            external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+            labels = if labels == null then "url_extracted_from_obj_parent_cmdline" else labels + "|url_extracted_from_obj_parent_cmdline" endif
+        }
+
+        insert_into URLs_Extraction_Stats if $url != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+    enrich Subject_process_with_URL:
+
+        enrich_fields {
+            $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+
+            $cmdline = subject.process.cmdline
+
+            $url = regex($cmdline, $url_pattern, 1)
+
+            $url_pos = find_substr($cmdline, $url)
+            $prefix = substr($cmdline, $url_pos - 1, 1)
+ 
+            if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                if $prefix == "(" then
+                    $postfix = ")"
+                elif $prefix == "[" then
+                    $postfix = "]"
+                elif $prefix == "{" then
+                    $postfix = "}"
+                else
+                    $postfix = $prefix
+                endif
+
+                $url_to_rest = substr($cmdline, $url_pos, length($cmdline))
+                $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                if $url_to_postfix != null then
+                    $url = substr($url_to_rest, 0, $url_to_postfix)
+                endif
+            endif
+
+            if find_substr($url, ";") != null then
+                $bytenum = find_substr($url, ";")
+                $first_url = substr($url, 0, $bytenum)
+                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                    $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                endif
+            elif find_substr($url, ",") != null then
+                $bytenum = find_substr($url, ",")
+                $first_url = substr($url, 0, $bytenum)
+                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                    $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                endif
+            endif
+
+            if external_link == null then
+                external_link = $url
+
+            elif not (match(external_link, $url) or match(external_link, "*" + $url + " |*")) then
+                external_link = join([external_link, $url], " | ")
+            endif   
+
+            $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+            $ipv4_in_url = ipv4($domain)
+
+            if ($ipv4_in_url != null
+                and external_dst.ip == null
+                and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                external_dst.ip = $domain
+
+            elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                $at = find_substr($domain, ".")
+
+                if $at != null then
+                    external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                    external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                else
+                    external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                endif
+            endif
+
+            external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+            labels = if labels == null then "url_extracted_from_subj_cmdline" else labels + "|url_extracted_from_subj_cmdline" endif
+        }
+
+        insert_into URLs_Extraction_Stats if $url != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }
+
+    enrich Subject_process_parent_with_URL:
+
+        enrich_fields {
+            $url_pattern = select_query_first("GetURLRegex", [], "regex_value")
+
+            $cmdline = subject.process.parent.cmdline
+
+            $url = regex($cmdline, $url_pattern, 1)
+
+            $url_pos = find_substr($cmdline, $url)
+            $prefix = substr($cmdline, $url_pos - 1, 1)
+ 
+            if in_list(["\"", "'", "`", "(", "[", "{"], $prefix) then
+                if $prefix == "(" then
+                    $postfix = ")"
+                elif $prefix == "[" then
+                    $postfix = "]"
+                elif $prefix == "{" then
+                    $postfix = "}"
+                else
+                    $postfix = $prefix
+                endif
+
+                $url_to_rest = substr($cmdline, $url_pos, length($cmdline))
+                $url_to_postfix = find_substr($url_to_rest, $postfix)
+
+                if $url_to_postfix != null then
+                    $url = substr($url_to_rest, 0, $url_to_postfix)
+                endif
+            endif
+
+            if find_substr($url, ";") != null then
+                $bytenum = find_substr($url, ";")
+                $first_url = substr($url, 0, $bytenum)
+                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                    $url = strip(strip(replace($url, " | ", ";"), " | ", ""), "", " | ")
+                endif
+            elif find_substr($url, ",") != null then
+                $bytenum = find_substr($url, ",")
+                $first_url = substr($url, 0, $bytenum)
+                $second_url = substr($url, length($first_url) + 1, find_substr(strip($url, $first_url + ";",""), ";"))
+
+                if regex($first_url, $url_pattern, 0) != null and regex($second_url, $url_pattern, 0) != null then
+                    $url = strip(strip(replace($url, " | ", ","), " | ", ""), "", " | ")
+                endif
+            endif
+
+            if external_link == null then
+                external_link = $url
+
+            elif not (match(external_link, $url) or match(external_link, "*" + $url + " |*")) then
+                external_link = join([external_link, $url], " | ")
+            endif   
+
+            $domain = regex($url, "(?i)^\w+:\/\/([a-z0-9-_\.]+)", 1)
+            $ipv4_in_url = ipv4($domain)
+
+            if ($ipv4_in_url != null
+                and external_dst.ip == null
+                and not in_subnet($ipv4_in_url, "10.0.0.0/8")
+                and not in_subnet($ipv4_in_url, "172.16.0.0/12")
+                and not in_subnet($ipv4_in_url, "192.168.0.0/16")
+                and not in_subnet($ipv4_in_url, "100.64.0.0/10")
+                and not in_subnet($ipv4_in_url, "169.254.0.0/16")
+                and not in_subnet($ipv4_in_url, "224.0.0.0/4") 
+                and not in_subnet($ipv4_in_url, "127.0.0.0/8")) then
+
+                external_dst.ip = $domain
+
+            elif $ipv4_in_url == null and not in_list([null, "localhost"], $domain) then
+                $at = find_substr($domain, ".")
+
+                if $at != null then
+                    external_dst.fqdn = coalesce(external_dst.fqdn, $domain)
+
+                    external_dst.hostname = coalesce(external_dst.hostname, substr($domain, 0, $at))
+                else
+                    external_dst.hostname = coalesce(external_dst.hostname, $domain)
+                endif
+            endif
+
+            external_dst.host = coalesce(external_dst.host, external_dst.fqdn, external_dst.hostname, external_dst.ip)
+
+            labels = if labels == null then "url_extracted_from_subj_parent_cmdline" else labels + "|url_extracted_from_subj_parent_cmdline" endif
+        }
+
+        insert_into URLs_Extraction_Stats if $url != null {
+            column::host = lower(event_src.host)
+            column::user = lower(coalesce(subject.account.name, subject.account.id, subject.name, subject.id, "undefined"))
+            column::url = $url
+            column::domain = lower(coalesce($domain, "unparsed"))
+            insert_inc(column::count)
+        }

@@ -1,0 +1,68 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "ACCESS" and in_list([3,4,53,54], $action)
+
+if $user_name != "" then
+    subject = "account"
+    submessage("TEXT", "subject_name", $user_name)
+endif
+action = "remove"
+status = "success"
+
+subformula "subject_name"
+    TEXT = "{subject.account.domain=WORDDASH}\\{subject.account.name=WORDDASH}"
+endsubformula
+subformula "subject_name"
+    TEXT = "{subject.account.name=WORDDASH}"
+endsubformula
+
+if $action == 3 then
+    object = "file_object"
+    object.type = "file"
+    category.generic = "File System Object"
+elif $action == 4 then
+    object = "file_object"
+    object.type = "folder"
+    category.generic = "File System Object"
+elif $action == 53 or $action == 54 then
+    object = "reg_object"
+    category.generic = "Registry Object"
+endif
+
+subject.process.fullpath = $process_name
+$csv_path = csv(subject.process.fullpath, '\\', '')
+subject.process.name = $csv_path[length($csv_path) - 1]
+if length($csv_path) > 1 then
+    subject.process.path = strip($process_name, "", subject.process.name)
+endif
+
+object.fullpath = lower($resource)
+$csv_path = csv(object.fullpath, '\\', '')
+object.name = $csv_path[length($csv_path) - 1]  # New value
+if length($csv_path) > 1 then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+if $computer_name != "" then
+    src.hostname = $computer_name
+endif
+
+importance = "info"
+
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "confident"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_access_resource_removed"

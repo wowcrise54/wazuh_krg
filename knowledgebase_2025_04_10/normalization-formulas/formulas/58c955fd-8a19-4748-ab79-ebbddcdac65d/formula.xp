@@ -1,0 +1,23 @@
+!TABULAR = "{object.value = permission},
+            {msgid = id},
+            {subject.id = creator_id},
+            {subject.name = creator_name},
+            {object.id = user_id},
+            {object.name = username },
+            {src.ip = ip},
+            {time = time},
+            {subject.type = password_changed}"
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+object.property = "privileges"
+
+event_src.vendor = "electronic_moscow"
+event_src.title = "sedo"
+event_src.category = "Application server"
+
+id = "PT_Electronic_Moscow_SEDO_odbc_user_permission_history"
+importance = "info"

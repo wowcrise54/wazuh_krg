@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{UNTIL("Site:")} {"Site"?} {datafield1=UNTIL(",Server")}
+        {"Name"?}: {datafield2=UNTIL(",")}{"\\""?}{"Event Description: "?}Management server {$act=REST}'
+
+if find_substr ($act,'started') != null then
+    action = "start"
+    importance = "info"
+elif find_substr ($act,'shut down') != null then
+    action = "stop"
+    importance = "medium"
+endif
+
+object = "system"
+status = "success"
+
+# datafield1 - Site Name
+# datafield2 - Server name
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip2, $ip1)
+event_src.hostname = coalesce($host2, $host1)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_server_shutdown_started_succesfully_en_ru"

@@ -1,0 +1,49 @@
+EVENTLOG = 'EventID="5450"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+action = "modify"
+object = "service"
+
+if $Keywords == "0x8020000000000000" then
+status = "success"
+elif $Keywords == "0x8010000000000000" then
+status = "failure"
+endif
+
+submessage("TEXT", "SPLIT", $Data["UserName"])
+
+# Извлечение subject.domain и subject.name из поля $Data["UserName"]
+subformula "SPLIT"
+    TEXT = '{$csv=CSV("\\\\","\'")}'
+    subject.domain = lower($csv[0])
+    subject.name = $csv[1]
+endsubformula
+
+object.name = "Windows Filtering Platform"
+object.property = "sub-layer"
+object.value = $Data["SubLayerName"]
+if $Data["ProviderName"] != '-' then
+    object.vendor = $Data["ProviderName"]
+endif
+
+reason = $Data["ChangeType"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_5450_WFP_sub_layer_has_been_changed"

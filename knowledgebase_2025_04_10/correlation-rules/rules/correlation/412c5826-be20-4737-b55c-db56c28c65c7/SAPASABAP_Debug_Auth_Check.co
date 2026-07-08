@@ -1,0 +1,84 @@
+query SAP_Check_Groups($sid) from SAP_ABAP_Systems_To_Groups {
+    sid == $sid
+    and group == "Production"
+}
+
+query SAP_Check_Event($event) from SAP_ABAP_Auth_Check_Events {
+    event == $event
+}
+
+event Change_Value:
+    key:
+        event_src.host, event_src.id, subject.account.name, datafield1
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and msgid == "CUL"
+        and object.value == "SY-SUBRC -> 0"
+        and datafield1 != null
+        and subject.account.name != null
+        and exec_query("SAP_Check_Groups", [event_src.id])
+    }
+
+event Debug_Program:
+    key:
+        event_src.host, event_src.id, subject.account.name, datafield1
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sap_as_abap"
+        and msgid == "BUZ"
+        and exec_query("SAP_Check_Event", [object.state])
+        and filter::CheckWL_Specific_Only("SAPASABAP_Debug_Auth_Check", lower(join([event_src.id, src.host], "|")))
+    }
+
+rule SAPASABAP_Debug_Auth_Check: (Change_Value -> Debug_Program) within 3s
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Debug_Program {
+        $subject.account.id = subject.account.name
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $datafield1 = datafield1  # SAP Client
+
+        $alert.key = lower(join([event_src.id, src.host], "|"))
+        $alert.context = join([subject.account.name, event_src.id], " | ")
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "module"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Exploitation for Credential Access"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $event_src.id, $subject.account.id, $datafield1], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

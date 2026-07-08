@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        {event_src.subsys=WORDDASH} [{NUMBER}]: {datafield1=WORD}:
+        alias {STRING} => {object.value=STRING}'
+
+action = "modify"
+object = "message"
+status = "success"
+
+object.type = "email"
+object.property = "new recipient"
+
+# datafield1 - queue id
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "sendmail"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Sendmail_syslog_change_name_by_alias"

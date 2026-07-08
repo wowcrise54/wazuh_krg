@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?} 
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/{msgid="NBR_CHANGE"}
+        ({WORD}){"["NUMBER"]"?}:{"VS=Admin-VS-"?}{"CID="UNTIL(";")?} Neighbor changes event: neighbor status changed.
+        ({$kv=UNTIL(")")}'
+
+$kv = keyvalue($kv, ',', '=', '"')
+
+if $kv['NbrCurrentState'] == "Down" then
+    action = "stop"
+else
+    action = "start"
+endif
+object = "session"
+if $kv['NbrCurrentState'] == "Full" or $kv['NbrCurrentState'] == "Down" then
+    status = "success"
+else
+    status = "ongoing"
+endif
+
+object.state = $kv['NbrCurrentState']
+
+dst.ip = $kv['NbrIpAddr']
+protocol = "OSPF"
+
+importance = "info"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_OSPF_neighbor_up_down"

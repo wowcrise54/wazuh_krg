@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$event_src_host=HOSTNAME}
+        {event_src.subsys="squid"} {object.process.id=NUMBER} - - Accepting {datafield1="TPROXY"?} {"intercepted"?}
+        {protocol=STRING?} {"bumped"?} {protocol.layer7=STRING} Socket connections at {object.id=WORD}
+        local={src.ip=IPV4|src.ip=IPV6}:{src.port=NUMBER} remote={dst.ip=IPV4|dst.ip=IPV6|"[::]"}{":"?}
+        {dst.port=NUMBER?} FD{NUMBER} flags={NUMBER}'
+
+action = "open"
+object = "connection"
+status = "success"
+
+# datafield1 - mechanism
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "ideco"
+event_src.title = "utm"
+
+$dot_pos = find_substr($event_src_host, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($event_src_host)
+    event_src.hostname = lower(substr($event_src_host, 0, $dot_pos))
+else
+    event_src.hostname = lower($event_src_host)
+endif
+
+event_src.category = "Network security"
+
+id = "PT_Ideco_IdecoUTM_syslog_squid_accepting_socket"

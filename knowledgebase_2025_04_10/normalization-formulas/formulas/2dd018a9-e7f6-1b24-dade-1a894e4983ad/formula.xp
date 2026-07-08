@@ -1,0 +1,40 @@
+TEXT = '<{NUMBER}>{time=DATETIME}{WORDDASH|STRING} vault[{NUMBER}]: {$json=REST}' 
+COND = find_substr($json, "auth/userpass/users/") != null 
+       and find_substr($json, "\"operation\":\"update\"") != null
+
+submessage("JSON","json_in_syslog_user_updated", $json)
+
+subformula 'json_in_syslog_user_updated'
+    JSON = ''
+    
+    if $error != null then
+        status = "failure"
+        reason = $error
+        importance = "low"
+    else
+        status = "success"
+        importance = "medium"
+    endif
+    
+    subject.account.name = $auth["display_name"]
+    subject.account.privileges = join($auth["policies"], ", ")
+    
+    object.account.name = csv($request["path"], "/", " ")[3]
+    
+    src.ip = $request["remote_address"]
+    src.port = $request["remote_port"]
+endsubformula
+
+subject = "account"
+action = "modify"
+object = "account"
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "hashicorp"
+event_src.title = "vault"
+event_src.category = "Application security"
+
+id = "PT_Hashicorp_Vault_syslog_User_updated"

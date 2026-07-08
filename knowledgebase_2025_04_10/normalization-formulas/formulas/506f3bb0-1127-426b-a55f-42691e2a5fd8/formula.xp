@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0101037124"
+
+action = "open"
+object = "tunnel"
+status = "failure"
+
+object.state = "phase 1"
+
+src.ip = $kv["remip"]
+src.port = $kv["remport"]
+dst.ip = $kv["locip"]
+dst.port = $kv["locport"]
+interface = $kv["outintf"]
+
+datafield1 = $kv["vd"]                                 # Virtual domain name
+datafield4 = $kv["cookies"]                            # Cookie
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")  # Event type
+datafield11 = $kv["action"]                            # Action
+
+if $kv["reason"] == "peer notification" then
+    reason = $kv["peer_notif"] 
+else
+    reason = $kv["reason"]
+endif
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "low"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["devid"]
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Fortinet_Fortigate_syslog_37124_mesgid_neg_i_p1_error"

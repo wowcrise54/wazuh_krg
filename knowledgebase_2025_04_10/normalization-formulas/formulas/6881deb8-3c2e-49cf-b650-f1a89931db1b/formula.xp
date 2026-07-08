@@ -1,0 +1,60 @@
+EVENTLOG = ''
+
+COND = $Channel == "Kaspersky Endpoint Security"
+       and $Provider["Name"] == "avp"
+       and $EventID["text"] == "362"
+
+action = "detect"
+object = "malware"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+$full = lower(substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' (')))
+$domain_user = csv($full, "\\", "'")
+if length($domain_user) == 2 then
+    subject.account.name = $domain_user[1]
+    subject.account.domain = $domain_user[0]
+else
+    subject.account.name = $full
+endif
+
+object.storage.fullpath = lower(coalesce($kv["Объект\\Путь"], $kv["Путь к объекту"] + $kv["Название объекта"]))
+$csv_p = replace(object.storage.fullpath, "/", "\\\\")
+$csv_path = csv($csv_p, '/', '')
+if length($csv_path) > 1 then
+    object.storage.name = $csv_path[length($csv_path) - 1]
+    object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+else
+    object.storage.name = $csv_p
+endif
+
+object.type = coalesce($kv["Результат\\Тип"], $kv["Тип"])
+object.property = "threat level"
+object.value = coalesce($kv["Результат\\Степень угрозы"], $kv["Степень угрозы"])
+
+datafield1 = substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' ('))     # Имя пользователя
+
+category.high = "Information Security"
+category.generic = "Malware"
+category.low = "Detection"
+
+time = $TimeCreated["SystemTime"]
+
+msgid = $EventID["text"]
+
+importance = "medium"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_362_malicious_link_blocked"

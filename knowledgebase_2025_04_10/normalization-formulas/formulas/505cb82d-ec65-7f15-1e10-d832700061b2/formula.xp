@@ -1,0 +1,47 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}{$message=REST}"
+
+COND = find_substr($message,"daemon_start") != null
+
+action = "start"
+object = "process"
+
+subformula 'MSG'
+    JSON = ''
+    
+    if $MSG["astra-audit"]["success"] == "1" or $MSG["astra-audit"]["success"] == "success" then
+        status = "success"
+    else
+        status = "failure"
+    endif
+    
+    $daemon_name = $MSG["astra-audit"]["name_en"]
+endsubformula
+
+subformula 'daemon_name'
+    TEXT = "The {object.process.name=STRING} daemon is started"
+endsubformula
+
+submessage("JSON", "MSG", $message)
+submessage("TEXT", "daemon_name", $daemon_name)
+
+datafield1 = $MSG["astra-audit"]["subj"]  # parsec-метка пользователя, вызвавшего событие. <уровень конфидециальности>:<уровень целостности>:<Категории>:<Роли>
+
+time = epoch_to_datetime(number($MSG["astra-audit"]["unixtime"]))
+msgid = $MSG["astra-audit"]["message_id"]
+
+importance = "medium"
+
+event_src.vendor = "npo_rusbiteh"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "astra_linux"
+event_src.subsys = $FACILITY
+$Computer = $HOST
+event_src.category = "Other"
+
+id = "PT_NPO_Rusbiteh_Astra_Linux_parsec_syslog_daemon_start"

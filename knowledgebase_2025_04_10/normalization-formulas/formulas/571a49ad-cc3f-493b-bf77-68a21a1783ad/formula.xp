@@ -1,0 +1,64 @@
+TEXT = '{"<"NUMBER">"}{NUMBER}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}
+        {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        {$tmp_subsys=WORDDASH} - RT_FLOW_SESSION_CREATE {"["}junos@2636.{STRING}
+        {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+action = "create"
+object = "conntrack"
+status = "success"
+
+if $kv["username"] != "N/A" then
+    object.account.name = $kv["username"]
+endif
+
+src.ip = $kv["source-address"]
+src.port = $kv["source-port"]
+dst.ip = $kv["destination-address"]
+dst.port = $kv["destination-port"]
+
+if $kv["nat-source-address"] != src.ip then
+    assigned_src_ip = $kv["nat-source-address"]
+endif
+
+if $kv["nat-destination-address"] != dst.ip then
+    assigned_dst_ip = $kv["nat-destination-address"]
+endif
+
+if number($kv["nat-source-port"]) != src.port then
+    assigned_src_port = $kv["nat-source-port"]
+endif
+
+if number($kv["nat-destination-port"]) != dst.port then
+    assigned_dst_port = $kv["nat-destination-port"]
+endif
+
+if assigned_src_ip != null 
+   or assigned_src_port != null 
+   or assigned_dst_ip != null 
+   or assigned_dst_port != null then
+    object.type = "nat"
+else
+    object.type = "stateful"
+endif
+
+interface = $kv["packet-incoming-interface"]
+
+protocol = $kv["protocol-id"]
+
+datafield1 = $kv["source-zone-name"]  # ingress interface name
+datafield3 = $kv["destination-zone-name"]  # egress interface name
+
+importance = "info"
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Firewall"
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+id = "PT_Juniper_Junos_syslog_data_plane_flow_created_structured"

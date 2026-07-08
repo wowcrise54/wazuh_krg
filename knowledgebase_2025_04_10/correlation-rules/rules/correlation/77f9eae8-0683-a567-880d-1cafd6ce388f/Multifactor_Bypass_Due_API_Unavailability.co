@@ -1,0 +1,88 @@
+event MultiFactor_API_Unreachable:
+    key:
+        event_src.host, chain_id, object.account.name, external_src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and action == "send"
+        and object == "request"
+        and status == "failure"
+        and lower(event_src.title) == "multifactor"
+    }
+
+event Multifactor_Bypass:
+    key:
+        event_src.host, chain_id, object.account.name, external_src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and action == "receive"
+        and object == "request"
+        and find_substr(lower(object.type),"response") != null
+        and lower(event_src.title) == "multifactor"
+        and datafield2 == "PassThrough"
+    }
+  
+rule Multifactor_Bypass_Due_API_Unavailability: MultiFactor_API_Unreachable and Multifactor_Bypass
+
+    on MultiFactor_API_Unreachable {
+        $object.path = object.path  # https://api.multifactor.ru/access/requests/ra.
+        $object.fullpath = object.fullpath
+        $object.name = object.name
+
+        $reason = reason            # Unable to connect to the remote server 
+
+        # Адрес для запроса второго фактора
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+    }
+
+    on Multifactor_Bypass {
+        $external_src.fqdn = external_src.fqdn
+        $external_src.geo.asn = external_src.geo.asn
+        $external_src.geo.city = external_src.geo.city          # Москва
+        $external_src.geo.country = external_src.geo.country    # RU
+        $external_src.geo.org = external_src.geo.org
+        $external_src.host = external_src.host                  # 176.59.172.35
+        $external_src.hostname = external_src.hostname
+        $external_src.ip = external_src.ip                      # 176.59.172.35
+
+        $object.type = object.type                              # MultiFactorApiResponse`1
+
+        $object.account.name = object.account.name              # ipetrov
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id                  # dPK5aCmPl
+        $object.account.privileges = object.account.privileges
+        
+        $datafield2 = datafield2 # PassThrough
+        $datafield3 = datafield3 # true
+        $datafield4 = datafield4 # false
+
+        $alert.context = "user " + $object.account.name + " bypassed multifactor"
+    }
+
+    emit {
+        $correlation_type = "incident"
+
+        $subject = "application"
+        $action = "open"
+        $object = "session"
+        $status = "success"
+
+        $importance = "medium"
+
+        $category.generic = "Attack"
+        $category.high = "Credential Access"
+        $category.low = "Modify Authentication Process: Multi-Factor Authentication"
+
+        # Так как в случае отвала Multifactor API подобных сработок будет много, то агрегируем все инициденты общим ключем.
+        $incident.aggregation.key = join([$correlation_name, $reason], "|")
+        $incident.severity = $importance
+        $incident.category = "ProtectionBypassing"
+        $incident.aggregation.timeout = 2h
+    }

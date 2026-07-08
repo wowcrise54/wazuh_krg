@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} {WORDDASH?} {":"?}
+        SysLog%%{NUMBER} # {WORDDASH} # Security Management # The client is forcibly exited due to a timeout # Succeeded;
+        User: {subject.account.name=WORD} {UNTIL("second(s)")} \\nClient IP: {src.ip=IPV4} #'
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+reason = "Timeout"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "m2000"
+event_src.vendor = "huawei"
+event_src.category = "Telecom"
+
+id = "PT_Huawei_M2000_syslog_Client_is_forcibly_exited_due_to_a_timeout"

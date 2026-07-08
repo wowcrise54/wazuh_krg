@@ -1,0 +1,212 @@
+query GetAssigneesInfoByAllFields($asset, $host, $repo, $user_id, $src_host) from SupplyChain_Merge_Assignees {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::user_id == $user_id
+    and column::src_host == $src_host
+}
+
+query GetMergeRequestInfo($asset, $host, $repo, $mr_id) from SupplyChain_Merge_Requests {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::merge_request_id == $mr_id
+}
+    qhandler {
+        $source_branch = column::source_branch
+        $target_branch = column::target_branch
+        $approvers = column::approvers
+    }
+
+query IsBranchImportant($asset, $host, $repo, $branch) from SupplyChain_Important_Branches {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::branch == $branch
+}
+
+query IsBranchProtected($asset, $host, $repo, $branch) from SupplyChain_Important_Branches_Registry {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and regex_match($branch, column::branch)
+}
+
+
+event Merge_Request_Apply:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "apply"
+        and object.type == "merge_request"
+        and status == "success"
+        and not in_list([subject.account.id, src.host, numfield3], null)
+    }
+
+event Branch_Push:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "modify"
+        and object.type == "branch"
+        and status == "success"
+        and msgid == "POST /api/:version/internal/post_receive"
+        and object.name != null
+    }
+
+
+enrichment SupplyChain_Merge_Request_Apply
+
+    enrich Merge_Request_Apply:
+
+        enrich_fields {
+            $user_id = number(subject.account.id)
+            $repository = join([datafield2, datafield1], "/")
+
+            # TL SupplyChain_Merge_Assignees
+            $last_changed = select_query_first("GetAssigneesInfoByAllFields", [event_src.asset,
+                                                                               event_src.host,
+                                                                               $repository,
+                                                                               $user_id,
+                                                                               src.host
+                                                                              ], "_last_changed")
+
+            if bool($last_changed) then
+                $ttl_tl = 7776000  # Default value is 90 days
+
+                if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then  # If record older than ttl/2
+                    $insert_all_fields_into_merge_assignees_tl = true
+                endif
+            else
+                $insert_all_fields_into_merge_assignees_tl = true
+            endif
+
+            if not bool($last_changed) then
+                # TL SupplyChain_Merge_Requests
+                $tl_data = exec_query("GetMergeRequestInfo", [event_src.asset, event_src.host, $repository, numfield3])
+
+                $approvers = lower($tl_data["$approvers"])
+                $source_branch = $tl_data["$source_branch"]
+                $target_branch = $tl_data["$target_branch"]
+
+                if object.property == null then
+                    object.property = "branch"
+                    object.value = $source_branch
+                    object.new_value = $target_branch
+                endif
+
+                # TL SupplyChain_Important_Branches
+                $is_branch_important = exec_query("IsBranchImportant", [event_src.asset, event_src.host, $repository, $target_branch])
+
+                if not $is_branch_important then
+                    # TL SupplyChain_Important_Branches_Registry
+                    $is_branch_protected = exec_query("IsBranchProtected", [event_src.asset, event_src.host, $repository, $target_branch])
+                endif
+
+                if in_list(["cleared by enrichment", null], $approvers) then
+                    $approvers = "no approvers"
+                endif
+
+                if datafield15 == null then
+                    datafield15 = $approvers
+                endif
+
+                if datafield16 == null and in_list([$is_branch_protected, $is_branch_important], true) then
+                    datafield16 = "branch is important"
+                endif
+
+                if datafield17 == null then
+                    datafield17 = "new assignee"
+                endif
+            endif
+        }
+
+        insert_into SupplyChain_Merge_Assignees if $insert_all_fields_into_merge_assignees_tl {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = $repository
+            column::user_id = $user_id
+            column::user = lower(subject.account.name)
+            column::src_host = src.host
+        }
+
+        remove_from SupplyChain_Merge_Requests {
+            column::event_src_asset == event_src.asset
+            and column::event_src_host == event_src.host
+            and column::repository == $repository
+            and column::merge_request_id == numfield3
+        }
+
+    enrich Branch_Push:
+
+        enrich_fields {
+            $repository = join([datafield2, datafield1], "/")
+
+            # TL SupplyChain_Important_Branches
+            $is_branch_important = exec_query("IsBranchImportant", [event_src.asset, event_src.host, $repository, object.name])
+
+            if not $is_branch_important then
+                # TL SupplyChain_Important_Branches_Registry
+                $is_branch_protected = exec_query("IsBranchProtected", [event_src.asset, event_src.host, $repository, object.name])
+            endif
+
+            if in_list([$is_branch_protected, $is_branch_important], true) then
+                $user_id = number(subject.account.id)
+
+                # TL SupplyChain_Merge_Assignees
+                $last_changed = select_query_first("GetAssigneesInfoByAllFields", [event_src.asset,
+                                                                                   event_src.host,
+                                                                                   $repository,
+                                                                                   $user_id,
+                                                                                   null  # Branch push event feature
+                                                                                  ], "_last_changed")
+
+                $is_pusher_exists = bool($last_changed)
+
+                if $is_pusher_exists then
+                    $ttl_tl = 7776000  # Default value is 90 days
+
+                    if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then  # If record older than ttl/2
+                        $insert_into_merge_assignees_tl_without_address = true
+                    endif
+                else
+                    $insert_into_merge_assignees_tl_without_address = true
+                endif
+
+                if datafield16 == null then
+                    datafield16 = "branch is important"
+                endif
+
+                if datafield17 == null and not $is_pusher_exists then
+                    datafield17 = "new pusher"
+                endif
+            endif
+        }
+
+        insert_into SupplyChain_Merge_Assignees if $insert_into_merge_assignees_tl_without_address {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = $repository
+            column::user_id = $user_id
+            column::user = lower(subject.account.name)
+        }

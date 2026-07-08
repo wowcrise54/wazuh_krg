@@ -1,0 +1,93 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {STRING} CEF:{NUMBER}|Infotecs|IDS HS|{UNTIL("|")}{msgid=NUMBER}|
+        {$desc=UNTIL("|")}{$priority=NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+COND = in_list(["302023", "302024", "302025", "302026", "302027", "302028", "870008", "870023", "870022"], msgid)
+
+subject = "account"
+action = switch msgid
+    case "302023" "create"
+    case "870008" "create"
+    case "302024" "remove"
+    case "302025" "stop"
+    case "302026" "start"
+    case "870023" "start"
+    case "302027" "stop"
+    case "870022" "stop"
+    case "302028" "start"
+
+endswitch
+object = "service"
+status = "success"
+
+subformula "start_service_name"
+    TEXT = "{DATETIME} {STRING} {STRING} Started {object.name=UNTIL('.')}"
+endsubformula
+
+subformula "stop_service_name"
+    TEXT = "{DATETIME} {STRING} {STRING} Stopped {object.name=UNTIL('.')}"
+endsubformula
+
+
+subject.account.name = $kv['suser']
+subject.account.domain = $kv['sntdom']
+subject.account.id = $kv['suid']
+
+$tmp_list = csv($kv['sproc'], "\\", "")
+subject.process.name = $tmp_list[length($tmp_list) - 1]
+subject.process.path = strip($kv['sproc'], '', subject.process.name)
+subject.process.fullpath = subject.process.path + subject.process.name
+subject.process.cmdline = $kv['InfotecsIDSHSCommandLine']
+
+$tmp_list = csv($kv['InfotecsIDSHSParentProcessName'], "\\", "")
+subject.process.parent.name = $tmp_list[length($tmp_list) - 1]
+subject.process.parent.path = strip($kv['InfotecsIDSHSParentProcessName'], '', subject.process.parent.name)
+subject.process.parent.fullpath = subject.process.parent.path + subject.process.parent.name
+
+# попытка получить имя сервиса
+if msgid == "870008" then
+    object.name = $kv['diff\\']
+elif msgid == "870023" then
+    submessage("TEXT", "start_service_name", $kv['msg'])
+elif msgid == "870022" then
+    submessage("TEXT", "stop_service_name", $kv['msg'])
+else
+    $temp = csv($kv['InfotecsIDSHSCommandLine'], ' ', '')
+    $temp = remove($temp, $temp[0])
+    object.name = join(remove($temp, $temp[0]), ' ')
+endif
+
+object.state = switch msgid
+    case "302027" "suspend"
+    case "302028" "resume"
+endswitch
+
+time = epoch_ms_to_datetime(number($kv['rt']))
+
+if $priority < 6 then
+    importance = "info"
+elif $priority >= 6 and $priority < 8 then
+    importance = "low"
+elif $priority >= 8 and $priority < 10 then
+    importance = "medium"
+elif $priority >= 10 then
+    importance = "high"
+endif
+
+category.generic = "Service"
+if in_list(["create", "remove"], action) then
+    category.high = "System Management"
+    category.low = "Manipulation"
+else
+    category.high = "Availability Management"
+    category.low = "Control"
+endif
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids_hs"
+event_src.subsys = lower($kv['deviceFacility'])
+event_src.ip = $kv['dvc']
+event_src.hostname = $kv['InfotecsIDSHShost']
+event_src.category = "IDS/IPS"
+event_src.id = $kv['InfotecsIDSHShostId']
+
+id = "PT_Infotecs_VipNet_IDS_HS_syslog_cef_service_actions"

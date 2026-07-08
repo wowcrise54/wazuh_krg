@@ -1,0 +1,10 @@
+filter ServiceStop_Windows() {
+    event_src.title == "windows"
+    and (
+        action == "modify" or action == "stop"
+    )
+    and status == "success"
+    and lower(object.state) == "stopped"
+    and category.generic == "Service"
+    and in_list(["Manipulation", "Control"], category.low)
+}

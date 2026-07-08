@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"("?}{"apache"|"apache2"|"httpd"}{")"?}{"["NUMBER"]"?}:
+        [{WORD?} {time=DATETIME}]
+        [{WORD}]
+        {"[pid "NUMBER"]"?}
+        [client {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}{":"src.port=NUMBER?}]
+        PHP Notice:
+        {$reason_raw=REST}'
+
+$ref_pos = find_substr($reason_raw, ", referer")
+if $ref_pos != Null then
+    reason = substr($reason_raw, 0, $ref_pos)
+    datafield1 = strip(substr($reason_raw, $ref_pos - length($reason_raw), length($reason_raw)), ", referer: ", "")
+else
+    reason = $reason_raw
+endif
+
+object = "application"
+object.name = "PHP"
+object.type = "Notice"
+action = "info"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache"
+event_src.category = "Web server"
+
+id = "PT_Opensource_ASF_Apache_HTTP_Server_syslog_php_notice"

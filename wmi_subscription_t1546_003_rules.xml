@@ -1,0 +1,103 @@
+<!--
+  Wazuh 4.14 port of the MaxPatrol SIEM WMI subscription rule family:
+  PT-CR-1095, PT-CR-272, PT-CR-2773, PT-CR-1096, PT-CR-2774,
+  PT-CR-2449 and PT-CR-2450. MITRE ATT&CK T1546.003.
+-->
+<group name="windows,wmi_subscription,t1546_003,">
+
+  <!-- PT-CR-272: creation or modification of WMI subscription components. -->
+  <rule id="110230" level="8">
+    <if_sid>61647,61648,61649</if_sid>
+    <field name="win.eventdata.operation" type="pcre2" negate="yes">(?i)^Deleted$</field>
+    <description>WMI permanent event subscription component modified by $(win.eventdata.user): $(win.eventdata.name).</description>
+    <mitre><id>T1546.003</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,wmi_subscription,</group>
+  </rule>
+
+  <!-- PT-CR-2774: explicit creation of a filter, consumer or binding. -->
+  <rule id="110231" level="10">
+    <if_sid>110230</if_sid>
+    <field name="win.eventdata.operation" type="pcre2">(?i)^Created$</field>
+    <description>WMI permanent event subscription component created by $(win.eventdata.user): $(win.eventdata.name).</description>
+    <mitre><id>T1546.003</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,wmi_subscription_creation,</group>
+  </rule>
+
+  <!-- Internal LiquidSnake filter signature from PT-CR-1095. -->
+  <rule id="110232" level="5">
+    <if_sid>61647</if_sid>
+    <field name="win.eventdata.operation" type="pcre2">(?i)^Created$</field>
+    <field name="win.eventdata.eventNamespace" type="pcre2">(?i)root\\cimv2$</field>
+    <field name="win.eventdata.query" type="pcre2">(?i)Win32_LogonSession</field>
+    <description>WMI event filter matches the LiquidSnake query signature: $(win.eventdata.query).</description>
+    <mitre>
+      <id>T1021.003</id>
+      <id>T1546.003</id>
+    </mitre>
+    <group>sysmon,attack,lateral_movement,persistence,dcom,wmi_subscription,liquidsnake,</group>
+  </rule>
+
+  <!-- PT-CR-1095: LiquidSnake filter followed by DCOM-launched scrcons.exe. -->
+  <rule id="110233" level="12" frequency="1" timeframe="180">
+    <if_sid>61603</if_sid>
+    <if_matched_sid>110232</if_matched_sid>
+    <same_location />
+    <field name="win.eventdata.image" type="pcre2">(?i)^[A-Z]:\\Windows\\System32\\wbem\\scrcons\.exe$</field>
+    <field name="win.eventdata.parentCommandLine" type="pcre2">(?i)^[A-Z]:\\Windows\\System32\\svchost\.exe\s+-k\s+DCOMLaunch\s+-p(?:\s|$)</field>
+    <description>Possible LiquidSnake remote WMI execution: DCOM launched scrcons.exe after creation of a Win32_LogonSession event filter.</description>
+    <mitre>
+      <id>T1021.003</id>
+      <id>T1546.003</id>
+    </mitre>
+    <group>sysmon,attack,lateral_movement,persistence,dcom,wmi_subscription,liquidsnake,</group>
+  </rule>
+
+  <!-- PT-CR-1096: serialized payload marker in a WMI ActiveScript consumer event. -->
+  <rule id="110234" level="12">
+    <decoded_as>windows_eventchannel</decoded_as>
+    <field name="win.system.eventID">^2$</field>
+    <field name="win.system.channel" type="pcre2">(?i)^Application$</field>
+    <field name="win.system.message" type="pcre2">(?is)(?=.*VBScript)(?=.*AAEAAAD//)</field>
+    <description>Serialized payload marker detected in a WMI VBScript event consumer.</description>
+    <mitre><id>T1546.003</id></mitre>
+    <group>windows,attack,persistence,privilege_escalation,event_triggered_execution,wmi_subscription,deserialization_payload,</group>
+  </rule>
+
+  <!-- PT-CR-2773: a process was started by a WMI subscription host/consumer. -->
+  <rule id="110235" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\(?:WmiPrvSE|scrcons)\.exe$</field>
+    <field name="win.eventdata.image" type="pcre2" negate="yes">(?i)\\(?:WmiPrvSE|scrcons)\.exe$</field>
+    <description>Possible WMI event subscription execution: $(win.eventdata.parentImage) started $(win.eventdata.image) with command line $(win.eventdata.commandLine).</description>
+    <mitre><id>T1546.003</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,wmi_subscription_execution,</group>
+  </rule>
+
+  <!-- PT-CR-2449: WMI filter creation followed by MSBuild on the same agent. -->
+  <rule id="110236" level="12" frequency="1" timeframe="180">
+    <if_sid>61603</if_sid>
+    <if_matched_sid>110231</if_matched_sid>
+    <same_location />
+    <field name="win.eventdata.image" type="pcre2">(?i)\\MSBuild\.exe$</field>
+    <description>Possible WMEye activity: MSBuild started shortly after creation of a WMI subscription component.</description>
+    <mitre>
+      <id>T1218.001</id>
+      <id>T1546.003</id>
+    </mitre>
+    <group>sysmon,attack,lateral_movement,persistence,signed_binary_proxy_execution,wmi_subscription,wmeye,</group>
+  </rule>
+
+  <!-- PT-CR-2450: MSBuild launched by WMI infrastructure. -->
+  <rule id="110237" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\MSBuild\.exe$</field>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\(?:WmiPrvSE|scrcons)\.exe$</field>
+    <description>Possible WMEye execution: WMI infrastructure launched MSBuild with command line $(win.eventdata.commandLine).</description>
+    <mitre>
+      <id>T1218.001</id>
+      <id>T1546.003</id>
+    </mitre>
+    <group>sysmon,attack,lateral_movement,persistence,signed_binary_proxy_execution,wmi_subscription,wmeye,</group>
+  </rule>
+
+</group>

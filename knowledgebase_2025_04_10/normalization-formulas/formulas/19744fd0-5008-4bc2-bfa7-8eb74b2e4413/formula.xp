@@ -1,0 +1,93 @@
+!TEXT='{"<"NUMBER">"} {NUMBER?} {DATETIME}
+       {IPV4|IPV6|$Computer=HOSTNAME} - - -
+       [ {STRING+?} timestamp="{time=DATETIME}" {STRING+?}
+       SourceModuleName="syslog_dbi_in_{event_src.ip=IPV4}" SourceModuleType="{WORD}"]
+       {$tv=REST}'
+
+if find_substr($tv,"ERROR") != null
+    and find_substr($tv,"fail2ban") != null then
+
+        submessage("TEXT", "error", $tv)
+
+        action = "info"
+        object = "application"
+        status = "failure"
+        
+        importance = "high"
+endif
+
+    if find_substr($tv,"WARNING") != null
+    and find_substr($tv,"Ban") != null then
+
+        submessage("TEXT", "ban", $tv)
+
+        subject = "application"
+        action = "create"
+        object = "rule" 
+        status = "success"
+        
+        subject.name = "fail2ban"
+        
+        reason = "banned"
+        
+        importance = "medium"
+endif
+
+if find_substr($tv,"WARNING") != null
+    and find_substr($tv,"Unban") != null then
+
+        submessage("TEXT", "unban", $tv)
+
+        subject = "application"
+        action = "remove"
+        object = "rule"
+        status = "success"
+        
+        subject.name = "fail2ban"
+        
+        reason = "unbanned"
+        
+        importance = "medium"
+endif
+
+if find_substr($tv,"WARNING") == null
+    and find_substr($tv,"ERROR") == null
+       and find_substr($tv,"fail2ban") == null then
+
+           submessage("TEXT", "info", $tv)
+
+           action = "info"
+           object = "application"
+           status = "success"
+           
+           importance = "info"
+endif
+
+subformula "error"
+    !TEXT='fail2ban.actions.action: ERROR {datafield1=REST}'  # error desription
+endsubformula
+
+subformula "ban"
+    !TEXT='fail2ban. actions: WARNING [cdc] Ban {dst.ip=IPV4|dst.ip=IPV6}'
+endsubformula
+
+subformula "unban"
+    !TEXT='fail2ban. actions: WARNING [cdc] Unban {dst.ip=IPV4|dst.ip=IPV6}'
+endsubformula
+
+subformula "info"
+    !TEXT='{datafield1=REST}'  # info description
+endsubformula
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kontinent"
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_syslog_Another_subsytem_inf"

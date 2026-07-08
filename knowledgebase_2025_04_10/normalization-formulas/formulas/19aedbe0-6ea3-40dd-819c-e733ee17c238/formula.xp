@@ -1,0 +1,25 @@
+TEXT = ":T={$timestamp=NUMBER};:M={NUMBER} {NUMBER};[INFO] [SECURITY] :C={NUMBER};
+        :A={src.ip=IPV4};{$state='Вход'|$state='Выход'} клиента '{subject.account.name=UNTIL(\"'\")}"
+
+subject = "account"
+if $state == "Вход" then
+    action = "login"
+else
+    action = "logout"
+endif
+object = "system"
+status = "success"
+
+time = epoch_to_datetime($timestamp)
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "elvis_plus"
+event_src.title = "zastava"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Elvis_plus_Zastava_filemonitor_User_login_logout"

@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        ru: "Поля события запуска процессов есть в списке исключений"
+        en: "Event fields are present in a list of exclusions (process startup)"
+    Description:
+        ru: "Значения полей корреляционного события совпадают со значениями из списка исключений. Макрос применим только к событиям типа \"Запуск процесса\""
+        en: "Correlated event field values match values from a list of exclusions. The macro is only applicable to events of the \"Process startup\" type."
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "correlated event field value"
+            ru: "значение поля корреляционного события"
+    rule_name:
+        Type: string
+        Name:
+            ru: "название правила корреляции"
+            en: "correlation rule name"
+ObjectId: PT-RF-52
+Origin: PT

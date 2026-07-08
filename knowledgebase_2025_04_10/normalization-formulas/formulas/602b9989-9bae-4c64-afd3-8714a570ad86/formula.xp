@@ -1,0 +1,120 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        haproxy{'['?}{NUMBER?}{']'?}{':'?} {'Backup'?} Server {$ps=STRING} {$rest=REST}"
+
+COND = (
+    find_substr($rest, "enters drain state") != null
+    or find_substr($rest, "leaving forced drain") != null
+    or find_substr($rest, "leaving drain") != null
+    or find_substr($rest, "but remains in drain mode") != null
+    or find_substr($rest, "remains in forced drain mode.") != null
+)
+
+action = "info"
+object = "application"
+status = "success"
+
+subformula "parse_status"
+    TEXT = "enters drain state {'('$reason_raw=UNTIL(')')?} {$appended_status=REST}"
+
+    object.new_value = "on"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "is {$st=WORD} (leaving {'forced'?} drain) {REST}"
+
+    object.state = switch $st
+        case "UP" "running"
+        case "DOWN" "stopped"
+    endswitch
+
+    object.new_value = "off"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "is leaving forced drain but remains in drain mode {REST}"
+
+    object.value = "on"
+    object.new_value = "on"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "remains in forced drain mode."
+
+    object.value = "on"
+    object.new_value = "on"
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=STRING+} {NUMBER} active and {NUMBER} backup servers left. {'Running on backup.'?} {NUMBER} sessions active, {NUMBER} requeued, {NUMBER} remaining in queue."
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=STRING+} {NUMBER} active and {NUMBER} backup servers online. {'Running on backup.'?} {NUMBER} sessions requeued, {NUMBER} total in queue."
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=REST}"
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=STRING+} {NUMBER} active and {NUMBER} backup servers left. {'Running on backup.'?} {NUMBER} sessions active, {NUMBER} requeued, {NUMBER} remaining in queue."
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=STRING+} {NUMBER} active and {NUMBER} backup servers online. {'Running on backup.'?} {NUMBER} sessions requeued, {NUMBER} total in queue."
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=REST}"
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = "{REST}"
+endsubformula
+
+submessage("TEXT", "parse_status", $rest)
+submessage("TEXT", "parse_appended_status", $appended_status)
+
+$ps_list = csv($ps, "/", "")
+$proxy = $ps_list[0]
+$server = $ps_list[1]
+
+object.type = "proxied server"
+object.group = $proxy
+object.name = $server
+object.property = "drain mode"
+
+datafield3 = $server  # Server Name
+datafield4 = $proxy   # Proxy Name
+
+reason = strip($reason_raw, "", " ")
+
+importance = "low"
+
+event_src.vendor = "haproxy_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "haproxy"
+event_src.category = "Proxy server"
+
+id = "PT_HAProxy_Technologies_HAProxy_syslog_Server_Drain_Mode"

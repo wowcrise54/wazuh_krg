@@ -1,0 +1,216 @@
+query Check_PTAF_Rules($alert_name) from PTAF_Alerts_Regex {
+    regex_match($alert_name, column::rule_regex)
+}
+
+event PTAF_Event:
+    key:
+        event_src.host, dst.host, src.host, subject.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "application_firewall"
+        and event_src.vendor == "positive_technologies"
+        and subject.type != "correlation"
+        and action != "login"
+        and subject == "rule"
+        and not in_list(["info", "low"], importance)
+        and not exec_query("Check_PTAF_Rules", [lower(subject.name)])  # Исключаем кейсы на которые написаны правила
+        and filter::CheckWL_Web_Access("PTAF_Alert_Detected", lower(join([subject.name, dst.host, src.host], "|")))
+    }
+
+event PTAF_Correlation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "application_firewall"
+        and event_src.vendor == "positive_technologies"
+        and subject.type == "correlation"
+        and subject == "rule"
+        and not exec_query("Check_PTAF_Rules", [lower(subject.name)]) 
+        and filter::CheckWL_Web_Access("PTAF_Alert_Detected", lower(join([subject.name, dst.host, src.host], "|")))
+    }
+    
+rule PTAF_Alert_Detected: PTAF_Correlation or PTAF_Event+ timer 2m
+    init {
+        $first_event = true
+        $action = "detect"
+        $fin_importance = 0
+        $rules_count = 0
+        $labels = "CheckWL_Web_Access"
+    }
+
+    on PTAF_Event {
+        if $action != "deny" and action == "deny" then
+            $action = "deny"
+        endif
+        
+        $event_importance = switch importance
+            case "medium" 2
+            case "high" 3
+        endswitch
+        
+        if $event_importance > $fin_importance then
+            $fin_importance = $event_importance
+        endif
+        
+        if $first_event then
+            $first_event = false
+            $subject = subject
+            $object = object
+            $status = status
+
+            $subject.account.id = subject.account.id
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.name = subject.account.name
+            $subject.account.session_id = subject.account.session_id
+            
+            $subject.type = subject.type
+            $subject.name = subject.name
+            $subject.id = subject.id
+            $subject.group = subject.group
+            $subject.state = subject.state
+            
+            $object.process.name = object.process.name
+            $object.process.meta = object.process.meta
+
+            $object.name = object.name
+            $object.domain = object.domain
+            $object.type = object.type
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.state = object.state
+            $object.vendor = object.vendor
+
+            $logon_service = logon_service
+            $logon_auth_method = logon_auth_method
+
+            $src.ip = src.ip
+            $src.host = src.host
+            $src.hostname = src.hostname
+            $src.asset = src.asset
+            $src.port = src.port
+            $src.geo.city = src.geo.city
+            $src.geo.country = src.geo.country
+
+            $assigned_dst_port = assigned_dst_port
+
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.host = dst.host
+            $dst.asset = dst.asset
+
+            $protocol.layer7 = protocol.layer7
+
+            $direction = direction
+
+            $duration = duration
+
+            $reason = reason
+
+            $count.bytes_in = count.bytes_in
+            $count.bytes_out = count.bytes_out
+            $count.bytes = count.bytes
+            
+            $datafield1 = datafield1    # ID сессии
+            $datafield2 = datafield2    # Адрес предыдущей страницы
+            $datafield3 = datafield3    # ID политики
+            $datafield4 = datafield4    # тип защищаемого приложения
+            $datafield5 = datafield5    # Все заголовки пакета
+            $datafield7 = datafield7    # Имя валидатора, с помощью которого найдено значение
+            $datafield8 = datafield8    # Паттерн обнаруженной SQL-инъекции
+            $datafield9 = datafield9    # Название сработавшей переменной
+            $datafield10 = datafield10  # Имя параметра для составной переменной
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+            
+            $alert.context = subject.name
+            $alert.key = lower(join([subject.name, dst.host, src.host], "|"))
+
+            $labels = join(["w_auto", $labels], "|")
+        endif 
+
+        $rules_count = $rules_count + 1
+
+        $importance = switch $fin_importance
+            case 2 "medium"
+            case 3 "high"
+        endswitch
+    }
+
+    on PTAF_Correlation {
+        $subject = subject
+        $object = object
+        $status = status
+
+        $subject.id = subject.id
+        $subject.name = subject.name
+        $subject.type = subject.type
+
+        $object.state = object.state
+        
+        $reason = reason
+        
+        $importance = importance
+
+        $src.ip = src.ip
+        $src.host = src.host
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.port = src.port
+        $src.geo.city = src.geo.city
+        $src.geo.country = src.geo.country
+
+        $assigned_dst_port = assigned_dst_port
+
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.host = dst.host
+        $dst.asset = dst.asset
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([subject.name, dst.host, src.host], "|"))
+    }
+
+emit {
+    if $rules_count > 5 or $subject.type == "correlation" or $importance == "high" then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $numfield1 = $rules_count
+    if $rules_count > 1 then
+        $reason = "rules count: " + string($numfield1)
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Exploit Public-Facing Application"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "Undefined"
+    $incident.aggregation.timeout = 2h
+}

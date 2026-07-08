@@ -1,0 +1,81 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src_title="ASA"|$event_src_title="PIX"|$event_src_title="FWSM"|$event_src_title="FTD"}{"-session"?}-{NUMBER}-{msgid="302020"}:
+        Built {$direction_raw="inbound"|$direction_raw="outbound"|} {protocol="ICMP"} connection for
+        faddr {$first_side_ip=IPV4|$first_side_ip=IPV6|$first_side_hostname=HOSTNAME}/{NUMBER} {"("$first_side_account=UNTIL(")")?}
+        gaddr {$second_side_assigned_ip=IPV4|$second_side_assigned_ip=IPV6|$second_side_assigned_hostname=HOSTNAME}/{NUMBER}
+        laddr {$second_side_ip=IPV4|$second_side_ip=IPV6|$second_side_hostname=HOSTNAME}/{NUMBER}
+        {"("$second_side_account=UNTIL(")")?} {"type" datafield6=NUMBER "code" datafield7=NUMBER?}'
+
+action = "create"
+object = "conntrack"
+status = "success"
+
+if ($direction_raw == "inbound") or ($direction_raw == null) then
+    if $first_side_account != null then
+        $raw_uname = strip($first_side_account, "(", ")")
+        if find_substr($raw_uname, "\\") != null then
+            $name_domain = csv($raw_uname, "\\", "`")
+            object.account.name = $name_domain[1]
+            object.account.domain = $name_domain[0]
+        else
+            object.account.name = $raw_uname
+        endif
+    endif
+    
+    src.ip = $first_side_ip
+    src.hostname = $first_side_hostname
+
+    dst.ip = $second_side_ip
+    dst.hostname = $second_side_hostname
+    if ($second_side_assigned_ip != dst.ip) or ($second_side_assigned_hostname != dst.hostname) then
+        assigned_dst_ip = $second_side_assigned_ip
+        assigned_dst_host = $second_side_assigned_hostname
+    endif
+    
+    direction = "ingress"
+
+elif $direction_raw == "outbound" then
+    if $second_side_account != null then
+        $raw_uname = strip($second_side_account, "(", ")")
+        if find_substr($raw_uname, "\\") != null then
+            $name_domain = csv($raw_uname, "\\", "`")
+            object.account.name = $name_domain[1]
+            object.account.domain = $name_domain[0]
+        else
+            object.account.name = $raw_uname
+        endif
+    endif
+    
+    dst.ip = $first_side_ip
+    dst.hostname = $first_side_hostname
+
+    src.ip = $second_side_ip
+    src.hostname = $second_side_hostname
+    if ($second_side_assigned_ip != src.ip) or ($second_side_assigned_hostname != src.hostname) then
+        assigned_src_ip = $second_side_assigned_ip
+        assigned_src_host = $second_side_assigned_hostname
+    endif
+    
+    direction = "egress"
+endif
+
+if coalesce(assigned_src_ip, assigned_src_host, assigned_dst_ip, assigned_dst_host) != null then
+    object.type = "nat"
+else
+    object.type = "stateful"
+endif
+
+# datafield6 - ICMP type
+# datafield7 - ICMP code
+
+importance = "info"
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src_title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_302020_Built_ICMP_connection"

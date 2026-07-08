@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} {"ethpm["NUMBER"]:"?} %{msgid="ETHPORT-5-IF_DOWN_NON_PARTICIPATING"}:
+        Interface {interface=STRING} is down (Non participating)'
+
+action = "down"
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "data link"
+
+reason = "Line protocol changed state to down"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_ETHPORT_5_IF_DOWN_NON_PARTICIPATING"

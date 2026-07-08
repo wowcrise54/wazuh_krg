@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"?}{WORD+}/{NUMBER}/{msgid="LOGOUT"}{"(l)"?}{"["NUMBER"]"?}:Console logout from {logon_service=WORDDASH}.'
+
+action = "logout"
+object = "system"
+status = "success"
+
+logon_auth_method = "local"
+
+importance = "high"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Console_session_logout"

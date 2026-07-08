@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {object.group=UNTIL("|")}{WORD}|{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "VPN-1 & FireWall-1"
+       and $kv["msg"] == 'Address spoofing'
+       or $kv["msg"] == 'Loopback address spoofing'
+
+if (lower($kv["act"]) == "detect") then
+    action = "detect"
+    importance = "info"
+else
+    action = "deny"
+    importance = "low"
+endif
+object = "packet"
+status = "success"
+
+src.ip = $kv["src"]
+$spt = $kv["spt"]
+if ($spt != 0) then src.port = $spt endif
+
+dst.ip = $kv["dst"]
+$dpt = $kv["dpt"]
+if ($dpt != 0) then dst.port = $dpt endif
+
+protocol = $kv["proto"]
+
+datafield1 = $kv["inzone"]               # входная зона (ingress zone)
+datafield3 = $kv["outzone"]              # исходящая зона (egress zone)
+switch lower($kv["deviceDirection"])
+    case "0" datafield2 = $kv["ifname"]  # входящий интерфейс
+    case "1" datafield4 = $kv["ifname"]  # исходящий интерфейс
+endswitch
+datafield8 = $kv["originsicname"]        # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+reason = $kv["msg"]
+time = epoch_ms_to_datetime(number($kv["rt"]))
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_VPN_and_Firewall_Address_spoofing"

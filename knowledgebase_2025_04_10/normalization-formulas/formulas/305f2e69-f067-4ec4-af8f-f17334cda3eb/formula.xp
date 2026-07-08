@@ -1,0 +1,44 @@
+!JSON = "EventCode=1036"
+!COND = $Logfile=="Application" and $SourceName=="MsiInstaller"
+
+action = "install"
+object = "update"
+status = "success"
+
+subformula "add_info"
+    TEXT = "{STRING+?} (KB{$datafield=WORD}) {REST}"
+    datafield1 = "KB" + $datafield
+endsubformula
+
+if find_substr($InsertionStrings[3], "Update for ") == 0 then
+    object.name = substr($InsertionStrings[3], 11, length($InsertionStrings[3]))
+elif find_substr($InsertionStrings[3], "Security Update for ") == 0 then
+    object.name = substr($InsertionStrings[3], 20, length($InsertionStrings[3]))
+else
+    object.name = $InsertionStrings[3]
+endif
+object.vendor = $InsertionStrings[5]
+object.version = $InsertionStrings[1]
+
+if find_substr($InsertionStrings[3], " (KB") != null then
+    submessage ("TEXT", "add_info", $InsertionStrings[3])
+endif
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Operating system"
+event_src.title = "windows"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_1036_Windows_Installer_installed_an_update"

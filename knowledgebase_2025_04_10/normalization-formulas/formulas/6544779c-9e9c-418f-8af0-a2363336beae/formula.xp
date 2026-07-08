@@ -1,0 +1,47 @@
+EVENTLOG = 'Channel="Application"'
+!COND = $EventID["text"] == "0" and $Provider["Name"] == "KSCM8"
+
+if $Data[0] == "Service started successfully." then
+    action = "start"
+    status = "success"
+    importance = "info"
+elif $Data[0] == "Service stopped successfully." then
+    action = "stop"
+    status = "success"
+    importance = "info"
+elif find_substr($Data[0], "Service cannot be started") != null then
+    action = "start"
+    status = "failure"
+    submessage('TEXT', 'SPLIT1', $Data[0])
+    importance = "medium"
+elif find_substr($Data[0], "Kernel") == 0 then
+    action = "alert"
+    status = "success"
+    importance = "high"
+endif
+
+object = "service"
+
+object.name = "Kaspersky Security for Microsoft Exchange Servers"
+
+subformula "SPLIT1"
+    TEXT = 'Service cannot be started. {$kv=KEYVALUE("\r\n", ":")}'
+    reason = strip($kv['System.IO.FileNotFoundException'], '', '.')
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+if action != "alert" then
+    category.generic = "Service"
+    category.high = "Availability Management"
+    category.low = "Control"
+endif
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_microsoft_exchange_servers"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Kaspersky_Security_for_Exchange_eventlog_0_service_info"

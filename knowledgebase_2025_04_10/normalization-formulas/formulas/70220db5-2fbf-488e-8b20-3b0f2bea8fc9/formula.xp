@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|} {event_src.hostname=HOSTNAME}: *{WORDDASH}: {time=DATETIME}:
+        {"#"|"%"}{msgid="APF-4-REGISTER_IPADD_ON_MSCB_FAILED"}: {STRING}
+        Could not Register IP Add on MSCB. MSCB still in init state. {$re=REST}'
+
+action = "assign"
+object = "ip_address"
+status = "failure"
+
+submessage ("TEXT", "rest", $re) #
+
+# извлечение src.mac
+subformula "rest"
+  !TEXT = "{UNTIL(':')} {src.mac = MACADDR}"
+endsubformula
+
+# извлечение src.mac
+subformula "rest"
+  !TEXT = "Address: {src.mac = MACADDR}"
+endsubformula
+
+reason = "Could not register an IP address on MSCB"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_syslog_APF_REGISTER_IPADD_ON_MSCB_FAILED"

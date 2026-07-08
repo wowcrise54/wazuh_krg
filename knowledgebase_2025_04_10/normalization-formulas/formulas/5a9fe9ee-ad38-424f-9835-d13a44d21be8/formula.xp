@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?}
+        {time=DATETIME}{msgid=WORD}:
+        Info: ICID {object.id=NUMBER} {"close"|"lost"}'
+
+action = "close"
+object = "session"
+status = "success"
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_injection_smtp_connection_close"

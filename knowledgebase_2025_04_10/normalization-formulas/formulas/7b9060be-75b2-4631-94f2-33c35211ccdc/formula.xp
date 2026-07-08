@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = find_substr($kv["description"], "Countries DB download has failed") != null  
+       and $kv["product"] == "SmartDefense"
+
+action = "download"
+object = "database"
+status = "failure"
+
+# дата последнего изменения сработавшей политики
+datafield7 = epoch_to_datetime(number(keyvalue($kv["__policy_id_tag"], ";", "=")["date"]))
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "high"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Smart_defense_Countries_db_download_has_failed"

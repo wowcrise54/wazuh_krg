@@ -1,0 +1,37 @@
+EVENTLOG = 'Provider.Name="PT-XDR"'
+
+COND = $Channel == "mpx_integration"
+
+subject = "application"
+action = "connect"  #TODO сделать issue в event_cat чтобы в actions можно было класть атач
+object = "host"
+status = "success"
+
+subject.group = $Data["group_id"]
+subject.process.version = $Data["agent_version"]
+
+object.name = coalesce($Data["fqdn"], $Data["hostname"])
+object.type = $Data["os_type"]
+object.property = "OS name"
+object.value = $Data["os_name"]
+
+
+datafield4 = $Data["os_arch"]           # архитектура 64/86/иное
+datafield5 = $Data["ips"]
+
+importance = "info"
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.id = $Data["agent_id"]
+event_src.ip = $Data["agent_ip"]
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.subsys = $Channel
+event_src.rule = $Data["policy_id"]
+event_src.fqdn = lower($Data["fqdn"])
+event_src.hostname = lower($Data["hostname"])
+    
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_eventlog_mpx_integration"

@@ -1,0 +1,83 @@
+event Ticket_Requested:
+    key:
+        event_src.host, subject.account.name, src.host, datafield6
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4769"
+        and lower(logon_service) != "krbtgt"
+        and not match(lower(logon_service), "*$")
+        and not match(lower(subject.account.name), "*$")
+        and not match(lower(object.account.name), "*$")
+        and status == "success"
+        and in_list(["0x11", "0x12", "0x17", "0x18"], datafield2)
+        #and filter::CheckWL_Specific_Only("Subrule_Tickets_Requested", lower(join([event_src.host, subject.account.name, src.host, datafield6], "|")))
+     }
+
+rule Subrule_Tickets_Requested: Ticket_Requested[1,] with different object.account.id timer 30s
+
+    init {
+        $logon_services = []
+        $object_ids = []
+    }
+    
+    on Ticket_Requested {
+    
+        if $count_total_requests == null then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            
+            $src.ip = src.ip
+            $src.port = src.port
+            $src.host = src.host
+            
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            
+            $datafield2 = datafield2 # TicketEncryptionType
+            $datafield6 = datafield6 # TicketEncryptionType в человекопонятном виде
+        endif
+    
+        if not in_list($logon_services, lower(logon_service)) then
+            $logon_services = append($logon_services, lower(logon_service))
+        endif
+        
+        if not in_list($object_ids, lower(object.account.id)) then
+            $object_ids = append($object_ids, lower(object.account.id))
+        endif
+        
+        $count_total_requests = $count_total_requests + 1
+    }
+    
+emit {
+
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $action = "access"
+    $object = "system"
+    $status = "success"
+    
+    if length($logon_services) == 1 then
+        $importance = "low"
+    else 
+        $importance = "medium"
+    endif
+    
+    $datafield1 = string(length($logon_services)) # Количество потенциально интересных запрошенных билетов
+    $datafield3 = join($logon_services, "|") # Имена сервисов, к которым были получены тикеты
+    $datafield4 = join($object_ids, "|") # SIDы сервисов
+    
+    $alert.key = lower(join([$event_src.host, $subject.account.name, $src.host, $datafield6], "|"))
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Steal or Forge Kerberos Tickets"
+}

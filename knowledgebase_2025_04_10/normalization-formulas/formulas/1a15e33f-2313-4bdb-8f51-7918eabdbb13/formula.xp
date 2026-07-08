@@ -1,0 +1,56 @@
+# <134>2023-12-04T12:44:10.815Z HOME-PC 1C-SIEM-converter: CEF:0|1С_Positive|BackgroundJob||_$Job$_.Start|66789|0| cs1={"Event":{"DataPresentation":"","Level":"Информация","Date":"2023-12-04T14:49:02","ApplicationName":"BackgroundJob","ApplicationPresentation":"Фоновое задание.Запуск","Event":"_$Job$_.Start","EventPresentation":null,"User":"071523a4-516f-4fce-ba4b-0d11ab7a1893","UserName":"","Computer":"load01","Metadata":"","Comment":"","TransactionStatus":"N","TransactionID":"01.01.1970 0:00:00 (0)","Connection":11279,"Session":66789,"ServerName":"load-01","Port":1567,"SyncPort":0}} cs1Label=JsonData
+
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} 
+        1C-SIEM-converter: CEF:0|{UNTIL("|")}{subject.application.name=WORD}||_$Job$_.Error|{NUMBER}|{NUMBER}| cs1={$json=UNTIL(" cs1Label=JsonData")}'
+
+subject = "account"
+action = "start"
+object = "task"
+status = "failure"
+        
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject.application.account.session_id = $Event['Session']
+subject.application.account.id = lower($Event['User'])
+
+if $Event['UserName'] != "" then
+    subject.application.account.name = lower($Event['UserName'])
+endif
+
+if $Event['Data']['Job'] != "" then
+    object.name = $Event['Data']['Job']
+endif
+
+if $Event['Computer'] != "" then
+    src.hostname = lower($Event['Computer'])
+endif
+
+if $Event['ServerName'] == null or $Event['ServerName'] == "" or lower($Event['ServerName']) == lower($Event['Computer']) then
+    logon_auth_method = "local"
+    
+    dst.hostname = lower($Event['Computer'])  # to have at least any info
+else
+    logon_auth_method = "remote"
+    
+    dst.hostname = lower($Event['ServerName'])
+endif
+
+datafield3 = $Event['ApplicationPresentation']  # event info
+if $Event['Comment'] != "" then
+    datafield6 = $Event['Comment']              # error info
+endif
+
+time = $Event['Date']
+msgid = $Event['Event']
+importance = "low"
+
+event_src.id = $Event['v8ibase']
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_syslog_registration_log_Error"

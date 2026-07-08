@@ -1,0 +1,125 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = in_list([
+           "DvsCreatedEvent",
+           "DvsRenamedEvent",
+           "DvsUpgradedEvent",
+           "DvsMergedEvent",
+           "DvsReconfiguredEvent",
+           "DvsDestroyedEvent"
+       ], $event_class)
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+action = switch $event_class
+    case "DvsCreatedEvent" "create"
+    case "DvsRenamedEvent" "rename"
+    case "DvsUpgradedEvent" "update"
+    case "DvsMergedEvent" "modify"
+    case "DvsReconfiguredEvent" "configure"
+    case "DvsDestroyedEvent" "remove"
+endswitch
+
+object = "resource"
+status = "success"
+
+subformula "create_dvs"
+    TEXT = '[A vSphere Distributed Switch {$dvs_name=STRING+} was created in {$datacenter_name=REST}'
+endsubformula
+
+subformula "rename_dvs"
+    TEXT = '[The vSphere Distributed Switch {$old_name=STRING+} in {$datacenter_name=STRING+} was renamed to {$new_name=REST}'
+
+    object.property = "name"
+    object.value = $old_name
+    object.new_value = strip($new_name, "", ".]")
+endsubformula
+
+subformula "upgrade_dvs"
+    TEXT = '[vSphere Distributed Switch {$dvs_name=STRING+} in datacenter {$datacenter_name=STRING+} was upgraded.]'
+endsubformula
+
+subformula "merge_dvs"
+    TEXT = '[vSphere Distributed Switch {$src_dvs_name=STRING+} was merged into {$dst_dvs_name=STRING+} in {$datacenter_name=REST}'
+    
+    object.property = "dst_dvs_name"
+    object.value = $dst_dvs_name
+endsubformula
+
+subformula "reconfigure_dvs"
+    TEXT = '[The vSphere Distributed Switch {$dvs_name=STRING+} in {$datacenter_name=STRING+} was reconfigured. {$rest=REST}'
+    
+    object.property = "configuration"
+    $rest = replace($rest, " ", "\\\\n")
+    $rest = replace($rest, " ", "   ")
+    $rest = replace($rest, "'", "\"")
+    object.new_value = strip($rest, " ", "]")
+endsubformula
+
+subformula "destroy_dvs"
+    TEXT = '[vSphere Distributed Switch {$dvs_name=STRING+} in {$datacenter_name=STRING+} was deleted.]'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+switch $event_class
+    case "DvsCreatedEvent"
+        submessage("TEXT", "create_dvs", $raw_message)
+    case "DvsRenamedEvent"
+        submessage("TEXT", "rename_dvs", $raw_message)
+    case "DvsUpgradedEvent"
+        submessage("TEXT", "upgrade_dvs", $raw_message)
+    case "DvsMergedEvent"
+        submessage("TEXT", "merge_dvs", $raw_message)
+    case "DvsReconfiguredEvent"
+        submessage("TEXT", "reconfigure_dvs", $raw_message)
+    case "DvsDestroyedEvent"
+        submessage("TEXT", "destroy_dvs", $raw_message)
+endswitch
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = "vswitch"
+object.name = coalesce($old_name, $dvs_name, $src_dvs_name)
+
+datafield1 = coalesce(strip($datacenter_name, "", ".]"), $def_dc_name)  # Datacenter Name
+datafield8 = coalesce($old_name, $dvs_name, $src_dvs_name)  # vDS Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_DvSwitch_Management"

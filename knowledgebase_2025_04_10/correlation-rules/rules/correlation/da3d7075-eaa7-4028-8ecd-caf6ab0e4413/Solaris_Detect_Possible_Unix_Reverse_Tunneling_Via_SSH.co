@@ -1,0 +1,71 @@
+event Syscall_Execve_Run_Ssh:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "solaris"
+        and event_src.category == "Operating system"
+        and action == "execute"
+        and object == "command"
+        and match(object.process.fullpath, "*bin/ssh")
+        and regex(object.process.cmdline, "\s+-[^-\s]*R\s+", 0) != null
+        and filter::CheckWL_Linux_Process_Creation("Solaris_Detect_Possible_Unix_Reverse_Tunneling_Via_SSH", lower(join([subject.account.name, object.process.fullpath, object.process.cmdline], "|")))
+    }
+
+rule Solaris_Detect_Possible_Unix_Reverse_Tunneling_Via_SSH: Syscall_Execve_Run_Ssh
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Syscall_Execve_Run_Ssh {
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.group = subject.account.group
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.session_id = subject.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $logon_service = logon_service
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.process.fullpath, object.process.cmdline], "|"))
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Protocol Tunneling"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

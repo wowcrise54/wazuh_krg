@@ -1,0 +1,252 @@
+event ProcessStart_With_Cmdline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            (
+                filter::ProcessStart_Windows_commandline("net1.exe", "((group\s+(.+\s)?\/do(m)?(ain)?)|(\/do(m)?(ain)?\s+(.+\s)?group))|localgroup")
+                and regex(lower(object.process.cmdline), "\/(add|delete)\\b", 0) == null
+            )
+            or filter::ProcessStart_Windows_commandline("wmic.exe", "win32_group")
+            or in_list(["ntrights.exe", "cacls.exe", "icacls.exe"], lower(object.process.name))
+            or (
+                in_list(["csvde.exe", "ldifde.exe", "dsquery.exe", "dsget.exe"], lower(object.process.name))
+                and find_substr(lower(object.process.cmdline), "group") != null
+            )
+        )
+        and filter::CheckWL_Process_Creation("Permission_Groups_Discovery", lower(join([object.process.name, object.process.cmdline], "|")))
+    }
+
+event PowerShell_Pipeline:
+    key:
+        event_src.host, subject.account.id, object.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4103"
+        and action == "execute"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "\\b((ntrights|icacls|cacls)\s|get-adaccountauthorizationgroup|get-adgroup|get-adgroupmember|get-adprincipalgroupmembership|get-localgroup|get-localgroupmember|get-acl|(get-wmiobject|gwmi|wmic).{0,100}\\bwin32_group|get-ad.{0,150}objectcategory=group|psbase.*?\\bschemaclassname\\b.*?-eq\s+[\'\"]group\\b[\'\"])\\b", 0) != null
+        and filter::CheckWL_Powershell("Permission_Groups_Discovery", lower(object.process.cmdline))
+    }
+
+event PowerShell_Command:
+    key:
+        event_src.host, subject.account.id, object.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4104"
+        and action == "execute"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "\\b((ntrights|icacls|cacls)\s|net1?(\.exe|\s).{0,50}\\b(((group\s+(.+\s)?\/do(m)?(ain)?)|(\/do(m)?(ain)?\s+(.+\s)?group))|localgroup)|get-adaccountauthorizationgroup|get-adgroup|get-adgroupmember|get-adprincipalgroupmembership|get-localgroup|get-localgroupmember|get-acl|(get-wmiobject|gwmi|wmic).{0,100}\\bwin32_group|get-ad.{0,150}objectcategory=group|psbase.*?\\bschemaclassname\\b.*?-eq\s+[\'\"]group\\b[\'\"])\\b", 0) != null
+        and filter::CheckWL_Powershell("Permission_Groups_Discovery", lower(object.process.cmdline))
+    }
+
+rule Permission_Groups_Discovery: ProcessStart_With_Cmdline or ((PowerShell_Pipeline+ or PowerShell_Command+) timer 5s)
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on ProcessStart_With_Cmdline {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.fullpath = object.process.parent.fullpath
+        $object.value = object.process.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([object.process.name, object.process.cmdline], "|"))
+        if in_list(["ntrights.exe", "cacls.exe", "icacls.exe"], lower(object.process.name)) then
+            $alert.context = object.process.parent.name + " | " + object.process.fullpath
+        else
+            $alert.regex_match = regex(lower(object.process.cmdline), "\\b(net.{0,50}(((group\s+(.+\s)?\/do(m)?(ain)?)|(\/do(m)?(ain)?\s+(.+\s)?group))|localgroup)|wmic.{0,50}win32_group|\\b(csvde|ldifde|dsquery|dsget)\\b.{0,50}group)\\b", 0)
+            $alert.context = object.process.parent.name + " | " + object.process.name
+        endif
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on PowerShell_Pipeline {
+        if $first_event then
+            $action = action  # execute
+            $object = object  # command
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.process.cmdline = object.process.cmdline
+            $object.process.name = object.process.name
+
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $datafield8 = datafield8  # версия модуля
+
+            $chain_id = chain_id
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.context = object.account.name + " | " + object.fullpath
+            $labels = $labels + "|CheckWL_Powershell"
+
+            $first_event = false
+        endif
+
+        $regex_found = regex(lower(object.process.cmdline), "\\b((ntrights|icacls|cacls)\s|get-adaccountauthorizationgroup|get-adgroup|get-adgroupmember|get-adprincipalgroupmembership|get-localgroup|get-localgroupmember|get-acl|(get-wmiobject|gwmi|wmic).{0,100}\\bwin32_group|get-ad.{0,150}objectcategory=group|psbase.*?\\bschemaclassname\\b.*?-eq\s+[\'\"]group\\b[\'\"])\\b", 0)
+        if find_substr($alert.regex_match, $regex_found) == null then
+            if $alert.regex_match == null then
+                $alert.regex_match = $regex_found
+            else
+                $alert.regex_match = join([$alert.regex_match, $regex_found], " | ")
+            endif
+        endif
+    }
+
+    on PowerShell_Command {
+        if $first_event then
+            $action = action  # execute
+            $object = object  # command
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.process.id = object.process.id
+            $object.process.cmdline = object.process.cmdline
+
+            $object.id = object.id
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.context = object.account.name + " | " + object.fullpath
+            $labels = $labels + "|CheckWL_Powershell"
+
+            $first_event = false
+        endif
+
+        $regex_found = regex(lower(object.process.cmdline), "\\b((ntrights|icacls|cacls)\s|net1?(\.exe|\s).{0,50}\\b(((group\s+(.+\s)?\/do(m)?(ain)?)|(\/do(m)?(ain)?\s+(.+\s)?group))|localgroup)|get-adaccountauthorizationgroup|get-adgroup|get-adgroupmember|get-adprincipalgroupmembership|get-localgroup|get-localgroupmember|get-acl|(get-wmiobject|gwmi|wmic).{0,100}\\bwin32_group|get-ad.{0,150}objectcategory=group|psbase.*?\\bschemaclassname\\b.*?-eq\s+[\'\"]group\\b[\'\"])\\b", 0)
+        if find_substr($alert.regex_match, $regex_found) == null then
+            if $alert.regex_match == null then
+                $alert.regex_match = $regex_found
+            else
+                $alert.regex_match = join([$alert.regex_match, $regex_found], " | ")
+            endif
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Permission Groups Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

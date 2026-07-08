@@ -1,0 +1,21 @@
+TEXT = '- 
+        {STRING} {time=DATETIME}: {NUMBER}: [{NUMBER}] Session {event_src.id=NUMBER}
+        {UNTIL("Accepting SMTP connection from")} {src.ip=IPV4}:{src.port=NUMBER} to {dst.ip=IPV4}:{dst.port=NUMBER}
+        {UNTIL("EHLO")} {event_src.fqdn=STRING}
+        {UNTIL("MAIL FROM:")}<{subject.account.contact=UNTIL(">")}
+        {UNTIL("Connection closed")}
+        {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] SMTP session {object.state="terminated"} (Bytes in/out: {count.bytes_in=NUMBER}/{count.bytes_out=NUMBER})
+        {STRING} {DATETIME}: {NUMBER}:'
+
+subject = "account"
+action = "open"
+object = "session"
+status = "failure"
+
+importance = "info"
+
+event_src.vendor = "mdaemon_technologies"
+event_src.title = "mdaemon_email_server"
+event_src.category = "Mail server"
+
+id = "PT_MDaemon_Technologies_MDaemon_Email_Server_filemonitor_smtp_session_failure"

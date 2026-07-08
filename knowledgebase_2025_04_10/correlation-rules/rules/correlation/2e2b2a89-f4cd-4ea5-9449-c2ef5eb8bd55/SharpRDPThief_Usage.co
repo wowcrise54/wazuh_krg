@@ -1,0 +1,103 @@
+event SubRule_MSTSC:
+    key:
+        event_src.host, subject.process.id, object.process.path
+    filter {
+        lower(correlation_name) == "subrule_mstsc_sharprdpthief_usage"
+    }
+
+event SubRule_Thread:
+    key:
+        event_src.host, object.process.id, datafield2
+    filter {
+        lower(correlation_name) == "subrule_thread_sharprdpthief_usage"
+        and filter::CheckWL_Specific_Only("SharpRDPThief_Usage", lower(join([subject.process.fullpath, object.process.fullpath, datafield1], "|")))
+    }
+
+rule SharpRDPThief_Usage: (SubRule_MSTSC and SubRule_Thread) within 10m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on SubRule_MSTSC {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.original_name = object.process.original_name
+        $subject.process.meta = object.process.meta
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.imphash = object.process.hash.imphash
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+
+        $subject.process.meta = object.process.meta
+
+        # Вторая подгружаемая библиотека
+        $datafield1 = datafield1   
+        $datafield2 = datafield2 
+        $datafield3 = datafield3
+        $datafield4 = datafield4 
+        $datafield5 = datafield5
+        
+        $datafield8 = datafield6         # LogonGuid
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.context = subject.account.name + "|" + subject.process.name + "|" + object.process.name + "|" + datafield1
+    }
+    
+    on SubRule_Thread {
+        $subject.process.parent.id = subject.process.id
+        $subject.process.parent.name = subject.process.name
+        $subject.process.parent.path = subject.process.path
+        $subject.process.parent.fullpath = subject.process.fullpath
+        $subject.process.parent.guid = subject.process.guid
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.chain = object.process.chain
+        
+        $datafield6 = datafield6    # Начальный адрес потока
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $alert.key = lower(join([subject.process.fullpath, object.process.fullpath, datafield1], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "start"
+    $object = "thread"
+    $status = "success"
+
+    $importance = "high"
+
+    $labels = $labels + "|lsass_cache_to_correlation"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Process Injection: Dynamic-link Library Injection"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, lower($subject.process.name)], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"}{NUMBER?}{$time=DATETIME?}{"#"|"%"|}
+        {$Computer=HOSTNAME?}{$tmp_subsys="SYSLOG"}-{WORD"-"?}SYSLOGCHANGE{":"|"-"}
+        syslog server {object.value=IPV4|object.value=IPV6} configuration changed'
+
+action = "modify"
+object = "configuration"
+status = "success"
+
+object.property = "syslog server ip"
+
+if $time != null then
+    time = $time
+else    
+    time = recv_time
+endif   
+importance = "info"
+
+event_src.vendor = "eltex"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "ros"
+event_src.category = "Network device"
+
+id = "PT_Eltex_MES2348P_syslog_syslog_config_change"

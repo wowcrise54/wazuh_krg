@@ -1,0 +1,27 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {NUMBER+},{DATETIME},
+        {event_src.id=WORD?},ALARM,{$csv=CSV}"
+
+subject = "system"
+action = "detect"
+object = "alert"
+status = "success"
+
+subject.name = $csv[20]
+
+reason = $csv[12]
+
+time = $csv[2]
+importance = "info"
+
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+event_src.category = "Network security"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_Events_Alarms"

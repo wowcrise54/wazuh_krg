@@ -1,0 +1,11 @@
+event Testing_Interface_Complete:
+    key:
+        event_src.host, object, object.property, object.value, importance, event_src.category,
+        event_src.vendor, event_src.title
+
+    id = "PT_Cisco_ASA_FWSM_PIX_syslog_105008_and_105009_Interface_checked"
+
+    action = "execute"
+    status = "success"
+
+aggregate Cisco_FW_Testing_Interface_Complete: Testing_Interface_Complete[3,30] within 5m

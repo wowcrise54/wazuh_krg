@@ -1,0 +1,32 @@
+TEXT = '{datafield1=UNTIL("-")}{NUMBER},EXCP,{NUMBER},{$kv=KEYVALUE(",","=","\'")}'
+
+COND = in_list(["rphost", "rmngr", "ragent"], $kv["process"])
+        and $kv["MName"] == null
+        and $kv["t:applicationName"] == "1CV8C"
+
+subject = "application"
+action = "info"
+object = "alert"
+status = "success"
+
+subject.application.account.name = lower($kv["Usr"])
+subject.application.account.id = subject.application.account.name
+subject.process.name = $kv["t:applicationName"]
+
+object.name = $kv["p:processName"]
+
+src.hostname = $kv["t:computerName"]
+
+# datafield1 - время регистрации события
+
+time = recv_time
+
+reason = $kv["Descr"]
+
+importance = "high"
+
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_filemonitor_tech_log_error_occured_client_thin"

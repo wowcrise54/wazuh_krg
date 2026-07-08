@@ -1,0 +1,46 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and in_list(["Add Role", "Edit Role", "Delete Role"], $msgid) == true
+
+subformula "get_data"
+    TEXT = '{UNTIL("Role : ")}{object.name=UNTIL("\\";")}
+            {REST}'
+endsubformula
+
+subject = "account"
+
+if $msgid == "Add Role" then
+    action = "create"
+elif $msgid == "Edit Role" then
+    action = "modify"
+else
+    action = "remove"
+endif
+
+object = "resource"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+submessage("TEXT", "get_data", $data)
+
+object.type = "role"
+
+datafield1 = $display_user_name  # отображаемое имя пользователя
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "medium"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_client_role_manipulation"

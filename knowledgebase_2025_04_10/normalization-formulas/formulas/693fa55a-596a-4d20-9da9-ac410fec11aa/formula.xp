@@ -1,0 +1,66 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1271"
+       and $event_category == "Mandatory access control"
+       and $event_type == "Audit failure"
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "modify"
+object = "file_object"
+status = "failure"
+
+subject.account.name = $user_name
+subject.account.domain = $user_domain
+
+subformula "message"
+    TEXT = 'Prohibit modification of the resources confidentiality parameters. {$process=UNTIL("Current parameters:")}
+            {$old=UNTIL("Acquire parameters:")} {$new=UNTIL("Reason: ")} {reason=REST}'
+
+    $process = keyvalue($process, "\n", ": ", "")
+    $old = keyvalue($old, "\n", ": ", "")
+    $new = keyvalue($new, "\n", ": ", "")
+    
+    subject.process.name = $process["Process name"]
+    subject.process.id = $process["Process ID"]
+    
+    object.fullpath = $process["Resource name"]    
+    $csv_path = csv($process["Resource name"], "\\", "")
+    object.name = $csv_path[length($csv_path) - 1]
+    if strip(object.fullpath, '', object.name) != '' then
+        object.path = strip(object.fullpath, '', object.name)
+    endif
+    
+    
+    object.property = "confidentiality level"
+    object.value = $old["Confidentiality level"]
+    object.new_value = $new["Confidentiality level"]
+endsubformula
+
+msgid = $event_id
+importance = "medium"
+
+category.generic = "File System Object"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Полномочное управление доступом" then
+    event_src.subsys = "mandatory access control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1271_deny_change_resource_conf_param"

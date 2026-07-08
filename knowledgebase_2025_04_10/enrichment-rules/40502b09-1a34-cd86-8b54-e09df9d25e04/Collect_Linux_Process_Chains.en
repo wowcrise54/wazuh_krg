@@ -1,0 +1,191 @@
+query Get_Linux_Process_Chain($host, $pid) from Linux_Process_Chains {
+    host == $host
+    and proc_id == $pid
+} qhandler {
+    $audit_id = column::audit_id
+    $proc_name = column::proc_name
+    $session_id = column::subject_session_id
+    $parent_proc_id = column::parent_proc_id
+    $chain_proc_names = column::chain_proc_names
+    $chain_proc_info = column::chain_proc_info
+    $first_cmdline = column::first_cmdline
+    $step = column::step
+}
+
+query Check_Linux_Exec_File($host, $file_fullpath) from Linux_File_Created {
+    host == $host
+    and filename == $file_fullpath
+} qhandler {
+    $subj_proc_names = column::subj_proc_names
+    $subj_proc_info = column::subj_proc_info
+    $subj_proc_cmdline = column::subj_proc_cmdline
+}
+
+
+event Auditd_event:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "unix_like"
+        and event_src.subsys == "auditd"
+        and in_list(["execve", "execveat"], msgid)
+        and status == "success"
+        # Запрос к списку с критичными узлами
+        and table::Critical_Linux_Hosts_For_Process_Chains {
+            column::host == event_src.host
+        }
+    }
+
+    
+enrichment Collect_Linux_Process_Chains
+    enrich Auditd_event:
+        enrich_fields {
+            $parent_proc_id = object.process.parent.id
+            $proc_name = coalesce(object.process.name, "<unknown>")
+            $proc_id = object.process.id
+            $proc_meta = object.process.meta
+            $proc_cmdline = coalesce(object.process.cmdline, object.process.meta)
+            
+            $audit_id = number(chain_id)
+            $session_id = " [" + subject.account.session_id + "]"
+            
+            # Creator chain
+            $result_if_new_file = exec_query("Check_Linux_Exec_File", [lower(event_src.host), lower(object.process.fullpath)])
+            
+            if $result_if_new_file["$subj_proc_names"] != null then
+                $creator_names = " (file creator: " + $result_if_new_file["$subj_proc_names"] + ")"
+                $creator_info = " (file (" + lower(object.process.fullpath) + ") creator: " + $result_if_new_file["$subj_proc_info"] + ")"
+                $creator_cmdline = " (file creator: " + $result_if_new_file["$subj_proc_cmdline"] + ")"
+            else
+                $creator_names = ""
+                $creator_info = ""
+                $creator_cmdline = ""
+            endif
+            
+            # Process
+            $result_process = exec_query("Get_Linux_Process_Chain", [event_src.host, number($proc_id)])
+            
+            $found_chain_names = $result_process["$chain_proc_names"]
+            $found_chain_info = $result_process["$chain_proc_info"]
+            
+            $found_name = $result_process["$proc_name"]
+            $found_ppid = string($result_process["$parent_proc_id"])
+            
+            $found_step = $result_process["$step"]
+            
+            # Parent process
+            $result_parent_process = exec_query("Get_Linux_Process_Chain", [event_src.host, number($parent_proc_id)])
+            
+            $found_parent_chain_names = $result_parent_process["$chain_proc_names"]
+            $found_parent_chain_info = $result_parent_process["$chain_proc_info"]
+            $found_parent_first_cmdline = $result_parent_process["$first_cmdline"]
+            
+            $found_parent_name = $result_parent_process["$proc_name"]
+            
+            $found_parent_session_id = $result_parent_process["$session_id"]
+            $found_parent_step = $result_parent_process["$step"]
+
+            # Received info
+            $received_session_id = number(subject.account.session_id)
+            $received_chain_names = $proc_name + $creator_names
+            $received_chain_info = strip($proc_name + " (" + $proc_id + ")" + $session_id + $creator_info + " ← (" + $parent_proc_id + ")", "", " ← ()")
+            
+            # Step
+            if ($found_step == null) and ($found_parent_step == null) then
+                $new_step = 1  
+            elif ($found_step != null) and ($found_parent_step == null) then
+                $new_step = $found_step
+            else
+                $new_step = $found_parent_step + 1
+            endif
+            
+            # В ТС есть запись для PPID
+            $tl_has_ppid_row = ($found_parent_name != null)
+            
+            # В ТС есть запись для PID
+            $tl_has_pid_row = ($found_name != null)
+            # Запись для PID содержит PPID
+            $pid_row_contains_ppid = ($found_ppid != null)
+            # PPID из записи совпадает с PPID из события
+            $event_ppid_eq_pid_row_ppid = ($parent_proc_id == $found_ppid)
+            # Имя процесса из записи совпадает с именем из события
+            $event_name_eq_pid_row_name = ($proc_name == $found_name)
+            
+            # Сессия для PPID совпадает с пришедшей сессией
+            $ppid_sess_eq_received_sess = ($found_parent_session_id == $received_session_id)
+            # Сессия для PPID является системной
+            $ppid_sess_is_system = ($found_parent_session_id == 4294967295)
+            
+            # В ТС есть запись для PID
+            # + Запись для PID содержит PPID
+            # + PPID из записи совпадает с PPID из события
+            # + Имя процесса из записи совпадает с именем из события
+            if $tl_has_pid_row and $pid_row_contains_ppid and $event_ppid_eq_pid_row_ppid and $event_name_eq_pid_row_name then
+                # Ничего не делаем
+                $new_chain_names = $found_chain_names
+                $new_chain_info = $found_chain_info
+
+                $need_insert = false
+            else
+                # В ТС есть запись для PPID
+                if $tl_has_ppid_row then
+                    # Сессия для PPID совпадает с пришедшей сессией
+                    # или
+                    # Сессия для PPID является системной
+                    # + Сессия для PPID НЕ совпадает с пришедшей сессией
+                    if ($ppid_sess_eq_received_sess) or ($ppid_sess_is_system and not $ppid_sess_eq_received_sess) then
+                        # К родительской цепочке добавляем "[PID] Name" и вставляем в ТС
+                        $new_chain_names = $received_chain_names + " ← " + $found_parent_chain_names
+                        $new_chain_info = $proc_name + " (" + $proc_id + ")" + $session_id + $creator_info + " ← " + $found_parent_chain_info
+                        $new_chain_cmdlines = $proc_cmdline + $creator_cmdline
+                                    
+                        $need_insert = true
+                    else
+                        # Вставляем received в ТС
+                        $new_chain_names = $received_chain_names 
+                        $new_chain_info = $received_chain_info
+                        $new_chain_cmdlines = $proc_cmdline + $creator_cmdline
+                        
+                        $found_parent_name = null
+                        $found_parent_first_cmdline = null
+                        $new_step = 1
+                                
+                        $need_insert = true
+                    endif
+                else
+                    # Вставляем received в ТС
+                    $new_chain_names = $received_chain_names 
+                    $new_chain_info = $received_chain_info
+                    $new_chain_cmdlines = $proc_cmdline + $creator_cmdline
+                            
+                    $need_insert = true
+                endif
+            endif
+            
+            $proc_id = number($proc_id)
+            $parent_proc_id = number($parent_proc_id)
+            
+            $session_id = number(subject.account.session_id)
+            
+            object.process.chain = $new_chain_names
+            datafield19 = $new_chain_info
+        }
+        
+        insert_into Linux_Process_Chains if $need_insert {
+            column::host = event_src.host
+            column::audit_id = $audit_id
+            column::proc_id = $proc_id
+            column::proc_name = $proc_name
+            column::subject_account = subject.account.name
+            column::subject_session_id = $session_id
+            column::object_account = object.account.name
+            column::object_session_id = $session_id
+            column::proc_meta = $proc_meta
+            column::last_event_uuid = uuid
+            column::parent_proc_id = $parent_proc_id
+            column::parent_proc_name = $found_parent_name
+            column::step = $new_step
+            column::chain_proc_names = $new_chain_names
+            column::chain_proc_info = $new_chain_info
+            column::first_cmdline = $new_chain_cmdlines
+            column::second_cmdline = $found_parent_first_cmdline
+        }

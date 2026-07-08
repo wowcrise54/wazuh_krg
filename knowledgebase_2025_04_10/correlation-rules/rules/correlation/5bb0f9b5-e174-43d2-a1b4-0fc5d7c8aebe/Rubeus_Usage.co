@@ -1,0 +1,285 @@
+event Rubeus_In_Commandline:
+    key: 
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            lower(object.process.original_name) == "rubeus.exe"
+            or lower(object.process.meta) == "description:rubeus | product:rubeus | company:"
+            or lower(object.process.name) == "rubeus.exe"
+            or (
+                regex(lower(object.process.cmdline), "\sasktgt\\b.*?\/(user|password):", 0) != null
+                or regex(lower(object.process.cmdline), "\sasktgs\s.*?\/(service|ticket):", 0) != null
+                or regex(lower(object.process.cmdline), "\sptt\s.*?\/ticket:", 0) != null
+                or regex(lower(object.process.cmdline), "\screatenetonly\s.*?\/program:", 0) != null
+                or regex(lower(object.process.cmdline), "\ss4u\s.*?\/((impersonate)?user|ticket|tgs|msdsspn):", 0) != null
+                or regex(lower(object.process.cmdline), "\sdescribe\s.*?\/ticket:", 0) != null
+                or regex(lower(object.process.cmdline), "\schangepw\s.*?\/(ticket|new):", 0) != null
+                or regex(lower(object.process.cmdline), "\stgssub\s.*?\/(ticket|altservice):", 0) != null
+                or regex(lower(object.process.cmdline), "\s(golden|silver)\s.*?\/(user|service):", 0) != null
+                or regex(lower(object.process.cmdline), "\sbrute\s.*?\/password(s)?:", 0) != null
+                or regex(lower(object.process.cmdline), "\srenew\s.*?\/ticket:", 0) != null
+                or regex(lower(object.process.cmdline), "\shash\s.*?\/password:", 0) != null
+                or regex(lower(object.process.cmdline), "\s(kerberoast|asreproast|tgtdeleg|harvest|klist|triage)(\s|$)", 0) != null
+                or regex(lower(object.process.cmdline), "\smonitor($|\s.*?\/(interval|targetuser|runfor|nowrap)\\b)", 0) != null
+                # purge
+                or regex(lower(object.process.cmdline), "^(\\\"|\.)?[:\w\s\\\]+(\.exe)?(\\\")?\s+purge(\s+\/luid:\S+)?\s*$", 0) != null
+                # dump
+                or regex(lower(object.process.cmdline), "^(\\\"|\.)?[:\w\s\\\]+(\.exe)?(\\\")?\s+dump((\s+\/(((luid|service|user):\w+)|(server:((((\d+\.){3}\d+|(\w+\.)+\w+)(:\d+)?)))|nowrap))+)?\s*$", 0) != null
+            )
+        )
+        and length(object.process.cmdline) <= 150
+        and regex(lower(object.process.fullpath), "\w:\\\\windows\\\\system32\\\\klist.exe", 0) == null
+        and filter::CheckWL_Process_Creation("Rubeus_Usage", lower(object.process.cmdline))
+    }
+ 
+event Rubeus_In_PowerShell_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and object == "command"
+        and event_src.title == "windows"
+        and (
+            regex(lower(object.process.cmdline), "\sasktgt\\b.*?\/(user|password):", 0) != null
+            or regex(lower(object.process.cmdline), "\sasktgs\s.*?\/(service|ticket):", 0) != null
+            or regex(lower(object.process.cmdline), "\sptt\s.*?\/ticket:", 0) != null
+            or regex(lower(object.process.cmdline), "\screatenetonly\s.*?\/program:", 0) != null
+            or regex(lower(object.process.cmdline), "\ss4u\s.*?\/((impersonate)?user|ticket|tgs|msdsspn):", 0) != null
+            or regex(lower(object.process.cmdline), "\sdescribe\s.*?\/ticket:", 0) != null
+            or regex(lower(object.process.cmdline), "\schangepw\s.*?\/(ticket|new):", 0) != null
+            or regex(lower(object.process.cmdline), "\stgssub\s.*?\/(ticket|altservice):", 0) != null
+            or regex(lower(object.process.cmdline), "\s(golden|silver)\s.*?\/(user|service):", 0) != null
+            or regex(lower(object.process.cmdline), "\sbrute\s.*?\/password(s)?:", 0) != null
+            or regex(lower(object.process.cmdline), "\srenew\s.*?\/ticket:", 0) != null
+            or regex(lower(object.process.cmdline), "\shash\s.*?\/password:", 0) != null
+            or regex(lower(object.process.cmdline), "\s(kerberoast|asreproast|tgtdeleg|harvest|klist|triage)(\s|([\'\"]+)?$)", 0) != null
+            or regex(lower(object.process.cmdline), "\smonitor($|\s.*?\/(interval|targetuser|runfor|nowrap)\\b)", 0) != null
+            or regex(lower(object.process.cmdline), "::writeallbytes.*?\\bticket\.kirbi\\b.*?frombase64", 0) != null
+            # purge
+            or regex(lower(object.process.cmdline), "^(\\\"|\.)?[:\w\s\\\]+(\.exe)?(\\\")?\s+purge(\s+\/luid:\S+)?\s*$", 0) != null
+            # dump
+            or regex(lower(object.process.cmdline), "^(\\\"|\.)?[:\w\s\\\]+(\.exe)?(\\\")?\s+dump((\s+\/(((luid|service|user):\w+)|(server:((((\d+\.){3}\d+|(\w+\.)+\w+)(:\d+)?)))|nowrap))+)?\s*$", 0) != null
+        )
+        and length(object.process.cmdline) <= 150
+        and filter::CheckWL_Powershell("Rubeus_Usage", lower(object.process.cmdline))
+    }
+
+event Rubeus_In_PowerShell_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and object == "command"
+        and event_src.title == "windows"
+        and (
+            regex(lower(object.process.cmdline), "\sasktgt\\b.*?\/(user|password):", 0) != null
+            or regex(lower(object.process.cmdline), "\sasktgs\s.*?\/(service|ticket):", 0) != null
+            or regex(lower(object.process.cmdline), "\sptt\s.*?\/ticket:", 0) != null
+            or regex(lower(object.process.cmdline), "\screatenetonly\s.*?\/program:", 0) != null
+            or regex(lower(object.process.cmdline), "\ss4u\s.*?\/((impersonate)?user|ticket|tgs|msdsspn):", 0) != null
+            or regex(lower(object.process.cmdline), "\sdescribe\s.*?\/ticket:", 0) != null
+            or regex(lower(object.process.cmdline), "\schangepw\s.*?\/(ticket|new):", 0) != null
+            or regex(lower(object.process.cmdline), "\stgssub\s.*?\/(ticket|altservice):", 0) != null
+            or regex(lower(object.process.cmdline), "\s(golden|silver)\s.*?\/(user|service):", 0) != null
+            or regex(lower(object.process.cmdline), "\sbrute\s.*?\/password(s)?:", 0) != null
+            or regex(lower(object.process.cmdline), "\srenew\s.*?\/ticket:", 0) != null
+            or regex(lower(object.process.cmdline), "\shash\s.*?\/password:", 0) != null
+            or regex(lower(object.process.cmdline), "\s(kerberoast|asreproast|tgtdeleg|harvest|klist|triage)(\s|([\'\"]+)?$)", 0) != null
+            or regex(lower(object.process.cmdline), "\smonitor($|\s.*?\/(interval|targetuser|runfor|nowrap)\\b)", 0) != null
+            or regex(lower(object.process.cmdline), "::writeallbytes.*?\\bticket\.kirbi\\b.*?frombase64", 0) != null
+            # purge
+            or regex(lower(object.process.cmdline), "^(\\\"|\.)?[:\w\s\\\]+(\.exe)?(\\\")?\s+purge(\s+\/luid:\S+)?\s*$", 0) != null
+            # dump
+            or regex(lower(object.process.cmdline), "^(\\\"|\.)?[:\w\s\\\]+(\.exe)?(\\\")?\s+dump((\s+\/(((luid|service|user):\w+)|(server:((((\d+\.){3}\d+|(\w+\.)+\w+)(:\d+)?)))|nowrap))+)?\s*$", 0) != null
+        )
+        and length(object.process.cmdline) <= 150
+        and filter::CheckWL_Powershell("Rubeus_Usage", lower(object.process.cmdline))
+    }
+
+rule Rubeus_Usage: Rubeus_In_Commandline or Rubeus_In_PowerShell_Pipeline or Rubeus_In_PowerShell_Command
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Rubeus_In_Commandline {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.process.parent.fullpath
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Rubeus_In_PowerShell_Pipeline {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+
+        $object.process.name = object.process.name
+        $object.process.cmdline = object.process.cmdline
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $datafield8 = datafield8  # версия модуля
+
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.fullpath
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Rubeus_In_PowerShell_Command {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.id = object.process.id
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $incident_fullpath = object.fullpath
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+emit {
+    $alert.key = lower($object.process.cmdline)
+    $alert.regex_match = regex(lower($object.process.cmdline), "\sasktgt\s.*?\/(user|password):|\sasktgs\s.*?\/(service|ticket):|\sptt\s.*?\/ticket|\screatenetonly\s.*?\/program:|\ss4u\s.*?\/((impersonate)?user|ticket|tgs|msdsspn):|\sdescribe\s.*?\/ticket:|\shash\s.*?\/password:|\sbrute\s.*?\/password(s)?:|\schangepw\s.*?\/(ticket|new):|\stgssub\s.*?\/(ticket|altservice):|\s(golden|silver)\s.*?\/(user|service):|\srenew\s.*?\/ticket:|::writeallbytes.*?\\bticket\.kirbi\\b.*?frombase64|\s(kerberoast|asreproast|tgtdeleg|harvest|dump|klist|triage|purge)(\s|([\'\"]+)?$)|\smonitor($|\s.*?\/(interval|targetuser|runfor|nowrap)\\b)", 0)
+    if $object.process.name != null then
+        $alert.context = join([$object.process.name, $subject.account.name], " | ")
+    else
+        $alert.context = $subject.account.name
+    endif
+
+    if regex(lower($alert.regex_match), "\\b(silver|golden|brute|hash|asktgt|asktgs|ptt|createnetonly|s4u|hash|kerberoast)\\b", 0) != null then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $incident_fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

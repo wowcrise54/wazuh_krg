@@ -1,0 +1,36 @@
+EVENTLOG = 'EventID.text="2212"'
+COND =  $Channel == "DFS Replication"
+        and ( $Provider["Name"] == "DFS Replication" or  $Provider["Name"] == "DFSR" )
+
+object = "service"
+action = "terminate"
+status = "success"
+
+object.name = "DFS Replication"
+object.property = "disk"
+object.value = $Data[1]
+
+reason = "Unexpected shutdown on disk"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "medium"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_2212_detected_an_unexpected_shutdown"

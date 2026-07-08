@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        %%01SECLOG/{NUMBER}/{msgid="PACKET_DENY"}({LITERAL}):{$kv=KEYVALUE(",","=","")}'
+
+subject = "rule"        
+action = "deny"
+object = "packet"
+status = "success"
+
+subject.name = $kv["PolicyName"]
+
+src.ip = $kv["SourceIP"]
+src.port = $kv["SourcePort"]
+
+dst.ip = $kv["DestinationIP"]
+dst.port = $kv["DestinationPort"]
+
+protocol = lower($kv["Protocol"])
+
+count.packets_out = $kv["SendPkts"]
+count.bytes_out = $kv["SendBytes"]
+count.packets_in = $kv["RcvPkts"]
+count.bytes_in = $kv["RcvBytes"]
+
+duration = number($kv["EndTime"]) - number($kv["BeginTime"])
+
+datafield1 = $kv["SourceZone"]       # Sourze Zone
+datafield3 = $kv["DestinationZone"]  # Destination Zone
+
+reason = strip($kv["CloseReason"], "", ".")
+
+importance = "info"
+
+category.high = "Network Interaction Management"
+category.generic = "Packet"
+category.low = "Control"
+
+event_src.vendor = "huawei"
+event_src.title = "usg"
+event_src.category = "Firewall"
+event_src.rule = $kv["PolicyName"]
+
+id = "PT_Huawei_USG_syslog_Packet_Deny"        

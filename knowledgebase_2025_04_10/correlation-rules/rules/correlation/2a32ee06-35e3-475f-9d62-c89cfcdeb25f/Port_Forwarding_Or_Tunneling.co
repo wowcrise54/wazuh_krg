@@ -1,0 +1,130 @@
+event Set_Registry_Value_Portproxy:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                in_list(["12", "13"], msgid)
+                and event_src.title == "sysmon"
+            ) or (
+                msgid == "4657"
+                and event_src.title == "windows"
+            )
+        )
+        and (
+            match(lower(object.path), "*\\portproxy\\v4tov4\\tcp*")
+            or match(lower(object.path), "*\\portproxy\\v6tov6\\tcp*")
+        )
+        and action != "remove"
+        and filter::CheckWL_Registry_Actions("Port_Forwarding_Or_Tunneling", lower(join([subject.process.name, object.fullpath, object.new_value], "|")))
+    }
+
+rule Port_Forwarding_Or_Tunneling: Set_Registry_Value_Portproxy
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+    }
+
+    on Set_Registry_Value_Portproxy {
+        $action = action
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+        
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.path = object.path
+        $object.name = object.name
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.new_value = object.new_value
+        
+        if $object.new_value != null then
+            $dst.host = regex(lower($object.new_value), "(.*?)(/\d+)?$", 1)
+            if find_substr($object.new_value, "/") != null then
+                $dst.port = strip($object.new_value, $dst.host + "/", "")
+            endif
+            if in_subnet($src.host, "127.0.0.0/8") then
+                $dst.host = null
+            endif
+            $dst.ip = maybe_ipv4($dst.host)
+            if $dst.ip == null then
+                if find_substr($dst.host, '.') != null then
+                    $dst.fqdn = $dst.host
+                    $dst.hostname = substr($dst.host, 0, find_substr($dst.host, '.'))
+                else
+                    $dst.hostname = $dst.host
+                endif
+            endif
+        endif
+        if $object.name != null then
+            $src.host = regex(lower($object.name), "(.*?)(/\d+)?$", 1)
+            if find_substr($object.name, "/") != null then
+                $src.port = strip($object.name, $src.host + "/", "")
+            endif
+            if in_subnet($src.host, "127.0.0.0/8") then
+                $src.host = null
+            endif
+            $src.ip = maybe_ipv4($src.host)
+            if $src.ip == null then
+                if find_substr($src.host, '.') != null then
+                    $src.fqdn = $src.host
+                    $src.hostname = substr($src.host, 0, find_substr($src.host, '.'))
+                else
+                    $src.hostname = $src.host
+                endif
+            endif
+        endif
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([subject.process.name, object.fullpath, object.new_value], "|"))
+        $alert.regex_match = regex(lower($object.path), "\\\\portproxy\\\\v[46]tov[46]\\\\tcp", 0)
+        $alert.context = subject.process.fullpath + " | " + $alert.regex_match + " | " + object.new_value
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $object = "reg_object"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Proxy: Internal Proxy"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

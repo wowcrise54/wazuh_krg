@@ -1,0 +1,12 @@
+filter PhysicalACS_Enter() {
+    in_list([
+        "PT_Insyres_VisitorControl_odbc_pass",
+        "PT_Parsec_ParsecNET_3_odbc_user_login_logout",
+        "PT_Positive_Technologies_Access_control_odbc_Access_granted",
+        "PT_Positive_Technologies_Access_control_odbc_Access_granted_by_button",
+        "PT_RusGuard_RusGuard_Soft_odbc_Entrance_Exit",
+        "PT_Shs_group_Shs_office_syslog_User_login_logout"
+    ], id)
+    and object.state == "enter"
+    and status == "success"
+}

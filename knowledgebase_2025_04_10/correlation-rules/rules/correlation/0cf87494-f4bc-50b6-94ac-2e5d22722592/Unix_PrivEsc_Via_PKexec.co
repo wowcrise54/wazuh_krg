@@ -1,0 +1,148 @@
+event Start_Process:
+    key:
+        event_src.host, object.process.name, object.process.meta, subject.account.name, object.account.name, object.process.parent.id
+    filter { 
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and object.process.name == "pkexec"
+        and (
+            object.account.id == "0"
+            or object.account.name == "root"
+        )
+        and object.account.name != subject.account.name
+        and filter::CheckWL_Linux_Process_Creation("Unix_PrivEsc_Via_PKexec", lower(join([subject.account.name ,object.process.cmdline], "|")))
+}
+
+event Read_Files:
+    key:
+        event_src.host, subject.process.name, subject.process.meta, subject.account.name, object.account.name, subject.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and in_list(["open", "openat", "openat2"], msgid)
+        and action == "access"
+        and status == "success"
+        and subject.process.name == "pkexec"
+        and regex(object.name, "\.so|gconv", 0) != null
+        and regex(object.path, "(/usr)?/libx?(32|64)?", 0) == null
+    }
+    
+event Setuid:
+    key:
+        event_src.host, subject.process.name, subject.process.meta, subject.account.name, object.account.name, subject.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and in_list(
+            [
+                "setuid", "setgid", 
+                "setreuid", "setregid", 
+                "setresuid", "setresgid"
+            ], 
+            msgid
+        )
+        and status == "success"
+        and subject.process.name == "pkexec"     
+    }
+
+rule Unix_PrivEsc_Via_PKexec: (Start_Process 
+                                        and Read_Files[0,2] with different object.name 
+                                        and Setuid[0,2] with different msgid) timer 10s
+
+    init {
+        $labels = "CheckWL_Linux_Process_Creation"
+    }
+
+    on Start_Process {
+        $subject.type = subject.type
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.group = object.account.group
+        $object.account.domain = object.account.domain
+
+        $object.process.id = object.process.id
+        $object.process.cwd = object.process.cwd
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.parent.id = object.process.parent.id
+
+        $reason = reason
+        $detect = "CVE-2021-4034"
+
+        $logon_service = logon_service
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([subject.account.name ,object.process.cmdline], "|"))
+        
+        $alert.context = if $alert.context == null then subject.account.name else $alert.context + "|" + subject.account.name endif
+        
+        if regex(lower(object.process.cmdline), "pwnkit|lol", 0) != null and not match(lower($alert.context), "*used known*") then         
+            $alert.context = $alert.context + "|" + "Used known CVE POC"
+        endif
+    }
+ 
+    on Read_Files {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.state = object.state
+        $object.id = object.id
+
+        if regex(lower(object.name), "gconv-modules|payload|pwnkit", 0) != null and not match(lower($alert.context), "*used known*") then
+            $alert.context = if $alert.context == null then "Used known CVE POC" else $alert.context + "|" + "Used known CVE POC" endif
+        elif regex(lower(object.name), "\.so", 0) != null and not match(lower($alert.context), "*used known*") and not match(lower($alert.context), "*used unknown*") then
+            $alert.context = if $alert.context == null then "Used unknown CVE POC" else $alert.context + "|" + "Used unknown CVE POC" endif
+        endif
+    }
+
+emit {
+    if match(lower($alert.context), "*used known cve poc*") then
+        $correlation_type = "incident"
+        $importance = "high"
+    elif match(lower($alert.context), "*used unknown cve poc*") then
+        $correlation_type = "event"
+        $importance = "high"
+    else
+        $correlation_type = "event"
+        $importance = "medium"
+    endif
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Abuse Elevation Control Mechanism: Setuid and Setgid"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

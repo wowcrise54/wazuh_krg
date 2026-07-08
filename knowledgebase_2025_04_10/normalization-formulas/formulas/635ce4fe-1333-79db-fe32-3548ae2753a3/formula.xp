@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+{msgid="Добавление пользователя"} {LITERAL} {object.account.domain=WORD} \ {object.account.name=WORD} ", пользователь \'
+{subject.account.domain=WORD} \ {subject.account.name=WORD} {REST}'
+
+subject = "account"
+action = "create"
+object = "account"
+status = "success"
+
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "gazinformservice"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "efros_config_inspector"
+event_src.category = "Network security"
+
+id = "PT_Gazinformservice_Efros_Config_Inspector_syslog_add_user"

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Sabrul to rule CVE_2023_4911_GLIBC_Buffer_Overflow. The rule detects local privilege escalation via a buffer overflow. Attackers using the CVE-2023-4911 vulnerability can start SUID programs to execute code with elevated privileges</Description>
+  <EventDescriptions>
+    <EventDescription id="3944353e-08ea-3dc9-d22f-654b6479ed55">Multiple executions of SUID-program {object.process.name} by user {subject.account.name} were detected, indicating a buffer overflow attempt on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

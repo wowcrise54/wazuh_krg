@@ -1,0 +1,41 @@
+# A rule has been added to the Windows Firewall exception list
+
+EVENTLOG = 'EventID="2004"'
+!COND = $Channel=="Microsoft-Windows-Windows Firewall With Advanced Security/Firewall" and $Provider["Name"]=="Microsoft-Windows-Windows Firewall With Advanced Security"
+
+subject = "account"
+action = "create"
+object = "rule"
+if $Data["Action"]=="3" then
+status = "success"
+endif
+if $Data["Action"]=="2" then
+status = "failure"
+endif
+
+subject.id = $Data["ModifyingUser"]
+object.id = strip($Data["RuleId"],"{", "}")
+object.name = $Data["RuleName"]
+
+protocol = $Data["Protocol"]
+
+datafield1 = $Data["ModifyingApplication"]        # Приложение, создавшее правило
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "Firewall"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_2004_A_rule_has_been_added_to_the_Windows_Firewall_exception_list"

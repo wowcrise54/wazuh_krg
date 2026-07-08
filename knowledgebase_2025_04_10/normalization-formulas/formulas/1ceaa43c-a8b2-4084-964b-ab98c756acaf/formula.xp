@@ -1,0 +1,47 @@
+!TABULAR = '_1,
+            _2,
+            _3,
+            _5,
+            _8,
+            {$path_raw = _10},
+            _11'
+
+!COND = $_11 == 20 and $_1 == 8
+
+action = "stop"
+object = "service"
+status =  "success"
+
+object.process.version = strip($_7, 'Version: ', '')
+$csv_path = csv($path_raw, "\\", "'")
+object.process.name = $csv_path[length($csv_path) - 1]
+if strip($path_raw, "", object.process.name) != '' then
+    object.process.path = strip($path_raw, "", object.process.name)
+endif
+object.process.fullpath = object.process.path + object.process.name
+object.process.id = $_9
+
+time = win_ticks_to_datetime($_3)
+msgid = $_11
+importance = "medium"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.vendor = "smart_line"
+event_src.title = "devicelock"
+if maybe_ipv4($_2) != null or maybe_ipv6($_2) != null then
+    event_src.ip = $_2
+else
+    $dot_pos = find_substr($_2, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($_2)
+        event_src.hostname = lower(substr($_2, 0, $dot_pos))
+    else
+        event_src.hostname = lower($_2)
+    endif
+endif
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_odbc_Stop_Devicelock"

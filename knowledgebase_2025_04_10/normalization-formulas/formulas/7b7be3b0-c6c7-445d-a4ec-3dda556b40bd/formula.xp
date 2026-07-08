@@ -1,0 +1,56 @@
+EVENTLOG = ''
+
+COND = (
+            $Channel == "Kaspersky Endpoint Security"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "209"
+        )
+        or
+        (
+            $Channel == "Kaspersky Event Log"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "4660"
+            and find_substr($Data[0], "Автозапуск программы выключен") != null
+        )
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+$csv = csv(substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' (')), "\\", "'")
+subject.domain = $csv[0]
+subject.name = $csv[1]
+
+object.type = "autorun"
+object.state = "disabled"
+
+datafield2 = $kv["Программа\\Название"]  # program name
+datafield3 = $kv["Программа\\Путь"]      # program path
+
+reason = $kv["Результат\\Описание"]
+
+time = $TimeCreated["SystemTime"]
+
+msgid = switch $EventID["text"]
+    case "4660" $kv["Тип события"]
+    case "209" $EventID["text"]
+endswitch
+
+importance = "medium"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_209_application_autorun_is_disabled"

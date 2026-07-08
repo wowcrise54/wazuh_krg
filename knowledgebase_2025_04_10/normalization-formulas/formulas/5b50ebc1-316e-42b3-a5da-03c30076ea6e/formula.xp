@@ -1,0 +1,30 @@
+EVENTLOG = 'EventID.text="1204"'
+COND =  $Channel == "Active Directory Web Services"
+        and ( $Provider["Name"] == "Active Directory Web Services" or $Provider["Name"] == "ADWS" )
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+object = "service"
+object.name = "ADWS"
+action = "alert"
+status = "success"
+
+reason = "Failed to check host role"
+
+importance = "high"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1204_unable_to_determine_if_the_computer_is_a_domain_controller"

@@ -1,0 +1,37 @@
+EVENTLOG = 'EventID="20097"'
+COND = $Channel=="Microsoft-Windows-Dhcp-Server/FilterNotifications" and $Provider["Name"]=="Microsoft-Windows-DHCP-Server"
+
+action = "deny"
+object = "service"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+src.mac = $Data["MACAddress"]
+
+$dot_pos = find_substr($Data["HostName"], '.')
+
+if $dot_pos != null then
+	src.fqdn = lower($Data["HostName"])
+	src.hostname = lower(substr($Data["HostName"], 0, $dot_pos))
+else
+	src.hostname = lower($Data["HostName"])
+endif
+
+reason = "It did not match any entry in the allow list"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "DHCP server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_20097_Services_were_denied_to_machine"
+importance = "low"

@@ -1,0 +1,28 @@
+TEXT = "{'<'NUMBER'>'?} {time=DATETIME}, {NUMBER}, {STRING} {STRING} SYSTEM, {WORD}, 
+        {WORD}, {IPV4|IPV6|HOSTNAME|},{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}, 
+        STOP_RADIUS_REPLICATION_TIMER, {msgid='26157'}, {REST}"
+
+action = "stop"
+object = "service"
+status = "success"
+
+object.name = "RADIUS replication timer"
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "rsa"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "authentication_manager"
+event_src.category = "AAA"
+
+id = "PT_RSA_Authentication_manager_syslog_stop_RADIUS_replication_timer"

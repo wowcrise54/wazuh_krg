@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} Minor {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME} 
+{NUMBER}*|{NUMBER}*|{subject.account.name=UNTIL("*|")}{$user_type=WORD+}*|FC_Manage*|{DATETIME}*|Restart VM*|
+{$temp_status="Success"|$temp_status="Fail"}*|{msgid="Restart VM"}: {object.name=STRING} {$kv=KEYVALUE(",  ",":","")}'
+
+subject = "account"
+action = "restart"
+object = "virtual_machine"
+
+if $temp_status == "Success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+if $user_type == "Local User"
+    or $user_type == "Interface interconnection User" then
+    subject.account.provider = "local"
+elif $user_type == "Domain User" then
+    subject.account.provider = "domain"
+else
+    subject.account.provider = "unknown"
+endif
+
+object.id = replace($kv["id"], "", "\*|*")
+
+datafield1 = object.name  # Virtual machine name
+datafield2 = object.id    # Virtual machine ID
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "fusioncompute"
+event_src.category = "Virtualization"
+
+id = "PT_Huawei_FusionCompute_syslog_restart_vm"

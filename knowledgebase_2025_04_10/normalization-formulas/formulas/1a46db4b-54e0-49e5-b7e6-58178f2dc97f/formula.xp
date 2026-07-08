@@ -1,0 +1,63 @@
+TABULAR = 'time_stamp,
+           {time=datetime},
+           event_id,
+           hostname,
+           severity,
+           event_source,
+           event_desc,
+           antivirus_version,
+           ip_address'
+
+COND = $severity == 0 and $event_id == 302450688
+
+subject = "application"
+object = "update"
+status = "success"
+
+subject.name = "Symantec Endpoint Security Agent"
+subject.version = $antivirus_version
+
+submessage("TEXT", "obj_param", $event_desc)
+subformula "obj_param"
+    action = "install"
+    # получение информации об обновлении
+    TEXT = 'Обновление для {object.name=STRING+} из LiveUpdate успешно установлено. Новый порядковый номер: {object.id = WORD}{"."} Содержимое загружено с {$df=STRING+}'
+    object.path = strip($df,"",".")  # путь к источнику обновлений
+    object.type = "application"
+endsubformula
+
+subformula "obj_param"
+    action = "install"
+    # получение информации об обновлении
+    TEXT = 'An update for {object.name=STRING+} was successfully installed. The new sequence number is {object.id = WORD}{"."}'
+    object.type = "application"
+endsubformula
+
+subformula "obj_param"
+    action = "info"
+    TEXT = 'A LiveUpdate session ran successfully. {datafield1=NUMBER} update(s) were available.
+    {datafield2=NUMBER} update(s) installed successfully.
+    {datafield3=NUMBER} update(s) failed to install.'
+    # datafield1 : available update number
+    # datafield2 : succesfully install update
+    # datafield3 : failed install
+endsubformula
+
+msgid = $event_id
+
+importance = "info"
+
+event_src.ip = $ip_address
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($hostname)
+    event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    event_src.hostname = lower($hostname)
+endif
+event_src.vendor = "symantec"
+event_src.title = "endpoint_protection_manager"
+event_src.category = "Host security"
+event_src.subsys = lower($event_source)
+
+id = "PT_Symantec_EPM_odbc_updates_system_components"

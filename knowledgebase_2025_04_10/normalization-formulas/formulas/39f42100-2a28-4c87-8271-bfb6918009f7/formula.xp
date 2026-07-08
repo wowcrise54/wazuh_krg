@@ -1,0 +1,26 @@
+TEXT = '{time=DATETIME} DEBUG {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        PID=[{NUMBER}] TID=[{NUMBER}] Logged in  user is {subject.account.name=WORDDASH}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "netapp"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "snapcenter"
+event_src.category = "Backup server"
+
+id = "PT_NetApp_SnapCenter_filemonitor_Logged_In_User"

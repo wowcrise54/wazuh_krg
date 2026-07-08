@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = find_substr($kv["cluster_info"], "(ClusterXL) member") != null
+       and find_substr($kv["cluster_info"], "did not recieve CCPs from member") != null
+       and $kv["product"] == "VPN-1 & FireWall-1"
+
+action = "info"
+object = "node"
+status = "success"
+
+subformula 'sub1'
+    # извлечение object.state, datafield2, object.id и duration из cluster_info
+    TEXT = '(ClusterXL) member {datafield2=NUMBER} did not recieve CCPs from member 
+            {object.id=NUMBER} for the last {duration=NUMBER} seconds - as a result member {NUMBER} is considered 
+            down by member {NUMBER} {REST}'
+endsubformula
+
+submessage('TEXT', 'sub1', $kv["cluster_info"])
+
+object.state = "down"
+object.type = "Cluster"
+
+# datafield2 - идентификатор участника кластера, сообщившего о недоступности ноды
+datafield4 = $kv["origin_sic_name"]  # полное доменное имя
+datafield9 = $hostname               # имя устройства с LogExporter
+
+reason = "Cluster member " + string(datafield2) + " did not recieve CCPs from member " + 
+         string(object.id) + " for the last " + string(duration) + " seconds"
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "medium"
+
+$kv_names = keyvalue(datafield4, ",", "=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_VPN_and_Firewall_Cluster_member_state_changed_by_member"

@@ -1,0 +1,30 @@
+TEXT = '{time=DATETIME} {object.process.name=STRING} ({WORD}) {WORD} {WORD+} 
+        Claims Authentication {msgid="anvuv"} Medium {reason="Context has no SMTP/UPN claims"}.
+        IdentityContext: {"\'{"}{$data=UNTIL("}")}\'{datafield1=WORDDASH}'
+
+subject = "account"
+action = "send"
+object = "message"
+status = "failure"
+
+$kv = keyvalue($data, ',', ':', '"')
+
+$resource = lower(strip($kv['"userId"'],"0#.w|", ""))
+$temp = csv($resource, "\\\\", "")
+subject.account.domain = $temp[0]
+subject.account.name = $temp[1]
+subject.account.id = $kv['"nameid"']
+subject.account.contact = $kv['"upn"']
+
+# datafield1 - Correlation: Unique GUID-based ID, generated for each request received by the SharePoint server (unique to each request, not each error)
+$fix_slash = replace($kv['"appliesTo"'],"","/")
+datafield2 = $fix_slash    # site name
+datafield3 = $kv['"nii"']  # Uniform resource name
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Context_has_no_SMTP_UPN_claim"

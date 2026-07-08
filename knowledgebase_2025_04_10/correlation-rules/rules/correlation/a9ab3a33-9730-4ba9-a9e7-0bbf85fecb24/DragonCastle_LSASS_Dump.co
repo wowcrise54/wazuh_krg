@@ -1,0 +1,116 @@
+event Subrule_Shares_Accessed:
+    key:
+        event_src.host, object.storage.name
+    filter {
+        lower(correlation_name) == "subrule_shares_for_dragoncastle"
+        and filter::CheckWL_Specific_Only("DragonCastle_LSASS_Dump", lower(join([subject.account.id, src.ip, dst.host, object.storage.fullpath], "|")))
+    }
+
+event Subrule_Lsass_Pwned:
+    key:
+        event_src.host, object.process.name
+    filter {
+        lower(correlation_name) == "subrule_lsass_for_dragoncastle"
+    }
+
+rule DragonCastle_LSASS_Dump: (Subrule_Shares_Accessed and Subrule_Lsass_Pwned) within 15s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Subrule_Shares_Accessed {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+    
+        $src.ip = src.ip
+        $src.host = src.host
+        $src.port = src.port
+        
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.host = dst.host
+        $dst.asset = dst.asset
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(join([subject.account.id, src.ip, dst.host, object.storage.fullpath], "|"))
+    }
+    
+    on Subrule_Lsass_Pwned {
+        $subject.process.name = subject.process.name # lsass.exe
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.hash.md5 = subject.process.hash.md5
+        $subject.process.hash.imphash = subject.process.hash.imphash
+        $subject.process.hash.sha1 = subject.process.hash.sha1
+        $subject.process.hash.sha256 = subject.process.hash.sha256
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.chain = subject.process.chain 
+        
+        $object.process.name = object.process.name # DragonCastle's dll
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+        
+        $labels = $labels + "|lsass_cache_to_correlation"
+        
+        $object.property = object.property
+        $object.value = object.value
+        $object.version = object.version
+        
+        $datafield1 = "Registry key modified: " + datafield1
+        $datafield2 = "Registry key value: " + datafield2
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "high"
+    
+    $alert.context = join([$subject.account.name, "injected", $object.process.fullpath, "into", $subject.process.name], " ")
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+    
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

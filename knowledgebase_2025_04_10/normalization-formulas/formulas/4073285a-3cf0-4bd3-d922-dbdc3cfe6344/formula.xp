@@ -1,0 +1,54 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "CERTIFICATE_ADD - Adding certificate") != null
+       or find_substr($kv["Category"], "CERTIFICATE_DELETE - Deleting certificate") != null
+       
+subject = "account"
+object = "virtual_key"
+
+subformula "parse_category"
+    TEXT = "CERTIFICATE_{$act='ADD'|$act='DELETE'} - {'Adding'|'Deleting'} certificate 
+            {$res='succeeded'|$res='failed'}. Thumbprint: \"{$thprint=UNTIL('\"')}. 
+            {'Due to the following error: \"'?}{reason=UNTIL('\".')?}"
+    
+    action = switch $act
+        case "ADD" "create"
+        case "DELETE" "remove"
+    endswitch
+    status = switch $res
+        case "succeeded" "success"
+        case "failed" "failure"
+    endswitch
+    
+    object.property = "thumbprint" 
+    object.value = $thprint
+endsubformula
+
+submessage("TEXT", "parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "CERTIFICATE_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_certificate_manipulation"

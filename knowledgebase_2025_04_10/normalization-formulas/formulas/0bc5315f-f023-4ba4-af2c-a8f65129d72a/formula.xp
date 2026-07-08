@@ -1,0 +1,25 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         CEF:{NUMBER}|Avanpost|{$tpm_subsys=WORD}||{msgid=NUMBER}|Object modification|{NUMBER}|sourceTranslatedAddress={src.ip=IPV4} request={datafield1=STRING+} dvchost={dst.ip=IPV4}
+         cs1={object.type=WORD} cs1Label=ObjectType cs2={object.id=NUMBER} cs2Label=ObjectId'
+
+# datafield1 : req parametrs
+
+action = "modify"
+object = "resource"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "avanpost"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "avanpost_idm"
+event_src.subsys = lower($tpm_subsys)
+event_src.category = "AAA"
+
+id = "PT_Avanpost_Avanpost_IDM_syslog_CEF_HREditor_Object_modification"

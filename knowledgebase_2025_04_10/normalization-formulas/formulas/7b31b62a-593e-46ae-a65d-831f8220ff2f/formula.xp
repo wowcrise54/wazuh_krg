@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="sshkeys_mod"} {subject.account.name=STRING} {$status="OK"|"FAIL"|"FAILURE"} {WORD}
+        audit object {WORD} event detected {object.value=REST}'
+
+subject = "account"
+action = "configure"
+object = "system"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.property = "ssh_authkeys"
+
+importance = "high"
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_ssh_authorized_keys_modified"

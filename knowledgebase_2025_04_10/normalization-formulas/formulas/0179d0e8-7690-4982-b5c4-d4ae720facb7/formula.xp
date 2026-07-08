@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} %{msgid="RADIUS-3-RADIUS_ERROR_MESSAGE"}: RADIUS server {datafield1=IPV4} failed to respond {REST}'
+
+action = "access"
+object = "system"
+status = "failure"
+
+# datafield1 - ip radius server
+reason = "RADIUS server failed to respond"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_RADIUS_ERROR_MESSAGE"

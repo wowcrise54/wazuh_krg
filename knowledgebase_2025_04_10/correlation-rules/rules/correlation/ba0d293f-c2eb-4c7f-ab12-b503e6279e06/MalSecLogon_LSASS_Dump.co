@@ -1,0 +1,167 @@
+event MalSecLogon:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4624"
+        and src.host == "::1"
+        and logon_type == 9
+        and lower(action) == "elevate"
+        and lower(logon_service) == "seclogo"
+    }
+    
+event Start_LSASS_Child_Process:
+    key:
+        event_src.host, object.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and match(lower(object.process.parent.fullpath), "*\\windows\\system32\\lsass.exe")
+    }
+
+event Start_LSASS_Fork:
+    key:
+        event_src.host, subject.account.name
+    filter { 
+        lower(correlation_name) == "lsass_psscapture_snapshot"
+        and filter::CheckWL_Process_Creation("MalSecLogon_LSASS_Dump", lower(alert.key))
+}
+
+rule MalSecLogon_LSASS_Dump: (MalSecLogon and Start_LSASS_Fork and Start_LSASS_Child_Process?) timer 2m
+    
+    init {
+        $labels = "w_auto"
+    }
+    
+    on MalSecLogon {
+        $subject.account.name = subject.account.name
+        if lower(object.account.name) == "malseclogonuser" then
+            $alert.context = "Used known hacktool (malseclogonuser)" + $alert.context
+        endif      
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+    
+    on Start_LSASS_Child_Process {      
+        if $object.process.chain == null then
+            $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+        endif
+        
+        $subject.account.name = object.account.name # Reverse Names
+        $subject.account.domain = object.account.domain
+        $subject.account.session_id = object.account.session_id
+        $subject.account.id = object.account.id
+        $subject.account.privileges = object.account.privileges
+
+        $object.account.session_id = subject.account.session_id
+        $object.account.name = subject.account.name
+        $object.account.domain = subject.account.domain
+        $object.account.id = subject.account.id
+        
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $alert.context = $alert.context + "|" + lower(object.process.parent.name) + " was dumped by " + lower(object.process.fullpath)
+    }
+
+    on Start_LSASS_Fork {              
+        if $object.process.name == null then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $object.account.session_id = object.account.session_id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+        
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+            $object.process.hash = object.process.hash
+            $object.process.hash.md5 = object.process.hash.md5
+            $object.process.hash.imphash = object.process.hash.imphash
+            $object.process.hash.sha1 = object.process.hash.sha1
+            $object.process.hash.sha256 = object.process.hash.sha256
+            $object.process.version = object.process.version
+            $object.process.cmdline = object.process.cmdline
+            $object.process.guid = object.process.guid
+            $object.process.meta = object.process.meta
+            $object.process.original_name = object.process.original_name
+            $object.process.cwd = object.process.cwd
+
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+        endif
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        if $object.process.chain == null then
+            $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+        endif
+        
+        $alert.key = lower(alert.key)
+    }   
+
+emit {  
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+
+    $labels = $labels + "|lsass_cache_to_correlation"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,64 @@
+event DNS_log:
+    filter {
+        event_src.subsys == "microsoft-windows-dnsserver/audit"
+        and object.type != null
+        and in_list(["515", "516", "517", "519", "520", "521", "536"], msgid)
+    }
+
+enrichment DNS_type_decoding
+    enrich DNS_log:
+        enrich_fields {
+            object.type = switch object.type
+                case "1"    "A" # Address record
+                case "2"    "NS"    # Name server record
+                case "5"    "CNAME" # Canonical name record
+                case "6"    "SOA"   # Start of [a zone of] authority record
+                case "12"   "PTR"   # PTR Resource Record [de]
+                case "13"   "HINFO" # Host Information
+                case "15"   "MX"    # Mail exchange record
+                case "16"   "TXT"   # Text record
+                case "17"   "RP"    # Responsible Person
+                case "18"   "AFSDB" # AFS database record
+                case "24"   "SIG"   # Signature
+                case "25"   "KEY"   # Key record
+                case "28"   "AAAA"  # IPv6 address record
+                case "29"   "LOC"   # Location record
+                case "33"   "SRV"   # Service locator
+                case "35"   "NAPTR" # Naming Authority Pointer
+                case "36"   "KX"    # Key Exchanger record
+                case "37"   "CERT"  # Certificate record
+                case "39"   "DNAME" # Delegation name record
+                case "41"   "OPT"   # Option
+                case "42"   "APL"   # Address Prefix List
+                case "43"   "DS"    # Delegation signer
+                case "44"   "SSHFP" # SSH Public Key Fingerprint
+                case "45"   "IPSECKEY"  # IPsec Key
+                case "46"   "RRSIG" # DNSSEC signature
+                case "47"   "NSEC"  # Next Secure record
+                case "48"   "DNSKEY"    # DNS Key record
+                case "49"   "DHCID" # DHCP identifier
+                case "50"   "NSEC3" # Next Secure record version 3
+                case "51"   "NSEC3PARAM"    # NSEC3 parameters
+                case "52"   "TLSA"  # TLSA certificate association
+                case "53"   "SMIMEA"    # S/MIME cert association[10]
+                case "55"   "HIP"   # Host Identity Protocol
+                case "59"   "CDS"   # Child DS
+                case "60"   "CDNSKEY"   # 
+                case "61"   "OPENPGPKEY"    # OpenPGP public key record
+                case "62"   "CSYNC" # Child-to-Parent Synchronization
+                case "63"   "ZONEMD"    # Message Digests for DNS Zones
+                case "64"   "SVCB"  # Service Binding
+                case "65"   "HTTPS" # HTTPS Binding
+                case "108"  "EUI48" # MAC address (EUI-48)
+                case "109"  "EUI64" # MAC address (EUI-64)
+                case "249"  "TKEY"  # Transaction Key record
+                case "250"  "TSIG"  # Transaction Signature
+                case "251"  "IXFR"  # Incremental Zone Transfer
+                case "252"  "AXFR"  # Authoritative Zone Transfer
+                case "255"  "*" # All cached records
+                case "256"  "URI"   # Uniform Resource Identifier
+                case "257"  "CAA"   # Certification Authority Authorization
+                case "32768"    "TA"    # DNSSEC Trust Authorities
+                case "32769"    "DLV"   # DNSSEC Lookaside Validation record
+            endswitch
+        }

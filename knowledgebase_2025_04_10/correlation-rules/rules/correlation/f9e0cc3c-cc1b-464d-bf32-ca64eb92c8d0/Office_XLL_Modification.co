@@ -1,0 +1,127 @@
+event Registry_Office_Options_Changed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and (
+            msgid == "RegistrySetValue"
+            or (
+                msgid == "13"
+                and event_src.title == "sysmon"
+            )
+        )
+        and find_substr(lower(object.name), "open") != null
+        and find_substr(lower(object.path), "\\excel\\options") != null
+        and object.value != null
+        and filter::CheckWL_Registry_Actions("Office_XLL_Modification", lower(join([subject.process.name, object.fullpath], "|")))
+    }
+
+event Office_XLL_Addin_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::FileCreate_Windows()
+        and regex(lower(object.name), "\.xll|\.wll", 0) != null
+        and regex(lower(object.path), "\\\\microsoft\\\\addins\\\\|\\\\microsoft\\\\word\\\\startup", 0) != null
+        and filter::CheckWL_File_Creation("Office_XLL_Modification", lower(join([subject.process.name, object.fullpath], "|")))
+    }
+
+rule Office_XLL_Modification: Registry_Office_Options_Changed or Office_XLL_Addin_Created
+    
+    init {
+        $labels = "w_auto"
+    }
+
+    on Registry_Office_Options_Changed {
+        $object = object  # reg_object
+        $action = action  # modify
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.fullpath = object.fullpath
+
+        $alert.key = lower(join([subject.process.name, object.fullpath], "|"))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_Registry_Actions"
+    }
+
+    on Office_XLL_Addin_Created {
+        $object = object  # file_object
+        $action = action  # create
+        $status = status
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $alert.key = lower(join([subject.process.name, object.fullpath], "|"))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $labels = $labels + "|CheckWL_File_Creation"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Office Application Startup: Add-ins"
+
+    $importance = "medium"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

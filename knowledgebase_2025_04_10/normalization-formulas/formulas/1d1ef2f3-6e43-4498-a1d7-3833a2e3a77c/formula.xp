@@ -1,0 +1,189 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        mwg: {event_src.id=WORDDASH?}| {$kv=KEYVALUE("|","=")}'
+
+# blocked beacuse of virus detection
+if $kv["block_res"] == "80" then
+
+    action = "detect"
+    object = "malware"
+    status = "success"
+
+    object.name = $kv["virus_name"]
+
+    if $kv["auth_user"] != null and length($kv["auth_user"]) != 0 then
+        datafield5 = $kv["auth_user"]
+    endif
+
+    importance = "medium"
+
+    category.high = "Information Security"
+    category.generic = "Malware"
+    category.low = "Detection"
+
+# blocked because of other reason
+else
+
+    if $kv["auth_user"] != null and length($kv["auth_user"]) != 0 then
+        subject = "account"
+        subject.account.name = $kv["auth_user"]
+    endif
+    action = "access"
+    object = "resource"
+    if $kv["block_res"] == "0" then
+        $success_list = ["100","101","102","200","201","202","203","204",
+                         "205","206","207","226","300","302","304"]
+        if in_list($success_list, $kv["status_code"]) then
+            status = "success"
+            importance = "info"
+        else
+            status = "failure"
+            importance = "low"
+        endif
+    else
+        status = "failure"
+        importance = "low"
+    endif
+
+    if $kv["virus_name"] != null then
+        object.property = "malware"
+        object.value = $kv["virus_name"]
+    endif
+
+    object.name = $kv["filename"]
+    object.group = $kv["categories"]
+    object.type = $kv["media_type"]
+
+    reason = $kv["block_reason"]
+endif
+
+object.storage.fullpath = lower($kv["url"])
+$csv_p = replace(object.storage.fullpath, "/", "\\\\")
+$csv_path = csv($csv_p, '/', '')
+if length($csv_path) > 1 then
+    object.storage.name = lower($csv_path[length($csv_path) - 1])
+    object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+else
+    object.storage.name = $csv_p
+endif
+object.hash = $kv["hash"]
+
+datafield1 = $kv["status_code"]  # HTTP status code
+# datafield2 - description of the status code
+datafield2 = switch datafield1
+    case "000" "Unassigned"
+    case "100" "Continue"
+    case "101" "Switching"
+    case "102" "Processing"
+    case "200" "OK"
+    case "201" "Created"
+    case "202" "Accepted"
+    case "203" "Non-Authoritative Information"
+    case "204" "No Content"
+    case "205" "Reset Content"
+    case "206" "Partial Content"
+    case "207" "Multi-Status"
+    case "226" "IM Used"
+    case "300" "Multiple Choices"
+    case "301" "Moved Permanently"
+    case "302" "Found"
+    case "303" "See Other"
+    case "304" "Not Modified"
+    case "305" "Use Proxy"
+    case "307" "Temporary Redirect"
+    case "308" "Permanent Redirect"
+    case "400" "Bad Request"
+    case "401" "Unauthorized"
+    case "402" "Payment Required"
+    case "403" "Forbidden"
+    case "404" "Not Found"
+    case "405" "Method Not Allowed"
+    case "406" "Not Acceptable"
+    case "407" "Proxy Authentication Required"
+    case "408" "Request Timeout"
+    case "409" "Conflict"
+    case "410" "Gone"
+    case "411" "Length Required"
+    case "412" "Precondition Failed"
+    case "413" "Payload Too Large"
+    case "414" "URI Too Long"
+    case "415" "Unsupported Media Type"
+    case "416" "Range Not Satisfiable"
+    case "417" "Expectation Failed"
+    case "418" "Unassigned, I'm a teapot"
+    case "420" "Unassigned, Method Failure (Spring Framework) or Enhance Your Calm (Twitter) - Unofficial codes"
+    case "421" "Misdirected Request"
+    case "422" "Unprocessable Entity"
+    case "423" "Locked"
+    case "424" "Failed Dependency"
+    case "425" "Unassigned, Unordered Collection"
+    case "426" "Upgrade Required"
+    case "428" "Precondition Required"
+    case "429" "Too Many Requests"
+    case "431" "Request Header Fields Too Large"
+    case "434" "Unassigned, Requested host unavailable"
+    case "440" "Unassigned, Login Timeout - Internet Information Services - Unofficial code"
+    case "444" "Unassigned, Connection Closed Without Response or No Response - nginx - Unofficial code"
+    case "449" "Unassigned, Retry With - Internet Information Services - Unofficial code"
+    case "450" "Unassigned, Blocked by Windows Parental Controls (Microsoft) - Unofficial code"
+    case "451" "Unavailable For Legal Reasons or Redirect - Internet Information Services - Unofficial code"
+    case "495" "Unassigned, SSL Certificate Error - nginx - Unofficial code"
+    case "496" "Unassigned, SSL Certificate Required - nginx - Unofficial code"
+    case "497" "Unassigned, HTTP Request Sent to HTTPS Port - nginx - Unofficial code"
+    case "498" "Unassigned, Invalid Token (Esri) - Unofficial code"
+    case "499" "Unassigned, Token Required (Esri) or Request has been forbidden by antivirus or Client Closed Request - nginx - Unofficial codes"
+    case "500" "Internal Server Error"
+    case "501" "Not Implemented"
+    case "502" "Bad Gateway"
+    case "503" "Service Unavailable"
+    case "504" "Gateway Timeout"
+    case "505" "HTTP Version Not Supported"
+    case "506" "Variant Also Negotiates"
+    case "507" "Insufficient Storage"
+    case "508" "Loop Detected"
+    case "509" "Unassigned, Bandwidth Limit Exceeded (Apache Web Server/cPanel) - Unofficial code"
+    case "510" "Not Extended"
+    case "511" "Network Authentication Required"
+    case "520" "Unassigned, Unknown Error - CloudFlare - Unofficial code"
+    case "521" "Unassigned, Web Server Is Down - CloudFlare - Unofficial code"
+    case "522" "Unassigned, Connection Timed Out - CloudFlare - Unofficial code"
+    case "523" "Unassigned, Origin Is Unreachable - CloudFlare - Unofficial code"
+    case "524" "Unassigned, A Timeout Occurred - CloudFlare - Unofficial code"
+    case "525" "Unassigned, SSL Handshake Failed - CloudFlare - Unofficial code"
+    case "526" "Unassigned, Invalid SSL Certificate - CloudFlare - Unofficial code"
+    case "530" "Unassigned, Site is frozen - Unofficial code"
+    case "599" "Network Connect Timeout Error"
+endswitch
+
+datafield3 = $kv["method"]  # HTTP method
+
+if $kv["user_agent"] != null and length($kv["user_agent"]) != 0 then
+    datafield4 = $kv["user_agent"]  # HTTP useragent
+endif
+
+src.ip = $kv["src_ip"]
+dst.hostname = $kv["host"]
+dst.ip = $kv["server_ip"]
+dst.port = $kv["url_port"]
+
+count.bytes_in = $kv["bytes_to_client"]
+count.bytes_out = $kv["bytes_from_client"]
+
+msgid = $kv["block_res"]
+
+submessage ("TEXT", "datetime", $kv["time_stamp"])
+subformula "datetime"
+    TEXT = "[{time=DATETIME}]"
+endsubformula
+
+event_src.category = "Web security"
+event_src.title = "web_gateway"
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_McAfee_Web_Gateway_syslog_cef_Resource_access"

@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {"unbound["NUMBER"]: ["NUMBER"]"?} {"unbound["NUMBER":"NUMBER"]: ["NUMBER"]"?} unbound{":"?} [{NUMBER}{":"NUMBER?}] fatal error: {$re=REST}'
+
+action = "start"
+object = "service"
+status = "failure"
+
+reason = lower($re)
+
+importance = "high"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "unbound"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_Unbound_syslog_fatal_error"

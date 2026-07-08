@@ -1,0 +1,40 @@
+EVENTLOG = 'Channel="Application"'
+COND = $EventID["text"] == "0" and $Provider["Name"] == "SecurityConfigurator"
+         and find_substr($Data[0],"Настройка списка приложений") == 0
+
+object = "virtual_key"
+object.type = "security token"
+status = "success"
+
+submessage("TEXT","SPLIT",$Data[0])
+
+subformula "SPLIT"  # Добавление/удаление токена безопасности
+    # Извлечение object.name и action из $Data[0]
+    TEXT='Настройка списка приложений - {$action=STRING} токен безопасности {$token_name=STRING} приложения {$application_name=STRING}'
+
+    object.name = $token_name
+    datafield1 = $application_name
+
+    action = switch $action
+        case "Добавлен" "create"
+        case "Удален" "remove"
+    endswitch
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "opensource"
+event_src.title = "scada_security_configurator"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "SCADA"
+
+id = "PT_Opensource_Scada_Security_Configurator_eventlog_App_Change"

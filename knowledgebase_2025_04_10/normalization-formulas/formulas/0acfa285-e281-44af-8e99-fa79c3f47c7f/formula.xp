@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        %{msgid="CC-6-STATIONUNASSOC"}: Station {src.mac=MACADDR} un-associated from
+        radio {datafield3=STRING} wlan {datafield1=STRING} : {reason=REST}'
+
+action = "disconnect"
+object = "host"
+status = "success"
+
+object.type = "wlan client"
+
+# datafield1 - WLAN
+# datafield3 - Radio
+
+importance = "info"
+
+event_src.vendor = "extreme_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "wm3600"
+event_src.category = "Wireless"
+
+id = "PT_Extreme_Networks_WM3600_syslog_CC_6_STATIONUNASSOC"

@@ -1,0 +1,111 @@
+query Check_Volume_ID($vm_id) from VK_Cloud_Critical_VM_Disks{
+    vm_id == $vm_id
+}
+
+event Volume_Attach:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and in_list(["nova", "cinder"], event_src.subsys)
+        and (
+                (
+                    msgid == "create-volume"
+                    and datafield4 != null
+                    and table::VK_Cloud_Important_Objects{column::object_id == lower(datafield4) and column::object_type == "vm"}
+                )
+                or (
+                    msgid == "os-attach"
+                    and datafield7 != null
+                    and table::VK_Cloud_Important_Objects{column::object_id == lower(datafield7) and column::object_type == "vm"}
+                )
+                or (
+                    msgid == "vm-attach-volume"
+                    and object.id != null
+                    and table::VK_Cloud_Important_Objects{column::object_id == lower(object.id) and column::object_type == "vm"}
+                )
+        )
+        and status == "success"
+    }
+
+event Volume_Delete_or_Detach:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and in_list(["nova", "cinder"], event_src.subsys)
+        and in_list(["delete-volume", "os-detach"], msgid)
+        and object.id != null
+        and table::VK_Cloud_Critical_VM_Disks{column::volume_id == lower(object.id)}
+        and status == "success"
+    }
+
+event VM_Detach_Volume:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and in_list(["nova", "cinder"], event_src.subsys)
+        and msgid == "vm-detach-volume"
+        and object.id != null
+        and object.value != null
+        and table::VK_Cloud_Critical_VM_Disks{column::volume_id == lower(object.value) and column::vm_id == lower(object.id)}
+        and status == "success"
+    }
+
+event Delete_VM:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and in_list(["nova", "cinder"], event_src.subsys)
+        and msgid == "delete-vm"
+        and object.id != null
+        and table::VK_Cloud_Critical_VM_Disks{column::vm_id == lower(object.id)}
+        and status == "success"
+    }
+
+enrichment VK_Cloud_Enrich_Important_VM
+    enrich Volume_Attach:
+        enrich_fields {
+            if msgid == "create-volume" and not table::VK_Cloud_Critical_VM_Disks{
+                column::volume_id == lower(object.id) 
+                and column::vm_id == lower(datafield4)
+            } then
+                    $new_volume_id = object.id
+                    $server_id = datafield4
+            elif msgid == "os-attach" and not table::VK_Cloud_Critical_VM_Disks{
+                column::volume_id == lower(object.id) 
+                and column::vm_id == lower(datafield7)
+            } then
+                    $new_volume_id = object.id
+                    $server_id = datafield7
+            elif msgid == "vm-attach-volume" and not table::VK_Cloud_Critical_VM_Disks{
+                column::volume_id == lower(object.value) 
+                and column::vm_id == lower(object.id)
+            } then
+                    $new_volume_id = object.value
+                    $server_id = object.id
+            endif
+        }
+
+        insert_into VK_Cloud_Critical_VM_Disks {
+            column::volume_id = $new_volume_id
+            column::vm_id = $server_id
+        }
+
+    enrich Volume_Delete_or_Detach:
+        remove_from VK_Cloud_Critical_VM_Disks {
+            column::volume_id == lower(object.id)
+        }
+
+    enrich VM_Detach_Volume:
+        remove_from VK_Cloud_Critical_VM_Disks {
+            column::volume_id == lower(object.value)
+            and column::vm_id == lower(object.id)
+        }
+
+    enrich Delete_VM:
+        remove_from VK_Cloud_Critical_VM_Disks {
+            column::vm_id == lower(object.id)
+        }   

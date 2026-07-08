@@ -1,0 +1,14 @@
+filter Logout_Unix() {
+    filter::NotFromCorrelator()
+    and action == "logout"
+    and (
+        category.high == "Access Management"
+        and category.low == "Communication"
+    )
+    and status == "success"
+    and filter::OperatingSystem_UNIXLike()
+    and (
+        subject.name != null
+        or subject.id != null
+    )
+}

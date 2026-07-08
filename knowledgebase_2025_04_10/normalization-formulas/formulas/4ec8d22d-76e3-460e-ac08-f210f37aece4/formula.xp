@@ -1,0 +1,40 @@
+TEXT = '{time=DATETIME} {STRING} ({WORD}) {WORD+} {msgid="af3y9"} {WORD}
+        STS {"Call Claims Windows"|"Call Claims Saml"|"Service request"}: Successfully requested {"sign-in"|"oauth"|}
+        claim identity {$fork=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subformula "credentials"
+    TEXT = '{"for user"|"acting as user"} \'{"i:"?}{"0#.w|"?}{$end=STRING+}'
+
+    datafield1 = substr($end, -36, 36)
+
+    # Monstrous way to rehabilitate the STRING's work
+    $fqdn_raw = strip($end,"i:", "'. " + datafield1)
+    $fqdn = strip($fqdn_raw,"0#.w|", "")
+    $sep = find_substr($fqdn, "\\")
+    subject.account.domain = lower(substr($fqdn, 0, $sep))
+    subject.account.name = lower(substr($fqdn, $sep + 1, length($fqdn) - $sep))
+
+endsubformula
+
+subformula "credentials"
+    TEXT = '. {datafield1=WORDDASH}'
+endsubformula
+
+submessage("TEXT", "credentials", $fork)
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Claims_authentication"

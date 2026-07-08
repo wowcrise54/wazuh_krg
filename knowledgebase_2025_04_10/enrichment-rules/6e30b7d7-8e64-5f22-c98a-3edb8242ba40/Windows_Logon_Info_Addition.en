@@ -1,0 +1,277 @@
+#запрос в ТС c белыми списками для исключения сработок
+query CheckIfWhitelisted($rule, $value, $tag) from Common_whitelist_for_labeling {
+    (rule == $rule or rule == "*")
+    and specific_value == $value
+    and tag == $tag
+}
+
+query GetProcessChain($host, $proc_id, $proc_name) from Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and proc_name == $proc_name
+}
+    qhandler {
+        $subject_session_id = subject_session_id
+        $object_session_id = object_session_id
+    }
+    
+query GetLogonType($host, $session_id) from Windows_Logon_Sessions {
+    host == $host
+    and session_id == $session_id
+}
+    qhandler {
+        $src_ip = src_ip
+        $src_host = src_host
+        $src_asset = src_asset
+        $logon_type = logon_type
+        $username = username
+    }
+
+query GetLogonTypeRDP($host, $session_id) from Windows_Logon_Sessions_RDP {
+    host == $host
+    and session_id == $session_id
+}
+    qhandler {
+        $src_ip = src_ip
+        $src_host = src_host
+        $src_asset = src_asset
+        $logon_type = logon_type
+        $username = username
+    }
+    
+query CheckVPN($assigned_ip) from Active_External_Sessions {
+    assigned_ip == $assigned_ip
+}
+    qhandler {
+        $user = username
+        $domain = user_domain
+        $id = user_id
+        $external_ip = external_ip
+        $external_host = external_host
+    }
+
+query CheckSubnet($ip) from Specific_Local_Networks {
+    in_subnet($ip, local_network)
+}
+
+query GetProcessChain_Powershell($host, $proc_id, $object_account) from Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and (
+        proc_name == "powershell.exe" 
+        or proc_name == "powershell_ise.exe" 
+        or proc_name == "pwsh.exe"
+        or proc_name == "wsmprovhost.exe"
+        or proc_name == "rundll32.exe"
+        or proc_name == "regsvr32.exe"
+        or proc_name == "regasm.exe"
+        or proc_name == "regsvcs.exe"
+        or proc_name == "installutil.exe"
+    )
+    and object_account == $object_account
+}
+    qhandler {
+        $subject_session_id = subject_session_id
+        $object_session_id = object_session_id
+    }
+
+query GetProcessChain_pid_ppid($host, $proc_id, $parent_proc_id) from Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and parent_proc_id == $parent_proc_id
+}
+    qhandler {
+        $subject_account = subject_account
+        $proc_name = proc_name
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $subject_session_id = subject_session_id
+        $object_account = object_account
+        $object_session_id = object_session_id
+    }
+    
+event Correlation:
+    filter {
+        correlation_name != null
+        and ( 
+            event_src.title == "windows"
+            or event_src.title == "sysmon"
+        )
+        and (
+            logon_type == null 
+            or subject.account.session_id == null
+            or object.account.session_id == null
+        )      
+    }
+    
+enrichment Windows_Logon_Info_Addition
+
+    enrich Correlation:
+        enrich_fields {
+            # Данный фильтр исключает попадание в условие событий Powershell             
+            if object.process.id != null 
+            and (object.process.name != null or object.process.parent.id != null) 
+            and (object.account.session_id == null or subject.account.session_id == null) then
+                if object.process.name != null then
+                    $query_result = exec_query("GetProcessChain", [event_src.host, number(object.process.id), object.process.name])
+                else 
+                    $query_result = exec_query("GetProcessChain_pid_ppid", [event_src.host, number(object.process.id), number(object.process.parent.id)])
+                endif
+            endif
+
+            # Условие для корреляций с заполненными subject.process*
+            if subject.process.id != null 
+            and (subject.process.name != null or subject.process.parent.id != null) 
+            and (object.account.session_id == null or subject.account.session_id == null) then
+                if subject.process.name != null then
+                    $query_result_subject = exec_query("GetProcessChain", [event_src.host, number(subject.process.id), subject.process.name])
+                else 
+                    $query_result_subject = exec_query("GetProcessChain_pid_ppid", [event_src.host, number(subject.process.id), number(subject.process.parent.id)])
+                endif
+                # Если нет object.process, то используем перемнную $query_result
+                if object.process.id == null then
+                    $query_result = $query_result_subject
+                endif
+            endif
+            # Условие для событий Powershell
+            if lower(event_src.subsys) == "microsoft-windows-powershell/operational" then
+                # 4103
+                if object.process.parent.id != null and object.process.id == null then
+                    object.process.id = object.process.parent.id
+                endif
+                $query_result = exec_query("GetProcessChain_Powershell", [event_src.host, number(object.process.id), lower(object.account.domain) + "\\" + lower(object.account.name)])    
+            endif
+
+
+            if $query_result != null or $query_result_subject != null then
+                # Если есть только процесс-объект
+                if (object.process.id != null and subject.process.id == null) then
+                    # Заполняем object account сессию, если ее нет
+                    if object.account.session_id == null then
+                        object.account.session_id = $query_result["$object_session_id"]
+                        if object.account.session_id != null then
+                            labels = labels + "|obj_acc_session_enriched" # Метка для валидации проставления object.account.session_id
+                        endif
+                    endif
+                    # Заполняем subject account сессию, если ее нет
+                    if subject.account.session_id == null then
+                        subject.account.session_id = $query_result["$subject_session_id"]
+                        if subject.account.session_id != null then
+                            labels = labels + "|subj_acc_session_enriched" # Метка для валидации проставления subject.account.session_id
+                        endif
+                    endif
+
+                # Если есть только процесс-субъект
+                elif (subject.process.id != null and object.process.id == null) then
+                    # Заполняем subject account сессию object-сессией (т.к. это релаьные права)
+                    if subject.account.session_id == null then
+                        subject.account.session_id = $query_result["$object_session_id"]
+                        if subject.account.session_id != null then
+                            labels = labels + "|subj_acc_session_enriched" # Метка для валидации проставления subject.account.session_id
+                        endif
+                    endif
+
+                # Если есть оба процесса: объект и субъект
+                elif object.process.id != null and subject.process.id != null then
+                    # Заполняем object account сессию, если ее нет
+                    if object.account.session_id == null then
+                        object.account.session_id = $query_result["$object_session_id"]
+                        if object.account.session_id != null then
+                            labels = labels + "|obj_acc_session_enriched" # Метка для валидации проставления object.account.session_id
+                        endif
+                    endif
+                    # Заполняем subject account сессию, если ее нет
+                    if subject.account.session_id == null then
+                        subject.account.session_id = $query_result_subject["$object_session_id"]
+                        if subject.account.session_id != null then
+                            labels = labels + "|subj_acc_session_enriched" # Метка для валидации проставления subject.account.session_id
+                        endif
+                    endif
+                endif
+            endif
+                     
+            if subject.account.session_id != null then
+                # Проверка, если учетка network service, то сессия кладется в object.account.session_id
+                if in_list(["999", "996"], subject.account.session_id) and object.account.session_id != null then               
+                    $logon_result = exec_query("GetLogonTypeRDP", [lower(event_src.host), object.account.session_id])
+                    # Проверяем другую таблицу с сессиями
+                    if $logon_result['$src_ip'] == null then
+                        $logon_result = exec_query("GetLogonType", [lower(event_src.host), object.account.session_id])
+                    endif
+                else 
+                    $logon_result = exec_query("GetLogonTypeRDP", [lower(event_src.host), subject.account.session_id])
+                    # Проверяем другую таблицу с сессиями
+                    if $logon_result['$src_ip'] == null then
+                        $logon_result = exec_query("GetLogonType", [lower(event_src.host), subject.account.session_id])
+                    endif
+                endif
+                
+                if $logon_result != null then               
+                    # Проставляем logon_type
+                    if logon_type == null and $logon_result["$logon_type"] != null then
+                        logon_type = number($logon_result["$logon_type"])
+                        labels = labels + "|logon_type_enriched" # Метка для валидации проставления logon_type
+                    endif
+                    
+                    # Проставлем src.host при сетевом входе на узел
+                    if src.host == null and $logon_result["$src_host"] != null then
+                        src.host = $logon_result["$src_host"]
+                        labels = labels + "|src_host_enriched" # Метка для валидации проставления src.host при сетевом входе
+                    endif
+
+                    # Проставляем src.ip при сетевом входе на узел
+                    if src.ip == null and $logon_result["$src_ip"] != null then 
+                        src.ip = $logon_result["$src_ip"]
+                        src.asset = $logon_result["$src_asset"] # Проставляем исходный актив
+                        src.geo.org = select_query_first("CheckSubnet", [src.ip], "description") # Приносим описание подсети для адреса входа
+                        labels = labels + "|src_ip_enriched" # Метка для валидации проставления src.ip при сетевом входе            
+                    endif
+                    
+                    if find_substr(labels, "src_ip_enriched") != null then
+
+                        $data = exec_query("CheckVPN",[src.ip])
+                        if subject.application.account.name == null then 
+                            subject.application.account.name = $data["$user"]
+                            subject.application.account.domain = $data["$domain"]
+                            subject.application.account.id = $data["$id"]
+                        endif
+
+                        external_src.ip  = $data["$external_ip"]
+
+                        if $data["$external_host"] != $data["$external_ip"] then
+                            external_src.host  = $data["$external_host"]
+                        endif
+
+                        if external_src.ip != null and subject.application.account.name != null then
+                            labels = labels + "|vpn_session_enriched" # Метка для валидации проставления src.ip при VPN коннекте
+                        endif
+                    endif
+                endif
+            endif
+
+            # Проверяем наличие записей в белых списках
+            if subject.account.name != null 
+            and src.ip != null
+            and exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.name + "|" + src.ip), "subj_acc|ip"]) then
+                drop
+            endif
+
+            if object.account.name != null 
+            and src.ip != null
+            and exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.name + "|" + src.ip), "obj_acc|ip"]) then
+                drop
+            endif
+            
+            if subject.account.id != null 
+            and src.ip != null
+            and exec_query("CheckIfWhitelisted", [correlation_name, lower(subject.account.id + "|" + src.ip), "subj_acc_id|ip"]) then
+                drop
+            endif
+
+            if object.account.id != null 
+            and src.ip != null
+            and exec_query("CheckIfWhitelisted", [correlation_name, lower(object.account.id + "|" + src.ip), "obj_acc_id|ip"]) then
+                drop
+            endif
+    }
+    

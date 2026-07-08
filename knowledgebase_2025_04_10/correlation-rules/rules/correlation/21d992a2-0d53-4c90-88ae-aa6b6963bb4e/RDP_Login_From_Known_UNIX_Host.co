@@ -1,0 +1,89 @@
+query Check_If_UNIX_Host($host_ip, $host_name) from UNIX_Hosts {
+    host == $host_ip 
+    or host == $host_name
+}
+
+query Check_If_UNIX_Host_Assetgrid($host_ip, $host_name) from AssetGrid_UNIX_Hosts {
+    asset_ip == $host_ip 
+    or unixhost_hostname == $host_name
+}
+
+event RDP_Login_Attempt:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["4624", "4625", "528", "529", "530", "531", "532", "533", "534", "535", "536", "537", "539", "540"], msgid)
+        and action == "login"
+        and event_src.title == "windows"
+        and logon_type == 10
+        and (
+                exec_query("Check_If_UNIX_Host", [src.ip, lower(src.host)])
+                or exec_query("Check_If_UNIX_Host_Assetgrid", [src.ip, lower(src.host)])
+            )
+        and filter::CheckWL_Networking("RDP_Login_From_Known_UNIX_Host", lower(dst.host))
+    }
+
+rule RDP_Login_From_Known_UNIX_Host: RDP_Login_Attempt
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on RDP_Login_Attempt {
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $logon_type = logon_type
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(dst.host)
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: Remote Desktop Protocol"
+
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.domain, $src.host, $dst.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

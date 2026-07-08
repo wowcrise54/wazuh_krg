@@ -1,0 +1,29 @@
+!JSON = "EventCode=4789"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing" and $EventType=="4"
+
+subject = "account"
+action = "remove"
+object = "ds_object"
+status = "success"
+
+subject.name = lower($InsertionStrings[4])
+subject.domain = lower($InsertionStrings[5])
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Operating system"
+event_src.title = "active_directory"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_4789_Basic_application_group_was_deleted"

@@ -1,0 +1,41 @@
+# When you use auditpol to set per user selective auditing Windows logs
+# this event documenting the user for whom you set audit policy as well as the category,
+# subcategory and the nature of the change in terms of success/failure and include/exclude
+
+EVENTLOG = 'EventID="4912"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "policy"
+status = "success"
+
+datafield1 = maybe_number16($Data["SubjectLogonId"])    # ID сессии
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+subject.name = lower($Data["SubjectUserName"])
+subject.domain = lower($Data["SubjectDomainName"])
+subject.id = $Data["SubjectUserSid"]
+
+object.type = $Data["CategoryId"]
+object.name = $Data["SubcategoryId"]
+object.state = $Data["AuditPolicyChanges"]
+object.value = $Data["TargetUserSid"]
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_4912_Per_user_audit_policy_changed"
+importance = "info"

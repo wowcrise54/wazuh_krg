@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {$time1=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        Category: {NUMBER},{$tmp_subsys="Smc"},{"Event Description: "?}{"Прервано"|$raw_action="Установлено"|
+        $raw_action="Connected to"|"Disconnected from"}{"соединение с"?} Symantec Endpoint Protection Manager
+        ({dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME|}){",Event time: "?}{$time2=DATETIME?}{"\\""?}{",Group Name: "?}
+        {$raw_group=REST?}'
+
+action = if $raw_action != null then "open" else "terminate" endif
+object = "session"
+status = "success"
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+datafield10 = if $raw_group == "" then null else strip($raw_group, "", "\"") endif
+
+importance = "info"
+
+time = coalesce($time2, $time1)
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_agent_connect_disconnect_en_ru"

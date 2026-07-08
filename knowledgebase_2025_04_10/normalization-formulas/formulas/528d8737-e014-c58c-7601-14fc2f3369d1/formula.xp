@@ -1,0 +1,33 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME} {$Computer=HOSTNAME} [{$time_date=DATETIME},{$time_rest=NUMBER}] INFO 
+        Log for partition {object.name=STRING} is renamed to {object.fullpath=STRING} 
+        and is scheduled for deletion({datafield1=UNTIL(')')}"
+
+action = "remove"
+object = "log"
+status = "ongoing"
+
+$temp_csv = csv(object.fullpath, '/', '')
+object.new_value = $temp_csv[(length($temp_csv) - 1)]
+object.path = strip(object.fullpath, "", object.new_value)
+
+object.property = "new name before deletion"
+object.type = "partition log"
+
+# datafield1 module created event
+
+time = epoch_ms_to_datetime(datetime_to_epoch_ms($time_date) + $time_rest)
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache_kafka"
+event_src.category = "Other"
+
+id = "PT_Opensource_ASF_Apache_Kafka_syslog_partition_log_rename_and_deletion"

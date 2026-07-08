@@ -1,0 +1,33 @@
+JSON = ""
+
+COND = coalesce($ENTITY_TYPE, $entity_type) == "Token"
+        and in_list(["create", "delete", "change"], coalesce($OPERATION, $operation))
+         
+subject = "account"
+action = switch coalesce($OPERATION, $operation)
+    case "create" "create"
+    case "delete" "remove"
+    case "change" "modify"
+endswitch
+object = "resource"
+status = "success"
+
+subject.account.id = coalesce($user_or_token['USER_ID'], $user_id)
+subject.account.name = coalesce($user_or_token['USERNAME'], $user_login)
+subject.account.fullname = coalesce($user_or_token['DISPLAY_NAME'], $user_fullname)
+subject.account.contact = coalesce($user_or_token['EMAIL'], $user_email)
+
+object.id = coalesce($ENTITY_ID, $entity_id)
+object.name = coalesce($ENTITY_DISPLAY_NAME, $entity_display_name)
+object.type = "token"
+
+time = coalesce($CHANGE_DATE + $user_or_token['TIMEZONE'], $change_date)
+
+importance = "medium"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_Token_create_remove"

@@ -1,0 +1,145 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_REGISTER_DISK_FINISHED_SUCCESS",  # 378
+           "USER_REGISTER_DISK_FINISHED_FAILURE",  # 379
+           "USER_REGISTER_DISK_INITIATED",  # 381
+           "USER_ADD_DISK",  # 2,020
+           "USER_ADD_DISK_FINISHED_SUCCESS",  # 2,021
+           "USER_ADD_DISK_FINISHED_FAILURE",  # 2,022
+           "USER_FAILED_ADD_DISK",  # 2,023
+           "ADD_DISK_INTERNAL",  # 2,036
+           "ADD_DISK_INTERNAL_FAILURE",  # 2,037
+           "USER_UPDATE_DISK",  # 86
+           "USER_FAILED_UPDATE_DISK"  # 87
+       ], $event_class)
+
+if in_list(["ADD_DISK_INTERNAL", "ADD_DISK_INTERNAL_FAILURE"], $event_class) then
+    subject = "system"
+else
+    subject = "account"
+endif
+
+if substr($event_class, 0, 18) == "USER_REGISTER_DISK" then
+    action = "enable"
+elif find_substr($event_class, "ADD_DISK") != null then
+    action = "create"
+elif substr($event_class, -11, 11) == "UPDATE_DISK" then
+    action = "modify"
+endif
+
+object = "resource"
+
+if in_list(["USER_REGISTER_DISK_INITIATED", "USER_ADD_DISK", "ADD_DISK_INTERNAL"], $event_class) then
+    status = "ongoing"
+elif in_list([
+    "USER_REGISTER_DISK_FINISHED_SUCCESS", "USER_ADD_DISK_FINISHED_SUCCESS", "USER_UPDATE_DISK"
+    ], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # USER_REGISTER_DISK_FINISHED_SUCCESS
+    TEXT = "Disk {$disk_alias=STRING+} has been successfully registered as a floating disk."
+endsubformula
+
+subformula "parse_body"
+    # USER_REGISTER_DISK_FINISHED_FAILURE
+    TEXT = "Failed to register Disk {$disk_alias=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REGISTER_DISK_INITIATED
+    TEXT = "Registering Disk {$disk_alias=STRING+} has been initiated."
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_DISK
+    # ADD_DISK_INTERNAL_FAILURE
+    # ADD_DISK_INTERNAL
+    TEXT = "Add-Disk operation of {$disk_alias=STRING+} {'was initiated by'|'failed to complete.'} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_DISK_FINISHED_SUCCESS
+    TEXT = "The disk {$disk_alias=STRING+} was successfully added."
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_DISK_FINISHED_FAILURE, USER_FAILED_ADD_DISK
+    TEXT = "Add-Disk operation failed {'to complete.'|'(User: '} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_UPDATE_DISK
+    TEXT = "Disk {$disk_alias=STRING+} was updated by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_UPDATE_DISK
+    TEXT = "Failed to update disk {$disk_alias=STRING+} (User: {$user=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+if in_list([
+    "USER_ADD_DISK", "ADD_DISK_INTERNAL_FAILURE", "ADD_DISK_INTERNAL", "USER_UPDATE_DISK"
+    ], $event_class) then
+    $user = strip($user, "", ".")
+elif in_list([
+    "USER_ADD_DISK_FINISHED_FAILURE", "USER_FAILED_ADD_DISK", "USER_FAILED_UPDATE_DISK"
+    ], $event_class) then
+    $user = strip($user, "", ").")
+endif
+
+if in_list(["", "the system"], $user) then
+    $user = null
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+if in_list([
+    "USER_REGISTER_DISK_FINISHED_SUCCESS", "USER_REGISTER_DISK_INITIATED",
+    "USER_ADD_DISK", "ADD_DISK_INTERNAL_FAILURE", "ADD_DISK_INTERNAL",
+    "USER_ADD_DISK_FINISHED_SUCCESS"
+    ], $event_class) then
+    $disk_alias = strip($disk_alias, "'", "'")
+elif $event_class == "USER_REGISTER_DISK_FINISHED_FAILURE" then
+    $disk_alias = strip($disk_alias, "'", "'.")
+endif
+
+object.type = "disk"
+object.name = $disk_alias
+
+logon_service = $authz_provider
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_Disk_Management"

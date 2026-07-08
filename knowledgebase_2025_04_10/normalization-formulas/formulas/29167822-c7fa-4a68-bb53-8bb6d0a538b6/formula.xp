@@ -1,0 +1,62 @@
+TABULAR = "user_name,
+           subsystem,
+           action,
+           status"
+
+COND = in_list([10604, 10605, 10606], $action)
+
+if $user_name != "" then
+    subject = "account"
+    subject.account.name = $user_name
+endif
+
+switch $action
+    case 10604
+        action = "stop"
+    case 10605
+        action = "update"
+        $kv = keyvalue($data, ' ', '=', '"')
+        datafield1 = $kv['"FromRev"']          # номер исходной ревизии
+        datafield2 = $kv['"ToRev"']            # номер обновленной ревизии
+    case 10606
+        action = "start"
+endswitch
+
+object = "application"
+
+if $status == "success" then
+    status = "success"
+elif $status == "failure" then
+    status = "failure"
+elif $status == "ongoing" then
+    status = "ongoing"
+else
+    drop
+endif
+
+if $src_host != "" then
+    submessage("TEXT", "get_address_port", $src_host)
+endif
+
+subformula "get_address_port"
+    TEXT = '{UNTIL("//")} {"["?} {event_src.ip=IPV4|event_src.ip=IPV6|
+             $Computer=HOSTNAME} {"] :"?}  {REST}'
+endsubformula
+
+time = string($createtime)
+msgid = $action
+importance = "low"
+
+event_src.vendor = "drweb"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "security_suite"
+event_src.subsys = lower($subsystem)
+event_src.category = "Anti-virus"
+
+id = "PT_DrWeb_Security_Suite_odbc_event_server_activity"

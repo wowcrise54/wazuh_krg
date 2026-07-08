@@ -1,0 +1,35 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        {"Event Description: "?}Сообщение администратора устройств Устройство {$raw_action="отключено"|$raw_action="включено"|
+        $raw_action="разрешено"}. [{"Имя"|"name"}]: {object.name=STRING+}
+        [{"Класс"|"class"}]: {object.type=STRING+} [{"Guid"|"guid"}]:{object.id=WORDDASH} [{"ID устройства"|"deviceID"}]:
+        {UNTIL(",Local")}{"Host IP"?}:
+        {$ip4=IPV4|$ip4=IPV6},Local{"Host MAC"?}: {src.mac=WORD} {REST}'
+
+if $raw_action == "отключено" then
+    action = "disable"
+elif $raw_action == "включено" then
+    action = "enable"
+else
+    action = "allow"
+endif
+object = "device"
+status = "success"
+
+if $host3 != null or $ip3 != null or $ip4 != null then
+    event_src.ip = coalesce($ip4, $ip3)
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_device_disable_en_ru"

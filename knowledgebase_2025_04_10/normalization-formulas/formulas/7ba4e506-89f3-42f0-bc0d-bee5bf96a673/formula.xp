@@ -1,0 +1,55 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {STRING} CEF:{NUMBER}|Infotecs|IDS HS|{UNTIL("|")}{msgid=NUMBER}|
+        {$desc=UNTIL("|")}{$priority=NUMBER}|{$kv=KEYVALUE(" ","=","")}'
+
+COND = in_list(["500002", "500003", "880006", "880000", "880008"], msgid)
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+subformula "account"
+    TEXT = "{DATETIME} {STRING} {STRING} Failed password for invalid user {$subject_name=STRING} from {$src_ip=IPV4|$src_ip=IPV6} port {$src_port=NUMBER} {STRING}"
+endsubformula
+
+if msgid == "880006" then
+    submessage("TEXT", "account", $kv['msg'])
+endif
+
+subject.account.name = coalesce($kv['duser'], $subject_name, $kv['user\\'])
+subject.account.domain = $kv['dntdom']
+
+src.ip = coalesce($kv['src'], $src_ip, $kv['rhost\\'])
+src.port = coalesce(number($kv['spt']), $src_port)
+
+logon_type = $kv['InfotecsIDSHSLogonType']
+logon_service = $kv['InfotecsIDSHSAuthType']
+logon_auth_method = "remote"
+
+reason = $kv['reason']
+
+time = epoch_ms_to_datetime(number($kv['rt']))
+
+if $priority < 6 then
+    importance = "info"
+elif $priority >= 6 and $priority < 8 then
+    importance = "low"
+elif $priority >= 8 and $priority < 10 then
+    importance = "medium"
+elif $priority >= 10 then
+    importance = "high"
+endif
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids_hs"
+event_src.subsys = lower($kv['deviceFacility'])
+event_src.ip = $kv['dvc']
+event_src.hostname = $kv['InfotecsIDSHShost']
+event_src.category = "IDS/IPS"
+event_src.id = $kv['InfotecsIDSHShostId']
+
+id = "PT_Infotecs_VipNet_IDS_HS_syslog_cef_logon_failure"

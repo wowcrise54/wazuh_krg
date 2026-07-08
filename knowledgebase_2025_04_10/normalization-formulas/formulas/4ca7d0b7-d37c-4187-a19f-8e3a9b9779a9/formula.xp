@@ -1,0 +1,51 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} pluton-ise-handler:
+        CEF:{NUMBER}|JETINFOSYSTEMS|PLUTONNG|{"2.2."|"version=repo-dev#"}{NUMBER}|{msgid="JETPLT2009"}|Обнаружение нового пользователя|{NUMBER}|
+        src={src.ip=IPV4} spt={$src=NUMBER} dst={dst.ip=IPV4} dpt={$dst=NUMBER} externalId={WORDDASH}
+        rt={$datetime=NUMBER} cnt={NUMBER} proto={protocol=WORDDASH}
+        {UNTIL(" cs3=")}{datafield3=UNTIL(" cs3Label=")}MonitoredSystem deviceExternalId={$device_id=STRING} suser={object.name=REST}'
+
+action = "detect"
+object = "account"
+status = "success"
+
+if $src != 0 then
+    src.port = $src
+endif
+
+if $dst != 0 then
+    dst.port = $dst
+endif
+
+$device_hostname = substr($device_id, 0, find_substr($device_id, '('))
+$device_ip = strip($device_id, $device_hostname + '(' , ')')
+
+if $device_ip == dst.ip  then
+    $dot_pos = find_substr($device_hostname, '.')
+    if $dot_pos != null then
+        dst.fqdn = $device_hostname
+        dst.hostname = substr($device_hostname, 0, $dot_pos)
+    else
+        dst.hostname = $device_hostname
+    endif
+else
+    datafield1 = $device_ip
+    datafield2 = $device_hostname
+endif
+
+# datafield3 - MonitoredSystem
+
+time = epoch_to_datetime($datetime)
+importance =  "info"
+
+event_src.vendor = "jet"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pluton"
+event_src.category = "IDS/IPS"
+
+id = "PT_Jet_Pluton_syslog_CEF_JETPLT2009_detect_new_user"

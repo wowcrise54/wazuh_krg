@@ -1,0 +1,83 @@
+event KBD_Input_Command:
+    key: 
+    object.account.name, dst.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "it_bastion"
+        and event_src.title == "skdpu_nt"
+        and msgid == "KBD_INPUT"
+        and object.process.cmdline != null
+        and (
+        ( regex(lower(object.process.cmdline), "chmod\s+\+r?w?x|chmod\s+([246]\d{3}|.?\+s)|chmod\s+.?[7531]{3}\\b|\\buseradd\s|adduser\s|subprocess\.(call|popen)|\s-exec\s|openssl.*?-connect|-u\s[^\s]+.*-p\s.*?\.txt|ssh.*?-(l|r)\s.*?\d+:[a-z0-9._-]+:\d+|ssh.*?-d.*?[a-z0-9._-]+:\d+|\\bcrontab\s+\-e|crash\s-h|check_ssl_cert.*?--curl-bin|\\bat\s+now\\b|whois\s+(-h.*?-p|-p.*&-h)|node\\b.*?(child_process\.spawn|http\.get|createreadstream|createwritestream|net\.connect)|(view|vim)\s+-c\s|finger.*?@|xetex.*?--shell-escape|http\.server|simplehttpserver|octave-cli\s.*?--eval.*?(system|fopen|fclose)|tar\s.*?(--checkpoint-action\=exec|--rsh-command|-i\s+(\'|\"))|gdb\s+(-nx\s+-ex|-ex\s+\nx)|\$\(mktemp|\\bauthorized_keys\\b|\(^|\\bstrings\s|\\bld_preload\\b", 0) != null) 
+        or (protocol == "rdp" 
+        and 
+        regex(lower(object.process.cmdline), "shellcode|-lhost|reverse_|bind_|remove-|psexec|base64|iconv|webclient|webreguest|winhttp|url=|encodedcommand|powerview|powerup|recon|scrnsavebackdoor|regbackdoor|dns_txt|pwnage|backdoor|adsbackdoor|remotepsremoting|remotewmi|amsibypass|lsasecret|listener|passhashes|mimikatz|wdigestdowngrade|adsbackdoor|remotepsremoting|remotewmi|amsibypass|interceptor|nisnag|powerpreter|bruteforce|portscan|psgcat|persistence|remotewmi|amsibypass|antivirusbypass|avsignature|codeexecution|dllinjection|powersploit|gpppassword|minidump|shadowcopy|privesc|llmnresponse|nbnsresponse|inveigh|internetexplorer|serverxmlhttp|mshta.*?http|mshta.*?ftp|dcsync|keystrokes|timedscreenshot|vaultcredential|credentialinjection|ninjacopy|tokenmanipulation|volumeshadowcopy|reflectivepeinjection|userhunter|gpolocation|aclscanner|downgradeaccount|serviceunquoted|servicefilepermission|servicepermission|serviceabuse|servicebinary|regautologon|vulnautorun|vulnschtask|unattendedinstallfile|duplicatetoken|psuacme|targetscreen|poshrathttp|powershellwmi|exfiltration|captureserver|chromedump|foxdump|indexeditem|screenshot|netripper|egresscheck|postexfil|psinject|runas|powerdump|sshcommand|backdoorlnk|bypassuac|wscriptbypassuac|paranoia|winenum|arpscan|reversednslookup|smbscanner|mimikittenz|volumeshadowcopytools|regalwaysinstallelevated|port-scan|powershelltcp|clipboardcontents|install-ssp|powerbreach|invoke-tater|phant0m|-noni|-noninteractive|-enc|-nol\s+|non\s+|invoke-|bypass|hidden|downloadfile|downloadstring|nop\s+|-noprofile|executionpolicy|iex\s+|reflectedpeinjection|new-object|paexec|xcopy|sdelete|plink|nping|nmap|ncat\.exe|ncat\s+|-p\s+22|:3389|vssadmin|ftp\s+|ftp\.exe|taskkill|robocopy|copy-item|schtask\s+|^at\s+|at\.exe|mofcomp|wevtutil|vnc|cpassword|pskill|winscp|wmic|psexesvc|-ma\s+lsass\.exe|wmic.*?http|wmic.*?ftp|cmdkey\s+/list|cmd.*?/k.*?<.*?\.txt|ntds\.dit|copy.*?ntds\.dit|copy.*?config\\sam|reg\s+save.*?system|snapshot", 0) != null) )
+        and filter::CheckWL_Specific_Only("SKDPUNT_Suspicious_Command", lower(join([object.account.name, dst.host], "|")))
+   } 
+
+rule SKDPUNT_Suspicious_Command: KBD_Input_Command + timer 30s
+
+    init {
+        $first_event = true
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on KBD_Input_Command{
+        if $first_event then
+
+            $subject = subject
+            $subject.account.name   =   subject.account.name
+            $subject.account.domain =   subject.account.domain
+            $subject.account.session_id =   subject.account.session_id
+            $subject.type = subject.type
+            $subject.id = subject.id
+            
+            $protocol.layer7 = protocol.layer7
+            $object = object
+            $object.type = object.type
+            $object.value = object.value
+            $object.property = object.property
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.name = object.name
+            $object.process.cmdline = object.process.cmdline
+            
+            $protocol = protocol
+
+            $dst.host = dst.host
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+
+            $event_src.host = event_src.host
+            $event_src.hostname = event_src.hostname
+            $event_src.title = event_src.title
+            $event_src.vendor = event_src.vendor
+
+            $first_event = false
+        endif
+
+        $count.subevents = $count.subevents + 1
+
+        $alert.key = lower(join([object.account.name, dst.host], "|"))
+    }
+    
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "failure"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $object.account.name, $src.ip, $dst.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+
+ }

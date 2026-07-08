@@ -1,0 +1,8 @@
+filter Legitimate_Processes_Linux() {
+	filter::NotFromCorrelator()
+	and filter::OperatingSystem_UNIXLike()
+	and (
+		regex(lower(object.process.fullpath), "\/(usr\/)?s?bin\/(apt|rpm|yum|dnf|pkg|flatpak|snap|mkdir|cp|pwd|ls|touch|mv|rm)", 0) != null
+		or regex(lower(subject.process.fullpath), "\/(usr\/)?s?bin\/(apt|rpm|yum|dnf|pkg|flatpak|snap|mkdir|cp|pwd|ls|touch|mv|rm)", 0) != null
+	)
+}

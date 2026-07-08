@@ -1,0 +1,9 @@
+event UDP_DNS_drop:
+    key:
+        event_src.host, datafield1, src.host, src.port, interface, dst.host, dst.port,
+        reason, protocol, action, object, object.type, status, importance,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Cisco_ASA_FWSM_PIX_syslog_410001_UDP_DNS_drop"
+
+aggregate Cisco_FW_UDP_DNS_drop: UDP_DNS_drop[3,100] within 5m

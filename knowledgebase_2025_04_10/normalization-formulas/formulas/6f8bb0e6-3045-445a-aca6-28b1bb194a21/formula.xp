@@ -1,0 +1,30 @@
+TABULAR = '{time=time},
+           {src.ip=ip},
+           permissions,
+           create_by,
+           realname,
+           email,
+           last_login_time,
+           {subject.account.name=username},
+           {subject.account.id=uuid},
+           {dst.hostname=url}'
+
+COND = $product == "Wallarm"
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "wallarm"
+event_src.title = "wallarm"
+event_src.category = "Web security"
+event_src.hostname = dst.hostname
+
+id = "PT_Wallarm_Wallarm_customeventcollector_user_logged_in"

@@ -1,0 +1,25 @@
+TEXT = "{'<'NUMBER'>'?}{':'?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|'(none)'|}
+        usermod[{NUMBER}]: add '{object.account.name=WORDDASH}' to group '{object.name=WORDDASH}'"
+
+action = "modify"
+object = "user_group"
+status = "success"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+importance = "info"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_common_syslog_user_add_to_group"

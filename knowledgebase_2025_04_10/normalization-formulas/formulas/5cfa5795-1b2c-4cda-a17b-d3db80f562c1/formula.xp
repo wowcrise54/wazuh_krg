@@ -1,0 +1,52 @@
+TEXT ='<{NUMBER}> {NUMBER?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME} {datafield1=WORD} {msgid="7920"} - - {$data=REST}'
+
+COND = find_substr($data, "Login attempt") != null
+
+subformula "get_json_data"
+    JSON = ''
+endsubformula
+
+submessage("JSON","get_json_data",$data)
+
+subject = "account"
+action = "login"
+object = "system"
+
+if $result == "Success" then
+    status = "success"
+elif $result == "Failure" then
+    status = "failure"
+endif
+
+$cut = strip($detail, 'Authenticating domain user ', '.')
+subject.account.fullname = lower(strip($cut, "'", "'"))
+$temp = csv(subject.account.fullname, '\\', '')
+subject.account.name = $temp[1]
+subject.account.domain = $temp[0]
+
+src.fqdn = lower($hostname)
+src.hostname = csv(src.fqdn, ".", "")[0]
+src.ip = $ipv4
+
+# datafield1 - Era Server Name
+datafield2 = $event_type  # Event type
+datafield3 = $target # Target GUID
+
+importance = switch $severity
+    case "Information" "info"
+    case "Low" "low"
+    case "Medium" "medium"
+    case "Warning" "medium"
+    case "Critical" "high"
+endswitch
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "eset"
+event_src.title = "protect"
+event_src.category = "Host security"
+event_src.hostname = csv(event_src.fqdn, ".", "")[0]
+
+id = "PT_ESET_Protect_8_syslog_login_attempt"

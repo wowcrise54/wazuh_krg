@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        ru: "Проверка на присутствие в списке исключений (ОС Linux)"
+        en: "Check for presence on the exclusion list (Linux OS)"
+    Description:
+        ru: "Проверка ключевой информации скоррелированного события на присутствие в списке исключений на узлах с ОС Linux, используя прямое сравнение значений"
+        en: "A check for the presence of correlated event key information on the exclusion list on hosts running Linux OS using the direct comparison of values"
+    UseAsEventName: False
+Args:
+    rule_name:
+        Type: string
+        Name:
+            ru: "Название правила корреляции"
+            en: "Correlation rule name"
+    specific_value:
+        Type: string
+        Name:
+            en: "Key information value of a correlated event"
+            ru: "Значение ключевой информации скоррелированного события"
+ObjectId: PT-RF-74
+Origin: PT

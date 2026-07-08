@@ -1,0 +1,114 @@
+TABULAR = '{time=DetectedUTC},
+           Analyzer,
+           AnalyzerName,
+           ThreatEventID,
+           ThreatSeverity'
+
+# 1319, 1320, 1323, 1324 -> F1
+COND = in_list(["1329", "1330", "1331", "1332", "1334", "1337", "1338", "1339", "2402",
+                "2412"], string($ThreatEventID)) and
+                $AnalyzerName == "VirusScan Enterprise"
+
+subject = "application"
+# action differs
+# object differs
+status = "failure"
+
+subject.id = $ServerID
+subject.type = $Analyzer
+subject.name = $AnalyzerName
+subject.version = $AnalyzerEngineVersion
+
+object.type = $ThreatType
+if $ThreatName != "none" and length($ThreatName) != 0 then
+    object.name = $ThreatName
+endif
+object.group = $ThreatCategory
+if $SourceProcessName != null then
+    object.property = "SourceProcessName"
+    object.value = $SourceProcessName
+endif
+if $TargetFileName != "null" and length($TargetFileName) != 0  then
+    object.path =  $TargetFileName
+endif
+if $ThreatActionTaken != "none" then
+    object.state = $ThreatActionTaken
+endif
+
+src.hostname = $AnalyzerHostName
+dst.ip = $TargetIP
+dst.hostname = $TargetHostName
+
+# datafield1 - RU localization
+datafield2 = $TargetUserName
+datafield3 = $ThreatSeverity
+datafield4 = $AnalyzerDATVersion
+datafield5 = $AnalyzerDetectionMethod
+
+msgid = string($ThreatEventID)
+switch msgid
+    case "1329"
+        reason = "Offline Virtual Image scan failed due to a sharing violation"
+        datafield1 = "Сбой сканирования автономного виртуального образа: Нарушение совместного доступа"
+        object = "resource"
+        action = "scan"
+    case "1330"
+        reason = "Offline Virtual Image scan failed due to a removable drive conflict"
+        datafield1 = "Сбой сканирования автономного виртуального образа: Конфликт съёмных дисков"
+        object = "resource"
+        action = "scan"
+    case "1331"
+        reason = "Offline Virtual Image scan failed: unable to virtualize registry"
+        datafield1 = "Сбой сканирования автономного виртуального образа: Не удалось выполнить виртуализацию реестра"
+        object = "resource"
+        action = "scan"
+    case "1332"
+        reason = "Offline Virtual Image scan failed because image is suspended or running"
+        datafield1 = "Сбой сканирования автономного виртуального образа: Образ приостановлен или выполняется"
+        object = "resource"
+        action = "scan"
+    case "1334"
+        reason = "Offline Virtual Image scan: copy DAT files failed"
+        datafield1 = "Сканирование автономного виртуального образа: Сбой копирования DAT-файлов"
+        object = "resource"
+        action = "scan"
+    case "1337"
+        reason = "Offline Virtual Image scan failed due to a partition mount failure"
+        datafield1 = "Сбой сканирования автономного виртуального образа: сбой подключения раздела"
+        object = "resource"
+        action = "scan"
+    case "1338"
+        reason = "Offline Virtual Image scan failed"
+        datafield1 = "Сбой сканирования автономного виртуального образа"
+        object = "resource"
+        action = "scan"
+    case "1339"
+        reason = "Offline Virtual Image scan failed: unable to load required library"
+        datafield1 = "Сбой сканирования автономного виртуального образа: не удалось загрузить требуемую библиотеку"
+        object = "resource"
+        action = "scan"
+    case "2402"
+        reason = "Update Failed"
+        datafield1 = "Сбой обновления"
+        object = "update"
+        action = "install"
+    case "2412"
+        reason = "Deployment Failed"
+        datafield1 = "Сбой развертывания"
+        object = "application"
+        action = "install"
+endswitch
+
+importance = "high"
+
+event_src.vendor = "mcafee"
+event_src.title = "vse"
+event_src.category = "Anti-virus"
+
+if maybe_ipv4($SourceIP) != null then
+    event_src.ip = maybe_ipv4($SourceIP)
+elif maybe_ipv6($SourceIP) != null then
+    event_src.ip = maybe_ipv6($SourceIP)
+endif
+
+id = "PT_McAfee_VSE_odbc_F3_High_Infection_Halt"

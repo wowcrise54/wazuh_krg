@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} 
+        {"%%"?}{WORD+}/{NUMBER}/{msgid="CPU_USAGE_HIGH"}{"(l)"?}{"["NUMBER"]"?}:The CPU is overloaded, 
+        and the tasks with top three CPU occupancy are CFM ({datafield1=NUMBER}%), INFO({datafield2=NUMBER}%), 
+        tCOUNTER.0({datafield3=NUMBER}%). (CpuUsage={object.value=NUMBER}%, Threshold={datafield4=NUMBER}%)'
+
+action = "alert"
+object = "device"
+status = "success"
+
+object.property = "cpu"
+
+reason = "The CPU is overloaded"
+
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_CPU_usage_above_threshold"

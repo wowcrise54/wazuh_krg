@@ -1,0 +1,49 @@
+TABULAR = 'entryid, action, {time=datatime}, {subject.id=user}, username'
+
+!COND = $action == "ADMIN-AUDIT" and (find_substr($entrydata,"ADDED PERMISSION") != Null or find_substr($entrydata,"UPDATED PERMISSION") != Null or find_substr($entrydata,"REVOKED PERMISSION") != Null)
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+submessage("TEXT", "SPLIT", $entrydata)
+if find_substr($username,"\\") != Null then
+    submessage("TEXT", "SPLIT2", $username)
+else
+    subject.name = $username
+endif
+
+subformula "SPLIT"
+    TEXT = "{$kv=KEYVALUE('\" ', '=')}"
+    $name = strip($kv['targetuser'],"\"","")
+    if find_substr($name,"\\") != Null then
+        $csv = csv($name, "\\", "'")
+        object.domain = $csv[0]
+        object.name = $csv[1]
+    else
+        object.name = $name
+    endif
+    msgid = strip($kv['auditevent'],"\"","")
+    dst.hostname = strip($kv['targetcomptr'],"\"","")
+
+    if $kv['other'] != Null then
+        object.property = "privileges"
+        object.value = strip($kv['other'],"\"","")      # права доступа
+    endif
+    datafield1 = strip($kv['target'],"\"","")           # устройство, для которого изменяются права доступа
+endsubformula
+
+subformula "SPLIT2"
+    TEXT = "{subject.domain=WORDDASH}\\{subject.name=STRING}"
+endsubformula
+
+if length($computer) != 0 then
+    event_src.hostname = $computer
+endif
+event_src.vendor =  "lumension"
+event_src.title = "endpoint_security"
+event_src.category = "Host security"
+
+id = "PT_Lumension_Endpoint_Security_odbc_change_permissions"
+importance = "info"

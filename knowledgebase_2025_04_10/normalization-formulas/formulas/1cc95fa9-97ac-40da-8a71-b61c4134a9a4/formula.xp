@@ -1,0 +1,28 @@
+TABULAR =  "recordid,
+            {subject.name = module_name},
+            severity,
+            event_id,
+            {time = time},
+            {datafield1 = site_code},
+            hostname,
+            {datafield2 = component},
+            {object.id = params}
+            "
+
+COND = $event_id == 2509
+
+subject = "application"
+object = "rule"
+
+action = "apply"
+status = "failure"
+msgid = string($event_id)
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+event_src.title = "sccm"
+event_src.category = "Network monitoring system"
+
+importance = "medium"
+
+id = "PT_Microsoft_SCCM_odbc_2509_improrer_configuration_of_collections"

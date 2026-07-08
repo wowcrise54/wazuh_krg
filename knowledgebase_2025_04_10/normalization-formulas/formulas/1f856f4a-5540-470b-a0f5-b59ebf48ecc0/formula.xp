@@ -1,0 +1,53 @@
+!TABULAR = 'Version,
+            DateTime,
+            Severity,
+            MessageID'
+
+!COND = $Location == "com.sap.security.core.util.SecurityAudit" and find_substr($MsgText, "ROLE.MODIFY") != null
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+object.property = "role"
+subject.name = lower($User)
+
+submessage("TEXT", "parse_msg_text", $MsgText)
+subformula "parse_msg_text"
+    TEXT = '{"Role modified"|STRING} | ROLE.MODIFY | ROLE.UME_ROLE_PERSISTENCE.{$rolename=STRING} | |
+        ADD_VALUES: PRINCIPAL_RELATION_MEMBER_ATTRIBUTE=[USER.{"R3"|"PRIVATE"}_DATASOURCE.{$username=STRING}'
+
+    object.name = lower(strip($username, "un:", "]"))
+    object.value = strip($rolename, "un:", "")
+endsubformula
+
+if $Application != '' then
+    datafield1 = $Application   # application
+endif
+if $Transaction != '' then
+    datafield2 = $Transaction   # transaction id
+endif
+if $ThreadName != '' then
+    datafield3 = $ThreadName    # thread name
+endif
+if $Session != '' then
+    datafield4 = $Session       # session id
+endif
+if $DsrComponent != '' then
+    datafield5 = $DsrComponent  # component name
+endif
+
+importance = "info"
+if ($TimeZone != null) then
+    time = $DateTime + "#" + $TimeZone
+else
+    time = $DateTime
+endif
+
+event_src.vendor = "sap"
+event_src.title = "sap_as_java"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_JAVA_Security_Audit_filemonitor_Role_assigned_to_user"

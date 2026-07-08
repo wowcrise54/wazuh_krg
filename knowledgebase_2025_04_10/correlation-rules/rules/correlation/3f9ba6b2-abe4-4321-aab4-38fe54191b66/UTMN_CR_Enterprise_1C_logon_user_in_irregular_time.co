@@ -1,0 +1,130 @@
+query Check_Terminal_Positive ($hostname) from UTMN_TL_Terminal_servers_static {
+        	column::host == $hostname
+}
+
+event User_successfully_logon_to_Windows_Terminal:
+    key:
+        subject.account.name,dst.hostname
+    filter {
+        filter::NotFromCorrelator()
+        and filter::UserAccount_Windows(subject.name,subject.id)
+        and event_src.title == "windows" 
+        and msgid == "4624"
+        and in_list([10], logon_type)
+        and not filter::Loopback_Address(src.ip)
+        and subject.account.privileges != null
+    }
+
+event Login_attempt_1c_from_Terminal:
+    key:
+        subject.account.name,src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::Login_except_Windows()
+        and event_src.title == "1c_enterprise"
+        and not in_list([subject.application.account.name, src.host], null)
+        and filter::CheckWL_Specific_Only("UTMN_CR_Enterprise_1C_logon_user_in_irregular_time", lower(subject.application.account.name))
+        and exec_query("Check_Terminal_Positive", [lower(src.host)])
+        and status == "success"
+        and in_list([0,15,16,17,18,19,20,21,22,23], hour(time))
+    }
+    
+event Login_attempt_1c_not_from_Terminal:
+    key:
+        subject.application.account.name,src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::Login_except_Windows()
+        and event_src.title == "1c_enterprise"
+        and not in_list([subject.application.account.name, src.host], null)
+        and filter::CheckWL_Specific_Only("UTMN_CR_Enterprise_1C_logon_user_in_irregular_time", lower(subject.application.account.name))
+        and not exec_query("Check_Terminal_Positive", [lower(src.host)])
+        and status == "success"
+        and in_list([0,15,16,17,18,19,20,21,22,23], hour(time))
+    }
+
+rule UTMN_CR_Enterprise_1C_logon_user_in_irregular_time: (User_successfully_logon_to_Windows_Terminal -> Login_attempt_1c_from_Terminal) or Login_attempt_1c_not_from_Terminal
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+	on User_successfully_logon_to_Windows_Terminal {
+    	$src.host = src.host
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+    }
+	
+    on Login_attempt_1c_from_Terminal {
+        $subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.privileges = subject.application.account.privileges
+        $subject.application.account.session_id = subject.application.account.session_id
+
+		$subject.account.fullname = subject.account.fullname  # Application account
+
+        $src_asset = src.asset
+
+        $alert.key = lower(subject.application.account.name)
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $object.name = object.name
+    }
+    
+    on Login_attempt_1c_not_from_Terminal {
+		$subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.privileges = subject.application.account.privileges
+        $subject.application.account.session_id = subject.application.account.session_id
+
+		$subject.account.fullname = subject.account.fullname  # Application account
+
+        $src_asset = src.asset
+        $src.host = src.host
+
+        $alert.key = lower(subject.application.account.name)
+
+        $event_src.id = event_src.id
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $object.name = object.name
+    }
+
+emit {
+
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Brute Force"
+    
+    $incident.aggregation.key = join([$correlation_name, $subject.application.account.name, $src.host], "|")
+    $incident.severity = "medium"
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

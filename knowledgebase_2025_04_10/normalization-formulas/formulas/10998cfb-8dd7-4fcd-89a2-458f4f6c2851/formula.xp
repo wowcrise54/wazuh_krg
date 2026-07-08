@@ -1,0 +1,144 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{WORD}|{$kv=KEYVALUE(" ", "=", "~")}'
+        
+COND = $tmp_subsys == "VPN-1 & FireWall-1"
+       and $kv["nat_rule_uid"] == null
+       and $kv["vpn_feature_name"] == null
+       and ($kv["msg"] != "Address spoofing")
+       and ($kv["msg"] != "Loopback address spoofing")
+       and find_substr($kv["msg"], "IP multicast routing failed") == null
+       and $kv["cluster_info"] == null
+
+subject.id = $kv["rule_uid"]
+if (subject.id != null) then
+    subject = "rule"
+    subject.name = $kv["cs2"]
+endif
+switch lower($kv["act"])
+    case "accept"
+        action = "allow"
+        importance = "info"
+        category.low = "Control"
+    case "detect"
+        action = "detect"
+        importance = "low"
+        category.low = "State"
+    case "reject"
+        action = "deny"
+        importance = "medium"
+        category.low = "Control"
+    case "drop"
+        action = "deny"
+        importance = "medium"
+        category.low = "Control"
+endswitch
+object = "connection"
+status = "success"
+
+subformula "suser_long"
+TEXT = '{subject.account.fullname=UNTIL(" (")}{subject.account.name=WORD}
+        @{subject.account.domain=UNTIL(")")}'
+endsubformula
+
+subformula "suser_long"
+TEXT = '{subject.account.fullname=UNTIL(" (")}
+            {subject.account.name=UNTIL(")")}'
+endsubformula
+        
+subformula "user_long"
+TEXT = '{subject.account.name=WORDDASH}'
+endsubformula        
+        
+subformula "suser_long"
+TEXT = '{REST}'
+endsubformula        
+
+submessage('TEXT', 'suser_long', $kv["suser"])
+
+subformula "duser_long"
+TEXT = '{object.account.fullname=UNTIL(" (")}{object.account.name=WORD}
+        @{object.account.domain=UNTIL(")")}'
+endsubformula
+
+subformula "duser_long"
+TEXT = '{object.account.fullname=UNTIL(" (")}
+        {object.account.name=UNTIL(")")}'
+endsubformula
+        
+subformula "duser_long"
+TEXT = '{object.account.name=WORDDASH}'
+endsubformula        
+        
+subformula "duser_long"
+TEXT = '{REST}'
+endsubformula  
+
+submessage('TEXT', 'duser_long', $kv["duser"])
+
+$service_id = $kv["service_id"]
+if ($service_id != null) then
+    object.property = "Service found for the connection (by the destination port)"
+    object.value = $service_id
+endif
+
+src.ip = $kv["src"]
+$spt = $kv["spt"]
+if ($spt != 0) then src.port = $spt endif
+$shost = $kv["shost"]
+if find_substr($shost, '@') != null then
+    src.fqdn = $shost
+    src.hostname = substr($shost, 0, find_substr($shost, "@"))
+else
+    src.hostname = $shost
+endif
+
+dst.ip = $kv["dst"]
+$dpt = $kv["dpt"]
+if ($dpt != 0) then dst.port = $dpt endif
+$dhost = $kv["dhost"]
+if find_substr($dhost, '@') != null then
+    dst.fqdn = $dhost
+    dst.hostname = substr($dhost, 0, find_substr($dhost, "@"))
+else
+    dst.hostname = $dhost
+endif
+
+direction = switch lower($kv["conn_direction"])
+  case "internal" "ingress"
+  case "outgoing" "egress"
+endswitch
+
+if find_substr($kv["cs4Label"], "TCP") != null then
+    tcp_flag = $kv["cs4"]
+endif
+
+protocol = $kv["proto"]
+
+datafield1 = $kv["inzone"]         # входная зона (ingress zone)
+datafield3 = $kv["outzone"]        # исходящая зона (egress zone)
+if find_substr($kv["cn2Label"], "ICMP") != null then
+    datafield5 = $kv["icmp"]       # icmp общее имя
+    datafield6 = $kv["cn2"]        # icmp тип
+    datafield7 = $kv["cn3"]        # icmp код
+endif
+datafield8 = $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+if find_substr($service_id, "CPD") != null then
+    reason = "Check Point Daemon Protocol - data transfer is possible in the connection: secure internal communication (SIC), licensing and status reporting."
+endif
+reason = coalesce($kv["msg"], $kv["tcp_packet_out_of_state"], $kv["tcp_state"], $kv["drop_reason"])
+time = epoch_ms_to_datetime(number($kv["rt"]))
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_VPN_and_Firewall_FW_detect_connection"

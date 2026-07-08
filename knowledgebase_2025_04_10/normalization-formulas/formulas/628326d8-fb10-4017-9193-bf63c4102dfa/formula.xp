@@ -1,0 +1,27 @@
+!TEXT = '{"<"NUMBER">"?} {time=DATETIME} {$Computer=WORDDASH} {event_src.subsys=WORD}:
+        {$level=LITERAL} {UNTIL("]")} Unexpected error no node by zoo_get_children
+        for zookeeper node {object.path=REST}'
+
+action = "check"
+object = "node"
+status = "failure"
+
+importance = switch $level
+    case "I" "info"
+    case "W" "low"
+    case "E" "medium"
+    case "F" "high"
+endswitch
+
+event_src.vendor = "nutanix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ahv"
+event_src.category = "Virtualization"
+
+id = "PT_Nutanix_AHV_syslog_error_no_node"

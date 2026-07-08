@@ -1,0 +1,76 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        CEF:{NUMBER}|Avanpost|{$tpm_subsys="IDM"}||{msgid="886137034"}|Создана задача на {"отзыв"|"назначение"}
+        роли "{object.value=UNTIL("\\"")} для пользователя "{datafield2=UNTIL("\\"")}|{NUMBER}|{$kv=KEYVALUE(" ", "=", "")}'
+
+subject = "account"
+action = "create"
+object = "task"
+status = "success"
+
+subformula "body"
+    JSON = ''    
+endsubformula
+
+subject.account.id = $kv["suid"]
+
+if find_substr($kv["suser"], "\\") != null then
+    $csv_subject_domain_name = csv($kv["suser"], "\\", "")
+    subject.account.domain = $csv_subject_domain_name[0]
+    subject.account.name = $csv_subject_domain_name[1]
+else
+    subject.account.fullname = $kv["suser"]
+endif
+
+submessage("JSON", "body", $kv["body"])
+
+subject.type = $author
+
+object.type = $actionName
+object.property = "role"
+object.state = join(["is running", $isRunning], ": ")
+
+if ipv4($kv["sourceTranslatedAddress"]) != null  then
+    if $kv["sourceTranslatedAddress"] != "127.0.0.1" then
+        src.ip = $kv["sourceTranslatedAddress"]
+
+        logon_auth_method = "remote"
+    else
+        logon_auth_method = "local"
+    endif
+else
+    src.hostname = $kv["sourceTranslatedAddress"]
+endif
+
+$dot = find_substr($kv["dvchost"], ".")
+if $dot != null then
+    dst.fqdn = $kv["dvchost"]
+    dst.hostname = substr($kv["dvchost"], 0, $dot)
+elif ipv4($kv["dvchost"]) != null then
+    dst.ip = $kv["dvchost"]
+else
+    dst.hostname = $kv["dvchost"]
+endif
+
+datafield1 = $kv["request"]  # Запрос
+# datafield2 - Пользователь, на которого направлена задача
+datafield3 = $employeeId          # Employee Id
+datafield4 = $roleId              # Role Id
+datafield5 = $stoppedWithError    # Stopped With Error
+datafield6 = $stoppedWithRequest  # Stopped With Request
+datafield7 = if length($pendingStamps) > 0 then join($pendingStamps, "|") else null endif  # Pending Stamps
+
+importance = "low"
+
+event_src.vendor = "avanpost"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "avanpost_idm"
+event_src.subsys = lower($tpm_subsys)
+event_src.category = "AAA"
+
+id = "PT_Avanpost_Avanpost_IDM_syslog_CEF_IDM_Task_create"

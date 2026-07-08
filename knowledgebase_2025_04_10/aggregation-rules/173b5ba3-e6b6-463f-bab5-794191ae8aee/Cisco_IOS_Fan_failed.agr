@@ -1,0 +1,8 @@
+event Fan_failed:
+    key:
+        event_src.host, datafield1, action, object, status, importance,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Cisco_IOS_syslog_ENVMON_3_FAN_FAILED"
+
+aggregate Cisco_IOS_Fan_failed: Fan_failed[3,300] within 30m

@@ -1,0 +1,101 @@
+/* -----------------------------------------------------------------------------
+  Mixins & functions (inc)
+----------------------------------------------------------------------------- */
+
+/* -- Device screens mixins ---------------------------------------------------------------------------- */
+
+/* stylelint-disable scss/no-global-function-names */
+@mixin media-min($breakpoint) {
+  @if map-has-key($breakpoints, $breakpoint) {
+    $breakpoint-value: map-get($breakpoints, $breakpoint);
+    @media (min-width: $breakpoint-value) {
+      @content;
+    }
+  }
+}
+
+@mixin media-max($breakpoint) {
+  @if map-has-key($breakpoints, $breakpoint) {
+    $breakpoint-value: map-get($breakpoints, $breakpoint);
+    @media (max-width: ($breakpoint-value - 1)) {
+      @content;
+    }
+  }
+}
+
+@mixin media-only($lower, $upper) {
+  @if map-has-key($breakpoints, $lower) and map-has-key($breakpoints, $upper) {
+    $lower-breakpoint: map-get($breakpoints, $lower);
+    $upper-breakpoint: map-get($breakpoints, $upper);
+    @media (min-width: $lower-breakpoint) and (max-width: ($upper-breakpoint - 1)) {
+      @content;
+    }
+  }
+}
+/* stylelint-enable scss/no-global-function-names */
+
+/* -- Sidebar ---------------------------------------------------------------------------- */
+
+@mixin global-toc-nested-padding($min, $max, $delta, $default) {
+  @for $level from $min through $max {
+    ul {
+      .toctree-l#{$level} > a {
+        padding-left: $delta * ($level - 1);
+        &.current-toc-node::before {
+          left: $delta * ($level - 1) - $default;
+        }
+      }
+    }
+  }
+}
+
+@mixin local-toc-nested-padding($min, $max, $delta, $default) {
+  $elements: "& > ul > li > ul > li";
+  @for $level from $min through $max {
+    #{$elements} {
+      padding-left: $delta;
+    }
+
+    $elements: $elements + " > ul > li";
+  }
+}
+
+/* -- Link-boxes ----------------------------------------------------------------------- */
+
+@mixin link-boxes-steps-progress($max-layout,$progress-color,$empty-color, $breakpoint){
+  @for $layout from 2 through $max-layout {
+    @for $step from 0 through $max-layout {
+      @if $step < $layout {
+        $progress: calc((($step * 2) - 1) / ($layout * 2));
+        .link-boxes-group.layout-#{$layout}[data-step='#{$step}'] {
+          .steps-line::before {
+            background: $empty-color;
+            background: linear-gradient(90deg, $progress-color $progress * 100%, $empty-color $progress * 100%);
+            @include media-max($breakpoint) {
+              background: linear-gradient(180deg, $progress-color $progress * 100%, $empty-color $progress * 100%);
+            }
+          }
+        }
+      }
+      @if $step >= $layout {
+        .link-boxes-group.layout-#{$layout}[data-step='#{$step}'] {
+          .steps-line::before {
+            background: $progress-color;
+          }
+        }
+      }
+    }
+  }
+}
+
+/* -- Decoration --------------------------------------------- */
+
+@mixin underline-gradient() {
+  background-image: linear-gradient(90deg, transparent -1.54%,rgb(13 99 237 / 50%) 98.88%);
+  display: inline;
+  background-size: 100% 5px;
+  background-position: 100% 90%;
+  background-repeat: no-repeat;
+  line-height: 1.5em;
+  padding-block-end: 0.25em;
+}

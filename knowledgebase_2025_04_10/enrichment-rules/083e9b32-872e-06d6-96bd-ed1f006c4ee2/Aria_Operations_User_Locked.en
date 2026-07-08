@@ -1,0 +1,25 @@
+query CheckIfAccountIsLocked($username) from Aria_Operations_Locked_Accounts {
+    column::username == $username
+}
+
+event Locked_User:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "aria_operations"
+        and event_src.vendor == "vmware"
+        and action == "lock"
+        and object == "account"
+        and status == "success" 
+        and object.account.name != null
+        and not exec_query("CheckIfAccountIsLocked", [object.account.name])
+    }
+
+enrichment Aria_Operations_User_Locked
+    enrich Locked_User:
+        enrich_fields {
+            reason = "locked"
+        } 
+        
+        insert_into Aria_Operations_Locked_Accounts {
+            column::username = object.account.name
+        }

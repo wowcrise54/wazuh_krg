@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {WORD} {":"?} {"%"?} {msgid="AAA-4-LOGIN_FAILED"}: {$user=UNTIL(" [")} {$network=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+$account_name = csv($user, " ", "")
+subject.account.name = $account_name[1]
+$network_split = csv($network, "] [", "")
+$src_ip = csv($network_split[0], ": ", "")
+src.ip = $src_ip[1]
+$service = csv($network_split[1], ": ", "")
+logon_service = $service[1]
+$reason = csv($network_split[2], ": ", "")
+reason = strip($reason[1], "", "]")
+
+importance = "high"
+
+category.high = "Service"
+category.generic = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "arista"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eos"
+event_src.category = "Network device"
+
+id = "PT_Arista_Arista_EOS_syslog_aaa_4_login_failed"

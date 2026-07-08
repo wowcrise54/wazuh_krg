@@ -1,0 +1,73 @@
+JSON = 'source="glance"'
+
+COND = in_list(["create-image", "delete-image"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "create-image" "create"
+    case "delete-image" "remove"
+endswitch
+
+object = "file_object"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+if $response_body["id"] != null then
+    object.id = $response_body["id"]
+else
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[3]
+endif
+
+if $response_body["name"] != "" then
+    object.name = $response_body["name"]
+endif
+
+object.type = "image"
+
+datafield1 = $method                               # Method
+datafield2 = $uri                                  # URL
+datafield6 = $response_body["owner"]               # An identifier for the owner of the image, usually the project/tenant ID
+datafield7 = $response_body["owner_user_name"]     # Owner user name
+datafield8 = $response_body["owner_project_name"]  # Owner project name
+datafield9 = $response_body["visibility"]          # Visibility for image
+
+if $success == "no" then
+    $message_path = coalesce($response_body["itemNotFound"], $response_body["badRequest"])
+    reason = coalesce($message_path["message"], $response_body)
+endif
+
+time = $timestamp
+msgid = $action
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Glance_Image_operations"

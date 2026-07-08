@@ -1,0 +1,191 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_ADD_VM_POOL_WITH_VMS",  # 302
+           "USER_ADD_VM_POOL_WITH_VMS_FAILED",  # 303
+           "USER_ADD_VM_POOL_WITH_VMS_ADD_VDS_FAILED",  # 320
+           "USER_UPDATE_VM_POOL",  # 314
+           "USER_UPDATE_VM_POOL_FAILED",  # 315
+           "USER_UPDATE_VM_POOL_WITH_VMS",  # 344
+           "USER_UPDATE_VM_POOL_WITH_VMS_FAILED",  # 345
+           "USER_REMOVE_VM_POOL_INITIATED",  # 321
+           "USER_REMOVE_VM_POOL",  # 304
+           "USER_REMOVE_VM_POOL_FAILED",  # 305
+           "USER_ADD_VM_TO_POOL",  # 306
+           "USER_ADD_VM_TO_POOL_FAILED",  # 307
+           "USER_REMOVE_VM_FROM_POOL",  # 308
+           "USER_REMOVE_VM_FROM_POOL_FAILED"  # 309
+       ], $event_class)
+
+subject = "account"
+
+if in_list([
+    "USER_ADD_VM_POOL_WITH_VMS", "USER_ADD_VM_POOL_WITH_VMS_FAILED",
+    "USER_ADD_VM_POOL_WITH_VMS_ADD_VDS_FAILED"
+    ], $event_class) then
+    action = "create"
+elif in_list([
+    "USER_REMOVE_VM_POOL_INITIATED", "USER_REMOVE_VM_POOL", "USER_REMOVE_VM_POOL_FAILED"
+    ], $event_class) then
+    action = "remove"
+else
+    action = "modify"
+endif
+
+object = "resource"
+
+if $event_class == "USER_REMOVE_VM_POOL_INITIATED" then
+    status = "ongoing"
+elif in_list([
+    "USER_ADD_VM_POOL_WITH_VMS", "USER_ADD_VM_POOL_WITH_VMS_ADD_VDS_FAILED",
+    "USER_REMOVE_VM_POOL", "USER_ADD_VM_TO_POOL", "USER_REMOVE_VM_FROM_POOL",
+    "USER_UPDATE_VM_POOL", "USER_UPDATE_VM_POOL_WITH_VMS"
+    ], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # USER_ADD_VM_POOL_WITH_VMS
+    TEXT = "VM Pool {$vm_pool_name=STRING+} (containing {$vms_count=NUMBER} VMs) was created by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_VM_POOL_WITH_VMS_FAILED
+    # USER_REMOVE_VM_POOL_FAILED
+    TEXT = "Failed to {'create'|'remove'} VM Pool {$vm_pool_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_VM_POOL_WITH_VMS_ADD_VDS_FAILED
+    TEXT = "Pool {$vm_pool_name=STRING+} Created, but some Vms failed to create (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_VM_POOL_INITIATED
+    TEXT = "VM Pool {$vm_pool_name=STRING+} removal was initiated by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_VM_POOL
+    TEXT = "VM Pool {$vm_pool_name=STRING+} was removed by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_VM_TO_POOL
+    TEXT = "VM {$vm_name=STRING+} was added to VM Pool {$vm_pool_name=STRING+} by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_ADD_VM_TO_POOL_FAILED
+    TEXT = "Failed to add VM {$vm_name=STRING+} to VM Pool {$vm_pool_name_user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_VM_FROM_POOL
+    TEXT = "VM {$vm_name=STRING+} was removed from VM Pool {$vm_pool_name=STRING+} by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_VM_FROM_POOL_FAILED
+    TEXT = "Failed to remove VM {$vm_name=STRING+} from VM Pool {$vm_pool_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "314"
+    # USER_UPDATE_VM_POOL
+    TEXT = "VM Pool {$vm_pool_name=STRING+} configuration was updated by {$user=REST}"
+endsubformula
+
+subformula "315"
+    # USER_UPDATE_VM_POOL_FAILED
+    TEXT = "Failed to update VM Pool {$vm_pool_name=STRING+} configuration (User: {$user=REST}"
+endsubformula
+
+subformula "344"
+    # USER_UPDATE_VM_POOL_WITH_VMS
+    TEXT = "VM Pool {$vm_pool_name=STRING+} was updated by {$user=STRING+} {$vms_count=NUMBER} VMs were added."
+    
+    $user = strip($user, "", ",")
+endsubformula
+
+subformula "345"
+    # USER_UPDATE_VM_POOL_WITH_VMS_FAILED
+    TEXT = "Failed to update VM Pool {$vm_pool_name_user=REST}"
+endsubformula
+
+if $event_class == "USER_UPDATE_VM_POOL" then
+    submessage("TEXT", "314", $raw_message)
+elif $event_class == "USER_UPDATE_VM_POOL_FAILED" then
+    submessage("TEXT", "315", $raw_message)
+elif $event_class == "USER_UPDATE_VM_POOL_WITH_VMS" then
+    submessage("TEXT", "344", $raw_message)
+elif $event_class == "USER_UPDATE_VM_POOL_WITH_VMS_FAILED" then
+    submessage("TEXT", "345", $raw_message)
+else
+    submessage("TEXT", "parse_body", $raw_message)
+endif
+
+$list = csv($vm_pool_name_user, "(User: ", "'")
+if length($list) == 2 then
+    $vm_pool_name = $list[0]
+    $user = $list[1]
+endif
+
+if in_list([
+    "USER_ADD_VM_POOL_WITH_VMS", "USER_REMOVE_VM_POOL_INITIATED", "USER_REMOVE_VM_POOL",
+    "USER_ADD_VM_TO_POOL", "USER_REMOVE_VM_FROM_POOL", "USER_UPDATE_VM_POOL"
+    ], $event_class) then
+    $user = strip($user, "", ".")
+elif in_list([
+    "USER_ADD_VM_POOL_WITH_VMS_FAILED", "USER_REMOVE_VM_POOL_FAILED",
+    "USER_ADD_VM_POOL_WITH_VMS_ADD_VDS_FAILED", "USER_ADD_VM_TO_POOL_FAILED",
+    "USER_REMOVE_VM_FROM_POOL_FAILED", "USER_UPDATE_VM_POOL_FAILED",
+    "USER_UPDATE_VM_POOL_WITH_VMS_FAILED"
+    ], $event_class) then
+    $user = strip($user, "", ").")
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = "vm_pool"
+object.name = $vm_pool_name
+if in_list(["USER_ADD_VM_TO_POOL", "USER_ADD_VM_TO_POOL_FAILED"], $event_class) then
+    object.property = "added_vm"
+elif in_list(["USER_REMOVE_VM_FROM_POOL", "USER_REMOVE_VM_FROM_POOL_FAILED"], $event_class) then
+    object.property = "removed_vm"
+endif
+object.value = $vm_name
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_VM_Pool_Lifecycle"

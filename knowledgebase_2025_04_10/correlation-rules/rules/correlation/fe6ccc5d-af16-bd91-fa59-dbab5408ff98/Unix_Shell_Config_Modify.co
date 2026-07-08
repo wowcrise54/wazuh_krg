@@ -1,0 +1,103 @@
+event Config_Modify:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and event_src.subsys == "auditd"
+        # матчит все файлы инициализации находящиеся в директории пользователя ~/ и в /etc/
+        and filter::FileModify_Linux("(^\/etc)?\/\.?((config\/)?fish\/|ba|z|k|c|tc)?(sh)?(\.(ba|z|k|c|tc)(sh)?)?_?(rc|profile(\.d)?|login|logout|config\.fish)$") 
+        and status == "success"
+        and action != "remove"
+        and filter::CheckWL_Linux_File_Operations("Unix_Shell_Config_Modify", 
+            lower(join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|")))
+    }
+
+rule Unix_Shell_Config_Modify: Config_Modify
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+    }
+       
+    on Config_Modify {
+        $action = action  # create, modify, access
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+                
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.meta = subject.process.meta
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.type = subject.type
+                
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.id = object.id
+        $object.type = object.type
+        $object.state = object.state
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+
+        $numfield2 = numfield2  # Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|"))
+        $alert.context = object.account.name + " " + action + " " + object.fullpath + " with " + subject.process.fullpath
+        $alert.regex_match = regex(object.fullpath, 
+            "(^\/etc)?\/\.?((config\/)?fish\/|ba|z|k|c|tc)?(sh)?(\.(ba|z|k|c|tc)(sh)?)?_?(rc|profile(\.d)?|login|logout|config\.fish)$", 0)
+    }
+
+emit {  
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = coalesce($action, "modify")
+    $object = "file_object"
+    $status = "success"
+
+    if match($object.fullpath, "/etc/*") then
+        $importance = "medium"
+    else
+        $importance = "low"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Event Triggered Execution: Unix Shell Configuration Modification"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

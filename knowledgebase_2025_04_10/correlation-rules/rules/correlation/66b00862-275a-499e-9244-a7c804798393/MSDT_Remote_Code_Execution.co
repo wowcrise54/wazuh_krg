@@ -1,0 +1,134 @@
+event MSDT_Start:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("msdt.exe", "\/cab\s+?.*?\.diagcab\\b")
+        and filter::CheckWL_Process_Creation("MSDT_Remote_Code_Execution", lower(join([subject.account.name, object.process.cmdline], "|")))
+    }
+
+event MSDT_Create_File:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "11"
+        and event_src.title == "sysmon"
+        and lower(subject.process.name) == "msdt.exe"
+        and regex(lower(object.path), "\w:\\\\(windows|(users\\\\\w+?\\\\appdata\\\\local))\\\\(temp|elevateddiagnostics)(\\\\\w+?)?\\\\(sdiag_.*?|\d+?)\\\\", 0) == null
+    }
+
+event Payload_Download:
+    key:
+        event_src.host
+    filter {
+        correlation_name == "Subrule_Payload_Download_Via_WebClient"
+    }
+
+rule MSDT_Remote_Code_Execution: MSDT_Start and Payload_Download and MSDT_Create_File within 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on MSDT_Start {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline], "|"))
+    }
+
+    on MSDT_Create_File {
+        $object.name = object.name
+        $object.property = object.property
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+    }
+
+    on Payload_Download {
+        $datafield1 = object.process.cmdline
+        $datafield2 = object.process.parent.cmdline
+        $datafield3 = object.process.chain
+        $datafield4 = object.account.id
+        
+        # src
+        $src.host = src.host
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.asset = src.asset
+        $src.port = src.port
+
+        # dst
+        $dst.host = dst.host
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.asset = dst.asset
+        $dst.port = dst.port
+
+        $alert.context = alert.context
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "User Execution: Malicious File"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}{$ip3=IPV4|$ip3=IPV6|$host3=HOSTNAME|}{","?}
+        Category: {NUMBER},{$tmp_subsys="LiveUpdate Manager"},{"\\""?}Event Description: 
+        {"Не удалось установить обновление для "|"An update for "}{$raw_o_name=UNTIL(" failed")|$raw_o_name=UNTIL(".")} 
+        {"to install."?} {"Ошибка:"|"Error:"} {UNTIL(", DuResult:")?}
+        {reason=UNTIL(".\\"")|reason=UNTIL(",Event time: ")} {",Event time: "?}{time=DATETIME},
+        {"\\""?}Group Name: {datafield10=UNTIL("\\"")|datafield10=REST}'
+
+action = "update"
+object = "service" 
+status = "failure" 
+
+object.name = strip($raw_o_name, "", " from LiveUpdate")
+
+if $host3 != null or $ip3 != null then
+    event_src.ip = $ip3
+    event_src.hostname = $host3
+else
+    event_src.ip = coalesce($ip2, $ip1)
+    event_src.hostname = coalesce($host2, $host1)
+endif
+datafield2 = coalesce($host1, $ip1, $host2, $ip2)  # Server name 
+# datafield10 - Group Name
+
+if find_substr(reason, "Authentication failed") != null then
+   importance = "medium"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_LU_install_status"

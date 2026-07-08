@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}
+        {UNTIL("Site:")} {"Site"?} {datafield1=UNTIL(",Server")} {"Name"?}: {datafield2=UNTIL(",")}
+        Domain {"Name"?}: {datafield3=UNTIL(",")} The management server received a report that the client
+        computer changed its hardware identity, {object.name=UNTIL(",")} {datafield5=UNTIL(",")}{datafield6=REST}'
+
+action = "modify"
+object = "computer"
+status = "success"
+
+# datafield1 - Site Name
+# datafield2 - Server name
+# datafield3 - Domain name
+# datafield5 - The logon user name.
+# datafield6 - The logon domain name.
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip2, $ip1)
+event_src.hostname = coalesce($host2, $host1)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_Client_computer_changed_its_hardware_identity"

@@ -1,0 +1,16 @@
+!TEXT = "{time=DATETIME} {UNTIL(']')} INFO {msgid='Umbraco.Core.Publishing.PublishingStrategy'} -
+         Content '{object.name=WORDDASH+}' with Id '{object.id=WORD}' has been {object.state=WORD}."
+
+action = "info"
+object = "resource"
+status = "success"
+
+object.type = "content"
+
+importance = "low"
+
+event_src.vendor = "opensource"
+event_src.title = "umbraco_cms"
+event_src.category = "Other"
+
+id = "PT_Opensource_Umbraco_CMS_filemonitor_Content_published_unpublished"

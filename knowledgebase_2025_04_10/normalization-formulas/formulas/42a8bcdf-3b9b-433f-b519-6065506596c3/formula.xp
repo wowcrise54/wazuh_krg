@@ -1,0 +1,69 @@
+TEXT ='<{NUMBER}> {NUMBER?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME} {datafield1=WORD} {msgid="7920"} - - {$data=REST}'
+
+COND = find_substr($data, "Threat_Event") != null and find_substr($data, "Cleaned by deleting") == null and find_substr($data, "Potentially unwanted application") == null
+
+subformula "get_json_data"
+    JSON = ''
+endsubformula
+
+submessage("JSON","get_json_data",$data)
+
+action = "detect"
+object = "malware"
+status = "success"
+
+subject.account.fullname = lower($username)
+$temp = csv(subject.account.fullname, '\\', '')
+subject.account.name = $temp[1]
+subject.account.domain = $temp[0]
+
+subject.process.fullpath = lower($processname)
+$csv = csv(subject.process.fullpath, '\\', '')
+subject.process.name = $csv[(length($csv))-1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+
+object.fullpath = lower($object_uri)
+$tmp = csv(object.fullpath, '=', '')
+$check = $tmp[(length($tmp))-1]
+$links = csv(object.fullpath, '/', '')
+if $check != object.fullpath then
+    object.name = $check
+    object.path = strip(object.fullpath, "", object.name)
+else
+    object.name = $links[(length($links))-1]
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+object.type = $threat_type + ': ' + $threat_name
+object.hash = lower($hash)
+object.state = $action_taken  # Action taken
+
+src.fqdn = lower($hostname)
+src.hostname = csv(src.fqdn, ".", "")[0]
+src.ip = $ipv4
+
+# datafield1 - Era Server Name
+datafield2 = $scanner_id # Filter name
+datafield3 = $event_type  # Event type
+datafield4 = $scan_id  # database name
+
+importance = switch $severity
+    case "Information" "info"
+    case "Low" "low"
+    case "Medium" "medium"
+    case "Warning" "medium"
+    case "Critical" "high"
+endswitch
+
+reason = $circumstances
+
+category.generic = "IS Incident"
+category.high = "Information Security"
+category.low = "State"
+
+event_src.vendor = "eset"
+event_src.title = "protect"
+event_src.category = "Host security"
+event_src.hostname = csv(event_src.fqdn, ".", "")[0]
+
+id = "PT_ESET_Protect_8_syslog_An_access_to_a_malicious_file_detected"

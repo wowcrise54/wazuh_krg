@@ -1,0 +1,42 @@
+!JSON = 'EventIdentifier=666'
+!COND = $Logfile=="Security" and $Category==7
+
+subject = "account"
+action = "modify"
+object = "user_group"
+status = "success"
+
+subject.account.name = lower($InsertionStrings[5])
+subject.account.domain = lower($InsertionStrings[6])
+
+object.name = $InsertionStrings[2]
+object.domain = lower($InsertionStrings[3])
+object.type = "Security-disabled universal"
+object.id = strip($InsertionStrings[4], "%{", "}")
+
+object.account.id = strip($InsertionStrings[1], "%{", "}")
+object.account.dn = $InsertionStrings[0]
+object.state = "A member was removed"
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "medium"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Directory service"
+
+id = "PT_Microsoft_Windows_wmi_666_A_member_was_removed_from_a_security_disabled_universal_group"

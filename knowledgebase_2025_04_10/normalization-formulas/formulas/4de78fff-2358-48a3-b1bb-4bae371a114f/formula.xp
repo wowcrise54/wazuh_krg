@@ -1,0 +1,42 @@
+EVENTLOG = 'EventID="787"'
+COND =  $Channel == "Microsoft-Windows-TerminalServices-SessionBroker/Operational"
+        and $Provider["Name"] == "Microsoft-Windows-TerminalServices-SessionBroker"
+
+subject = "application"
+action = "bind"
+object = "session"
+status = "success"
+
+subject.name = "Connection Broker"
+object.name = $UserData["EventXML"]["param2"]
+object.id = $UserData["EventXML"]["param1"]
+
+datafield1 = $UserData["EventXML"]["param4"]  # Название фермы
+
+$dot_pos = find_substr($UserData["EventXML"]["param3"], '.')
+
+if $dot_pos != null then
+	dst.fqdn = lower($UserData["EventXML"]["param3"])
+	dst.hostname = lower(substr($UserData["EventXML"]["param3"], 0, $dot_pos))
+else
+	dst.hostname = lower($UserData["EventXML"]["param3"])
+endif
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Terminal services"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_787_Session_for_user_add_to_database"

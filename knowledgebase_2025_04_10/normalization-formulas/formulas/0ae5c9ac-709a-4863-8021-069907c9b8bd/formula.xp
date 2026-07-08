@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} %{msgid="SECURITYD-6-CHANGE_PASSWD"}: changing passwd for {object.account.name=WORD}'
+
+action = "modify"
+object = "account"
+status = "success"
+
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.title = "nexus"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_SECURITYD_6_CHANGE_PASSWD"

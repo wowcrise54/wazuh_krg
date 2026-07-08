@@ -1,0 +1,41 @@
+EVENTLOG = ''
+
+COND = $Channel == "Kaspersky Event Log"
+       and $Provider["Name"] == "avp"
+       and $EventID["text"] == "4660"
+       and find_substr($Data[0], "Объект помещен на карантин") != null
+
+action = "detect"
+object = "malware"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+object.name = $kv["Результат\\Название"]
+object.type = $kv["Результат\\Тип"]
+object.path = $kv["Объект"]
+object.property = "threat level"
+object.value = $kv["Результат\\Степень угрозы"]
+object.state = "quarantined"
+
+datafield1 = substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' ('))     # Имя пользователя
+
+time = $TimeCreated["SystemTime"]
+
+msgid = $kv["Тип события"]
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_object_moved_to_quarantine"

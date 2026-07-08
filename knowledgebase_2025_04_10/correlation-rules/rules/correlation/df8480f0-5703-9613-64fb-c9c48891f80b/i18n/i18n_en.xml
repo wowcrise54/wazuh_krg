@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in the GitLab version control system. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="244eccee-5898-717e-83a5-61c57da9004b">Successful password spraying in application {event_src.title} on host {event_src.host}. The passwords of users {datafield2} are bruteforced. Number of failed authorization attempts: {datafield1}.</EventDescription>
+    <EventDescription id="94eabc84-7b10-e54c-20e6-77b5acd2c557">Successful password spraying in application {event_src.title} on host {event_src.host}. The password of user {subject.account.name} is bruteforced. Number of failed authorization attempts: {datafield1}.</EventDescription>
+    <EventDescription id="f0c67063-423f-c99a-c136-41fd8b264273">Password spraying attempts in application {event_src.title} on host {event_src.host}. Number of authorization attempts: {datafield1}.</EventDescription>
+  </EventDescriptions>
+</Localization>

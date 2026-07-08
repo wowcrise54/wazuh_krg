@@ -1,0 +1,48 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="https-proxy"}[{NUMBER}]: msg_id="{msgid="2CFF-0001"}"
+         {$act1="Allow"|$act1="Deny"} {WORDDASH} {WORDDASH} {$pt1=WORD} {src.ip=IPV4|src.ip=IPV6}
+         {dst.ip=IPV4|dst.ip=IPV6} {src.port=NUMBER} {dst.port=NUMBER} {$msg=STRING+} ({datafield1=UNTIL(")")}'
+
+$kv = keyvalue($msg, " ", "=", '"')
+
+subject = "application"
+action = switch $act1
+    case "Allow" "allow"
+    case "Deny" "deny"
+endswitch
+object = "request"
+status = "success"
+
+subject.name = "https-proxy"
+
+dst.geo.country = $kv["geo_dst"]
+
+protocol = lower($pt1)
+
+# datafield1 - Proxy policy name
+$dog = find_substr($kv["src_user"], "@")
+if $dog != null then
+    datafield3 = substr($kv["src_user"], 0, $dog)              # user name
+    datafield4 = strip($kv["src_user"], datafield3 + "@", "")  # user domain
+else
+    datafield3 = $kv["src_user"]  # user name
+endif
+datafield5 = $kv["dstname"]  # policy site
+
+reason = $kv["cats"]
+
+importance = "info"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.subsys = "vpn-gateway"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_2CFF0001_Weblocker_request_categories"

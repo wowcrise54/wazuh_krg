@@ -1,0 +1,32 @@
+TEXT = '{time=DATETIME}{subject.name=STRING}({WORD}){WORD+}{msgid="95kp"}{datafield1=WORD}
+        Creating site {UNTIL("[")?}{$url=UNTIL("]")?}{$scheme=WORD?}{"://"?}{$host=HOSTNAME?}{":"?}
+        {dst.port=NUMBER?}{$name=STRING?}{UNTIL("WSS_Content]")?}{$df2=REST?}'
+
+subject = "process"
+action = "create"
+object = "resource"
+status = "ongoing"
+
+object.type = "site"
+
+if $url == null then
+    object.name = $scheme + "://" + $host + strip($name,"",")")
+else
+    object.path = $url
+endif
+
+# datafield1 - Уровень важности события по оценке самого ПО
+
+if $df2 == '' then
+else
+    datafield2 = $df2    # Идентификатор базы данных
+endif
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+event_src.subsys = "topology"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Creating_site"

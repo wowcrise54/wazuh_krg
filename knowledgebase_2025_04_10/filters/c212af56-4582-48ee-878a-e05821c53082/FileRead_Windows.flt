@@ -1,0 +1,18 @@
+filter FileRead_Windows() {
+    (
+        action == "access"
+        and object.type == "file"
+        and (
+            reason == "ReadData"
+            or datafield4 == "0x1"
+        )
+        and event_src.vendor == "microsoft"
+        and event_src.title == "windows"       
+    )
+    and (
+            category.generic == "File System Object"
+            and in_list(["System Management", "Users And Rights Management"], category.high)
+            and category.low == "Manipulation"
+    ) 
+}
+

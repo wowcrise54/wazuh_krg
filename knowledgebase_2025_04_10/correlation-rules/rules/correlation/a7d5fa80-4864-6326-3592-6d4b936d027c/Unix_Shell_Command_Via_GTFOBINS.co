@@ -1,0 +1,163 @@
+query Check_Shell_Command_GTFOBin($process_name) from Unix_GTFOBins {
+    gtfobin_name == $process_name
+    and detection_category == "shell_command"
+}
+
+event Process_Start_GTFOBins:
+    key:
+        event_src.host, object.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.subsys == "auditd"
+        and event_src.title == "unix_like"
+        and action == "start"
+        and object == "process"
+        and status == "success"
+        and subject.account.id != "0"
+        and exec_query("Check_Shell_Command_GTFOBin", [object.process.name])
+    }
+
+event Process_Start_Shell_Pid:
+    key:
+        event_src.host, object.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux_Shell()
+        and status == "success"
+        and filter::CheckWL_Linux_Process_Creation("Unix_Shell_Command_Via_GTFOBINS",
+            lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+
+event Process_Start_Shell_Ppid:
+    key:
+        event_src.host, object.process.parent.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux_Shell()
+        and status == "success"
+        and filter::CheckWL_Linux_Process_Creation("Unix_Shell_Command_Via_GTFOBINS",
+            lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+
+rule Unix_Shell_Command_Via_GTFOBINS: (Process_Start_GTFOBins and (Process_Start_Shell_Pid or Process_Start_Shell_Ppid)) within 20s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+    }
+
+    on Process_Start_GTFOBins {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.meta = object.process.meta
+        $subject.process.cwd = object.process.cwd
+        $subject.process.parent.id = object.process.parent.id
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.group = object.account.group
+
+        $logon_service = logon_service
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.context = join([$subject.process.name, "gtfobin_functions:" + select_query_first("Check_Shell_Command_GTFOBin", [object.process.name], "gtfobin_functions")], " | ")
+    }
+    
+    on Process_Start_Shell_Pid {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+        
+        $alert.key = lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|"))
+    }
+
+    on Process_Start_Shell_Ppid {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+        
+        $alert.key = lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|"))
+    }
+
+emit {
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    if regex($object.process.cmdline, "(c|tc|sc|k|z|fi|da|ba)?sh(\s+-i)?$", 0) != null then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "System Binary Proxy Execution"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

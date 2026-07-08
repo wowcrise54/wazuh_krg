@@ -1,0 +1,109 @@
+# Ищем входы пользователей с 1 айпи под разными УЗ
+query Tracker($vendor, $username, $src_ip) from Active_External_Sessions {     
+     type == $vendor
+     and external_ip == $src_ip # С какого айпи
+     and username != $username # У другого пользователя активная сессия с этого адреса
+}
+
+event VPN_Anomaly_Logon:
+    key:
+        event_src.title, event_src.host      
+    filter {
+        filter::NotFromCorrelator()
+        and filter::AuthVPN()
+        and status == "success"
+        and exec_query("Tracker", [event_src.vendor, lower(coalesce(subject.account.name, object.account.name)), src.ip])
+        and filter::CheckWL_Profiling("VPN_MultiUser_IP", lower(join([src.host, coalesce(subject.account.name, object.account.name), event_src.host, event_src.title], "|")))
+    }
+    
+rule VPN_MultiUser_IP: VPN_Anomaly_Logon
+
+    init {
+        $labels = "CheckWL_Profiling"
+    }
+
+    on VPN_Anomaly_Logon {
+        $object = object
+        $action = action 
+        $subject = subject
+
+        $subject.group = subject.group
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.group = subject.account.group
+        $subject.account.session_id = subject.account.session_id
+
+        $object.account.name = object.account.name
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.geo.org = src.geo.org
+        $src.geo.country = src.geo.country
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $datafield1 = datafield1
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+        $datafield6 = select_query_first("Tracker",[event_src.vendor, lower($subject.account.name), $src.ip],"username")
+        $datafield7 = datafield7
+        $datafield8 = datafield8
+        $datafield9 = datafield9
+        $datafield10 = datafield10
+
+        $assigned_src_ip = assigned_src_ip
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        if src.geo.country != null and not in_list(["россия","ru","russia","российская федерация"], lower(src.geo.country)) then
+            $importance = "high"
+        else
+            $importance = "medium"
+        endif
+    
+        $alert.key = lower(join([src.host, coalesce(subject.account.name, object.account.name), event_src.host, event_src.title], "|"))
+        $alert.context = $datafield6
+    }
+   
+emit {
+    $correlation_type = "event"
+
+    $status = "success"
+        
+    $category.generic = "Anomaly"
+    $category.high = "Initial Access"
+    $category.low = "External Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+ }

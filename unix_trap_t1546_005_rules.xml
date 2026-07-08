@@ -1,0 +1,18 @@
+<!--
+  Native Wazuh port of the trap signature used by MaxPatrol SIEM PT-CR-1021
+  (Unix_Suspicious_Command). MITRE ATT&CK T1546.005: Trap.
+  Data source: Linux auditd EXECVE records decoded by Wazuh.
+-->
+<group name="linux,unix_trap,t1546_005,">
+
+  <rule id="110290" level="10">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">(?i)\btrap\b\s+['&quot;](.+)['&quot;]\s+\b\w+\b</field>
+    <description>Audit: Shell trap action configured by UID $(audit.auid): $(audit.command), executable $(audit.exe).</description>
+    <mitre>
+      <id>T1546.005</id>
+    </mitre>
+    <group>audit,audit_command,attack,persistence,privilege_escalation,event_triggered_execution,unix_shell,trap,</group>
+  </rule>
+
+</group>

@@ -1,0 +1,65 @@
+event Application_Settings_Changed:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "kaspersky"
+        and event_src.title == "endpoint_security" 
+        and (
+            msgid == "Изменены параметры программы"
+            or msgid == "218"
+        )
+        and filter::CheckWL_Specific_Only("Kaspersky_Endpoint_Policy_Modification", lower(object.type))
+    }
+    
+rule Kaspersky_Endpoint_Policy_Modification: Application_Settings_Changed
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Application_Settings_Changed {
+        $subject.account.domain = coalesce(subject.account.domain, subject.domain)
+        $subject.account.name = coalesce(subject.account.name, subject.name)
+        
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        
+        $datafield2 = datafield2  # program name 
+        
+        $reason = reason
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category 
+        
+        $alert.key = lower(object.type) 
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "modify"
+    $object = "configuration"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

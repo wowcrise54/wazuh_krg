@@ -1,0 +1,30 @@
+TABULAR = 'action,
+           fw_subproduct,
+           user'
+
+COND = $action == "logout"
+       and $fw_subproduct == "VPN-1"
+       and $['L2TP:'] == "L2TP user disconnected"
+
+subject = "account"
+action = "stop"
+object = "session"
+status = "success"
+
+subject.account.name = $user
+
+src.ip = $src
+protocol = lower($['scheme:'])
+
+datafield8 = $origin_sic_name  # полное доменное имя
+
+time = $time
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($fw_subproduct)
+event_src.ip = $orig
+event_src.category = "VPN"
+
+id = "PT_Checkpoint_Gaia_opseclog_VPN_and_Firewall_L2TP_Logout"

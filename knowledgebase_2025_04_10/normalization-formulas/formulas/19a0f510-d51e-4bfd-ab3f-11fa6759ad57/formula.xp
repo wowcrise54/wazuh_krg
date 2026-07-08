@@ -1,0 +1,40 @@
+!TABULAR = "{object.id = C_6},
+            {time = EVENT_TIME},
+            {datafield1 = SESSION_ID},
+            USER_NAME"
+
+!COND = in_list(['Создание','Удаление','Изменение', 'Компиляция', 'Полное удаление', 'Ошибки'], $C_5) and ($EVENT_TYPE == "VW_CRIT_DIARY_CRITERIA")
+
+subject = "account"
+action = switch $C_5
+    case "Изменение" "modify"
+    case "Создание" "create"
+    case "Удаление" "remove"
+    case "Полное удаление" "remove"
+    case "Компиляция" "info"
+    case "Ошибки" "info"
+endswitch
+object = "resource"
+status = "success"
+
+subject.name = $USER_NAME
+object.type = "view"
+object.name = $C_7
+object.state = $C_5
+
+if $C_5 == "Ошибки" then
+    reason = $C_4
+else
+    datafield2 = $C_4
+endif
+
+# datafield1 - id сессии
+# datafield2 - Изменяемое представление (идентификатор типа и короткое имя)
+
+importance = "info"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_view_action"

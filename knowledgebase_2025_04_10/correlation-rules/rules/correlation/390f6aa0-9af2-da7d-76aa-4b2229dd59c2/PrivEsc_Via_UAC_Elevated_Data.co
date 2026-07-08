@@ -1,0 +1,137 @@
+event File_Create_UAC:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and lower(object.fullpath) == "c:\\windows\\temp\\uac"
+    }
+
+event File_Create_Msi:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and lower(object.fullpath) == "c:\\config.msi"
+        and filter::CheckWL_Process_Creation("PrivEsc_Via_UAC_Elevated_Data", lower(subject.process.fullpath))
+    }
+
+event StartProcess_CVE:
+    key:
+        event_src.host, object.process.fullpath, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+    }
+
+rule PrivEsc_Via_UAC_Elevated_Data: (StartProcess_CVE and File_Create_Msi and File_Create_UAC) within 30s 
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+    
+    on StartProcess_CVE {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6  # LogonGuid
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.context = $subject.account.name + " -> NT Authority\\System. Dropped files: "
+    }
+
+    on File_Create_UAC {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        if $files_list == null then
+            $files_list = object.fullpath
+        else
+            $files_list = join([$files_list, object.fullpath], ", ")
+        endif
+    }
+
+    on File_Create_Msi {
+
+        $datafield1 = object.name
+        $datafield2 = object.path
+        $datafield3 = object.fullpath
+
+        if $files_list == null then
+            $files_list = object.fullpath
+        else
+            $files_list = join([$files_list, object.fullpath], ", ")
+        endif
+        
+        $alert.key = lower(subject.process.fullpath)
+    }
+
+emit {  
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "create"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $alert.context = $alert.context + $files_list
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

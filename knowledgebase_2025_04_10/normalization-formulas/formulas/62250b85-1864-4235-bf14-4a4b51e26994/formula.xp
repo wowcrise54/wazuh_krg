@@ -1,0 +1,65 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.EventEx] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+[{$prefix="File system"|$prefix="The volume"} [{$fs_name=STRING+}{$fs_id=WORDDASH}] {$raw_message=REST}'
+COND = ($raw_message == "has been safely un-mounted. The datastore is no longer accessible on this host.]")
+       or (
+           substr($raw_message, 0, 9) == "on volume"
+           and substr($raw_message, -19, 19) == "mode on this host.]"
+       )
+
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+action = switch $prefix
+    case "File system" "bind"
+    case "The volume" "unbind"
+endswitch
+
+object = "resource"
+status = "success"
+
+subformula "parse_rest"
+    TEXT = 'on volume {$arguments_2=WORDDASH} has been mounted in {$arguments_3=STRING} mode on this host.]'
+endsubformula
+
+subformula "parse_rest"
+    TEXT = 'has been safely un-mounted. The datastore is no longer accessible on this host.]'
+endsubformula
+
+submessage("TEXT", "parse_rest", $raw_message)
+
+object.type = "datastore"
+object.name = strip($fs_name, "", ",")
+object.storage.name = $fs_id
+
+if $prefix == "File system" then
+    object.property = "volume|mode"
+    object.value = $arguments_2 + " | " + $arguments_3
+endif
+
+datafield1 = $def_dc_name  # Datacenter Name
+datafield2 = strip($fs_name, "", ",")  # Datastore Name
+
+msgid = switch $prefix
+    case "File system" "esx.audit.vmfs.volume.mounted"
+    case "The volume" "esx.audit.vmfs.volume.umounted"
+endswitch
+
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Datastore_Mount_Unmount"

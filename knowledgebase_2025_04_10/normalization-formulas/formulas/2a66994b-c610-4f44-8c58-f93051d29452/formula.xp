@@ -1,0 +1,19 @@
+id = "PT_Accord_SUCU_filemonitor_Exit_program"
+
+!TEXT = "{time = DATETIME},{subject.name=WORDDASH},{HOSTNAME},Execute command,{msgid='Exit'},{$csv=CSV}"
+
+subject = "account"
+action = "stop"
+object = "application"
+
+if $csv[0] == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+importance = "low"
+
+event_src.vendor = "accord"
+event_src.title = "sucu"
+event_src.category = "Host security"

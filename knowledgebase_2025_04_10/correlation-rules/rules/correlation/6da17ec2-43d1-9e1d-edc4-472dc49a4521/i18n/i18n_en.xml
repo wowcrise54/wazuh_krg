@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Persistence on a host was gained using systemd timer files. Attackers can use a timer to execute malicious code at system startup or based on a schedule to gain persistence and escalate privileges.</Description>
+  <EventDescriptions>
+    <EventDescription id="366924b5-d2f9-0cc6-83e1-3bfbe3959371">User {subject.account.name} gained persistence on host {event_src.host} using systemd timer files</EventDescription>
+    <EventDescription id="726660ff-c9ec-b1a4-faf1-c8ead76af310">User {subject.account.name} attempted to gain persistence on host {event_src.host} using a temporary systemd timer</EventDescription>
+    <EventDescription id="d1a8080a-15c2-59da-2da2-8e991af9a1f0">User {subject.account.name} gained persistence on host {event_src.host} using systemd timer file "{object.name}"</EventDescription>
+  </EventDescriptions>
+</Localization>

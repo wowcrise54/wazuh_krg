@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>В процесс werfault.exe внедрился подозрительный процесс, что может быть признаком использования Havoc для скрытого исполнения команд PowerShell</Description>
+  <EventDescriptions>
+    <EventDescription id="8586e8f1-5d3a-be19-bdac-e482d82988bb">Процесс {object.process.parent.name} создал удаленный поток в адресном пространстве процесса {object.process.name} на узле {event_src.host}. Это может свидетельствовать об использовании программного обеспечения Havoc для скрытого исполнения команд PowerShell</EventDescription>
+    <EventDescription id="d28ece38-fe01-48a7-84b2-8dfb46bdb805">Процесс {object.process.parent.name} создал удаленный поток в адресном пространстве процесса {object.process.name} на узле {event_src.host} для выполнения команды "{object.process.cmdline}". Это может свидетельствовать об использовании программного обеспечения Havoc для скрытого исполнения команд PowerShell</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,37 @@
+!JSON = 'EventIdentifier=562'
+!COND = $Logfile=="Security" and $Category==3
+
+subject = "account"
+action = "remove"
+object = "handle"
+status = "success"
+
+subject.account.domain = lower(substr($User, 0, find_substr($User, '\\')))
+subject.account.name = lower(substr($User, find_substr($User, '\\') + 1, length($User) - find_substr($User, '\\') - 1))
+
+subject.process.fullpath = lower($InsertionStrings[3])
+$temp = csv(subject.process.fullpath, '\\', '')
+subject.process.name = $temp[length($temp)-1]
+subject.process.path = strip(subject.process.fullpath, '', subject.process.name)
+subject.process.id = $InsertionStrings[2]
+
+object.id = $InsertionStrings[1]
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_Common_Security_562_A_handle_to_an_object_was_closed"

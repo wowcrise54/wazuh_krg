@@ -1,0 +1,29 @@
+EVENTLOG = 'EventID.text="1297"'
+!COND = $Channel=="TrustAccess"
+
+subject = "account"
+action = "stop"
+object = "service"
+status = "success"
+
+subject.account.name = $Data[0]
+subject.account.privileges = "administrator"
+
+object.type = "audit event collection"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.hostname = lower($Computer)
+
+event_src.vendor = "security_code"
+event_src.title = "trustaccess"
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_TrustAccess_eventlog_audit_event_collection_disable"

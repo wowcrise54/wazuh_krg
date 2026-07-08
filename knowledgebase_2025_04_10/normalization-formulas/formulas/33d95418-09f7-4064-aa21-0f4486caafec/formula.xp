@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = find_substr($kv["sys_message"], "stopped logging") != null 
+       or find_substr($kv["sys_message"], "started logging") != null
+
+action = "info"
+object = "service"
+status = "success"
+
+object.name = "logging"
+
+if find_substr($kv["sys_message"], "started logging") != null then
+    object.state = "started"
+else
+    object.state = "stopped"
+endif
+
+object.property = "logging origin"
+object.value = $kv["origin_sic_name"]  # полное доменное имя
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Logging_start_stop"

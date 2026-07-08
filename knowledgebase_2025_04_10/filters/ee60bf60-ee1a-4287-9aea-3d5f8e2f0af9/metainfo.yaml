@@ -1,0 +1,31 @@
+Filter:
+    Name:
+        en: "Event fields are present in a list of exclusions"
+        ru: "Поля события есть в списке исключений"
+    Description:
+        en: "Correlated event field values match a regular expression from the list of exclusions that blocks correlation rule triggerings"
+        ru: "Значения полей корреляционного события совпадают с регулярным выражением из списка исключений, запрещающего срабатывания правил корреляции"
+    UseAsEventName: False
+Args:
+    host:
+        Type: string
+        Name:
+            en: "host where the event was registered"
+            ru: "узел, на котором зарегистрировано событие"
+    specific_value:
+        Type: string
+        Name:
+            en: "correlated event field value"
+            ru: "значение поля корреляционного события"
+    user:
+        Type: string
+        Name:
+            ru: "идентификатор пользователя, с которым связано корреляционное событие"
+            en: "ID of the user with which the correlated event is associated"
+    rule_name:
+        Type: string
+        Name:
+            ru: "название правила корреляции"
+            en: "correlation rule name"
+ObjectId: PT-RF-46
+Origin: PT

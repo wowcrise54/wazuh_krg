@@ -1,0 +1,154 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_VDC_LOGIN",  # 30
+           "USER_VDC_LOGOUT",  # 31
+           "USER_VDC_LOGIN_FAILED",  # 114
+           "USER_VDC_LOGOUT_FAILED",  # 815
+           "USER_MAX_SESSIONS_EXCEEDED",  # 4,173
+           "USER_LOGIN_ON_BEHALF",  # 1,401
+           "USER_LOGIN_ON_BEHALF_FAILED"  # 1,402
+       ], $event_class)
+
+subject = "account"
+
+if in_list([
+    "USER_VDC_LOGIN", "USER_VDC_LOGIN_FAILED", "USER_MAX_SESSIONS_EXCEEDED",
+    "USER_LOGIN_ON_BEHALF", "USER_LOGIN_ON_BEHALF_FAILED"
+    ], $event_class) then
+    action = "login"
+else
+    action = "logout"
+endif
+
+object = "application"
+
+if in_list(["USER_VDC_LOGIN", "USER_VDC_LOGOUT", "USER_LOGIN_ON_BEHALF"], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # USER_VDC_LOGIN
+    TEXT = "User {$user=STRING+} connecting from '{src.ip=IPV4|src.ip=IPV6}' using session {$session_id=STRING} logged in."
+endsubformula
+
+subformula "parse_body"
+    # USER_VDC_LOGOUT
+    TEXT = "User {$user=STRING+} connected from '{src.ip=IPV4|src.ip=IPV6}' using session {$session_id=STRING} logged out."
+endsubformula
+
+subformula "parse_body"
+    # USER_VDC_LOGIN_FAILED
+    TEXT = "User {$user=STRING+} connecting from '{src.ip=IPV4|src.ip=IPV6|WORD}' failed to log in {$reason_raw=REST}"
+    
+    if $reason_raw != "." then
+        reason = strip($reason_raw, ": '", "'.")
+    endif
+endsubformula
+
+subformula "parse_body"
+    # USER_VDC_LOGOUT_FAILED
+    TEXT = "Failed to log out user {$user=STRING+} connected from '{src.ip=IPV4|src.ip=IPV6}' using session {$session_id=STRING}"
+    
+    $session_id = strip($session_id, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_MAX_SESSIONS_EXCEEDED
+    TEXT = "User {$user=STRING+} has reached the maximum number of allowed sessions {NUMBER}."
+    
+    reason = $raw_message
+endsubformula
+
+subformula "parse_body"
+    # USER_LOGIN_ON_BEHALF
+    TEXT = "Executed login on behalf - {$login_on_behalf_log_info=REST}"
+    
+    $login_on_behalf_log_info = strip($login_on_behalf_log_info, "", ".")
+    submessage("TEXT", "parse_behalf_info", $login_on_behalf_log_info)
+endsubformula
+
+subformula "parse_body"
+    # USER_LOGIN_ON_BEHALF_FAILED
+    TEXT = "Failed to execute login on behalf - {$login_on_behalf_log_info=REST}"
+    
+    $login_on_behalf_log_info = strip($login_on_behalf_log_info, "", ".")
+    submessage("TEXT", "parse_behalf_info", $login_on_behalf_log_info)
+endsubformula
+
+subformula "parse_behalf_info"
+    TEXT = "for user {$user=REST}"
+endsubformula
+
+subformula "parse_behalf_info"
+    TEXT = "for internal id {$user_id=REST}"
+endsubformula
+
+subformula "parse_behalf_info"
+    TEXT = "for principal name: {$principal_name=STRING+} authz name: {$authz_name=REST}"
+    
+    $principal_name = strip($principal_name, "", ",")
+endsubformula
+
+subformula "parse_behalf_info"
+    TEXT = "for external id: {$external_id=STRING+} authz name: {$authz_name=REST}"
+    
+    $external_id = strip($external_id, "", ",")
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+if $user != null then
+    $user_list = csv($user, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        if in_list(["USER_LOGIN_ON_BEHALF", "USER_LOGIN_ON_BEHALF_FAILED" ], $event_class) then
+            $domain = $user_list[1]
+        else
+            $authz_provider = $user_list[1]
+        endif
+    elif length($user_list) == 3 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+        $authz_provider = $user_list[2]
+    else
+        $username = $user
+    endif
+else
+    $username = coalesce($user_id, $principal_name, $external_id)
+    $authz_provider = $authz_name
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+subject.account.session_id = strip($session_id, "'", "'")
+
+if in_list(["127.0.0.1", "::1"], string(src.ip)) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+logon_service = $authz_provider
+
+msgid = $event_class
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_User_Login_Logout"

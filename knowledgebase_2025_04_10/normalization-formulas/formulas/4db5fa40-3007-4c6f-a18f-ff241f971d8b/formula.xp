@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        Vaultize - - [origin software= {datafield2=STRING} version= {datafield3=STRING} src={src.ip=IPV4|src.ip=IPV6}][
+        userid user= {object.id=UNTIL("][")} client url=https:// {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME} {"/"?}
+        userAgent={datafield1=UNTIL("]")} Password of {$obj_name=UNTIL(" is changed by")} {subject.name=UNTIL(".")}'
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.type = "administrator"
+
+$csv2 = csv($obj_name, "(","'")
+object.name = strip($csv2[0],'',' ')
+
+# datafield1 - user agent
+# datafield2 - application name
+# datafield3 - application version
+
+reason = "password is changed"
+
+importance = "info"
+
+event_src.vendor = "vaultize_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vdr"
+event_src.category = "Application server"
+
+id = "PT_Vaultize_Technologies_VDR_syslog_user_password_changed"

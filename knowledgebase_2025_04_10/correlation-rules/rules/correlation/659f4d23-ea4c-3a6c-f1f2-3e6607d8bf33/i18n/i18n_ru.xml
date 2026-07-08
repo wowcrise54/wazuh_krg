@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Подключение к именованным каналам samr и srvsvc от имени одного и того же пользователя с одного и того же узла, что может свидетельствовать об использовании одного из методов сбора информации утилиты SharpHound (BloodHound): LocalGroup, RDP, DCOM, LocalAdmin, ComputerOnly</Description>
+  <EventDescriptions>
+    <EventDescription id="8deffe85-ccc0-47ed-9020-542792ecfa4a">Пользователь {subject.account.name} с узла {src.host} с помощью утилиты {object.process.name} последовательно подключился к именованным каналам {reason} узла {event_src.host}</EventDescription>
+    <EventDescription id="d22307b1-6ffe-44ef-a6b6-2cb9ef8a7dea">Пользователь {subject.account.name} с узла {src.host} с помощью утилиты {object.process.name} подключился к именованному каналу {reason} узла {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

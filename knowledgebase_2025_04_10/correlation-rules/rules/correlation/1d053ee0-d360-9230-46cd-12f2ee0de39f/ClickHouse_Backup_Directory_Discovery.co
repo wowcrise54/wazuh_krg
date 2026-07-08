@@ -1,0 +1,67 @@
+event Get_Backup_Dir:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "clickhouse"
+        and object.type == "select"
+        and find_substr(datafield2, "system.backups") != null
+        and filter::CheckWL_Database_Actions("ClickHouse_Backup_directory_discovery", lower(object.query))
+    }
+
+rule ClickHouse_Backup_directory_discovery: Get_Backup_Dir
+
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Get_Backup_Dir {
+        $status = status
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+
+        $object.type = object.type
+        $object.query = object.query
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+        
+        $logon_service = logon_service
+
+        $datafield1 = datafield1  # Затронутые базы
+        $datafield2 = datafield2  # Затронутые таблицы
+        $datafield3 = datafield3  # Затронутые колонки
+
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.ip = event_src.ip
+
+        $alert.key = lower(object.query)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+    
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "File and Directory Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity" 
+    $incident.aggregation.timeout = 2h
+}

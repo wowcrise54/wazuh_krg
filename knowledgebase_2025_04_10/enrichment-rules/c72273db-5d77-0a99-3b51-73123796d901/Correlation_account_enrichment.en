@@ -1,0 +1,59 @@
+query GetAccountStorage($user_id) from Known_Windows_Accounts {
+    column::id == $user_id
+}
+
+event Corr_event:
+    filter {
+        filter::FromCorrelator()
+        and (
+             (
+              event_src.vendor == "microsoft"
+              and in_list(["active_directory", "sysmon", "windows"], event_src.title)
+              and (
+                   (object.account.id != null and object.account.provider == null)
+                   or (subject.account.id != null and subject.account.provider == null)
+              )
+             )
+             or in_list(["sql_server", "mysql", "postgresql", "oracle_database"], event_src.title)
+        )
+    }
+
+enrichment Correlation_account_enrichment
+    enrich Corr_event:
+        enrich_fields {
+
+            if in_list(["sql_server", "mysql", "postgresql", "oracle_database"], event_src.title) 
+               and subject.account.name == null
+               and subject.account.id != null 
+            then
+                subject.account.name = subject.account.id
+            endif
+
+            if subject.account.id != null and subject.account.provider == null then
+                if find_substr(subject.account.id, "S-1-5-21-") != 0 then
+                    $subject_account_storage = "local"
+                elif subject.account.domain == "microsoftaccount" then
+                    $subject_account_storage = "local"
+                else
+                    $subject_account_storage = select_query_first("GetAccountStorage", [lower(subject.account.id)], "storage")
+                endif
+
+                subject.account.provider = $subject_account_storage
+            endif
+
+            if object.account.id != null and object.account.provider == null then
+                if object.account.id == subject.account.id and $subject_account_storage != null then
+                    $object_account_storage = $subject_account_storage
+                elif find_substr(object.account.id, "S-1-5-21-") != 0 then
+                    $object_account_storage = "local"
+                elif object.account.domain == "microsoftaccount" then
+                    $object_account_storage = "local"
+                else
+                    $object_account_storage = select_query_first("GetAccountStorage", [lower(object.account.id)], "storage")
+                endif
+                
+                if in_list(["domain", "local", "unknown"], $object_account_storage) then
+                    object.account.provider = $object_account_storage
+                endif
+            endif
+        }

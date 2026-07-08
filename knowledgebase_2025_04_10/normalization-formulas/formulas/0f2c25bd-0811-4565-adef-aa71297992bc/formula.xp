@@ -1,0 +1,85 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} {WORD} hostd[{WORD}] [Originator@{NUMBER} {$kv=UNTIL("]")}{"Event"NUMBER":"?}
+{$prefix="Guest OS"|$prefix="Unsupported guest OS"}{$rest=REST}'
+
+subject = "account"
+object = "system"
+status = "success"
+
+subformula "supported_os"
+    TEXT = '{$act="reboot"|$act="standby"|$act="shut down"} for {$vm_name=STRING+} on {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=REST}'
+    
+    switch $act
+        case "reboot"
+            action = "restart"
+            msgid = "VmGuestRebootEvent"
+        case "standby"
+            action = "stop"
+            msgid = "VmGuestStandbyEvent"
+        case "shut down"
+            action = "stop"
+            msgid = "VmGuestShutdownEvent"
+    endswitch
+endsubformula
+
+subformula "unsupported_os"
+    TEXT = '{$guest_id=WORDDASH} for {$vm_name=STRING+} on {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=REST}'
+    
+    action = "start"
+    object.property = "os_id"
+    object.value = $guest_id
+    msgid = "VmUnsupportedStartingEvent"
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+switch $prefix
+    case "Guest OS" submessage("TEXT", "supported_os", $rest)
+    case "Unsupported guest OS" submessage("TEXT", "unsupported_os", $rest)
+endswitch
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+datafield1 = $datacenter_name  # Datacenter Name
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $host_name  # Host Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_Success_Guest_OS_Operations"

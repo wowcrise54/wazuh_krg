@@ -1,0 +1,83 @@
+query CheckIfAccountSignificant($user_id) from Sensitive_Users {
+    user_id == $user_id
+}
+
+query CheckIfAccountSignificant_AssetGrid($user_id) from AssetGrid_Critical_Domain_Accounts {
+    member_sid == $user_id
+}
+
+event Remove_Access_To_Account:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and in_list(["4723", "4724", "4726", "4740", "627", "628", "630", "644"], msgid)
+        and (
+                exec_query("CheckIfAccountSignificant", [
+                lower(object.account.id)
+                ])
+                or exec_query("CheckIfAccountSignificant_AssetGrid", [
+                lower(object.account.id)
+                ])
+            )
+        and filter::CheckWL_Specific_Only("Remove_Access_To_Sensitive_Account", lower(join([subject.account.id, object.account.id], "|")))
+    }
+
+rule Remove_Access_To_Sensitive_Account: Remove_Access_To_Account
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Remove_Access_To_Account {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+
+        $reason = reason
+
+        $alert.key = lower(join([subject.account.id, object.account.id], "|"))
+        $alert.context = lower(join([subject.account.name, object.account.name], " | "))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "account"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Account Access Removal"
+        
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

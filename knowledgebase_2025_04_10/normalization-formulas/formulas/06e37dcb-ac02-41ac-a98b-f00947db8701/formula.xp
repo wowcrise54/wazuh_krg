@@ -1,0 +1,47 @@
+!JSON = 'EventIdentifier=592'
+!COND = $Logfile=="Security" and $Category==5
+
+subject = "account"
+action = "start"
+object = "process"
+status = "success"
+
+subject.account.session_id = maybe_number16(strip(csv($InsertionStrings[5], ",", "`")[1], "", ")"))
+subject.account.name = lower($InsertionStrings[3])
+subject.account.domain = lower($InsertionStrings[4])
+
+object.account.session_id = subject.account.session_id
+object.account.name = subject.account.name 
+object.account.domain = subject.account.domain
+
+object.process.id = $InsertionStrings[0]
+$path_splitdrive = csv(lower($InsertionStrings[1]),'\\','"')
+object.process.name = $path_splitdrive[length($path_splitdrive) - 1]
+if strip($InsertionStrings[1], "", object.process.name) != '' then
+    object.process.path = strip(lower($InsertionStrings[1]), "", object.process.name)
+endif
+object.process.fullpath = lower($InsertionStrings[1])
+object.process.parent.id = $InsertionStrings[2]
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+category.generic = "Process"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_Common_Security_592_A_new_process_has_been_created"

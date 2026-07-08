@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+        authmgr[{NUMBER}]: <{msgid=NUMBER}> <ERRS> < {WORDDASH}
+        {event_src.ip=IPV4|event_src.ip=IPV6} > Dropping EAPOL packet sent by Station
+        {src.mac=MACADDR} {datafield6=MACADDR}'
+
+action = "info"
+object = "message"
+status = "success"
+
+protocol = "eapol"
+
+# datafield6 - client BSSID
+
+importance = "info"
+
+event_src.title = "arubaos"
+event_src.vendor = "aruba_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Wireless"
+
+id = "PT_Aruba_Networks_ArubaOS_syslog_dropping_eapol_packet"

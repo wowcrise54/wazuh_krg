@@ -1,0 +1,154 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = (
+    in_list([
+        "AccountRemovedEvent", 
+        "AccountCreatedEvent", 
+        "AccountUpdatedEvent", 
+        "UserPasswordChanged"
+    ], $event_class)
+    or (
+        $event_class == "EventEx" 
+        and (
+            substr($raw_message, 0, 42) == "[Remote access for ESXi local user account"
+            or substr($raw_message, 0, 24) == "[Login password for user"
+        )
+    )
+)
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+object = "account"
+status = "success"
+
+subformula "create_account"
+    TEXT = '[Account {$spec_id=STRING*} was created on host {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}]'
+    
+    action = "create"
+endsubformula
+
+subformula "remove_account"
+    TEXT = '[Account {$account=STRING*} was removed on host {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}]'
+    
+    action = "remove"
+endsubformula
+
+subformula "update_account"
+    TEXT = '[Account {$spec_id=STRING*} was updated on host {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}, the description was changed from \'{$prev_description=UNTIL("\' to \'")} {$spec_description=UNTIL("\'")}]'
+    
+    action = "modify"
+    object.property = "description"
+    object.value = $prev_description
+    object.new_value = $spec_description
+endsubformula
+
+subformula "change_passwd"
+    TEXT = '[Password was changed for account {$user_login=STRING} on host {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6}]'
+    
+    action = "modify"
+    object.property = "password"
+endsubformula
+
+subformula "change_dcui_passwd"
+    TEXT = '[Login password for user {$arguments_1=STRING} has been changed. Please consult ESXi Embedded and vCenter Server Setup Guide or follow the Ask VMware link for more information.]'
+    
+    action = "modify"
+    object.property = "password"
+    $event_class = "esx.audit.dcui.login.passwd.changed"
+endsubformula
+
+subformula "lock_account"
+    TEXT = '[Remote access for ESXi local user account {$arguments_1=STRING} has been locked for {$arguments_2=NUMBER} seconds after {$arguments_3=NUMBER} failed login attempts.]'
+    
+    subject = null
+    action = "lock"
+    
+    $arguments_1 = strip($arguments_1, "'", "'")
+    duration = $arguments_2
+    numfield1 = $arguments_3  # Failed Login Attempts
+    $event_class = "esx.audit.account.locked"
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+switch $event_class
+    case "AccountCreatedEvent"
+        submessage("TEXT", "create_account", $raw_message)
+    case "AccountRemovedEvent"
+        submessage("TEXT", "remove_account", $raw_message)
+    case "AccountUpdatedEvent"
+        submessage("TEXT", "update_account", $raw_message)
+    case "UserPasswordChanged"
+        submessage("TEXT", "change_passwd", $raw_message)
+endswitch
+    
+switch substr($raw_message, 0, 24)
+    case "[Login password for user" 
+        submessage("TEXT", "change_dcui_passwd", $raw_message) 
+    case "[Remote access for ESXi " 
+        submessage("TEXT", "lock_account", $raw_message)
+endswitch
+
+$obj_acct_name = coalesce($spec_id, $account, $user_login, $arguments_1)
+$username = null
+$domain = null
+
+submessage("TEXT", "parse_user", $obj_acct_name)
+
+object.account.name = $username
+object.account.domain = $domain
+
+if coalesce(ipv4($host_name), ipv6($host_name)) != null then
+    dst.ip = coalesce(ipv4($host_name), ipv6($host_name))
+else
+    dst.hostname = $host_name
+endif
+
+datafield1 = $def_dc_name  # Datacenter Name
+datafield6 = $host_name  # Host Name
+
+msgid = $event_class
+importance = "medium"
+
+if action != "lock" then
+    category.generic = "Account"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endif
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Account_Management"

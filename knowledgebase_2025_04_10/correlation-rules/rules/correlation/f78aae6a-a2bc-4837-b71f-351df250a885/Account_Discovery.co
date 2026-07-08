@@ -1,0 +1,233 @@
+event ProcessStart_With_Cmdline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            (
+                in_list(["dsquery.exe", "dsget.exe"], lower(object.process.name))
+                and regex(lower(object.process.cmdline), "computer|contact|ou|server|user|\*", 0) != null
+            )
+            or filter::ProcessStart_Windows_commandline("query.exe", "session")
+            or (
+                filter::ProcessStart_Windows_commandline("net1.exe","user")
+                and regex(lower(object.process.cmdline), "add|delete", 0) == null
+            )
+            or filter::ProcessStart_Windows_commandline("wmic.exe","\\b(user|logonsession|useraccount|loggedonuser)\\b")
+            or (
+                in_list(["csvde.exe", "ldifde.exe"], lower(object.process.name))
+                and find_substr(lower(object.process.cmdline), "account") != null
+            )
+            or in_list(["quser.exe","qwinsta.exe"], lower(object.process.name))
+            or regex(lower(object.process.cmdline), "\\bquser\\b", 0) != null
+        )
+        and filter::CheckWL_Process_Creation("Account_Discovery", lower(join([object.process.name, object.process.cmdline], "|")))
+    }
+
+event PowerShell_Pipeline:
+    key:
+        event_src.host, object.process.id, object.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "get-localuser|(get-wmiobject|gwmi|wmic).{0,20}win32_(useraccount|loggedonuser|logonsession)|get-aduser|get-ad.{0,20}(objectclass=user|samaccounttype=805306368)|psbase.*schemaclassname.*-eq\s+[\'\"]user[\'\"]", 0) != null
+        and filter::CheckWL_Powershell("Account_Discovery", lower(object.process.cmdline))
+    }
+
+event PowerShell_Command:
+    key:
+        event_src.host, object.process.id, object.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "(^|\s)net(1)?(\.exe)?\s+.{0,20}user|(dsquery|dsget).{0,20}(computer|contact|ou|server|user|\*)|wmic.{0,20}(user|logonsession|useraccount|loggedonuser)|(csvde|ldifde).{0,20}account|get-localuser|(get-wmiobject|gwmi|wmic).{0,20}win32_(useraccount|loggedonuser|logonsession)|get-aduser|get-ad.{0,20}(objectclass=user|samaccounttype=805306368)|psbase.*schemaclassname.*-eq\s+[\'\"]user[\'\"]", 0) != null
+        and filter::CheckWL_Powershell("Account_Discovery", lower(object.process.cmdline))
+    }
+
+rule Account_Discovery: ProcessStart_With_Cmdline or ((PowerShell_Pipeline+ or PowerShell_Command+) timer 30s)
+
+    init {
+        $labels = "w_auto"
+        $first_event = true
+    }
+
+    on ProcessStart_With_Cmdline {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $alert.key = lower(join([object.process.name, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "(dsquery|dsget).{0,20}(computer|contact|ou|server|user|\*)|query.{0,20}session|net.{0,20}user|wmic.{0,20}(user|logonsession|useraccount|loggedonuser)|(csvde|ldifde).{0,20}account|\\bquser\\b", 0)
+        $alert.context = join([object.process.parent.name, object.process.name], " | ")
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on PowerShell_Pipeline {
+        if $first_event then
+            $action = action  # execute
+            $object = object  # command
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $object.process.cmdline = object.process.cmdline
+            $object.process.name = object.process.name
+
+            $object.process.parent.id = object.process.parent.id
+            $object.process.parent.path = object.process.parent.path
+            $object.process.parent.name = object.process.parent.name
+            $object.process.parent.fullpath = object.process.parent.fullpath
+            $object.process.parent.guid = object.process.parent.guid
+            $object.process.parent.cmdline = object.process.parent.cmdline
+
+            $datafield8 = datafield8  # версия модуля
+
+            $chain_id = chain_id
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.regex_match = regex(lower(object.process.cmdline), "get-localuser|(get-wmiobject|gwmi|wmic).{0,20}win32_(useraccount|loggedonuser|logonsession)|get-aduser|get-ad.{0,20}(objectclass=user|samaccounttype=805306368)|psbase.*schemaclassname.*-eq\s+[\'\"]user[\'\"]", 0)
+            $alert.context = join([object.account.name, object.fullpath], " | ")
+            $labels = $labels + "|CheckWL_Powershell"
+
+            $first_event = false
+        endif
+    }
+
+    on PowerShell_Command {
+        if $first_event then
+            $action = action  # execute
+            $object = object  # command
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.id = object.id
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+
+            $object.value = object.value
+            $object.process.id = object.process.id
+            $object.process.cmdline = object.process.cmdline
+            $object.process.id = object.process.id
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+
+            $alert.key = lower(object.process.cmdline)
+            $alert.regex_match = regex(lower(object.process.cmdline), "(^|\s)net(1)?\\b.{0,20}user|(dsquery|dsget).{0,20}(computer|contact|ou|server|user|\*)|wmic.{0,20}(user|logonsession|useraccount|loggedonuser)|(csvde|ldifde).{0,20}account|get-localuser|(get-wmiobject|gwmi|wmic).{0,20}win32_(useraccount|loggedonuser|logonsession)|get-aduser|get-ad.{0,20}(objectclass=user|samaccounttype=805306368)|psbase.*schemaclassname.*-eq\s+[\'\"]user[\'\"]", 0)
+            $alert.context = object.fullpath
+            $labels = $labels + "|CheckWL_Powershell"
+            
+            $first_event = false
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 30m
+}

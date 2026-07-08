@@ -1,0 +1,42 @@
+EVENTLOG = 'EventID.text="33282"'
+!COND = $Channel=="TrustAccess"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+$name_domain = csv($Data[0], '@', '\"')
+
+subject.account.name = $name_domain[0]
+subject.account.domain = $name_domain[1]
+
+src.ip = $Data[1]
+
+logon_service = $Data[2]  # service principal name
+
+# datafield1 - name of subsystem
+if ($Data[4] == "%%49") then
+    datafield1 = "Kerberos AS"
+elif $Data[4] == "%%50" then
+    datafield1 = "Kerberos TGS"
+elif $Data[4] == "%%105" then
+    datafield1 = "Kerberos CA"
+endif
+
+reason = $Data[5]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+event_src.title = "trustaccess"
+event_src.hostname = $Computer
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_TrustAccess_eventlog_authentication_failed"

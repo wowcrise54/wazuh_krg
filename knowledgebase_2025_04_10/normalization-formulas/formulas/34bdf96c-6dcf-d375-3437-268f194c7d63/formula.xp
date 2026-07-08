@@ -1,0 +1,85 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "CUSTOM_GROUP_CREATE - Creating custom group") != null
+       or find_substr($kv["Category"], "CUSTOM_GROUP_IMPORT - Importing custom group") != null
+       or find_substr($kv["Category"], "CUSTOM_GROUP_UPDATE - Updating custom group") != null
+       or find_substr($kv["Category"], "CUSTOM_GROUP_DELETE - Deleting custom group") != null
+
+subject = "account"
+object = "resource"
+
+subformula "parse_category"
+    TEXT = 'CUSTOM_GROUP_{$act="CREATE"|$act="IMPORT"|$act="UPDATE"|$act="DELETE"} - 
+           {"Creating"|"Importing"|"Updating"|"Deleting"} custom group{"(s)"?}
+           {$res="succeeded"|$res="failed"}. {$kv_group=KEYVALUE(",",":","\\"")}'
+    
+    action = switch $act
+        case "CREATE" "create"
+        case "IMPORT" "upload"
+        case "UPDATE" "modify"
+        case "DELETE" "remove"
+    endswitch
+    status = switch $res
+        case "succeeded" "success"
+        case "failed" "failure"
+    endswitch
+    
+    if not in_list($bad_values, $kv_group["ID(s)"]) then
+        datafield1 = strip($kv_group["ID(s)"], "[", "]")        # Group ids
+    elif not in_list($bad_values, $kv_group["ID"]) then
+        datafield1 = strip($kv_group["ID"], "[", "]")           # Group id
+    endif
+    
+    reason = $kv_group["Due to the following error"]
+endsubformula
+
+subformula "parse_sources_reason"
+    TEXT = '{$kv_sr=KEYVALUE(".", ":", "\\"")}'
+    
+    if not in_list($bad_values, $kv_sr["Name(s)"]) then
+        datafield2 = replace($kv_sr["Name(s)"], "", "[\[\]\"]") # Group names
+    elif not in_list($bad_values, $kv_sr["Name"]) then
+        datafield2 = $kv_sr["Name"]                             # Group name
+    endif
+
+    reason = $kv_sr["Due to the following error"]
+endsubformula
+
+$bad_values = [null, 'n/a', 'null', '[]']
+
+submessage("TEXT","parse_category", $kv["Category"])
+
+if $kv["Name"] != null then
+    submessage("TEXT","parse_sources_reason", "Name:" + $kv["Name"])
+elif $kv["Name(s)"] != null then
+    submessage("TEXT","parse_sources_reason", "Name(s):" + $kv["Name(s)"])
+endif
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+object.type = "custom group"
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "CUSTOM_GROUP_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_custom_group_manipulation"

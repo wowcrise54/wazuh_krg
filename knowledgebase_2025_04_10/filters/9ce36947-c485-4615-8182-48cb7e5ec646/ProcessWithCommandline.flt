@@ -1,0 +1,8 @@
+filter ProcessWithCommandline() {
+    in_list([
+        "process",
+        "command"
+    ], object)
+    and object.process.cmdline != null
+    and object.process.cmdline != ""
+}

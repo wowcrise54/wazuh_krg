@@ -1,0 +1,32 @@
+TEXT = '{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        CEF:{NUMBER}|InfoTeCS|IDS NS|{UNTIL("|")}{UNTIL("|")}system|{NUMBER}|cat=System:
+        Configuration{$kv=KEYVALUE(" ", "=", "\\"")}'
+          
+COND = $kv["act"] == "system_net_if_mode"
+
+subject = "account"
+if $kv["cs2"] == "off" then
+    action = "disable"
+else
+    action = "enable"   
+endif 
+object = "interface"
+status = "success"
+
+subject.account.name = $kv["suser"]
+
+object.name = $kv["cs1"]
+object.property = "interface state"
+object.new_value = $kv["cs2"]
+
+interface = $kv["cs1"]
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+time = recv_time 
+msgid = $kv["act"]
+importance = "info"
+
+id = "PT_Infotecs_VipNet_IDS_cef_interface_state_change"

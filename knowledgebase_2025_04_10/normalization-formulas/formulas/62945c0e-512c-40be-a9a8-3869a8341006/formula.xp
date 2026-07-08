@@ -1,0 +1,54 @@
+TABULAR = '{subject.name=job_owner},
+           {src.hostname=client_name},
+           master_server_key,
+           {datafield3=policy_name},
+           {time=start_time}'
+
+COND = in_list([0, 1, 6], $job_type)
+
+subject = "account"
+action = "backup"
+object = "resource"
+
+if $job_status == 0 then
+    status = "success"
+else
+    status = "failure"
+    reason = $job_status
+endif
+
+if $backup_id != "" then
+    object.id = $backup_id
+endif
+
+if $current_file != "" then
+    object.name = $current_file
+endif
+
+if $destination_media_server_name != "" then
+    dst.hostname = $destination_media_server_name
+endif
+
+datafield1 = $master_server_key  # Идентификатор мастер-сервера
+
+if $destination_storage_unit_name != "" then
+    datafield2 = $destination_storage_unit_name  # Имя хранилища для бэкапа
+endif
+
+# datafield3 - имя управляющей политики
+
+if $schedule_name != "" then
+    datafield4 = $schedule_name  # Имя расписания
+endif
+
+duration = datetime_to_epoch(datetime($end_time)) - datetime_to_epoch(datetime($start_time))
+
+msgid = $job_type
+importance = "info"
+
+event_src.vendor = "veritas"
+event_src.title = "netbackup"
+event_src.subsys = "nbdb jobd"
+event_src.category = "Backup server"
+
+id = "PT_Veritas_Netbackup_NBDB_Jobd_odbc_0_1_6_Backup"

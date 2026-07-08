@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying on the Internet Information Services web server. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="2f49dab5-24f3-c9a1-d25e-1688efaae1be">Successful password spraying from host {src.host} in application {event_src.title} on host {event_src.host}. Attackers obtained the passwords of the following users: {datafield2}. Number of failed login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="3e25b373-b473-3462-018e-de4fbe113d1e">Password spraying attempts from host {src.host} in application {event_src.title} on host {event_src.host}. Number of login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="62924208-da08-c2b3-9ce0-0fec5eeac54b">Successful password spraying from host {src.host} in application {event_src.title} on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {datafield1}.</EventDescription>
+  </EventDescriptions>
+</Localization>

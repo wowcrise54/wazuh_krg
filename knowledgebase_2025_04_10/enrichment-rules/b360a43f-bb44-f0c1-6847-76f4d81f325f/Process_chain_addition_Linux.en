@@ -1,0 +1,204 @@
+query GetProcessChain($host, $proc_id, $proc_name) from Linux_Process_Chains { 
+    host == $host
+    and proc_id == $proc_id
+    and proc_name == $proc_name
+}
+    qhandler {
+        $audit_id = audit_id
+        $proc_id = proc_id
+        $proc_name = proc_name
+        $proc_meta = proc_meta
+        $subject_account = subject_account
+        $subject_session_id = subject_session_id
+        $object_account = object_account
+        $object_session_id = object_session_id
+        $last_event_uuid = last_event_uuid
+        $parent_proc_id = parent_proc_id
+        $parent_proc_name = parent_proc_name
+        $step = step
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $first_cmdline = first_cmdline
+        $second_cmdline = second_cmdline
+    }
+
+query GetProcessChain_pid_ppid($host, $proc_id, $parent_proc_id) from Linux_Process_Chains {
+    host == $host
+    and proc_id == $proc_id
+    and parent_proc_id == $parent_proc_id
+}
+    qhandler {
+        $audit_id = audit_id
+        $proc_id = proc_id
+        $proc_name = proc_name
+        $proc_meta = proc_meta
+        $subject_account = subject_account
+        $subject_session_id = subject_session_id
+        $object_account = object_account
+        $object_session_id = object_session_id
+        $last_event_uuid = last_event_uuid
+        $parent_proc_id = parent_proc_id
+        $parent_proc_name = parent_proc_name
+        $step = step
+        $chain_proc_names = chain_proc_names
+        $chain_proc_info = chain_proc_info
+        $first_cmdline = first_cmdline
+        $second_cmdline = second_cmdline
+    }
+    
+
+query CheckIfWhitelisted($rule, $value, $tag) from Common_whitelist_for_labeling {
+    (rule == $rule or rule == "*")
+    and specific_value == $value
+    and tag == $tag
+}
+
+query CheckIfWhitelisted_regex($rule, $value, $tag) from Common_whitelist_for_labeling_regex {
+    (rule == $rule or rule == "*")
+    and regex_match($value, column::specific_value)
+    and tag == $tag
+}
+    
+event Chain_labeled:
+    key:
+        event_src.host
+    filter {
+        correlation_name != null
+        and event_src.title == "unix_like"
+        and event_src.subsys == "auditd"
+        and find_substr(labels, "proc_chain_enriched") == null
+        and find_substr(labels, "proc_chain_exclude") == null
+        and (
+            # Убрал исключение по "←", чтобы корреляции с цепочкой проходили через вайтлист по цепочке
+            object.process.id != null or object.process.parent.id != null or subject.process.id != null
+        )
+        and table::Critical_Linux_Hosts_For_Process_Chains {
+            column::host == event_src.host
+        }
+    
+    }
+    
+enrichment Process_chain_addition_Linux
+    enrich Chain_labeled:
+        enrich_fields {  
+        if object.process.id != null and (object.process.name != null or object.process.parent.id != null) then
+                if object.process.name != null then
+                    $query_obj_proc = exec_query("GetProcessChain", [event_src.host, number(object.process.id), object.process.name])
+                else
+                    $query_obj_proc = exec_query("GetProcessChain_pid_ppid", [event_src.host, number(object.process.id), number(object.process.parent.id)])
+                    object.process.name = $query_obj_proc["$proc_name"]
+                    if object.process.name != null then
+                        labels = labels + "|obj_proc_name_enriched"  # Метка для валидации проставления object.process.name
+                    endif
+                endif
+                
+                if $query_obj_proc["$chain_proc_names"] != null and (
+                    exec_query("CheckIfWhitelisted", [correlation_name, lower($query_obj_proc["$chain_proc_names"]), "chain"]) 
+                    or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower($query_obj_proc["$chain_proc_names"]), "chain"])) then
+                    drop
+                endif
+                
+                if $query_obj_proc["$chain_proc_names"] != null then
+                    object.process.chain = $query_obj_proc["$chain_proc_names"]
+                    datafield19 = $query_obj_proc["$chain_proc_info"]
+                endif
+                
+                if object.process.cmdline == null and $query_obj_proc["$first_cmdline"] != null then
+                    object.process.cmdline = $query_obj_proc["$first_cmdline"]
+                    labels = labels + "|obj_proc_cmdline_enriched"  # Метка для валидации проставления object.process.cmdline
+                endif
+                
+                if object.process.parent.cmdline == null and $query_obj_proc["$second_cmdline"] != null then
+                    object.process.parent.cmdline = $query_obj_proc["$second_cmdline"]
+                    labels = labels + "|obj_proc_parent_cmdline_enriched"  # Метка для валидации проставления object.process.parent.cmdline
+                endif
+                
+                if object.process.meta == null and $query_obj_proc["$proc_meta"] != null then
+                    object.process.meta = $query_obj_proc["$proc_meta"]
+                    labels = labels + "|obj_proc_meta_enriched"  # Метка для валидации проставления object.process.meta
+                endif
+                
+                if  object.account.name == null and $query_obj_proc["$object_account"] != null then
+                    object.account.name = $query_obj_proc["$object_account"]
+                    labels = labels + "|obj_acc_name_enriched"  # Метка для валидации проставления object.account.name
+                endif
+                
+                if  object.account.session_id == null and $query_obj_proc["$object_session_id"] != null then
+                    object.account.session_id = $query_obj_proc["$object_session_id"]
+                    labels = labels + "|obj_acc_ses_enriched"  # Метка для валидации проставления object.account.session_id
+                endif
+                
+                if  subject.account.name == null and $query_obj_proc["$subject_account"] != null then
+                    subject.account.name = $query_obj_proc["$subject_account"]
+                    labels = labels + "|subj_acc_name_enriched"  # Метка для валидации проставления subject.account.name
+                endif
+                
+                if  subject.account.session_id == null and $query_obj_proc["$subject_session_id"] != null then
+                    subject.account.session_id = $query_obj_proc["$subject_session_id"]
+                    labels = labels + "|subj_acc_ses_enriched"  # Метка для валидации проставления subject.account.session_id
+                endif
+        endif
+            
+        if subject.process.id != null and (subject.process.name != null or subject.process.parent.id != null) then
+                if subject.process.name != null then
+                    $query_subj_proc = exec_query("GetProcessChain", [event_src.host, number(subject.process.id), subject.process.name])
+                else
+                    $query_subj_proc = exec_query("GetProcessChain_pid_ppid", [event_src.host, number(subject.process.id), number(subject.process.parent.id)])
+                    subject.process.name = $query_subj_proc["$proc_name"]
+                    if subject.process.name != null then
+                        labels = labels + "|subj_proc_name_enriched"  # Метка для валидации проставления subject.process.name
+                    endif
+                endif
+                
+                if $query_subj_proc["$chain_proc_names"] != null and (
+                    exec_query("CheckIfWhitelisted", [correlation_name, lower($query_subj_proc["$chain_proc_names"]), "chain"]) 
+                    or exec_query("CheckIfWhitelisted_regex", [correlation_name, lower($query_subj_proc["$chain_proc_names"]), "chain"])) then
+                    drop
+                endif
+                
+                if $query_subj_proc["$chain_proc_names"] != null then
+                    subject.process.chain = $query_subj_proc["$chain_proc_names"]
+                    datafield18 = $query_subj_proc["$chain_proc_info"]
+                endif
+                
+                if subject.process.cmdline == null and $query_subj_proc["$first_cmdline"] != null then
+                    subject.process.cmdline = $query_subj_proc["$first_cmdline"]
+                    labels = labels + "|subj_proc_cmdline_enriched"  # Метка для валидации проставления subject.process.cmdline
+                endif
+                
+                if subject.process.parent.cmdline == null and $query_subj_proc["$second_cmdline"] != null then
+                    subject.process.parent.cmdline = $query_subj_proc["$second_cmdline"]
+                    labels = labels + "|subj_proc_parent_cmdline_enriched"  # Метка для валидации проставления subject.process.parent.cmdline
+                endif
+                
+                if subject.process.meta == null and $query_subj_proc["$proc_meta"] != null then
+                    subject.process.meta = $query_subj_proc["$proc_meta"]
+                    labels = labels + "|subj_proc_meta_enriched"  # Метка для валидации проставления subject.process.meta
+                endif
+                
+                if  object.account.name == null and $query_obj_proc["$object_account"] != null then
+                    object.account.name = $query_obj_proc["$object_account"]
+                    labels = labels + "|obj_acc_name_enriched"  # Метка для валидации проставления object.account.name
+                endif
+                
+                if  object.account.session_id == null and $query_obj_proc["$object_session_id"] != null then
+                    object.account.session_id = $query_obj_proc["$object_session_id"]
+                    labels = labels + "|obj_acc_ses_enriched"  # Метка для валидации проставления object.account.session_id
+                endif
+                
+                if  subject.account.name == null and $query_obj_proc["$subject_account"] != null then
+                    subject.account.name = $query_obj_proc["$subject_account"]
+                    labels = labels + "|subj_acc_name_enriched"  # Метка для валидации проставления subject.account.name
+                endif
+                
+                if  subject.account.session_id == null and $query_obj_proc["$subject_session_id"] != null then
+                    subject.account.session_id = $query_obj_proc["$subject_session_id"]
+                    labels = labels + "|subj_acc_ses_enriched"  # Метка для валидации проставления subject.account.session_id
+                endif
+            endif
+            
+            if object.process.chain != null or subject.process.chain != null then
+                labels = labels + "|proc_chain_enriched"  # Метка для декларации вайтлистинга
+            endif
+    }
+        

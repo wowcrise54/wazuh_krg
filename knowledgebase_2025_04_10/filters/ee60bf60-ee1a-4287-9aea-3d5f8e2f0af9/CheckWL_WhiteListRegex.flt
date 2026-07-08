@@ -1,0 +1,8 @@
+filter CheckWL_WhiteListRegex(string $rule_name, string $host, string $user, string $specific_value) {
+    table::Common_whitelist_regex {
+        (column::rule == $rule_name or column::rule == "*")
+        and (column::host == $host or column::host == "*")
+        and (column::user_id == $user or column::user_id == "*")
+        and regex_match($specific_value, column::specific_regex)
+    }
+}

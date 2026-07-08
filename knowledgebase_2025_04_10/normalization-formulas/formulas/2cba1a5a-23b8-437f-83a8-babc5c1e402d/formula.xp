@@ -1,0 +1,27 @@
+JSON = ""
+
+COND = $ENTITY_TYPE == "ServiceLog" 
+        and $OPERATION == "download"
+
+subject = "account"
+action = "download"
+object = "log"
+status = "success"
+
+subject.id = $user_or_token['USER_ID']
+subject.name = $user_or_token['USERNAME']
+
+object.name = $ENTITY_DISPLAY_NAME
+
+datafield1 = $user_or_token['DISPLAY_NAME']  # отображаемое имя пользователя-субъекта
+datafield2 = $user_or_token['EMAIL']         # почтовый адрес пользователя-субъекта
+
+time = $CHANGE_DATE + $user_or_token['TIMEZONE']
+importance = "info"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_Log_download"

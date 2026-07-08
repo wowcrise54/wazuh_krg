@@ -1,0 +1,14 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} %{msgid="LINK-I-UP"|msgid="LINK-W-DOWN"}:
+        {interface=STRING+} changed state to {$state="up"|$state="down"} {REST}'
+
+action = $state  # up/down
+object = "interface"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_Interface_link_up_down"

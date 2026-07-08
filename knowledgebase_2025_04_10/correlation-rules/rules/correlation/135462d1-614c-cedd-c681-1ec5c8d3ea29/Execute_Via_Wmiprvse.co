@@ -1,0 +1,133 @@
+event Module_Load:
+    key:
+        event_src.host, subject.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and event_src.vendor == "microsoft"
+        and msgid == "7"
+        and in_list(["wminet_utils.dll", "wmiutils.dll"], lower(object.process.name))
+        and (
+            regex(lower(subject.process.path), "^[a-z]:\\\\(windows|program\s+files(\s+\(x86\))?|progra~3|programdata)\\\\", 0) == null  # исключаем системные процессы
+            or in_list(["winword.exe", "excel.exe", "powerpnt.exe", "msaccess.exe", "onenote.exe", "outlook.exe", "visio.exe", "winproj.exe"], lower(subject.process.name))
+        )
+        and filter::CheckWL_Specific_Only("Execute_Via_Wmiprvse", lower(join([subject.account.name, subject.process.fullpath], "|")))
+    }
+
+event Process_Start:
+    key:
+        event_src.host, object.account.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and regex(lower(object.process.parent.fullpath), "^[a-z]:\\\\windows\\\\system32\\\\wbem\\\\wmiprvse\.exe$", 0) != null
+        and (
+            lower(subject.account.name) == "network service"
+            or lower(subject.account.id) == "s-1-5-20"
+        )
+        and not in_list(["werfault.exe", "wmiprvse.exe"], lower(object.process.name))
+    }
+
+rule Execute_Via_Wmiprvse: Module_Load and Process_Start within 5s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Module_Load {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.hash = subject.process.hash
+        $subject.process.version = subject.process.version
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.guid = subject.process.guid
+        $subject.process.meta = subject.process.meta
+        $subject.process.original_name = subject.process.original_name
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.chain = subject.process.chain
+
+        $object.name = object.process.name
+        $object.path = object.process.path
+        $object.fullpath = object.process.fullpath
+
+        $alert.key = lower(join([subject.account.name, subject.process.fullpath], "|"))
+    }
+
+    on Process_Start {
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $datafield18 = datafield18 # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19 # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule        
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $reason = join([$object.process.name, $subject.process.name], " ← ")
+
+    $alert.context = join([$object.process.fullpath, $subject.process.fullpath], "|")
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Windows Management Instrumentation"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "ForbiddenServiceUsage"
+    $incident.aggregation.timeout = 2h
+}

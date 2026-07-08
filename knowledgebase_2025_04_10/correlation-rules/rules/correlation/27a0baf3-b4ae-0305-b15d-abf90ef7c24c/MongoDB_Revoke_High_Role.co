@@ -1,0 +1,79 @@
+event Revoke_High_Role:
+    key:
+        event_src.host, event_src.title
+    filter {
+        msgid == "revokeRolesFromUser"
+        and event_src.title == "mongodb"
+        and action == "revoke"
+        and object == "account"
+        and status == "success"
+        and importance == "medium"
+        and filter::CheckWL_Database_Actions("MongoDB_Revoke_High_Role", lower(object.account.id))
+    }
+
+rule MongoDB_Revoke_High_Role: Revoke_High_Role
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Revoke_High_Role {
+        $status = status
+    
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.privileges = subject.account.privileges
+      
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.privileges = object.account.privileges
+        $object.storage.name = object.storage.name
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+             
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+            
+        $datafield1 = datafield1     # БД пользователя субъекта
+        $datafield2 = reason
+        
+        $alert.key = lower(object.account.id)
+        $alert.regex_match = string(regex(lower(object.account.privileges), "root|dbowner|useradminanydatabase|useradmin|readwriteanydatabase|dbadminanydatabase|clusteradmin|hostmanager", 0))
+        $alert.context = $alert.regex_match
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "revoke"
+    $object = "account"
+    
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Account Access Removal"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

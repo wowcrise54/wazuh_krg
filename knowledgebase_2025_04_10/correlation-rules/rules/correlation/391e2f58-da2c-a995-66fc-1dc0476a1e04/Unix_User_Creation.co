@@ -1,0 +1,327 @@
+event Useradd_Execution:
+    key:
+        event_src.host, subject.account.session_id, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and object.process.name == "useradd"
+        and status == "success"
+        # где создали юзера | кто создал | имя созданного юзера
+        and filter::CheckWL_Linux_Specific_Only("Unix_User_Creation", join([event_src.host, subject.account.name, regex(object.process.cmdline, "\S+$", 0)], "|"))
+    }
+
+event Modify_Files:
+    key:
+        event_src.host, subject.account.session_id, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileModify_Linux("^/etc/(shadow|passwd|group|gshadow)$")
+        and action == "access"
+        and status == "success"
+        and subject.process.name == "useradd"
+    }
+   
+event Create_User:
+    key:
+        event_src.host, subject.account.session_id, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and filter::AccountCreated()
+        and subject.process.name == "useradd"
+    }
+
+event Echo_To_Passwd:
+    key:
+        event_src.host, subject.account.session_id, object.process.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and regex(object.process.cmdline, "echo\s+[\"\'](.*?)[\"\']\s+>>\s+/etc/passwd", 0) != null
+    }
+
+event Modify_Passwd:
+    key:
+        event_src.host, subject.account.session_id, subject.process.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileModify_Linux("^/etc/passwd$")
+        and action == "access"
+        and status == "success"
+        and object.state == "w"
+        and filter::CheckWL_Linux_File_Operations("Unix_User_Creation", join([event_src.host, subject.account.name, subject.process.fullpath], "|"))
+    }
+
+rule Unix_User_Creation: 
+        # Создание пользователя с помощью useradd и adduser 
+        (Useradd_Execution and (Modify_Files[,4] with different object.fullpath) and Create_User) timer 60s
+        # Создание пользователя прямой записью в /etc/passwd
+        or (Echo_To_Passwd? and Modify_Passwd) timer 60s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Specific_Only"
+        $anomalies = null
+        $regex_match = null
+    }
+       
+    on Useradd_Execution {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+        
+        # ищем полный командлайн
+        if length(object.process.meta) > length(object.process.cmdline) 
+        and find_substr(object.process.meta, object.process.cmdline) != null
+        then
+            $full_cmdline = object.process.meta
+        else
+            $full_cmdline = object.process.cmdline
+        endif
+
+        # Имя создаваемого пользователя (по синтаксису команды всегда идет в конце)
+        $object.account.name = regex($full_cmdline, "\S+$", 0)
+        $object.account.id = coalesce($object.account.id, regex($full_cmdline, "\s-(o?u|-uid)\s+(\d+)", 2))
+
+        $root_or_sudo = coalesce(
+            # Для ключей -g (-og), --gid
+            regex($full_cmdline, "\s-(o?g|-gid)\s+[\"\']?\\b(root|0)[\"\']?\\b", 0),
+            # Для ключа -G <список имен групп через запятую без пробелов>
+            regex($full_cmdline, "\s-([DlmMNorU]+)?G([DlmMNorU]+)?\s+(((\w+\,)+)?\\b(root|sudo)\\b((\w+\,)+)?)", 0)
+            )
+        $duplicate_root_uid = regex($full_cmdline, "\s-(o?u|-uid)\s+\\b0\\b", 0) # ключи -u, -ou, --uid
+        $system_account = regex($full_cmdline, "\s-((([DlmMNoU]+)?r([DlmMNoU]+)?)|-system)\\b", 0) # ключ -r (--system)
+        $no_homedir = regex($full_cmdline, "\s-(([DlmNoU]+)?M([DlmNoU]+)?)\\b", 0) # ключ -M
+        $no_group = regex($full_cmdline, "\s-((([DlmMoU]+)?N([DlmMoU]+)?)|-no-user-group)\\b", 0) # ключ -N (--no-user-group)
+
+        if $root_or_sudo != null then
+            $object.account.group = "root"
+            $regex_match = append($regex_match, "root (sudo) regex: " + strip($root_or_sudo, " ", ""))
+            $anomalies = append($anomalies, "root (sudo) user")
+            $importance = "medium"
+        endif
+        if $duplicate_root_uid != null then
+            $regex_match = append($regex_match, "duplicate root uid: " + strip($duplicate_root_uid, " ", ""))
+            $anomalies = append($anomalies, "duplicate root uid")
+            $importance = "medium"
+        endif
+        if $system_account != null then
+            $object.account.group = "system"
+            $regex_match = append($regex_match, "system account regex: " + strip($system_account, " ", ""))
+            $anomalies = append($anomalies, "system account")
+            $importance = "medium"
+        endif
+        if $no_homedir != null then
+            $regex_match = append($regex_match, "no home dir regex: " + strip($no_homedir, " ", ""))
+            $anomalies = append($anomalies, "no home directory")
+        endif
+        if $no_group != null then
+            $regex_match = append($regex_match, "no group regex: " + strip($no_group, " ", ""))
+            $anomalies = append($anomalies, "no group specified")
+        endif
+                
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1 # Executable Name
+        $datafield2 = datafield2 # Binary File Owner User Name
+        $datafield3 = datafield3 # Binary File Access Mode
+        $datafield4 = datafield4 # Interpreter or Binary
+        $datafield5 = datafield5 # The file that caused the error
+        
+        $numfield2 = numfield2 # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([event_src.host, subject.account.name, regex(object.process.cmdline, "\S+$", 0)], "|")
+        $alert.regex_match = join($regex_match, " | ")
+    }
+
+    on Modify_Files {
+        
+        $files_modified = append($files_modified, object.fullpath)
+    }
+
+    on Create_User {
+
+        if $object.account.id == null then
+            $object.account.id = object.account.id
+        elif $object.account.id != null and $object.account.id != object.account.id then
+            close
+        endif
+    }
+
+    on Echo_To_Passwd {
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+
+        # /etc/passwd format: 
+        # [username]:[password]:[uid]:[gid]:[gecos]:[home_dir]:[login_shell]
+        $regex_cmd = regex(object.process.cmdline, "echo\s+[\"\'](.*?)[\"\']\s+>>\s+/etc/passwd", 0)
+        $username = regex($regex_cmd, "[\"\'](.*?):(.*?):(.*?):(.*?):(.*?):(.*?):(.*?)[\"\']", 1)
+        $user_uid = number(regex($regex_cmd, "[\"\'](.*?):(.*?):(.*?):(.*?):(.*?):(.*?):(.*?)[\"\']", 3))
+        $user_gid = number(regex($regex_cmd, "[\"\'](.*?):(.*?):(.*?):(.*?):(.*?):(.*?):(.*?)[\"\']", 4))
+
+        $object.account.name = $username
+        if $user_uid != null then 
+            $object.account.id = string($user_uid)
+            if $user_uid == 0 then
+                $anomalies = append($anomalies, "duplicate root uid")
+                $importance = "medium"
+            elif $user_uid > 0 and $user_uid < 1000 then
+                $object.account.group = "system"
+                $anomalies = append($anomalies, "system account")
+                $importance = "medium"
+            endif    
+        endif
+        if $user_gid != null then
+            if $user_gid == 0 then 
+                $object.account.group = "root"
+                $anomalies = append($anomalies, "root user")
+                $importance = "medium"
+            else 
+                $object.account.group = string($user_gid)
+            endif    
+        endif
+
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        $object.process.chain = coalesce($object.process.chain, object.process.chain)
+        
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1 # Executable Name
+        $datafield2 = datafield2 # Binary File Owner User Name
+        $datafield3 = datafield3 # Binary File Access Mode
+        $datafield4 = datafield4 # Interpreter or Binary
+        $datafield5 = datafield5 # The file that caused the error
+        $datafield6 = "Echo_To_Passwd"
+        
+        $numfield2 = numfield2 # Binary File Owner User ID
+
+        $alert.regex_match = $regex_cmd
+
+        $anomalies = append($anomalies, "echo output into /etc/passwd file")
+    }
+
+    on Modify_Passwd {
+        $subject.account.name = coalesce($subject.account.name, subject.account.name)
+        $subject.account.domain = coalesce($subject.account.domain, subject.account.domain)
+        $subject.account.id = coalesce($subject.account.id, subject.account.id)
+        $subject.account.session_id = coalesce($subject.account.session_id, subject.account.session_id)
+        $subject.account.privileges = coalesce($subject.account.privileges, subject.account.privileges)
+        $subject.type = coalesce($subject.type, subject.type)
+
+        $object.process.id = coalesce($object.process.id, subject.process.id)
+        $object.process.name = coalesce($object.process.name, subject.process.name)
+        $object.process.path = coalesce($object.process.path, subject.process.path)
+        $object.process.fullpath = coalesce($object.process.fullpath, subject.process.fullpath)
+        $object.process.cmdline = coalesce($object.process.cmdline, subject.process.cmdline)
+        $object.process.meta = coalesce($object.process.meta, subject.process.meta)
+        $object.process.cwd = coalesce($object.process.cwd, object.process.cwd)
+        $object.process.parent.id = coalesce($object.process.parent.id, object.process.parent.id)
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.state = object.state
+        
+        $subject.process.chain = coalesce($subject.process.chain, subject.process.chain)
+        $object.process.chain = coalesce($object.process.chain, subject.process.chain, object.process.chain)
+        $datafield18 = coalesce($datafield18, datafield18)  # chain with PID for subject
+        $datafield19 = coalesce($datafield19, datafield19)  # chain with PID for object
+        
+        $datafield7 = "Modify_Passwd"
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = join([event_src.host, subject.account.name, subject.process.fullpath], "|")
+
+        $correlation_type = "incident"
+
+        $files_modified = append($files_modified, object.fullpath)
+        if not in_list($anomalies, "echo output into /etc/passwd file") then
+            $anomalies = append($anomalies, "possible output redirection into /etc/passwd file")
+        endif
+    }
+
+emit {  
+    $correlation_type = coalesce($correlation_type, "event")
+
+    $subject = "account"
+    $action = "create"
+    $object = "account"
+    $status = "success"
+
+    $importance = coalesce($importance, "low")
+
+    # Если /etc/passwd не был изменен, значит, в файле /etc/nsswitch.conf, возможно, заранее была определена альтернативная база passwd
+    if not in_list($files_modified, "/etc/passwd") then 
+        $anomalies = append($anomalies, "/etc/passwd was not modified")
+    endif
+    
+    $reason = join($anomalies, " | ")
+
+    if coalesce($object.account.name, $object.account.id) != null then
+        $for_context = $object.account.name + "(" + $object.account.id + ")"
+    endif
+    
+    if $reason != null then
+        $alert.context = join(["user", $subject.account.name, "created account", $for_context, "with such anomalies:", $reason], " ")
+    else
+        $alert.context = join(["user", $subject.account.name, "created account", $for_context], " ")
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Create Account: Local Account"
+
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

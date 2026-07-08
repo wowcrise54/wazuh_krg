@@ -1,0 +1,80 @@
+event Postgre_Query:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "postgresql"
+        and (
+            # ALTER TABLE temp_table OWNER TO testuser;
+            regex(lower(object.query), "\\balter\\b.*\\btable\\b.*\\bowner\\b.*to", 0) != null
+            # ALTER ROLE testuser  CREATEROLE;
+            or regex(lower(object.query), "\\balter\\b.*\\brole\\b.*\\bcreaterole\\b", 0) != null
+            # GRANT pg_execute_server_program TO testuser;
+            or regex(lower(object.query), "\\bgrant\\b.*\\bpg_execute_server_program\\b.*to", 0) != null
+            # GRANT pg_read_server_files TO testuser;
+            or regex(lower(object.query), "\\bgrant\\b.*\\bpg_read_server_files\\b. *to", 0) != null
+            # GRANT pg_write_server_files TO testuser;
+            or regex(lower(object.query), "\\bgrant\\b.*\\bpg_write_server_files\\b.*to", 0) != null
+        )
+        and filter::CheckWL_Database_Actions("PostgreSQL_Assignment_Sensitive_Privilege", lower(join([src.host, object.query, subject.application.account.id], "|")))
+    }
+
+rule PostgreSQL_Assignment_Sensitive_Privilege: Postgre_Query
+
+    on Postgre_Query {
+        $subject.application.account.id = subject.application.account.id
+        $subject.application.account.name = subject.application.account.name
+        
+        $object.path = object.path
+        $object.query = object.query
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+        
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(join([src.host, object.query, subject.application.account.id], "|"))
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+    $status = "success"
+    
+    if regex(lower($object.query), "alter.*table.*owner.*to", 0) != null then
+        $object.type = "ALTER TABLE"
+        $object.application.account.id = replace(regex(lower($object.query), "alter.*table.*owner.*to(.*);", 1), "", " ")
+        $object.value = replace(regex(lower($object.query), "alter.*table (.*) owner.*to", 1), "", " ")
+    else
+        $object.type = "ALTER ROLE"
+        $object.application.account.id = replace(regex(lower($object.query), "alter.*role(.*)createrole", 1), "", " ")
+    endif
+
+    $importance = "high"
+    
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Account Manipulation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "Undefined"
+    $incident.aggregation.timeout = 2h
+}

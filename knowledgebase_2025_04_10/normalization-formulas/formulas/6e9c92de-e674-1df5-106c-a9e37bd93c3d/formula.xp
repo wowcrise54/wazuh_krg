@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} WARN [{UNTIL("]")} com.vmware.vcops.adminui.action.LoginAction:{NUMBER} - 
+        Login attempt from {src.ip=IPV4|src.ip=IPV6} failed.'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+object.type = "admin panel"
+
+dst.ip = coalesce(recv_ipv4, recv_ipv6)
+
+time = datetime(replace($dt, ".", ","))
+importance = "medium"
+
+category.high = "Access Management"
+category.generic = "Application"
+category.low = "Communication"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_admin_panel_login_attempt_failure"

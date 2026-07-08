@@ -1,0 +1,187 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        percona-audit: {$json_message=REST}'
+
+COND = find_substr($json_message, "\"audit_record\"") != null
+       and find_substr($json_message, "\"name\":\"Query\"") != null
+       and (
+            find_substr($json_message, "\"command_class\":\"create_user\"") != null
+            or find_substr($json_message, "\"command_class\":\"alter_user\"") != null
+            or find_substr($json_message, "\"command_class\":\"drop_user\"") != null
+            or find_substr($json_message, "\"command_class\":\"rename_user\"") != null
+       )
+       and find_substr($json_message, "\"record\"") != null
+       and find_substr($json_message, "\"timestamp\"") != null
+       and find_substr($json_message, "\"connection_id\"") != null
+
+submessage("JSON", "parse_json", $json_message)
+
+subject = "account"
+
+$query = $audit_record["sqltext"]
+$query_to_parse = if find_substr($query, "\n") != null then lower(replace($query, " ", "\n")) else lower($query) endif
+$query_to_parse = if find_substr($query_to_parse, "\"") != null then replace($query_to_parse, "", "\"") else $query_to_parse endif
+$query_to_parse = if find_substr($query_to_parse, "'") != null then replace($query_to_parse, "", "'") else $query_to_parse endif
+$query_to_parse = if find_substr($query_to_parse, "`") != null then replace($query_to_parse, "", "`") else $query_to_parse endif
+$query_to_parse = if find_substr($query_to_parse, "\\") != null then replace($query_to_parse, "", "\\\\") else $query_to_parse endif
+
+if $audit_record["command_class"] == "create_user" then
+    action = "create"
+
+    submessage("TEXT", "parse_query_create", $query_to_parse)
+    submessage("TEXT", "parse_rest_data_create", $rest_data_create)
+
+    importance = "low"
+
+elif $audit_record["command_class"] == "rename_user" then
+    action = "modify"
+
+    submessage("TEXT", "parse_query_rename", $query_to_parse)
+
+    importance = "low"
+
+elif $audit_record["command_class"] == "alter_user" then
+    action = "modify"
+
+    submessage("TEXT", "parse_query_modify", $query_to_parse)
+
+    importance = "medium"
+
+elif $audit_record["command_class"] == "drop_user" then
+    action = "remove"
+
+    submessage("TEXT", "parse_query_remove", $query_to_parse)
+
+    importance = "medium"
+endif
+
+object = "account"
+
+if $audit_record["status"] == 0 then
+    status = "success"
+else
+    status = "failure"
+
+    reason = $audit_record["status"]
+endif
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_query_create"
+    TEXT = 'create user {"if""not""exists"?} {$object_user=STRING} {$rest_data_create=REST}'
+
+    $csv_object_user = csv($object_user, "@", "'")
+    object.account.name = $csv_object_user[0]
+
+    datafield4 = if $csv_object_user[1] != "%" then $csv_object_user[1] else null endif  # Allowed host
+endsubformula
+
+subformula "parse_rest_data_create"
+    TEXT = '{STRING?} default role {object.account.privileges=UNTIL(" REQUIRE ")|object.account.privileges=UNTIL(" WITH ")|
+            object.account.privileges=UNTIL(" COMMENT ")|object.account.privileges=UNTIL(" ATTRIBUTE ")|
+            object.account.privileges=REST}'
+endsubformula
+
+subformula "parse_rest_data_create"
+    TEXT = '{REST}'
+endsubformula
+
+subformula "parse_query_rename"
+    TEXT = 'rename user {"if""exists"?} {$object_user=STRING} to {$object_new_value=STRING}'
+
+    $csv_object_user = csv($object_user, "@", "'")
+    object.account.name = $csv_object_user[0]
+
+    datafield4 = if $csv_object_user[1] != "%" then $csv_object_user[1] else null endif  # Allowed host
+
+    $csv_object_new_value = csv($object_new_value, "@", "'")
+    object.new_value = $csv_object_new_value[0]
+
+    datafield5 = if $csv_object_new_value[1] != "%" then $csv_object_new_value[1] else null endif  # Allowed host
+endsubformula
+
+subformula "parse_query_rename"
+    TEXT = '{REST}'
+endsubformula
+
+subformula "parse_query_modify"
+    TEXT = 'alter user {"if""exists"?} {$object_user=STRING} {REST}'
+
+    $csv_object_user = csv($object_user, "@", "'")
+    object.account.name = $csv_object_user[0]
+
+    datafield4 = if $csv_object_user[1] != "%" then $csv_object_user[1] else null endif  # Allowed host
+endsubformula
+
+subformula "parse_query_remove"
+    TEXT = 'drop  user {"if""exists"?} {$object_user=REST}'
+
+    $csv_object_users = csv($object_user, ", ", "")
+
+    if length($csv_object_users) == 1 then
+        $csv_object_user = csv($object_user, "@", "'")
+        object.account.name = $csv_object_user[0]
+
+        datafield4 = if $csv_object_user[1] != "%" then $csv_object_user[1] else null endif  # Allowed host
+    else
+        datafield3 = $object_user # Users
+    endif
+endsubformula
+
+$square_bracket = find_substr($audit_record["user"], "[")
+$user = substr($audit_record["user"], 0, $square_bracket)
+subject.account.id = $user
+subject.account.name = $user
+
+subject.account.session_id = $audit_record["connection_id"]
+
+object.query = $query
+
+if $audit_record["host"] == "localhost" then
+    src.hostname = $Computer
+
+elif not in_list(["", null], $audit_record["host"]) then
+    $first_dot = find_substr($audit_record["host"], '.')
+
+    if $first_dot != null then
+        src.fqdn = lower($audit_record["host"])
+        src.hostname = lower(substr($audit_record["host"], 0, $first_dot))
+    else
+        src.hostname = lower($audit_record["host"])
+    endif
+endif
+
+if $audit_record["ip"] == "::1" then
+    src.ip = event_src.ip
+
+elif not in_list(["", null], $audit_record["ip"]) then
+    src.ip = $audit_record["ip"]
+endif
+
+dst.hostname = $Computer
+dst.ip = event_src.ip
+
+if $audit_record["db"] != "" then
+    datafield1 = $audit_record["db"]  # имя БД
+endif
+
+time = $audit_record["timestamp"]
+msgid = $audit_record["command_class"]
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.title = "mysql"
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Database server"
+
+id = "PT_Oracle_MySQL_syslog_user_operations"

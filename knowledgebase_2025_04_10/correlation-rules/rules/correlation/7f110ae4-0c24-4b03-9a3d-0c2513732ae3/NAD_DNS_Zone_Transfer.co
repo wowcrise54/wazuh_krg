@@ -1,0 +1,130 @@
+event SIEM_Zone_Transfer_Completed:
+    key:
+        dst.host
+    filter {
+        correlation_name == "DNS_Zone_Transfer_To_Untrusted_Host"
+        and status == "success"
+    }
+
+event NAD_Zone_Transfer:
+    key:
+        dst.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "nad"
+        and action == "detect"
+        and object == "alert"
+        and object.id == "2101948"
+        and src.host != null
+        and dst.host != null
+        and filter::CheckWL_NAD_Alert("NAD_DNS_Zone_Transfer", lower(join([src.ip, object.id, dst.ip], "|")))
+    }
+
+rule NAD_DNS_Zone_Transfer: (SIEM_Zone_Transfer_Completed? and NAD_Zone_Transfer) timer 5m
+
+    init {
+        $labels = "w_auto|CheckWL_NAD_Alert"
+    }
+
+    on SIEM_Zone_Transfer_Completed {
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        
+        $object.value = object.value  # zone name
+
+        $reason = "siem_rule"
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+on NAD_Zone_Transfer {
+        $object.name = object.name
+        $object.id = object.id
+        $object.type = object.type
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $src.geo.country = src.geo.country
+        $src.geo.city = src.geo.city
+        $src.geo.asn = src.geo.asn
+        $src.geo.org = src.geo.org
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $dst.asset = dst.asset
+        $dst.geo.country = dst.geo.country
+        $dst.geo.city = dst.geo.city
+        $dst.geo.asn = dst.geo.asn
+        $dst.geo.org = dst.geo.org
+
+        $direction = direction
+        $protocol.layer7 = protocol.layer7
+        $protocol = protocol
+        
+        $external_link = external_link
+
+        $datafield1 = object.value
+        $datafield2 = datafield2   # Идентификатор сессии (потока)
+        $datafield4 = datafield4   # Информация о тактиках-техниках ATT&CK
+        $datafield8 = datafield8   # Ip-адрес атакующего
+        $datafield9 = datafield9   # Ip-адрес жертвы (атакуемого)
+
+        if $event_src.host == null then
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        endif
+        
+        $alert.key = lower(join([src.ip, object.id, dst.ip], "|"))
+        $alert.context = coalesce(alert.context, object.name)
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "rule"
+    $action = "detect"
+    $object = "attack"
+    $status = "success"
+
+    $object.property = "zone name"
+
+    if $reason == "siem_rule" then
+        $importance = "medium"
+    else
+        $importance = "low"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Application Layer Protocol: DNS"
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $dst.ip], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

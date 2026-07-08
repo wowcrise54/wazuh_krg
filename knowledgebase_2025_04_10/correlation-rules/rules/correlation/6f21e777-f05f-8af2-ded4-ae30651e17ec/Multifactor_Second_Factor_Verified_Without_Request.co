@@ -1,0 +1,99 @@
+event Request_Sent:
+    key:
+        subject.account.name, subject.account.domain, external_src.host, event_src.host, chain_id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "multifactor"
+        and subject == "account"
+        and action == "send"
+        and object == "request"
+        and status == "success"
+    }
+
+event Second_Factor_Verified:
+    key:
+        object.account.name, object.account.domain, external_src.host, event_src.host, chain_id
+    filter {
+        filter::NotFromCorrelator()
+        and action == "validate"
+        and object == "request"
+        and datafield18 == "success"
+        and object.type == "2FA authentication"
+        and lower(event_src.title) == "multifactor"
+        and filter::CheckWL_External_Connection(
+            "Multifactor_Second_Factor_Verified_Without_Request", 
+            lower(join([object.account.name, object.account.domain, external_src.host], "|"))
+        )
+    }
+
+rule Multifactor_Second_Factor_Verified_Without_Request: (Request_Sent? and Second_Factor_Verified) timer 5m
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Request_Sent {
+        $request_sent = true
+    }
+
+    on Second_Factor_Verified {
+        if $request_sent then
+            close  # Activity is legitimate
+        else
+
+            $object.account.id = object.account.id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.contact = object.account.contact
+            $object.account.fullname = object.account.fullname
+
+            $external_src.host = external_src.host
+            $external_src.fqdn = external_src.fqdn
+            $external_src.hostname = external_src.hostname
+            $external_src.ip = external_src.ip
+            $external_src.geo.asn = external_src.geo.asn
+            $external_src.geo.city = external_src.geo.city
+            $external_src.geo.country = external_src.geo.country
+            $external_src.geo.org = external_src.geo.org
+
+            $datafield2 = datafield2    # MobileApp
+            $datafield16 = datafield16  # Локация
+
+            $chain_id = chain_id
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.key = lower(join([object.account.name, object.account.domain, external_src.host], "|"))
+            $alert.context = join(remove([datafield2, datafield16], null), " | ")
+
+            $labels = $labels + "|CheckWL_External_Connection"
+        endif
+    }
+
+    emit {
+        $correlation_type = "event"
+
+        $subject = "application"
+        $action = "open"
+        $object = "session"
+        $status = "success"
+
+        $importance = "medium"
+
+        $category.generic = "Attack"
+        $category.high = "Credential Access"
+        $category.low = "Modify Authentication Process: Multi-Factor Authentication"
+
+        $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+        $incident.severity = $importance
+        $incident.category = "ProtectionBypassing"
+        $incident.aggregation.timeout = 2h
+    }

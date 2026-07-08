@@ -1,0 +1,43 @@
+JSON = ''
+
+COND = $_eventSource == "JBHubEventCollector" and $targetType == "Certificate"
+
+subject = "account"
+
+if $type == "Create" then
+    action = "create"
+
+elif $type == "Remove" then
+    action = "remove"
+
+elif $type == "Update" and $change["fieldName"] == "disabled" then
+    action = switch $change["newValue"]
+        case "true" "enable"
+        case "false" "disable"
+    endswitch
+endif
+
+object = "virtual_key"
+status = "success"
+
+subject.account.id = $author
+subject.account.name = $authorPresentation
+
+object.id = $targetId
+object.name = $targetPresentation
+object.type = lower($targetType)
+object.property = $change["fieldName"]
+object.value = $change["oldValue"]
+object.new_value = $change["newValue"]
+
+chain_id = $id
+
+time = epoch_ms_to_datetime($timestamp)
+msgid = join([$type, $targetType], "")
+importance = "low"
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_Jetbrains_Hub_customeventcollector_Certificate_Manage"

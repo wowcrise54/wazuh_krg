@@ -1,0 +1,51 @@
+TEXT = '{"<"NUMBER">"?} {$sys_time=DATETIME} {$Computer=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER}: {"default"?}
+        {msgid="SSLVPN HTTP_RESOURCEACCESS_DENIED"} {NUMBER+} : {$kv=KEYVALUE("- ", " ", "\\"")}'
+
+subject = "rule"
+action = "deny"
+object = "session"
+status = "success"
+
+subject.account.group = join(csv($kv["Group(s)"], ",", ""), "|")
+subject.account.session_id = $kv["SessionId:"]
+$csv = csv($kv["User"], "\\", "")
+if length($csv) == 2 then
+    subject.account.domain = $csv[0]
+    subject.account.name = $csv[1]
+else
+    subject.account.name = $kv["User"]
+endif
+
+subject.name = $kv["Denied_by_policy"]
+
+src.ip = csv($kv["Context"], "@", "")[1]
+
+dst.ip = $kv["Remote_host"]
+if dst.ip == null then
+    dst.fqdn = $kv["Remote_host"]
+endif
+
+protocol.layer7 = "http"
+
+count.bytes_out = $kv["Total_bytes_send"]
+
+datafield3 = csv($kv["Denied_url"], " ", "")[0]                 # request method
+datafield4 = strip($kv["Denied_url"], datafield3 + " ", "")     # forbidden url
+
+time = $sys_time
+importance = "low"
+
+event_src.vendor = "citrix"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "netscaler"
+event_src.ip = csv($kv["Vserver"], ":", "")[0]
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Citrix_NetScaler_syslog_sslvpn_http_recourceaccess_denied"

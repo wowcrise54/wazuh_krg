@@ -1,0 +1,165 @@
+event Detect_Large_ICMP_Packet:
+    key:
+        src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "packets_transmission"
+        and event_src.subsys == "netflow"
+        and action == "detect"
+        and object == "flow"
+        and protocol == "icmp"
+        and dst.ip != null
+        and (
+            div(count.bytes, count.packets) > 56
+            or div(count.bytes_in, count.packets_in) > 56
+        )
+        and filter::CheckWL_Networking("Suspicious_ICMP_Packet", join([src.ip, dst.ip], "|"))
+    }
+
+event NAD_ICMP_Unspecific_Payload:
+    key:
+        src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "positive_technologies"
+        and event_src.title == "nad"
+        and action == "detect"
+        and object == "alert"
+        and dst.ip != null
+        and object.id == "10006723"  # ICMP unspecific payload
+        and filter::CheckWL_Networking("Suspicious_ICMP_Packet", join([src.ip, dst.ip], "|"))
+    }
+    
+event NAD_Cisco_Or_Fortigate_Specific_Payload:
+    key:
+        src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "positive_technologies"
+        and event_src.title == "nad"
+        and action == "detect"
+        and object == "alert"
+        and dst.ip != null
+        and in_list([
+            "10006724",  # Cisco ICMP specific payload
+            "10006725"   # Fortigate ICMP specific payload
+            ], object.id)
+    }
+
+rule Suspicious_ICMP_Packet: Detect_Large_ICMP_Packet or ((NAD_ICMP_Unspecific_Payload and not NAD_Cisco_Or_Fortigate_Specific_Payload) timer 3s)
+    
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+    }
+
+    on Detect_Large_ICMP_Packet {
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.asset = dst.asset
+
+        $protocol = protocol
+        $count.packets = count.packets
+        $count.packets_in = count.packets_in
+        $count.bytes = count.bytes
+        $count.bytes_in = count.bytes_in
+        
+        $numfield1 =  coalesce(div(count.bytes, count.packets), div(count.bytes_in, count.packets_in))  # packet size
+
+        $start_time = start_time
+        $duration = duration
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = join([src.ip, dst.ip], "|")
+        $alert.context = "packet size: " + $numfield1
+    }
+
+    on NAD_ICMP_Unspecific_Payload {
+        $object.name = object.name
+        $object.id = object.id
+        $object.name = object.name
+        $object.group = object.group
+        $object.type = object.type
+        $object.version = object.version
+        $object.state = object.state
+        $object.path = object.path    # URL сигнатуры
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.asset = src.asset
+        $src.mac = src.mac
+        $src.geo.country = src.geo.country
+        $src.geo.city = src.geo.city
+        $src.geo.org = src.geo.org
+        $src.geo.asn = src.geo.asn
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.asset = dst.asset
+        $dst.ip = dst.ip
+        $dst.mac = dst.mac
+        $dst.geo.country = dst.geo.country
+        $dst.geo.city = dst.geo.city
+        $dst.geo.org = dst.geo.org
+        $dst.geo.asn = dst.geo.asn
+        
+        $protocol = protocol
+        $direction = direction
+        
+        $datafield2 = datafield2  # Идентификатор потока
+        $datafield3 = datafield3  # Содержимое пакета
+        $datafield4 = datafield4  # Информация о тактиках-техниках ATT&CK
+        $datafield8 = datafield8  # Адрес атакующего
+        $datafield9 = datafield9  # Адрес атакованного
+
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.key = join([src.ip, dst.ip], "|")
+        $alert.context = object.name
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "alert"
+    $object = "attack"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Non-Application Layer Protocol"
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 3h
+}

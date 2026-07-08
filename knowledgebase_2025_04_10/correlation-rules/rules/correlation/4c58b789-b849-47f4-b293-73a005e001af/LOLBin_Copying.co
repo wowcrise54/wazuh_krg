@@ -1,0 +1,216 @@
+query CheckCopiedFileName($name) from Known_Executables {
+    filename == $name
+}
+
+event Copy_In_Commandline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and (
+            (
+                in_list(["expand.exe", "extrac32.exe", "xcopy.exe"], lower(object.process.name))
+                and exec_query("CheckCopiedFileName", [regex(lower(object.process.cmdline), "([^\s\\\\]+?\.exe)\s*($|\||/)", 1)])
+            )
+            or (
+                lower(object.process.name) == "cmd.exe"
+                and regex(lower(object.process.cmdline), "\\bcopy\\b", 0) != 0
+                and exec_query("CheckCopiedFileName", [string(regex(lower(object.process.cmdline), "\\bcopy\\b.*?([^\s\\\\]+\.exe)", 1))])
+            )
+        )
+        and filter::CheckWL_Process_Creation("LOLBin_Copying", lower(object.process.cmdline))
+    }
+
+event Copy_In_Powershell_Pipeline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and object == "command"
+        and event_src.title == "windows"
+        and exec_query("CheckCopiedFileName", [string(regex(lower(object.process.cmdline), "copy-item\\b.*?([^\s\\\\]+\.exe)", 1))])
+        and filter::CheckWL_Powershell("LOLBin_Copying", lower(join([object.name, object.process.cmdline], "|")))
+    }
+
+event Copy_In_Powershell_Command:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and object == "command"
+        and event_src.title == "windows"
+        and exec_query("CheckCopiedFileName", [string(regex(lower(object.process.cmdline), "\\b(copy-item|copy|expand|extrac32|xcopy)\\b.*?([^\s\\\\]+\.exe)", 2))])
+        and filter::CheckWL_Powershell("LOLBin_Copying", lower(join([object.name, object.process.cmdline], "|")))
+    }
+
+rule LOLBin_Copying: Copy_In_Commandline or Copy_In_Powershell_Pipeline or Copy_In_Powershell_Command
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Copy_In_Commandline {
+        $action = action  # start
+        $object = object  # process
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+
+        $object.name = regex(lower(object.process.cmdline), "(expand|extract32|copy).*?([^\s\\\\]+\.exe)", 2)
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = $object.name
+        $alert.context = $alert.regex_match
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Copy_In_Powershell_Pipeline {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.name = object.account.name
+        $subject.account.domain = object.account.domain
+        $subject.account.id = object.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([object.name, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "copy-item\\b.*?([^\s\\\]+\.exe)", 1)
+        $alert.context = "regex match: " + $alert.regex_match
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Copy_In_Powershell_Command {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        
+        $object.account.name = object.account.name
+        $object.account.id = object.account.id
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+        
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+        $object.process.cmdline = object.process.cmdline
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([object.name, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "(\\b(copy-item|copy)\\b|(expand|extrac32|xcopy)).*?([^\s\\\]+\.exe)", 4)
+        $alert.context = "regex match: " + $alert.regex_match
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+    
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,60 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME}: Application=smtp,
+        Event=\'{msgid="Email Status"}\', From={$sender=STRING} size={object.value=NUMBER?},
+        source={$source=STRING} {UNTIL(" to=")}{$receiver=UNTIL(",")} virtual_host={STRING}
+        msgid={object.id=WORDDASH}, {UNTIL(" status=")}\'{$re=REST}'
+
+action = "info"
+object = "message"
+status = "success"
+
+if find_substr($re, 'attachment') != null then
+    submessage ("TEXT", "parse_rest1", $re)
+else
+    submessage ("TEXT", "parse_rest2", $re)
+endif
+
+subformula "parse_rest1"
+    !TEXT = "{$status=STRING+} attachment(s)=\'{$attachment=STRING+} number-attachment(s)=\'{datafield3=NUMBER}\'"
+    object.state = strip(substr($status, 0, find_substr($status, "',")), '', '\',')
+    if length($attachment) != 2 then
+        datafield4 = strip($attachment, '', '\',')  # список прикрепленных файлов
+    endif
+endsubformula
+
+subformula "parse_rest2"
+    !TEXT = '{$status=REST}'
+    object.state = strip(substr($status, 0, find_substr($status, "'")), '', '\'')
+endsubformula
+
+if object.value != null then
+    object.property = "size"
+endif
+
+src.ip = strip(substr($source, find_substr($source, '('), length($source)), '(', '),')
+if find_substr($source, '(') != 0 then
+    src.hostname =substr($source, 0, find_substr($source, '('))
+endif
+
+if length($receiver) != 3 and length($receiver) != 1 then
+    datafield1 = strip($receiver, '', ',')      # получатель сообщения
+endif
+if length($sender) != 3 and length($sender) != 1 then
+    datafield2 = strip($sender, '<', '>,')      # отправитель сообщения
+endif
+
+# datafield3 - количество прикрепленных файлов
+
+importance = "low"
+
+event_src.category = "Web security"
+event_src.title = "email_gateway"
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_McAfee_Email_Gateway_syslog_Email_Status"

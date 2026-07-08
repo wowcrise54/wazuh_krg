@@ -1,0 +1,50 @@
+JSON = 'Event.Event="_$Session$_.Start"'
+
+COND = in_list(["Designer", "1CV8C", "1CV8", "COMConnection", "WebClient", "BackgroundJob"], $Event['ApplicationName'])
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+if $Event['User'] != "00000000-0000-0000-0000-000000000000" then
+    subject.application.account.id = lower($Event['User'])
+endif
+
+if $Event['UserName'] != "" then
+    subject.application.account.name = lower($Event['UserName'])
+endif
+
+subject.application.account.session_id = $Event['Session']
+
+object.name = $Event['ApplicationName']
+
+if $Event['Computer'] != "" then
+    src.hostname = lower($Event['Computer'])
+endif
+
+time = $Event['Date']
+msgid = $Event['Event']
+importance = "low"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.id = $Event['v8ibase']
+
+if $Event['ServerName'] != "" then
+    $dot_pos = find_substr($Event['ServerName'], '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($Event['ServerName'])
+        event_src.hostname = lower(substr($Event['ServerName'], 0, $dot_pos))
+    else
+        event_src.hostname = lower($Event['ServerName'])
+    endif
+endif
+
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_filemonitor_registration_log_session_start"

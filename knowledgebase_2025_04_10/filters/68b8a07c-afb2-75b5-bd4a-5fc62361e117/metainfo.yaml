@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        en: "Checks a specific value for LDAP requests against the whitelisting system"
+        ru: "Проверяет специфичное значение для LDAP-запросов по системе вайтлистинга"
+    Description:
+        en: "This filter is used to reduce the repetitive part of the check using the table list system"
+        ru: "Данный фильтр используется, чтобы сократить повторяющуюся часть проверки с помощью системы табличных списков"
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "repeated specific value"
+            ru: "проверяемое специфическое значение"
+    rule_name:
+        Type: string
+        Name:
+            ru: "название правила корреляции"
+            en: "correlation rule name"
+ObjectId: PT-RF-93
+Origin: PT

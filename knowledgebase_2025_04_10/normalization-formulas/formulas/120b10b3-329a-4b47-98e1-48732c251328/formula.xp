@@ -1,0 +1,39 @@
+EVENTLOG = 'Channel="Application"'
+!COND = $EventID["text"] == "1011" and $Provider["Name"] == "KSHSecurityService"
+
+subject = "application"
+object = "application"
+
+submessage("TEXT","SPLIT",$Data[0])
+
+subformula "SPLIT"
+    TEXT='{subject.process.name=UNTIL("\r\n")} Компонент \" {object.name=UNTIL("\\"")} {$state=UNTIL(".")}'
+    action = switch $state
+        case "включен" "start"
+        case "выключен" "stop"
+    endswitch
+    status = "success"
+endsubformula
+
+subformula "SPLIT"
+    TEXT='{object.process.name=UNTIL("\r\n")} Произошла ошибка: {reason=UNTIL(". \\"")}{object.name=UNTIL("\\"")} {REST}'
+    action = "start"
+    status = "failure"
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_sharepoint_server"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Security_for_SharePoint_Server_eventlog_1011_module_status"

@@ -1,0 +1,55 @@
+EVENTLOG = 'EventID="307"'
+COND = $Channel=="Microsoft-Windows-PrintService/Operational" and $Provider["Name"]=="Microsoft-Windows-PrintService"
+ 
+subject = "account"
+action = "access"
+object = "file_object"
+status = "success"
+
+subject.account.name = $UserData["DocumentPrinted"]["Param3"] 
+
+if find_substr($UserData["DocumentPrinted"]["Param6"], "{") != null and
+    find_substr($UserData["DocumentPrinted"]["Param5"], "{") != null then
+    datafield2 = $UserData["DocumentPrinted"]["Param5"]  # printer GUID
+    datafield3 = $UserData["DocumentPrinted"]["Param6"]  # port GUID
+elif find_substr($UserData["DocumentPrinted"]["Param6"], "{") == null and
+    find_substr($UserData["DocumentPrinted"]["Param5"], "{") == null then
+    object.fullpath = lower($UserData["DocumentPrinted"]["Param6"])
+    $temp_csv = csv(object.fullpath, "\\", "")
+    object.name = $temp_csv[length($temp_csv) - 1]
+    object.path = strip(object.fullpath, "", object.name)
+    datafield1 = $UserData["DocumentPrinted"]["Param5"]  # printer name
+endif
+
+object.id = $UserData["DocumentPrinted"]["Param1"]
+
+src.hostname = $UserData["DocumentPrinted"]["Param4"]
+
+if not in_list(["Print Document", "Печать документа"],$UserData["DocumentPrinted"]["Param2"])
+    and object.name == null then
+    object.name = lower($UserData["DocumentPrinted"]["Param2"])
+endif
+
+numfield1 = $UserData["DocumentPrinted"]["Param7"]   # file size
+numfield2 = $UserData["DocumentPrinted"]["Param8"]   # amount of printed pages
+ 
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+ 
+importance = "info"
+ 
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+ 
+id = "PT_Microsoft_Windows_eventlog_307_Document_printed"

@@ -1,0 +1,5 @@
+filter AnonymousAccount_Windows(string $id) {
+    event_src.vendor == "microsoft"
+    and event_src.title == "windows"
+    and lower($id) == "s-1-5-7"
+}

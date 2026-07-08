@@ -1,0 +1,135 @@
+JSON = ''
+
+COND = in_list(["priorityclasses", "controllerrevisions", "customresourcedefinitions", "poddisruptionbudgets",
+                "limitranges", "mutatingwebhookconfigurations", "validatingwebhookconfigurations", "podpresets",
+                "horizontalpodautoscalers"], $payload["objectRef"]["resource"])
+
+subject = "account"
+
+action = switch $payload["verb"]
+    case "create" "create"
+    case "get" "view"
+    case "list" "view"
+    case "watch" "view"
+    case "update" "modify"
+    case "patch" "modify"
+    case "delete" "remove"
+    case "deletecollection" "remove"
+endswitch
+
+object = "resource"
+
+if in_list(["ResponseStarted", "RequestReceived"], $payload["stage"]) then 
+    status = "ongoing"
+
+elif $payload["stage"] == "ResponseComplete" then
+    $code = number($payload["responseStatus"]["code"])
+    if $code == 101 or ($code >= 200 and $code < 300) then
+        status = "success"
+    else
+        status = "failure"
+    endif
+else
+    status = "failure"
+endif
+
+subject.account.id = $payload["user"]["uid"]
+subject.account.name = $payload["user"]["username"]
+subject.account.group = join($payload["user"]["groups"], "|")
+
+$space = find_substr($payload["userAgent"], " ")
+$csv_process = csv(substr($payload["userAgent"], 0, coalesce($space, length($payload["userAgent"]))), "/", "")
+subject.process.name = $csv_process[0]
+subject.process.version = strip($csv_process[1], "v", "")
+subject.process.meta = $payload["userAgent"]
+
+if $payload["impersonatedUser"] != null then
+    object.account.id = $payload["impersonatedUser"]["uid"]
+    object.account.name = $payload["impersonatedUser"]["username"]
+    object.account.group = join($payload["impersonatedUser"]["groups"], "|")
+else
+    object.account.id = subject.account.id
+    object.account.name = subject.account.name
+    object.account.group = subject.account.group
+endif
+
+$name = coalesce($payload["objectRef"]["name"], $payload["responseObject"]["metadata"]["name"])
+$type = join(remove([$payload["objectRef"]["resource"], $payload["objectRef"]["subresource"]], null), "/")
+object.storage.fullpath = join(remove([$type, $payload["objectRef"]["namespace"], $name], null), "/")
+
+object.id = coalesce($payload["responseObject"]["metadata"]["uid"], $payload["responseObject"]["details"]["uid"], $payload["objectRef"]["uid"])
+
+object.name = $name
+object.domain = $payload["objectRef"]["namespace"]
+object.group = $payload["objectRef"]["apiGroup"]
+object.state = $payload["responseStatus"]["code"]
+object.type = $type
+object.query = join([$payload["verb"], $payload["requestURI"]], " ")
+
+$fullpath = $payload["requestURI"]
+if find_substr($payload["requestURI"], "?") != null then
+    $fullpath = substr($payload["requestURI"], 0, find_substr($payload["requestURI"], "?"))
+endif
+if find_substr($fullpath, $payload["objectRef"]["name"]) != null then
+    object.path = strip($fullpath, "", $payload["objectRef"]["name"])
+else
+    object.path = $fullpath + "/"
+endif
+object.fullpath = join([object.path, object.name], "")
+
+if $payload["sourceIPs"][0] != "::1" then
+    src.ip = $payload["sourceIPs"][0]
+endif
+
+start_time = datetime($payload["requestReceivedTimestamp"])
+
+datafield2 = $payload["responseObject"]["metadata"]["ownerReferences"][0]["kind"]  # тип ресурса-владельца
+datafield3 = $payload["responseObject"]["metadata"]["ownerReferences"][0]["name"]  # имя ресурса-владельца
+datafield4 = $payload["responseObject"]["metadata"]["ownerReferences"][0]["uid"]   # ID ресурса-владельца
+
+if $payload["annotations"]["authorization.k8s.io/reason"] != "" then
+    datafield5 = $payload["annotations"]["authorization.k8s.io/reason"]  # RBAC subsystem message
+endif
+
+datafield8 = coalesce($payload["responseObject"]["kind"], $payload["requestObject"]["kind"])  # Object kind
+
+chain_id = $payload["auditID"]
+
+if not in_list([null, ""], $payload["responseObject"]["message"]) then
+    reason = $payload["responseObject"]["message"]
+elif not in_list([null, ""], $payload["responseStatus"]["reason"]) then
+    reason = $payload["responseStatus"]["reason"]
+else
+    reason = switch $payload["responseStatus"]["code"]
+        case 304 "NotModified"
+        case 307 "TemporaryRedirect"
+        case 400 "BadRequest"
+        case 401 "Unauthorized"
+        case 403 "Forbidden"
+        case 404 "NotFound"
+        case 405 "MethodNotAllowed"
+        case 409 "Conflict"
+        case 410 "Gone"
+        case 422 "UnprocessableEntity"
+        case 429 "TooManyRequests"
+        case 500 "InternalServerError"
+        case 503 "ServiceUnavailable"
+        case 504 "ServerTimeout"
+    endswitch
+endif
+
+time = datetime($payload["stageTimestamp"])
+msgid = "K8S_Metadata_Management"
+
+if (in_list(["create", "modify", "remove"], action)) then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = "kube-apiserver"
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_Kubernetes_Metadata_Management"

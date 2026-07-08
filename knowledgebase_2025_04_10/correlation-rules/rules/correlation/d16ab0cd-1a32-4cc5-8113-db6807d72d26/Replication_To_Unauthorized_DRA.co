@@ -1,0 +1,64 @@
+event Replication_Manipulation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["4928", "4929"], msgid)
+        and event_src.vendor == "microsoft"
+        and event_src.title == "active_directory"
+        and filter::CheckWL_Specific_Only("Replication_To_Unauthorized_DRA", lower(datafield1))
+    }
+
+rule Replication_To_Unauthorized_DRA: Replication_Manipulation
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Replication_Manipulation {
+        $src.hostname = src.hostname
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.asset = src.asset
+            
+        $datafield1 = datafield1    # Агент репликации
+        $datafield2 = datafield2    # DestinationDRA
+        $datafield3 = datafield3    # SourceDRA
+        $datafield4 = datafield4    # NamingContext
+        $datafield5 = datafield5    # Options
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(datafield1)
+        $alert.context = "Unauthorized DRA: " + datafield1
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "remove"
+    $object = "ds_object"
+    $status = "success"
+
+    $object.name = "Replication_To_Unauthorized_DRA"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "DCsync"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        %{"%"?}10{$tmp_subsys="DHCPS"}/{NUMBER}/{msgid="RECLAIM_IP"}:
+        DHCP server reclaimed a {object.value=STRING+} pool\'s lease (IP {assigned_src_ip=IPV4}, lease {datafield2=NUMBER} seconds),
+        which is allocated for the DHCP client (MAC{$mac=WORDDASH}){REST}'
+
+action = "unassign"
+object = "ip_address"
+status = "success"
+
+object.property = "address pool"
+
+# Divide the mac by inner dashes into a list and then concatenate it:
+$mac = csv($mac, "-", "'")
+src.mac = macaddr($mac[0] + $mac[1] + $mac[2])
+protocol = "DHCP"
+
+importance = "info"
+
+event_src.title = "vsr"
+event_src.subsys = lower($tmp_subsys)
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.category = "Network device"
+
+id = "PT_HPE_VSR_syslog_DHCPS_reclaim_ip"

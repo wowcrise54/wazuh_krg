@@ -1,0 +1,78 @@
+# {"class":"vim.event.EventEx","key":3291,"chainId":3291,"createdTime":"2022-02-10 18:31:28.269999+00:00","userName":"com.vmware.vcIntegrity","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"Datacenter","datacenter":"vim.Datacenter:datacenter-3"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"10.125.4.3","computeResource":"vim.ComputeResource:domain-s8"},"host":{"class":"vim.event.HostEventArgument","name":"10.125.4.3","host":"vim.HostSystem:host-10"},"fullFormattedMessage":"NFC operation 'Upload' for path '/tmp/vmware-root/ha-agentmgr/upgrade' was initiated from '10.125.4.5' and completed with status 'Success'","eventTypeId":"DatastoreFileNfcModificationEvent","severity":"info","message":"","arguments":{"operation":"nfcUploadFile","status":"nfcOpSuccess","sourceOfOperation":"10.125.4.5","targetPath":"/tmp/vmware-root/ha-agentmgr/upgrade"},"objectId":"","objectName":""}
+
+JSON = ''
+COND = $eventTypeId == "DatastoreFileNfcModificationEvent"
+
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+action = switch $arguments["operation"]
+    case "nfcDownloadFile" "download"
+    case "nfcUploadFile" "upload"
+endswitch
+
+object = "file_object"
+
+status = switch $arguments["status"]
+    case "nfcOpSuccess" "success"
+    case "nfcOpError" "failure"
+    case "nfcOpUnknown" "ongoing"
+endswitch
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+$obj_list = csv($arguments["targetPath"], "/", "'")
+
+if length($obj_list) > 1 then
+    object.name = $obj_list[length($obj_list)-1]
+    object.path = strip($arguments["targetPath"], "", object.name)
+else
+    object.name = $arguments["targetPath"]
+endif
+
+object.fullpath = $arguments["targetPath"]
+
+src.ip = $arguments["sourceOfOperation"]
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+
+chain_id = $chainId
+
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield2 = $ds["name"]  # Datastore Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield6 = coalesce($host["name"], $arguments["_sourcehost_"])  # Host Name
+
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "medium"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_Datastore_File_NFC"

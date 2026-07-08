@@ -1,0 +1,52 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {$fallback_time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING+?}
+        CEF:{NUMBER}|InfoTeCS|IDS|2.2{"."NUMBER?}-{NUMBER}|{NUMBER}:{subject.id=NUMBER}:{subject.version=NUMBER}|{subject.name=UNTIL("|")}
+        {$priority=NUMBER}|cat={NUMBER} src={src.ip=IPV4|src.ip=IPV6} dst={dst.ip=IPV4|dst.ip=IPV6} {$values=KEYVALUE(" ", "=", "\\\"")}'
+
+subject = "rule"
+action = "detect"
+object = "alert"
+status = "success"
+
+if $values["spt"] != "0" then
+    src.port = $values["spt"]
+endif
+if $values["dpt"] != "0" then
+    dst.port = $values["dpt"]
+endif
+if $values["proto"] != "N/A" then
+    protocol = $values["proto"]
+endif
+
+if $priority == 1 then
+    importance = "high"
+elif $priority == 2 then
+    importance = "medium"
+elif $priority == 3 then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+if maybe_datetime($values["rt"]) != null then
+    time = $values["rt"]
+else
+    time = $fallback_time
+endif
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "IDS/IPS Alert"
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+event_src.id = $values["deviceExternalId"]
+
+id = "PT_Infotecs_VipNet_IDS_2_2_syslog_alert_detected"

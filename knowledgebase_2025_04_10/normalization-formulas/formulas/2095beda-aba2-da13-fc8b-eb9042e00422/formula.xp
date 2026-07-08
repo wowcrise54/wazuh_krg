@@ -1,0 +1,111 @@
+JSON = 'source="neutron"'
+
+COND = in_list(["create-floating-ip", "update-floating-ip", "delete-floating-ip"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+if $action == "create-floating-ip" then
+    if $request_body["floatingip"]["port_id"] != null then
+        action = "assign"
+    else
+        action = "create"
+    endif
+
+elif $action == "update-floating-ip" then
+    if $request_body["floatingip"]["port_id"] != null then
+        action = "assign"
+    else
+        action = "unassign"
+    endif
+
+elif $action == "delete-floating-ip" then
+    action = "remove"
+endif
+
+object = "ip_address"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subformula "parse_error"
+    TEXT = 'Cannot associate floating IP {$floating_ip=IPV4} ({$floating_ip_id=UNTIL(")")}
+            with port {$port_id=STRING} using fixed IP {$fixed_ip_address=IPV4}, as that fixed IP
+            already has a floating IP on external network {$floating_network_id=UNTIL(".")}'
+endsubformula
+
+subformula "parse_error"
+    TEXT = '{REST}'
+endsubformula
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["floatingip"]
+
+if $response_body["NeutronError"]["message"] != null then
+    $error = $response_body["NeutronError"]["message"]
+
+    submessage("TEXT", "parse_error", $error)
+endif
+
+if $properties["id"] != null then
+    object.id = $properties["id"]
+
+elif $floating_ip_id != null then
+    object.id = $floating_ip_id
+else
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[length($csv_uri) - 1]
+endif
+
+object.state = $properties["status"]
+object.type = "floating ip"
+object.value = coalesce($properties["floating_ip_address"], $floating_ip)
+
+datafield1 = $method                                                             # Method
+datafield2 = $uri                                                                # URL
+datafield3 = coalesce($properties["floating_network_id"], $floating_network_id)  # The ID of the network associated with the floating IP
+datafield5 = coalesce($properties["port_id"], $port_id)                          # The ID of a port associated with the floating IP
+datafield6 = $properties["project_id"]                                           # The ID of the project
+datafield7 = $properties["router_id"]                                            # The ID of the router for the floating IP
+datafield8 = coalesce($properties["fixed_ip_address"], $fixed_ip_address)        # The fixed IP address that is associated with the floating IP address
+
+if $properties["description"] != "" then
+    datafield9 = $properties["description"]  # A human-readable description for the resource
+endif
+
+if $properties["dns_name"] != "" then
+    datafield10 = $properties["dns_name"]  # A valid DNS name
+endif
+
+if $properties["dns_domain"] != "" then
+    datafield11 = $properties["dns_domain"]  # A valid DNS domain
+endif
+
+reason = $error
+
+time = $timestamp
+msgid = $action
+importance = "low"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Neutron_Floating_IP_operations"

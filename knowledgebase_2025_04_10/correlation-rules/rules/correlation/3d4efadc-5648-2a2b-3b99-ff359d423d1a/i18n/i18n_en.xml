@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Attackers can disable UAC as part of remote connection control. This allows high-privilege users to connect to a remote host using an account from the local administrators group on this host.</Description>
+  <EventDescriptions>
+    <EventDescription id="0d89625f-e93a-ace8-3d0e-aaef18850f9a">User {subject.account.name} tried to disable user account control (UAC) by creating registry entry {object.name} on host {event_src.host}</EventDescription>
+    <EventDescription id="116f574e-46e7-27f6-9d86-dd3c8ec0df62">User {subject.account.name} tried to disable user account control (UAC) by creating registry entry {alert.regex_match} on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

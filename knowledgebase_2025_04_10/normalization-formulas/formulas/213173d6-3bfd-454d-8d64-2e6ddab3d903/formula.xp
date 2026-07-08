@@ -1,0 +1,41 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="https-proxy"}[{NUMBER}]: msg_id="
+         {msgid="2CFF-0007"}" Deny {WORDDASH} {WORDDASH} {$pt1=WORD}
+         {src.ip=IPV4|src.ip=IPV6} {dst.ip=IPV4|dst.ip=IPV6} {src.port=NUMBER} {dst.port=NUMBER} {$msg=STRING*}
+         ({datafield1=WORDDASH+})'
+
+$kv = keyvalue($msg, " ", "=", '"')
+
+if $kv["src_user"] != null then
+    subject = "account"
+endif
+action = "open"
+object = "session"
+status = "failure"
+
+$dog = find_substr($kv["src_user"], "@")
+if $dog != null then
+    subject.account.name = substr($kv["src_user"], 0, $dog)
+    subject.account.domain = strip($kv["src_user"], subject.account.name + "@", "")
+else
+    subject.name = $kv["src_user"]
+endif
+protocol = $pt1
+
+# datafield1 - Proxy policy name
+datafield10 = number16($kv["version"])  # SSL version
+
+importance = "low"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_2CFF0007_HTTPS_invalid_SSL_version"

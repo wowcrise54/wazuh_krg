@@ -1,0 +1,36 @@
+!JSON = 'EventIdentifier=520'
+!COND = $Logfile=="Security" and $Category==1
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+subject.id = $InsertionStrings[4]
+subject.name = lower($InsertionStrings[2])
+subject.domain = lower($InsertionStrings[3])
+
+object.path = $InsertionStrings[1]
+
+datafield1 = maybe_number16(strip(csv($InsertionStrings[4], ",", "`")[1], "", ")"))  # logon id
+datafield2 = $InsertionStrings[8] + $InsertionStrings[9]    # old datetime
+datafield3 = $InsertionStrings[10] + $InsertionStrings[11]  # new datetime
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_520_The_system_time_was_changed"

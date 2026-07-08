@@ -1,0 +1,62 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "ACCESS" and in_list([19,43], $action)
+
+if $user_name != "" then
+    subject = "account"
+    submessage("TEXT", "subject_name", $user_name)
+endif
+# action: check / restore
+# object: file / resource
+# status: success / failure
+
+if $result == 0 then  # OK
+    action = "check"
+    status = "success"
+    importance = "info"
+elif $result == -536870252 or $result == -536870249 then  # Resource has been restored from a backup
+    action = "restore"
+    status = "success"
+    importance = "low"
+else  # Integrity check error
+    action = "check"
+    status = "failure"
+    importance = "high"
+endif
+
+subformula "subject_name"
+    TEXT = "{subject.domain=WORDDASH}\\{subject.name=WORDDASH}"
+endsubformula
+subformula "subject_name"
+    TEXT = "{subject.name=WORDDASH}"
+endsubformula
+
+if $action == 19 then
+    object = "file"
+elif $action == 43 then
+    object = "resource"
+    object.type = "registry object"
+endif
+object.path = $resource
+
+if $computer_name != "" then
+    src.hostname = $computer_name
+endif
+
+# Name of involved process
+datafield1 = $process_name
+
+event_src.vendor = "confident"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_access_resource_integrity_control"

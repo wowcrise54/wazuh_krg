@@ -1,0 +1,38 @@
+TEXT = "{'<'NUMBER'>'?}{time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        ownCloud[{NUMBER}]: {STRING} The {$type='folder'|$type='file'} \"{object.fullpath=UNTIL('\"')}
+        with ID \"{object.id=NUMBER}\" has been {$ostate1='unshared'} {$ostate2=WORD*}
+        {'\"'?}{datafield1=UNTIL('\"')?} (Share ID: {NUMBER})"
+
+action = "modify"
+object = "file_object"
+status = "success"
+
+object.state = $ostate1 + " " + $ostate2
+if $type == "folder" then
+    object.type = "directory"
+else
+    object.type = "file"
+endif
+$csv_path = csv(object.fullpath, '/', '')
+object.name = $csv_path[length($csv_path) - 1]
+if strip(object.fullpath, '', object.name) != '' then
+    object.path = strip(object.fullpath, '', object.name)
+endif
+
+# datafield1 - Username or group name
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nextcloud"
+event_src.category = "File service"
+
+id = "PT_Opensource_Nextcloud_syslog_Resource_unshared"

@@ -1,0 +1,82 @@
+JSON = 'source="neutron"'
+
+COND = in_list(["create-security-group", "delete-security-group"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = switch $action
+    case "create-security-group" "create"
+    case "delete-security-group" "remove"
+endswitch
+
+object = "resource"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subformula "parse_id"
+    TEXT = '{UNTIL("\\\"security_group_id\\\"")}: \"{object.id=UNTIL("\\\"")} {REST}'
+endsubformula
+
+subformula "parse_id"
+    TEXT = '{REST}'
+endsubformula
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $request_body["security_group"]
+
+if $action == "create-security-group" then
+    if $properties["id"] != null then
+        object.id = $properties["id"]
+    else
+        submessage("TEXT", "parse_id", $response_body)
+    endif
+
+elif $action == "delete-security-group" then
+    $csv_uri = csv($uri, "/", "")
+    object.id = $csv_uri[length($csv_uri) - 1]
+endif
+
+if $properties["name"] != "" then
+    object.name = $properties["name"]
+endif
+
+object.state = $properties["status"]
+object.type = "security group"
+
+datafield1 = $method  # Method
+datafield2 = $uri     # URL
+
+if $properties["description"] != "" then
+    datafield9 = $properties["description"]  # A human-readable description for the resource
+endif
+
+reason = $response_body["NeutronError"]["message"]
+
+time = $timestamp
+msgid = $action
+importance = "medium"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Neutron_Security_group_operations"

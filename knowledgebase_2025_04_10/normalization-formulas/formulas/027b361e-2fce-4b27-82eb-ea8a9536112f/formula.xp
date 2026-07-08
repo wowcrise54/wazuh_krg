@@ -1,0 +1,39 @@
+TABULAR =  "id,
+            {subject.account.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.value=source_name},
+            {datafield1=object_type},
+            network_number,
+            {object.name=participant_object_name},
+            {object.type=participant_object_type}
+            "
+
+COND = $gr_name == "Управление пользователями и группами пользователей"
+       and $ev_desc == "Добавление пользователя в группу пользователей"
+       and $status == "Успешно"
+
+subject = "account"
+action = "modify"
+object = "user_group"
+status = "success"
+
+object.id = $participant_source_identifier
+object.property = "account"
+
+# datafield1 - тип узла
+datafield2 = $source_identifier  # идентификатор узла
+
+importance = "info"
+
+category.generic = "Group"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_add_user_to_group"

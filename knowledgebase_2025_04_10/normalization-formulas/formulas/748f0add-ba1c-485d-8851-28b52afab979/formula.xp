@@ -1,0 +1,33 @@
+TEXT = "{'<'NUMBER'>'?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        apt-monitor{'['NUMBER']'?} {':'?} [Audit] Component
+        {$objname=STRING+} Status {object.state=REST}"
+
+action = "info"
+object = "application"
+status = "success"
+
+if find_substr($objname, 'IP') != null then
+    submessage ("TEXT", "parse_with_ip", $objname)
+else
+    object.name = $objname
+endif
+
+subformula "parse_with_ip"
+    !TEXT = "{object.name=STRING+} IP {dst.ip=IPV4|dst.hostname=HOSTNAME} Type {object.type=REST}"
+endsubformula
+
+
+importance = "info"
+
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_component_status"

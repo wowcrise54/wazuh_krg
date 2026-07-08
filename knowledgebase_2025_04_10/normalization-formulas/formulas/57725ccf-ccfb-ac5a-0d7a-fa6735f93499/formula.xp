@@ -1,0 +1,46 @@
+TEXT = "<{NUMBER}>{DATETIME} {STRING} {$date=NUMBER} {$Computer=STRING} {NUMBER} {NUMBER} SecretNet[{NUMBER?}] [{NUMBER}]
+        {datafield1 = UNTIL(':')} successfully changed policy for plugin '{datafield2=STRING} {'Initiator:'?} {$tempuser=STRING?}"
+       
+if subject.account.name != null then
+    subject = "account"
+else
+    subject = null
+endif 
+
+action = "modify"
+object = "policy"
+status = "success"
+
+$tempuser = strip($tempuser, "", ".")
+if find_substr($tempuser, '@') != null then
+    $temp_csv = csv(lower($tempuser), "@", "`")
+    subject.account.name = $temp_csv[0]
+    subject.account.domain = $temp_csv[1]
+elif find_substr($tempuser, '\\') != null then
+    $temp_csv2 = csv(lower($tempuser), "\\", "`")
+    subject.account.name = $temp_csv2[1]
+    subject.account.domain = $temp_csv2[0]
+else 
+    subject.account.name = lower($tempuser)
+endif 
+
+datafield2 = strip(datafield2, "", "'.")
+
+#datafield1 name of plugin
+#datafield2 name of changing plugin
+
+time = epoch_to_datetime($date)
+importance = "info"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "secretnet_lsp"
+event_src.category = "Host security"
+
+id = "PT_Securitycode_SecretNet_LSP_syslog_plugin_policy_modified" 

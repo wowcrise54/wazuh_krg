@@ -1,0 +1,29 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4} {event_src.hostname=HOSTNAME}
+        - {'Log'|'Alert'} [Fields@{STRING} Action=\"ip changed\" UUid={STRING} {$kv=REST}"
+
+$kv = keyvalue($kv, " ", "=", "\"")
+
+subject = "account"
+action = if $kv["old_IP:"] != "0.0.0.0" then "update" else "assign" endif
+object = "ip_address"
+status = "success"
+
+subject.name = substr($kv["user"], find_substr($kv["user"], "=") + 1, find_substr($kv["user"], ",") - 3)
+
+object.property = "old IP-address"
+object.value = $kv["old_IP:"]
+
+src.ip = $kv["src"]
+src.mac = $kv["mac_address"]
+assigned_src_ip = $kv["assigned_IP:"]
+
+reason = $kv["OM:"]
+
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "connectra"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Checkpoint_Connectra_syslog_IP_changed"

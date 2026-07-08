@@ -1,0 +1,58 @@
+JSON = 'ENTITY_TYPE'
+COND = ($ENTITY_TYPE == "QueryReport"
+        and in_list(["privileges_create", "privileges_update", "move", "create_widget"], $OPERATION))
+
+subject = "account"
+action = switch $OPERATION 
+    case "privileges_create" "create"
+    case "privileges_update" "modify"
+    case "move" "move"
+    case "create_widget" "create"
+endswitch
+if find_substr($OPERATION, "privileges") != null then
+    object = "resource"
+    
+    object.storage.name = $ENTITY_DISPLAY_NAME
+    object.storage.id = $ENTITY_ID
+    
+    object.type = "privileges"
+elif find_substr($OPERATION, "widget") != null then
+    object = "resource"
+    
+    object.storage.name = $ENTITY_DISPLAY_NAME
+    object.storage.id = $ENTITY_ID
+    
+    object.type = "widget"
+else
+    object = "report"
+    
+    object.name = $ENTITY_DISPLAY_NAME
+    object.id = $ENTITY_ID
+endif
+status = "success"
+
+subject.account.id = $USER_ID
+subject.account.name = $user_or_token['USERNAME']
+subject.account.fullname = $user_or_token['DISPLAY_NAME']   
+subject.account.contact = $user_or_token['EMAIL']                
+
+if action == "move" then
+    object.property = "report location"
+    object.value = $PROPERTY_CHANGES['old']['FOLDER_NAME']
+    object.new_value = $PROPERTY_CHANGES['new']['FOLDER_NAME']
+    
+    if object.new_value == null then
+        object.new_value = "/"
+    endif
+endif
+
+time = $CHANGE_DATE
+msgid = $ENTITY_TYPE
+importance = "info"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_9_customeventcollector_Report_actions"

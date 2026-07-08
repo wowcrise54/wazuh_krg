@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля в домене FreeIPA. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="1b5257ca-a811-4ec4-3376-e9598dda8e59">Распыление пароля (password spraying) с узла {src.host} в домене FreeIPA на узле {event_src.host}. Подобран пароль пользователя {subject.account.name}. Количество неудачных попыток входа: {count.subevents}</EventDescription>
+    <EventDescription id="cb11f874-49f9-f744-6ef8-2c7115ed89b5">Попытки распыления пароля (password spraying) с узла {src.host} в домене FreeIPA на узле {event_src.host}. Количество попыток входа: {count.subevents}</EventDescription>
+    <EventDescription id="d49227c4-9a7f-f49d-8838-bc24865e035e">Распыление пароля (password spraying) с узла {src.host} в домене FreeIPA на узле {event_src.host}. Подобраны пароли пользователей {datafield3}. Количество неудачных попыток входа: {count.subevents}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,124 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "NETWORK_ADD_VM_INTERFACE",  # 932
+           "NETWORK_ADD_VM_INTERFACE_FAILED",  # 933
+           "NETWORK_ACTIVATE_VM_INTERFACE_SUCCESS",  # 1,012
+           "NETWORK_ACTIVATE_VM_INTERFACE_FAILURE",  # 1,013
+           "NETWORK_DEACTIVATE_VM_INTERFACE_SUCCESS",  # 1,014
+           "NETWORK_DEACTIVATE_VM_INTERFACE_FAILURE",  # 1,015
+           "NETWORK_REMOVE_VM_INTERFACE",  # 930
+           "NETWORK_REMOVE_VM_INTERFACE_FAILED",  # 931
+           "NETWORK_UPDATE_VM_INTERFACE",  # 934
+           "NETWORK_UPDATE_VM_INTERFACE_FAILED"  # 935
+       ], $event_class)
+
+subject = "account"
+action = "modify"
+object = "virtual_machine"
+
+if (substr($event_class, -6, 6) == "FAILED") or (substr($event_class, -7, 7) == "FAILURE") then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subformula "parse_body"
+    # NETWORK_ADD_VM_INTERFACE
+    # NETWORK_ACTIVATE_VM_INTERFACE_SUCCESS
+    TEXT = "{'Network'?} Interface {$interface_name=STRING+} ({$interface_type=STRING+} was {'added'|'plugged'} to VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_ADD_VM_INTERFACE_FAILED
+    # NETWORK_ACTIVATE_VM_INTERFACE_FAILURE
+    TEXT = "Failed to {'add'|'plug Network'} Interface {$interface_name=STRING+} ({$interface_type=STRING+} to VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_REMOVE_VM_INTERFACE
+    # NETWORK_DEACTIVATE_VM_INTERFACE_SUCCESS
+    TEXT = "{'Network'?} Interface {$interface_name=STRING+} ({$interface_type=STRING+} was {'removed'|'unplugged'} from VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_REMOVE_VM_INTERFACE_FAILED
+    # NETWORK_DEACTIVATE_VM_INTERFACE_FAILURE
+    TEXT = "Failed to {'remove'|'unplug Network'} Interface {$interface_name=STRING+} ({$interface_type=STRING+} from VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_UPDATE_VM_INTERFACE
+    TEXT = "Interface {$interface_name=STRING+} ({$interface_type=STRING+} was updated for VM {$vm_state=STRING+} (User: {$user=REST}"
+    
+    $vm_state_list = csv($vm_state, ". Link State is ", "'")
+    $vm_name = $vm_state_list[0]
+    $link_state = $vm_state_list[1]
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_UPDATE_VM_INTERFACE_FAILED
+    TEXT = "Failed to update Interface {$interface_name=STRING+} ({$interface_type=STRING+} for VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+$user = strip($user, "", ")")
+$vm_name = strip($vm_name, "", ".")
+$link_state = strip($link_state, "", ".")
+$interface_type = strip($interface_type, "", ")")
+
+if substr($event_class, 0, 11) == "NETWORK_ADD" then
+    $prefix = "added"
+elif substr($event_class, 0, 14) == "NETWORK_REMOVE" then
+    $prefix = "removed"
+elif substr($event_class, 0, 14) == "NETWORK_UPDATE" then
+    $prefix = "updated"
+elif substr($event_class, 0, 16) == "NETWORK_ACTIVATE" then
+    $prefix = "plugged"
+else
+    $prefix = "unplugged"
+endif
+
+if $link_state != null then
+    $prefix = $prefix + "_" + lower($link_state)
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+object.property = $prefix + "_net_interface"
+object.value = $interface_name
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_VM_Network_Interfaces"

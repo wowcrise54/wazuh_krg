@@ -1,0 +1,162 @@
+event Registry_Modify:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "13"
+        and (
+            find_substr(lower(object.path), "\\shell\\open\\command\\") != null
+            or (
+                match(lower(object.fullpath), "*\\software\\classes\\.*\\(default)")
+            ) or (
+                match(lower(object.fullpath), "*\\software\\microsoft\\windows\\currentversion\\explorer\\fileexts\\.*\\openwithprogids\\*")
+                and lower(subject.process.name) != "explorer.exe"
+            ) or (
+                match(lower(object.fullpath), "*\\software\\microsoft\\windows\\currentversion\\explorer\\fileexts\\.*\\userchoice\\progid"))
+        )
+        and filter::CheckWL_Registry_Actions("Default_File_Association_Modify", lower(join([subject.process.fullpath, object.new_value], "|")))
+    }
+
+event Registry_Modify_From_Suspicious_Process:
+    key:
+        event_src.host, object.process.fullpath, object.process.id 
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("cmd.exe", "cmd(.exe)?.*?(\/c).*?(ftype|assoc)")
+    }
+
+rule Default_File_Association_Modify: (Registry_Modify+ and Registry_Modify_From_Suspicious_Process?) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+        $events_cnt = 0
+    }
+
+    on Registry_Modify {
+        if $events_cnt == 0 then
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+
+            $object.account.id = object.account.id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.session_id = object.account.session_id
+            $object.account.privileges = object.account.privileges
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.value = object.value
+            $object.new_value = object.new_value
+
+            $alert.key = lower(join([subject.process.fullpath, object.new_value], "|"))
+            $alert.context = lower(join([event_src.host, subject.account.name, subject.account.domain], "|"))
+            $alert.regex_match = object.fullpath
+
+            if find_substr(lower($object.path), "\\shell\\open\\command\\") != null then
+                $reason = "file_association"
+                # File association
+                $datafield11 = regex(lower($object.fullpath), "classes\\\\(.*)\\\\shell", 1)
+            elif match(lower($object.fullpath), "*\\software\\classes\\.*\\(default)") then
+                $reason = "file_extansion"
+                # File extansion
+                $datafield11 = regex(lower($object.fullpath), "classes\\\\(.*)\\\\\(default\)", 1)
+            elif match(lower($object.fullpath), "*\\software\\microsoft\\windows\\currentversion\\explorer\\fileexts\\.*\\openwithprogids\\*") then
+                $reason = "list_of_open_programm"
+                # File extansion
+                $datafield11 = regex(lower($object.fullpath), "fileexts\\\\(.*)\\\\openwithprogids", 1)
+            elif match(lower($object.fullpath), "*\\software\\microsoft\\windows\\currentversion\\explorer\\fileexts\\.*\\userchoice\\progid") then
+                $reason = "default_programm"
+                # File extansion
+                $datafield11 = regex(lower($object.fullpath), "fileexts\\\\(.*)\\\\userchoice", 1)
+            endif
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+        endif
+        $events_cnt = $events_cnt + 1
+    }
+
+    on Registry_Modify_From_Suspicious_Process {
+        $subject.process.hash = object.process.hash
+        $subject.process.hash.md5 = object.process.hash.md5
+        $subject.process.hash.imphash = object.process.hash.imphash
+        $subject.process.hash.sha1 = object.process.hash.sha1
+        $subject.process.hash.sha256 = object.process.hash.sha256
+        $subject.process.version = object.process.version
+        $subject.process.cmdline = object.process.cmdline
+        $subject.process.meta = object.process.meta
+        $subject.process.original_name = object.process.original_name
+        $subject.process.cwd = object.process.cwd
+        $subject.process.chain = object.process.chain
+
+        $subject.process.parent.id = object.process.parent.id
+        $subject.process.parent.name = object.process.parent.name
+        $subject.process.parent.path = object.process.parent.path
+        $subject.process.parent.fullpath = object.process.parent.fullpath
+        $subject.process.parent.cmdline = object.process.parent.cmdline
+        $subject.process.parent.guid = object.process.parent.guid
+
+        $datafield19 = $datafield19 #цепочка процесса-объекта с идентификаторами
+    }
+
+emit {
+    if regex(lower($object.new_value), "(cmd|powershell(_ise)?)\.exe\\b", 0) != null then
+        # Suspicious value
+        $correlation_type = "incident"
+
+        $importance = "medium"
+    elif $events_cnt > 3 then
+        # Perhaps this is an installation or update of legitimate software
+        $correlation_type = "event"
+
+        $importance = "info"
+    elif match(lower($object.fullpath), "*\\software\\microsoft\\windows\\currentversion\\explorer\\fileexts\\.*\\openwithprogids\\*") then
+        # List of programs used to open files
+        $correlation_type = "event"
+
+        $importance = "medium"
+    else
+        # Other cases
+        $correlation_type = "event"
+        
+        $importance = "low"
+    endif
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "modify"
+    $object = "reg_object"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Event Triggered Execution: Change Default File Association"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-session"?}-{NUMBER}-{msgid="609001"}:
+        Built local-host {interface=UNTIL(":")}{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}'
+
+action = "lock"
+object = "resource"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_609001_Built_local_host"

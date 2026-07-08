@@ -1,0 +1,95 @@
+TABULAR = '__policy_id_tag,
+          action,
+          client_name,
+          client_version,
+          data_type,
+          destination_path,
+          event_type,
+          file_name,
+          file_operation,
+          file_size,
+          media_type,
+          media_description,
+          media_encrypted,
+          media_manufacturer,
+          orig,
+          os_name,
+          os_version,
+          process,
+          product,
+          product_family,
+          reading_data_access,
+          src,
+          src_machine_name,
+          src_user_name,
+          {time=time},
+          writing_data_access'
+
+COND = $product == "MEPP"
+       and $event_type == "File Operation"
+
+subject = "account"
+
+action = switch $file_operation
+     case "Write" "modify"
+     case "Copy" "copy"
+     case "Create" "create"
+     case "Delete" "remove"
+endswitch
+
+object = "file_object"
+
+if $action == "allow" then
+    status = "success"
+elif $action == "block" then
+    status = "failure"
+endif
+
+if length($src_user_name) != 0 then
+    subject.account.name = $src_user_name
+endif
+
+subject.process.name = $process
+
+object.name = $file_name
+if length(strip($source_path, " ", " ")) != 0 then
+    object.path = strip($source_path, "", object.name)
+endif
+object.fullpath = object.path + object.name
+
+object.type = $data_type
+
+object.property = "size"
+object.value = $file_size
+
+if length($media_description) != 0 then
+    datafield3 = $media_description  # описание хранилища
+endif
+
+$kv_policy_id_tag = keyvalue($__policy_id_tag, ";", "=", "")
+datafield4 = epoch_to_datetime(number($kv_policy_id_tag["date"]))  # дата последнего изменения сработавшей политики
+
+if length($destination_path) != 0 and $destination_path != "-" then
+    object.new_value = $destination_path
+endif
+
+msgid = $event_type
+
+if status == "success" then
+    importance = "medium"
+elif status == "failure" then
+    importance = "high"
+endif
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.subsys = lower($product)
+event_src.ip = $src
+event_src.hostname = $src_machine_name
+event_src.category = "Host security"
+
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Mepp_File_operation"

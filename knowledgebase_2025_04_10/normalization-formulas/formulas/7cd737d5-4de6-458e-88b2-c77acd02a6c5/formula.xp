@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?} {$time1=DATETIME} {datafield1=WORD} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}: {time=DATETIME} polystar\\{subject.account.name=WORD}:Beeline {subject.account.group=WORD+} {"+ View Data"?}{"@"}{WORDDASH}/{src.ip=IPV4}{STRING}
+        {$reason="Logged in"|$reason="Logged out"}.'
+
+subject = "account"
+
+if $reason == "Logged in" then
+    action = "login"
+elif $reason == "Logged out" then
+    action = "logout"
+endif
+
+object = "system"
+status = "success"
+
+dst.hostname = $Computer
+dst.ip = event_src.ip
+
+logon_auth_method = "remote"
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "osix"
+event_src.vendor = "polystar"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Telecom"
+
+id = "PT_Polystar_OSIX_syslog_Login_logout"

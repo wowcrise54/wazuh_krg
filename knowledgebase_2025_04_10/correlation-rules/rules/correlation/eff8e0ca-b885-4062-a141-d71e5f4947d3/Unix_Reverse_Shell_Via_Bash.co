@@ -1,0 +1,244 @@
+event Syscall_Connect:
+    key:
+        event_src.host, subject.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and not filter::Loopback_Address(dst.ip)
+        and (
+            dst.ip != event_src.ip
+            or dst.asset != event_src.asset
+        )
+        and msgid == "connect"
+        and direction == "egress"
+        and dst.port != null
+        and match(subject.process.fullpath, "*bin/bash")
+        and status == "success"
+    }
+
+event Syscall_Execve_Run_Pid:
+    key:
+        event_src.host, object.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and regex(object.process.fullpath, "bin/(ba)?sh$", 0) != null
+        and filter::CheckWL_Linux_Process_Creation("Unix_Reverse_Shell_Via_Bash",
+            lower(join([coalesce(subject.account.name, subject.account.id), object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+
+event Syscall_Execve_Run_Ppid:
+    key:
+        event_src.host, object.process.parent.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::ProcessStart_Linux()
+            and regex(object.process.fullpath, "bin/(ba)?sh$", 0) != null
+            # Частный случай при использовании перенаправления вывода
+            or (
+                match(object.process.fullpath, "*bin/cat")
+                and regex(object.process.meta, "^(\S+\/)?cat$", 0) != null
+            )
+        )
+        and filter::CheckWL_Linux_Process_Creation("Unix_Reverse_Shell_Via_Bash",
+            lower(join([coalesce(subject.account.name, subject.account.id), object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+
+rule Unix_Reverse_Shell_Via_Bash: (Syscall_Connect and (Syscall_Execve_Run_Pid or Syscall_Execve_Run_Ppid)) within 2s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+        $connect = 0
+        $run_shell_same_proc = 0
+        $run_shell_child_proc = 0
+    }
+
+    on Syscall_Connect {
+        $connect = number(chain_id)
+        
+        if ($connect != 0) and (($run_shell_same_proc != 0) or ($run_shell_child_proc != 0)) then
+            if not (($run_shell_same_proc > $connect) or ($run_shell_child_proc > $connect)) then
+                close
+            endif
+        endif
+        
+        $subject.process.id = subject.process.id
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.meta = subject.process.meta
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.parent.id = subject.process.parent.id
+
+        $dst.ip = dst.ip
+        $dst.host = dst.host
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        
+        $direction = direction
+
+        if in_subnet(dst.ip, "172.16.0.0/12") 
+        or in_subnet(dst.ip, "192.168.0.0/16") 
+        or in_subnet(dst.ip, "10.0.0.0/8") 
+        or in_subnet(dst.ip, "224.0.0.0/4") 
+        or in_subnet(dst.ip, "169.254.0.0/16") then
+            $reason = "internal attacker"
+        else
+            $reason = "external attacker"
+        endif
+        
+        $connect_to = "[connect] " + dst.host + ":" + string(dst.port)
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    }
+
+    on Syscall_Execve_Run_Pid {
+        $run_shell_same_proc = number(chain_id)
+        
+        if ($connect != 0) and (($run_shell_same_proc != 0) or ($run_shell_child_proc != 0)) then
+            if not (($run_shell_same_proc > $connect) or ($run_shell_child_proc > $connect)) then
+                close
+            endif
+        endif
+                
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+        
+        if subject != null then
+            $subject_acc_info = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ")"
+        else
+            $subject_acc_info = "[sys] "
+        endif
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.group = object.account.group
+        
+        $object_acc_info = coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ")"
+
+        $object.process.id = object.process.id
+        $object.process.cwd = object.process.cwd
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.chain = object.process.chain
+        $object.process.parent.id = object.process.parent.id
+        
+        $cmdline = "[" + string(object.process.id) + "] " + object.process.cmdline
+        
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+        
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|"))
+    }
+    
+    on Syscall_Execve_Run_Ppid {
+        $run_shell_child_proc = number(chain_id)
+        
+        if ($connect != 0) and (($run_shell_same_proc != 0) or ($run_shell_child_proc != 0)) then
+            if not (($run_shell_same_proc > $connect) or ($run_shell_child_proc > $connect)) then
+                close
+            endif
+        endif
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+        
+        $subject_acc_info = "[" + coalesce(logon_service, "sys") + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ")"
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.group = object.account.group
+        
+        $object_acc_info = "[" + coalesce(logon_service, "sys") + "] " + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ")"
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        
+        $cmdline = "[" + string(object.process.id) + "] " + object.process.cmdline
+
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+        
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "open"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "medium"
+
+    # Имеет вид: "[pts/0] <unknown>(1000) → <unknown>(0) → [connect] 192.168.206.134:4433 → [7073] bash -i"
+    $alert.context = join([$subject_acc_info, $object_acc_info, $connect_to, $cmdline], " → ")
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Unix Shell"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,42 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["facility"] == "security/authorization messages"
+       and find_substr($kv["default_device_message"], "LOGIN ON") != null
+
+subject = "account"
+action = "login"
+object = "system"
+status = "ongoing"
+
+subformula 'sub1'
+    # Извлечение subject.privileges и subject.name и src.ip из default_device_message
+    TEXT = '{UNTIL("login")}: {subject.account.privileges="ROOT"?} LOGIN ON {logon_service=STRING} 
+            {"BY" subject.account.name=STRING?} {$from="FROM" src.ip=STRING?}'
+endsubformula
+
+submessage('TEXT', 'sub1', $kv["default_device_message"])
+
+if $from != null then
+    protocol.layer7 = "telnet"
+    
+    logon_auth_method = "remote"
+else
+    logon_auth_method = "local"
+endif
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Login_ongoing"

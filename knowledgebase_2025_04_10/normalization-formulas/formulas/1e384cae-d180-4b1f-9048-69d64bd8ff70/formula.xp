@@ -1,0 +1,22 @@
+TEXT = '{time=DATETIME} [{WORD}] info: Удаление SSH ключа \'{object.value=UNTIL("\'")} {STRING} 
+        пользователя: {"{"} {$raw_kv=STRING}'
+
+subject = "account"
+action = "remove"
+object = "resource"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.type = "ssh key"
+object.property = "public ssh key"
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_remove_ssh_key"

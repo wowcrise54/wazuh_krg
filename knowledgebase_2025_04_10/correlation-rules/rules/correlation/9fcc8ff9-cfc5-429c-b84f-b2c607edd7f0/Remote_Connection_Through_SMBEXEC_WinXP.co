@@ -1,0 +1,104 @@
+event Logon_Success:
+    key:
+        event_src.host, subject.account.session_id, subject.account.domain, subject.account.name
+    filter {
+        msgid == "540"
+        and event_src.title == "windows"
+        and filter::CheckWL_Windows_Login("Remote_Connection_Through_SMBEXEC_WinXP",
+                lower(join([subject.account.id, src.host, string(logon_type), event_src.host], "|")))
+    }
+
+event Special_Privileges_Assigned_To_New_Logon:
+    key:
+        event_src.host, subject.account.session_id, subject.account.domain, subject.account.name
+    filter {
+        msgid == "576"
+        and event_src.title == "windows"
+    }
+
+event User_Attempted_To_Install_A_Service:
+    key:
+        event_src.host, subject.account.session_id, subject.account.domain, subject.account.name
+    filter {
+        msgid == "601"
+        and event_src.title == "windows"
+        and object.name == "BTOBTO"
+        and match(lower(object.process.cmdline), "*%comspec%*127.0.0.1*")
+    }
+
+rule Remote_Connection_Through_SMBEXEC_WinXP: (Logon_Success
+                                               and Special_Privileges_Assigned_To_New_Logon
+                                               and User_Attempted_To_Install_A_Service) within 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Windows_Login"
+    }
+
+    on Logon_Success {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+ 
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.mac = src.mac
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.mac = dst.mac
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $alert.key = lower(join([subject.account.id, src.host, string(logon_type), event_src.host], "|"))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        
+        $logon_type = logon_type
+    }
+    
+    on Special_Privileges_Assigned_To_New_Logon {
+        $subject.account.privileges = subject.account.privileges
+        $alert.context = lower(join(remove([$alert.context, subject.account.privileges], null), " | "))
+    }
+    
+    on User_Attempted_To_Install_A_Service {
+        $object.name = object.name
+        $object.process.cmdline = object.process.cmdline
+        $alert.context = lower(join(remove([$alert.context, object.name], null), " | "))
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+    
+    $object.property = "commandline"
+    
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "System Services: Service Execution"
+
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

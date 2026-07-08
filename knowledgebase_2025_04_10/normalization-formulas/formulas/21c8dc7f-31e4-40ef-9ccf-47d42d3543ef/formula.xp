@@ -1,0 +1,25 @@
+!TEXT = '{"<"NUMBER">"?} {DATETIME} {$Computer=HOSTNAME} {WORD+}:
+        [{time=DATETIME}] V2 [{WORD}][{WORD}] {"<"msgid=WORDDASH">"}
+		ConsoleProcessRequest: C2S_OPEN_DATA_CLIENTS_IMPORT, <{datafield1=WORD+}>
+		user [{subject.name=WORD}] has deleted client with ID={object.id=NUMBER}'
+
+subject = "account"
+action = "remove"
+object = "application"
+status = "success"
+
+importance = "medium"
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_remote_administrator_server"
+
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_remote_administrator_server_Client_has_deleted_by_user"

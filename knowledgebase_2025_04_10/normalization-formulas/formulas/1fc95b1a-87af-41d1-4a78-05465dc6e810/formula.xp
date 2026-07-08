@@ -1,0 +1,49 @@
+EVENTLOG = ''
+COND = $Channel=="Microsoft-Windows-DNSServer/Audit" and $Provider["Name"]=="Microsoft-Windows-DNSServer" 
+       and ($EventID["text"]=="520" or $EventID=="520")
+
+subject = "service"
+action = "remove"
+object = "resource"
+status = "success"
+
+object.property = "Resource record"
+object.type = $Data['Type']
+object.name = $Data['NAME']
+object.domain = $Data['Zone']
+object.value = ipv4(number16($Data['RDATA']))
+
+if object.value == null then 
+    $rdata = $Data['RDATA']
+    $data = substr($rdata, 6, length($rdata)-8) # убираем 6 байтов слева и 2 байта справа
+    $data = hex_to_string($data) # декодируем текст
+    object.value = replace($data, ".", "[\u0000-\u001f]")
+endif
+
+src.ip = maybe_ipv4($Data['Source'])
+
+numfield1 = $Data['TTL']
+datafield1 = $Data['RDATA']
+datafield2 = $Data['ZoneScope']
+
+reason = "Record delete - dynamic update"
+
+time = $TimeCreated["SystemTime"]
+msgid = "520"
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_520_DNS_Record_delete_dynamic_update"

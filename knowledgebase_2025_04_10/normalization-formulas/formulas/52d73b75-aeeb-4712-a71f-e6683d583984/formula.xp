@@ -1,0 +1,46 @@
+TABULAR = 'type,
+           name,
+           {msgid=actiontype},
+           {time=observerdetectiontime}'
+
+COND = $actiontype == 'MalwareInfection' and $type == 'SecurityIncident'
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+subject.name = $observerproductname
+subject.version = $observerproductversion
+
+object.id = $classificationid
+object.name = $classificationtype
+object.type = $classificationcategory
+object.path = $targetresource
+object.property = "severity"
+object.value = $classificationseverity
+
+# known values: "NoAction", "Quarantine"
+object.state = switch $remediationtype
+    case "Quarantine" "quarantined"
+endswitch
+
+src.hostname = lower($observerhost)
+dst.ip = $srcaddress
+dst.hostname = lower($targethost)
+
+reason = $remediationtype + " " + $remediationresult
+
+datafield1 = $targetuser                                # file owner
+datafield2 = $observerdetection                         # detection type
+datafield3 = $targetprocess                             # target process
+datafield4 = $remediationpendingaction                  # pending action
+datafield5 = "Malware activity: " + $isactivemalware    # malware activity status
+
+importance = "high"
+
+event_src.title = "forefront_endpoint_protection"
+event_src.vendor = "microsoft"
+event_src.category = "Anti-virus"
+
+id = "PT_Microsoft_Forefront_odbc_Malware_Infection"

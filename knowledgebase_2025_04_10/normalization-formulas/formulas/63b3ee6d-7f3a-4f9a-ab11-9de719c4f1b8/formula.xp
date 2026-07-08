@@ -1,0 +1,36 @@
+JSON = 'category=40'
+
+COND = $data["ID"] == "LOCAL_COMMAND"
+
+subject = "account"
+action = "execute"
+object = "command"
+status = switch $data["LocalCommand"]["OpOk"]
+    case true "success"
+    case false "failure"
+endswitch
+
+subject.account.id = $data["LocalCommand"]["AdminID"]
+
+object.property = "description"
+object.value = strip($data["LocalCommand"]["Text"],' ','')
+
+datafield1 = $cg_name   # имя узла безопасности
+datafield2 = $cg_cssid  # идентификатор узла безопасности
+
+time = $time
+
+msgid = $data["ID"]
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_odbc_local_command"

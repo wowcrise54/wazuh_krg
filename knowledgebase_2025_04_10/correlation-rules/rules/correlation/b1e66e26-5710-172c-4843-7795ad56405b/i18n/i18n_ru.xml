@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Взаимодействие базы данных PostgreSQL с файловой системой может свидетельствовать о разведке или попытках злоумышленника повысить привилегии в том случае, если это не штатная интеграция базы данных с внешними системами</Description>
+  <EventDescriptions>
+    <EventDescription id="1f793ad7-d4d2-8b10-c570-71c978aa2489">Обнаружено получение подкаталогов по пути "{object.path}" c помощью функции pg_ls_dir базы данных PostgreSQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="476b8970-3304-961f-8ad7-d650d6bc35cd">Обнаружено считывание данных из файла "{object.fullpath}" в таблицу {object.name} базы данных PostgreSQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="4fda4a0a-1fe1-b903-aa32-06da81f59553">Обнаружено взаимодействие с файловой системой через SQL-запросы базы данных PostgreSQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="a0f4848e-3255-9ad3-f6e0-8b0b2696a70a">Обнаружено считывание данных из файла "{object.path}" через SQL-запросы базы данных PostgreSQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="ab0142d5-bb59-a026-3cfe-f37f5710eddf">Обнаружена запись закодированных данных в файл "{object.fullpath}" через SQL-запросы базы данных PostgreSQL на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

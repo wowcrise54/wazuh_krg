@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Execution of certain SQL commands may indicate reconnaissance of the internal structure of the MySQL database, which may indicate attacker activity</Description>
+  <EventDescriptions>
+    <EventDescription id="10fcf781-df4a-4011-8701-50d48a64215a">User "{subject.account.name}" executed an SQL command to retrieve information about the available MySQL functions on host {event_src.host}</EventDescription>
+    <EventDescription id="1b7b8d02-2bae-461a-9ed8-81e9fe24db38">User "{subject.account.name}" executed an SQL command to retrieve information about MySQL database schemas on host {event_src.host}</EventDescription>
+    <EventDescription id="f949f415-40c7-485f-b412-8140a01dcb01">User "{subject.account.name}" executed an SQL command to retrieve information about MySQL database version on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

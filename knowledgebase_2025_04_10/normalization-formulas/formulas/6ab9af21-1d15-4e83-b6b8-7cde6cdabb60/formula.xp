@@ -1,0 +1,32 @@
+TEXT='{"<"NUMBER">"} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$raw_hostname=HOSTNAME} {STRING}
+      {NUMBER?} {$proto="IMAP"|$pop="POP"|"SMTPI"}-{object.id=NUMBER} ([{src.ip=IPV4|src.ip=IPV6}]:{src.port=NUMBER}) 
+      [{dst.ip=IPV4|dst.ip=IPV6}]:{dst.port=NUMBER} <- [{IPV4|IPV6}]:{NUMBER} incoming connection({$df1=STRING}'
+
+action = "start"
+object = "session"
+status = "ongoing"
+
+if $proto != null then 
+    protocol = "IMAP" 
+elif $pop != null then
+    protocol = "POP3" 
+else
+    protocol = "SMTP"
+endif
+
+datafield1 = strip ($df1,'',')')  # mail domain name
+
+importance = "info"
+
+event_src.vendor = "communigate_systems"
+event_src.title = "communigate"
+$dot_pos = find_substr($raw_hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = $raw_hostname
+    event_src.hostname = substr($raw_hostname, 0, $dot_pos)
+else
+    event_src.hostname = $raw_hostname
+endif
+event_src.category = "Mail server"
+
+id = "PT_CommuniGate_Systems_CommuniGate_syslog_mail_session_starting"

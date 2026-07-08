@@ -1,0 +1,26 @@
+!JSON = 'MessageType="Host_availability"'
+!COND = $DestAddress != null
+
+action = "info"
+object = "resource"
+status = "success"
+
+object.type = "host"
+object.state = $State
+
+reason = $Reason
+
+time = recv_time
+msgid = $MessageType
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "network_watch"
+if maybe_ipv4($DestAddress) != null or maybe_ipv6($DestAddress) != null then
+    event_src.ip = $DestAddress
+else
+    event_src.hostname = $DestAddress
+endif
+event_src.category = "Network monitoring system"
+
+id = "PT_Monitoring_Positive_Technologies_NetworkWatch_Host_availability"

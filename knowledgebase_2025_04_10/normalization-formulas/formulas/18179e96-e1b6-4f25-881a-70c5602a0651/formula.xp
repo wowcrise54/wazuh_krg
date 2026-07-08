@@ -1,0 +1,26 @@
+JSON = 'category = 39'
+
+COND = $data["ID"] == "FILE_CHECK_ERROR"
+
+subject = "account"
+action = "check"
+object = "file"
+status = "failure"
+
+subject.name = $data["User"]
+
+datafield1 = $cg_name   # узел безопасности
+datafield2 = $cg_cssid  # идентификатор узла безопасности
+
+reason = "integrity check"
+
+time = $time
+msgid = $data["ID"]
+importance = "high"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+
+id = "PT_Security_Code_Kontinent_odbc_checksum_check"

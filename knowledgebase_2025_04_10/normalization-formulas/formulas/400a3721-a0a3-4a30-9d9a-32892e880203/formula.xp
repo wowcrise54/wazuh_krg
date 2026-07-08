@@ -1,0 +1,32 @@
+!TABULAR = "{subject.name=subject_name},
+            {subject.domain=subject_domain},
+            {object.name=additional_info_2},
+            {object.value=additional_info_1},
+            {time=time_create},
+            {event_src.hostname=master_server_name}"
+
+!COND = in_list([9, 10], $msgid)
+
+msgid = $msgid
+
+subject = "account"
+action = "modify"
+object = "policy"
+status = "success"
+
+object.property = "client"
+
+reason = switch $msgid
+    case 9 "add client"
+    case 10 "remove client"
+endswitch
+
+msgid = $msgid
+importance = "info"
+
+event_src.vendor = "veritas"
+event_src.title = "netbackup"
+event_src.subsys = "nbdb audit"
+event_src.category = "Backup server"
+
+id = "PT_Veritas_Netbackup_NBDB_Audit_9_10_Client_action"

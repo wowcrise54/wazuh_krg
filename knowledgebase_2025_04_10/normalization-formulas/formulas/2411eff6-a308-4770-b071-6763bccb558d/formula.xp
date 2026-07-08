@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src_title="ASA"|$event_src_title="PIX"|$event_src_title="FWSM"|$event_src_title="FTD"}{"-session"?}-{NUMBER}-{msgid="201012"}:
+        {reason="Per-client embryonic connection limit exceeded"} {numfield1=NUMBER}/{NUMBER} for input packet
+        from {src.ip=IPV4|src.ip=IPV6}/{src.port=NUMBER}
+        to {dst.ip=IPV4|dst.ip=IPV6}/{dst.port=NUMBER} on interface {interface=REST}'
+
+action = "create"
+object = "conntrack"
+status = "failure"
+
+object.type = "stateful"
+
+# numfield1 - трешхолд (ограничение)
+
+importance = "medium"
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src_title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_201012_Embryonic_connection_limit"

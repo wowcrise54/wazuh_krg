@@ -1,0 +1,43 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "258"
+       and $event_category == "Системные"
+       and $event_type == "Информация"
+
+action = "stop"
+object = "service"
+status = "success"
+
+subformula "message"
+    TEXT = 'Служба \"{$service_name=STRING+} остановлена.'
+    
+    object.name = strip($service_name, '', '\"')
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+
+msgid = $event_id
+importance = "low"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Системные" then
+    event_src.subsys = "system"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_258_service_stop"

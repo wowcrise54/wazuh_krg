@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        pdns[{NUMBER}]: Listening on controlsocket in {$socket=REST}'
+
+action = "assign"
+object = "socket"
+status = "success"
+
+$t_socket = strip($socket, '\'', '\'')
+$name_and_path = csv($t_socket, "/", "'")
+if $name_and_path[0] == $t_socket then
+    object.name = $t_socket
+    object.fullpath = object.name
+else
+    object.name = $name_and_path[length($name_and_path) - 1]
+    object.path = strip($t_socket, "", object.name)
+    object.fullpath = $t_socket
+endif
+
+importance = "info"
+
+category.generic = "Socket"
+category.high = "Network Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "powerdns_authoritative_server"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_PowerDNS_Authoritative_Server_syslog_control_socket_listening"

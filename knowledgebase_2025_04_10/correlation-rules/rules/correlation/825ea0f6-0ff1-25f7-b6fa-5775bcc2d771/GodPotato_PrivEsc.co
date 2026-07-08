@@ -1,0 +1,206 @@
+event Pipe_Created:
+    key:
+        event_src.host, subject.account.name, subject.process.id, subject.process.fullpath
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "17"
+        and event_src.title == "sysmon"
+        and subject.process.name != null
+        and lower(subject.process.name) != "system"
+        and subject.account.name != null
+        and lower(subject.account.name) != "system"
+        and match(lower(object.name), "*\\pipe\\epmapper")
+        and filter::CheckWL_Specific_Only("GodPotato_PrivEsc", lower(join([subject.account.name, subject.process.fullpath], "|")))
+    }
+
+event Share_Access:
+    key:
+        event_src.host, subject.account.name, subject.process.id, subject.process.fullpath
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "windows"
+        and msgid == "5145"
+        and filter::Loopback_Address(src.ip)
+        and subject.account.name != null
+        and lower(subject.account.name) != "system"
+        and match(lower(object.fullpath), "*\\pipe\\epmapper")
+        and filter::CheckWL_Specific_Only("GodPotato_PrivEsc", lower(join([subject.account.name, object.fullpath], "|")))
+    }
+    
+event Elevated_Process_Run:
+    key:
+        event_src.host, subject.account.name, object.process.parent.id, object.process.parent.fullpath
+    filter {
+        correlation_name == "Subrule_Elevated_Process_Run"
+    }
+
+rule GodPotato_PrivEsc: ((Pipe_Created -> Elevated_Process_Run?) timer 10s) or Share_Access
+
+    init {
+        $count.subevents = 0
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Pipe_Created {
+        # Дублируется на случай отсутствия необязательного события Elevated_Process_Run
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.id = subject.process.id
+        
+        $object.name = object.name
+        $object.type = object.type
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $alert.key = lower(join([subject.account.name, subject.process.fullpath], "|"))
+
+        $count.subevents = $count.subevents + 1
+    }
+    
+    on Elevated_Process_Run {
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+               
+        $object.account.name = object.account.name
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+        
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+            
+        $alert.context = $subject.account.name + " → NT Authority\System"
+
+        $count.subevents = $count.subevents + 1
+    }
+
+    on Share_Access {
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+        $object.storage.id = object.storage.id
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $alert.key = lower(join([subject.account.name, object.fullpath], "|"))
+    }
+
+emit {
+    if $subject.process.name != null then
+        $correlation_type = "incident"
+        if $count.subevents == 2 then 
+            $status = "success"
+            $importance = "high"
+        else
+            $status = "failure"
+            $importance = "medium"
+        endif
+        
+        $subject = "process"
+        $action = "create"
+        $object = "resource"
+    else
+        $correlation_type = "event"
+        
+        $subject = "account"
+        $action = "access"
+        $object = "file_object"
+        $status = "success"
+
+        $importance = "medium"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

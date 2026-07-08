@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The following suspicious activity of office programs is detected: creating executables, changing registry keys, loading the DLL of an Internet Explorer COM object, creating threads in other processes' address space</Description>
+  <EventDescriptions>
+    <EventDescription id="4d66ff6b-eaf9-24d4-d5cc-7605b9a332fa">The Microsoft Office application "{subject.process.name}", launched by user {subject.account.name}, created a set of unusual executable files on the host {event_src.host}</EventDescription>
+    <EventDescription id="561cc1e3-49fd-c55a-ac4b-821c2bf3ead7">The Microsoft Office application "{subject.process.name}", launched by user {subject.account.name}, loaded an unusual DLL "{object.process.fullpath}" on host {event_src.host}</EventDescription>
+    <EventDescription id="62a01d43-b777-449b-54cc-56bb28486d92">The Microsoft Office application "{subject.process.name}", launched by user {subject.account.name}, created an unusual executable "{object.name}" on host {event_src.host}</EventDescription>
+    <EventDescription id="714360de-ff8f-005b-1862-6b35604eff8f">The Microsoft Office application "{subject.process.name}", launched by user {subject.account.name}, changed an unusual registry key "{object.fullpath}" on host {event_src.host}</EventDescription>
+    <EventDescription id="b46d53cc-ba94-b520-91e5-3a687a114a40">The Microsoft Office application "{subject.process.name}", launched by user {subject.account.name}, created an unusual remote thread in the address space of the process "{object.process.name}" on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

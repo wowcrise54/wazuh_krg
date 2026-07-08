@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to GitLab. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="1ba7be55-26f7-ac98-9ed1-d6425a034713">User {subject.account.name} from host {src.host} logged in to GitLab and accessed new repository "{object.name}" on host {event_src.host}. The repository is missing from the collected profile.</EventDescription>
+    <EventDescription id="4442cb51-523e-fb5f-8b7b-e42431284305">New user {subject.account.name} from host {src.host} logged in to GitLab on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="5868c83c-c5a9-c6a3-ba2a-127ff4eea133">User {subject.account.name} from host {src.host} logged in to a new instance of GitLab on host {event_src.host}. The instance is missing from the collected profile.</EventDescription>
+    <EventDescription id="6c473170-a0f6-c419-777b-bc96df1240f8">User {subject.account.name} from new host {src.host} logged in to GitLab on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="bb2d3938-1131-2698-3342-1711d31470ec">User {subject.account.name} from host {src.host} using a new agent logged in to GitLab on host {event_src.host}. The agent is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

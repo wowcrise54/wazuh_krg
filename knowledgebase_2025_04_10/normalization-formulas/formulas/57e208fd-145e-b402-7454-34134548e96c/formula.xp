@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {$event_src_ip=IPV4|$event_src_ip=IPV6|$event_src_host=HOSTNAME|} hub-all.log:
+    {$mday_raw=WORD} {$month_raw=WORD} {$year_raw=WORD} {$hours_raw=UNTIL(",")}{NUMBER}
+    INFO [{UNTIL("]")} [{UNTIL("]")} [{$email_details=UNTIL("]")}
+    Notification "{object.name=UNTIL("\\"")} was not sent, because {reason=REST}'
+
+action = "send"
+object = "message"
+status = "failure"
+
+object.type = "email"
+
+submessage("TEXT", "parse_email_details", $email_details)
+subformula "parse_email_details"
+    TEXT = 'email={object.account.name=UNTIL("@")}{object.account.domain=UNTIL("&")}{REST}'
+endsubformula
+subformula "parse_email_details"
+    TEXT = '{REST}'
+endsubformula
+
+$dot_pos = find_substr($event_src_host, '.')
+
+if $dot_pos != null then
+    $event_src_fqdn = lower($event_src_host)
+    $event_src_hostname = lower(substr($event_src_host, 0, $dot_pos))
+else
+    $event_src_hostname = lower($event_src_host)
+endif
+dst.ip = $event_src_ip
+dst.hostname = $event_src_hostname
+dst.fqdn = $event_src_fqdn
+
+time = $month_raw + " " + $mday_raw + " " + $year_raw + " " + $hours_raw
+importance = "low"
+
+event_src.ip = $event_src_ip
+event_src.hostname = $event_src_hostname
+event_src.fqdn = $event_src_fqdn
+
+event_src.vendor = "jetbrains"
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_JetBrains_Hub_syslog_notification_was_not_sent"

@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0101037136"
+
+action = "state"
+object = "host"
+status = "success"
+
+object.account.dn = $kv["user"]
+if $kv["xauthuser"] != "N/A" then object.account.name = $kv["xauthuser"] endif 
+if $kv["xauthgroup"] != "N/A" then object.account.group = $kv["xauthgroup"] endif
+
+object.state = "unavailable"
+
+src.ip = $kv["locip"]
+src.port = $kv["locport"]
+dst.ip = $kv["remip"]
+dst.port = $kv["remport"]
+assigned_dst_ip = $kv["assignip"]
+interface = $kv["outintf"]
+protocol = "ipsec"
+
+datafield1 = $kv["vd"]                                 # Virtual domain name
+datafield4 = $kv["cookies"]                            # Cookie
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")  # Event type
+datafield11 = $kv["action"]                            # Action
+
+reason = $kv["msg"]
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "low"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["devid"]
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Fortinet_Fortigate_syslog_37136_mesgid_dpd_failure"

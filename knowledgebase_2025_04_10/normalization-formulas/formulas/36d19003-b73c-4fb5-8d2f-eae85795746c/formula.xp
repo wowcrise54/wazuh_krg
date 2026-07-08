@@ -1,0 +1,48 @@
+TABULAR = '__policy_id_tag,
+           action,
+           dst,
+           orig,
+           product,
+           proto,
+           s_port,
+           service,
+           src,
+           time'
+
+COND = ($product == "URL Filtering")
+
+subject = "account"
+action = "access"
+object = "resource"
+if $action == "allow" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subject.name = $src_user_name
+object.state = $action
+object.path = $resource
+
+src.ip = $src
+src.port = $s_port
+dst.ip = $dst
+dst.port = $service
+protocol = lower($proto)
+
+datafield1 = $app_rule_id        # id правила
+if $app_rule_name != "" then
+    datafield2 = $app_rule_name  # название правила
+endif
+reason = $Attack_Info
+
+time = $time
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($product)
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_URL_Filtering"

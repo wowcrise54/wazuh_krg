@@ -1,0 +1,259 @@
+query Check_Malicious_File_By_Hash($file_hash_sha256) from PT_Sandbox_Detected_Malware {
+    column::file_hash_sha256 == $file_hash_sha256
+}
+
+query Check_Malicious_File_By_Name($file_name) from PT_Sandbox_Detected_Malware {
+    column::file_name == $file_name
+}
+
+query Get_Malware_Info($value) from PT_Sandbox_Detected_Malware {
+    column::file_hash_sha256 == $value or column::file_name == $value
+}
+
+qhandler {
+    $sandbox_scan_id = sandbox_scan_id
+    $file_hash_full = file_hash_full
+    $file_name = file_name
+    $file_path = file_path
+    $verdict = verdict
+    $sandbox_link = sandbox_link
+    $state = state
+}
+
+query CheckFullpath($filename, $filepath) from Known_Executables {
+    (filepath == $filepath or filepath == '*')
+    and filename == $filename
+}
+
+event Malicious_File_Detected_By_Hash:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon" 
+        and msgid == "1"
+        and exec_query("Check_Malicious_File_By_Hash", [lower(coalesce(object.process.hash.sha256, object.process.hash.md5, object.process.hash.sha1, object.process.hash.imphash))])
+        and filter::CheckWL_Process_Creation("Malicious_File_Is_Run", lower(object.process.hash))
+    }
+    
+event Malicious_File_Detected_By_Name:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows" 
+        and msgid == "4688"
+        and exec_query("Check_Malicious_File_By_Name", [lower(object.process.name)])
+        and filter::CheckWL_Process_Creation("Malicious_File_Is_Run", lower(object.process.name))
+        and not exec_query("CheckFullpath", [
+                lower(object.process.name),
+                lower(object.process.path)
+            ])
+    }
+
+event Malicious_File_Detected_In_Commandline:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and exec_query("Check_Malicious_File_By_Name", [regex(lower(object.process.cmdline), "(.*)\\\\(.*\.\\b(bat|cmd|dll|exe|scr|msi|vbs|ps1|hta|lnk|chm|jar|pdf|doc|dot|docm|docx|dotm|dotx|rtf|pot|ppa|pps|ppt|potm|potx|ppam|ppsm|ppsx|pptm|pptx|sldm|sldx|xla|xls|xlt|xlam|xlsb|xlsm|xlsx|xltm|xltx|csv|tsv|tab|iqy|zip|7z|rar|tar|cab|iso|vsdx|tmp)\\b)", 2)]) # Типы файлов, отправляемых на поведенческий анализ в PT SandBox
+        and filter::CheckWL_Process_Creation("Malicious_File_Is_Run", lower(object.process.cmdline))
+    }
+    
+    
+rule Malicious_File_Is_Run: Malicious_File_Detected_By_Hash or Malicious_File_Detected_By_Name or Malicious_File_Detected_In_Commandline
+    
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+
+    on Malicious_File_Detected_By_Hash {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $result = exec_query("Get_Malware_Info",[lower(object.process.hash.sha256)])
+        
+        $object.storage.name = $result["$file_name"]
+        $object.hash = $result["$file_hash_full"]
+        $object.storage.fullpath = $result["$file_path"]
+        
+        $object.process.name = object.process.name
+        $object.process.hash = object.process.hash
+        $object.process.fullpath = object.process.fullpath
+        $object.process.id = object.process.id
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID 
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(object.process.hash)
+        $alert.context = $result["$verdict"]
+        
+        $external_link = $result["$sandbox_link"]
+    }
+    
+    on Malicious_File_Detected_By_Name {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        
+        $result = exec_query("Get_Malware_Info",[lower(object.process.name)])
+        
+        $object.storage.name = $result["$file_name"]
+        $object.hash = $result["$file_hash_full"]
+        $object.storage.fullpath = $result["$file_path"]
+        
+        $object.process.name = object.process.name
+        $object.process.hash = object.process.hash
+        $object.process.fullpath = object.process.fullpath
+        $object.process.id = object.process.id
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $alert.key = lower(object.process.name)
+        $alert.context = $result["$verdict"]
+        
+        $external_link = $result["$sandbox_link"]
+    }
+
+    on Malicious_File_Detected_In_Commandline {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $raw_file_name = regex(lower(object.process.cmdline), "(.*)\\\\(.*\.\\b(bat|cmd|dll|exe|scr|msi|vbs|ps1|hta|lnk|chm|jar|pdf|doc|dot|docm|docx|dotm|dotx|rtf|pot|ppa|pps|ppt|potm|potx|ppam|ppsm|ppsx|pptm|pptx|sldm|sldx|xla|xls|xlt|xlam|xlsb|xlsm|xlsx|xltm|xltx|csv|tsv|tab|iqy|zip|7z|rar|tar|cab|iso|vsdx|tmp)\\b)", 2) # Типы файлов, отправляемых на поведенческий анализ в PT SandBox
+        
+        $result = exec_query("Get_Malware_Info",[$raw_file_name])
+        
+        $object.storage.name = $result["$file_name"]
+        $object.hash = $result["$file_hash_full"]
+        $object.storage.fullpath = $result["$file_path"]
+        
+        $object.process.name = object.process.name
+        $object.process.hash = object.process.hash
+        $object.process.fullpath = object.process.fullpath
+        $object.process.id = object.process.id
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(object.process.cmdline) 
+        $alert.context = $result["$verdict"]
+        
+        $external_link = $result["$sandbox_link"]
+    }
+    
+
+emit {
+    if $result["$state"] == "unwanted" then
+        $correlation_type = "event"
+    else
+        $correlation_type = "incident"
+    endif    
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+    
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "User Execution: Malicious File"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "MaliciousResources"
+    $incident.aggregation.timeout = 2h
+}

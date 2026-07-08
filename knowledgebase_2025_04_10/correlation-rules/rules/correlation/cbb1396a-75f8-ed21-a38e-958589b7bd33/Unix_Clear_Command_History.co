@@ -1,0 +1,178 @@
+event History_Cleaning_Command:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "start"
+        and object == "process"
+        and regex(object.process.cmdline, "\\b(history\s+\-[cd]|unset\s+HISTFILE|export\s+HIST(FILE)?SIZE\=0|cat\s+\/dev\/null\s+\>\s+.*?\/\.(bash|zsh|fish|ksh|tcsh)_history)\\b", 0) != null
+        and filter::CheckWL_Linux_Process_Creation("Unix_Clear_Command_History", lower(join([subject.account.id, object.process.cmdline], "|")))
+    }
+
+event Bash_History_File_Delete:
+    key:
+        event_src.host, subject.account.id, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileModify_Linux("\/\.(bash|zsh|fish|ksh|tcsh)_history$")
+        and in_list([".bash_history", ".zsh_history", ".fish_history", ".ksh_history", ".tcsh_history"], object.name)
+        and action == "remove"
+        and status == "success"
+        and filter::CheckWL_Linux_File_Operations("Unix_Clear_Command_History", lower(join([subject.account.id, subject.process.fullpath, object.fullpath], "|")))
+    }
+
+rule Unix_Clear_Command_History: History_Cleaning_Command or Bash_History_File_Delete
+
+    init {
+        $labels = "w_auto"
+    }
+       
+    on History_Cleaning_Command {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+        
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+        
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+        $object.process.chain = object.process.chain
+        
+        $logon_service = logon_service
+        
+        $datafield1 = datafield1
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+        
+        $numfield2 = numfield2      
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+               
+        $alert.key = lower(join([subject.account.id, object.process.cmdline], "|"))
+        $alert.regex_match = regex(object.process.cmdline, "\\b(history\s+\-c|unset\s+HISTFILE|export\s+HIST(FILE)?SIZE\=0|cat\s+\/dev\/null\s+\>\s+.*?\/\.(bash|zsh|fish|ksh|tcsh)_history)\\b", 0)
+        $alert.context = $subject.account.name + " | regex_match: " + $alert.regex_match
+
+        $labels = $labels + "|CheckWL_Linux_Process_Creation"
+    }
+
+    on Bash_History_File_Delete {
+        $action = action  # remove
+        $object = object  # file_object
+
+        $subject.type = subject.type
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.name = subject.process.name
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.id = subject.process.id
+        $subject.process.meta = subject.process.meta # old cmdline
+        $subject.process.parent.id = subject.process.parent.id
+
+        $object.name = object.name
+        $object.id = object.id
+        $object.type = object.type
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.state = object.state
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.group = object.account.group
+        $object.account.id = object.account.id
+
+        $logon_service = logon_service
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+
+        $numfield2 = numfield2  # Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        $event_src.fqdn = event_src.fqdn
+
+        $alert.key = lower(join([subject.account.id, subject.process.fullpath, object.fullpath], "|"))
+
+        if subject != null then
+            $alert.context = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") > "
+        else
+            $alert.context = "[sys] "
+        endif
+        $alert.context = $alert.context + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") > "
+        $alert.context = $alert.context + "[" + string(subject.process.id) + "] " + subject.process.name + " > "
+        $alert.context = $alert.context + object.fullpath
+
+        $labels = $labels + "|CheckWL_Linux_File_Operations"
+    }
+
+emit {  
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Indicator Removal: Clear Command History"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

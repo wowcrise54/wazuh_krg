@@ -1,0 +1,38 @@
+TABULAR= '.1.3.6.1.2.1.1.3.0,
+          .1.3.6.1.6.3.1.1.4.1.0,
+          .1.3.6.1.4.1.34849.105.1.1.0,
+          .1.3.6.1.4.1.34849.105.1.2.0,
+          .1.3.6.1.4.1.34849.105.1.3.0,
+          {event_src.hostname=.1.3.6.1.4.1.34849.105.1.4.0},
+          {time=.1.3.6.1.4.1.34849.105.1.5.0},
+          {src.ip=.1.3.6.1.4.1.34849.105.1.6.0},
+          {src.port=.1.3.6.1.4.1.34849.105.1.7.0},
+          {$dst=.1.3.6.1.4.1.34849.105.1.8.0},
+          {dst.port=.1.3.6.1.4.1.34849.105.1.9.0},
+          {protocol=.1.3.6.1.4.1.34849.105.1.10.0},
+          {datafield1=.1.3.6.1.6.3.18.1.3.0},
+          .1.3.6.1.6.3.18.1.4.0,
+          .1.3.6.1.6.3.1.1.4.3.0'
+
+COND = $.1.3.6.1.6.3.1.1.4.1.0 == ".1.3.6.1.4.1.34849.105.1.0.67174413"
+
+action = "access"
+object = "resource"
+status = "failure"
+
+if maybe_ipv4($dst) != null or maybe_ipv6($dst) != null then
+    dst.ip = $dst
+else
+    dst.hostname = $dst
+endif
+
+# datafield1 - snmp server
+
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "vgate"
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_vGate_snmp_authUnauthAccessDenied"
+

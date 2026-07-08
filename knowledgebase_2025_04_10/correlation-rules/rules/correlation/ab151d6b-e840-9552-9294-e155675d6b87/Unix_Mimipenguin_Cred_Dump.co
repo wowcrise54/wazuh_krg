@@ -1,0 +1,187 @@
+event Suspicious_Connection: # Находим атакующего
+    key:
+        event_src.host, subject.account.name, subject.account.session_id, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and lower(event_src.subsys) == "auditd"
+        and lower(action) == "open"
+        and lower(object) == "connection"
+        and not filter::Loopback_Address(dst.ip)
+        # Дополнительные фильтры для снижения количества инстансов
+        and lower(direction) == "egress"
+        and regex(lower(subject.process.name), ".*?\.(elf(-so)?|sh)$", 0) != null
+    }
+
+event Get_Current_Username:
+    key:
+        event_src.host, subject.account.name, subject.account.session_id, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and lower(event_src.subsys) == "auditd"
+        and lower(action) == "start"
+        and lower(object) == "process"
+        and lower(status) == "success"
+        and lower(object.process.cmdline) == "/bin/sh -c id -u"
+    }
+
+event Read_Shadow:
+    key:
+        event_src.host, subject.account.name, subject.account.session_id, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and lower(event_src.subsys) == "auditd"
+        and lower(action) == "access"
+        and lower(status) == "success"
+        and lower(object.state) == "r"
+        and lower(object.fullpath) == "/etc/shadow"
+        and not in_list(["sudo", "su", "systemd", "passwd", "useradd", "usermod", "groupadd", "groupmod", "users", "id", "groups", "chpasswd", "chsh", "chfn", "whoami", "finger", "gpasswd", "chgrp", "whoami", "getent", "last", "logname", "w", "who",  "members"], lower(subject.process.name))
+    } 
+
+event Read_Proc_Maps: # Обязательно для идентификации mimipenguin
+    key:
+        event_src.host, subject.account.name, subject.account.session_id, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and lower(event_src.subsys) == "auditd"
+        and lower(action) == "access"
+        and lower(status) == "success"
+        and lower(object.state) == "r"
+        and regex(lower(object.fullpath), "^/proc/\d+/maps$", 0) != null
+        and not in_list(["fuser", "evolution-source-registry"], lower(subject.process.name))
+        and filter::CheckWL_Linux_File_Operations("Unix_Mimipenguin_Cred_Dump", lower(join([subject.account.name, subject.process.name], "|")))
+    }
+
+event Read_Proc_Mem: # Обязательно для идентификации mimipenguin
+    key:
+        event_src.host, subject.account.name, subject.account.session_id, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and lower(event_src.subsys) == "auditd"
+        and lower(action) == "access"
+        and lower(status) == "success"
+        and lower(object.state) == "r"
+        and regex(lower(object.fullpath), "^/proc/\d+/mem$", 0) != null
+    }
+
+rule Unix_Mimipenguin_Cred_Dump: (Suspicious_Connection[,1] and (Get_Current_Username and Read_Shadow)? and Read_Proc_Maps[1,] and Read_Proc_Mem[1,]) timer 1m
+    init {
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+        $roadmap_of_attack = [null, null, null, null]
+        $proc_maps = []
+        $proc_mem = []
+    }
+    
+    on Suspicious_Connection {
+        $src.host = dst.host
+        $src.ip = dst.ip
+        $src.port = dst.port
+        $src.asset = dst.asset
+    }
+    
+    on Get_Current_Username {
+        $object.process.cmdline = object.process.cmdline
+        $object.process.chain = object.process.chain
+        $roadmap_of_attack = ["execute id command", $roadmap_of_attack[1], $roadmap_of_attack[2], $roadmap_of_attack[3]]
+    }
+    
+    on Read_Shadow {
+        $roadmap_of_attack = [$roadmap_of_attack[0], join(["read", object.fullpath], " "), $roadmap_of_attack[2], $roadmap_of_attack[3]]
+        $object.fullpath = object.fullpath
+        $object.name = object.name
+    }
+    
+    on Read_Proc_Maps {
+        if length($proc_maps) == 0 then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.id = subject.account.id
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+                
+            $subject.process.name = subject.process.name
+            $subject.process.id = subject.process.id
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.cmdline = subject.process.cmdline
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.meta = subject.process.meta
+            $subject.process.parent.id = subject.process.parent.id
+            $subject.type = subject.type
+                
+            $object.account.name = object.account.name # root
+            $object.account.domain = object.account.domain
+            $object.account.id = object.account.id
+            $object.account.group = object.account.group
+
+            $object.type = object.type
+            $object.state = object.state
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+                
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+        endif
+
+        if not in_list($proc_maps, lower(object.fullpath)) then
+            $proc_maps = append($proc_maps, lower(object.fullpath))
+        endif
+    }
+    
+    on Read_Proc_Mem {
+        if not in_list($proc_mem, lower(object.fullpath)) then
+            $proc_mem = append($proc_mem, lower(object.fullpath))
+        endif
+    }
+    
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "medium"
+    
+    # mimipenguin читает файлы /proc/<pid>/maps и /proc/<pid>/mem для следующих процессов:
+    # 1) gnome-keyring-daemon
+    # 2) gdm-password
+    # 3) vsftpd
+    # 4) sshd
+    # 5) lightdm
+    # Поэтому:
+    if length($proc_maps) > 5 then $detect = "drop" endif
+    
+    $datafield1 = join($proc_maps, ", ")
+    $datafield2 = join($proc_mem, ", ")
+    
+    $roadmap_of_attack = [$roadmap_of_attack[0], $roadmap_of_attack[1], "read files: " + $datafield1, "read files: " + $datafield2]
+    
+    $alert.key = lower(join([$subject.account.name, $subject.process.fullpath], "|"))
+    $alert.context = join($roadmap_of_attack, " | ")
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: Proc Filesystem"
+    
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

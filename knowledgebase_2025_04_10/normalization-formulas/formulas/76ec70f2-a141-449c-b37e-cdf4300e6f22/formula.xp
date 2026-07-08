@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME}{event_src.ip=IPV4|
+        $Computer=HOSTNAME|} postgres{"["NUMBER"]"?}: {"["NUMBER"]"?}
+        {$dt1=UNTIL(" |")}{ $app_name=UNTIL(" |")}
+        {subject.application.account.id=UNTIL(" |")} {object.path=UNTIL(" |")}
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME|"[local]"}{"("?}
+        {src.port=NUMBER?}{")"?}| {WORD} | {WORD} FATAL:  {reason=REST}'
+
+subject = "account"
+action = "login"
+object = "application"
+status = "failure"
+
+subject.application.account.name = subject.application.account.id
+
+if $app_name != "[unknown]" then
+    logon_service = $app_name    # application (driver) name
+endif
+
+if find_substr($dt1, "-") != null then
+    time = $dt1
+else
+    time = epoch_ms_to_datetime(number(csv($dt1, ".", "")[0])*1000 + number(csv($dt1, ".", "")[1]))  # для версий postgreSQL > 9.5
+endif
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "postgresql"
+event_src.category = "Database server"
+
+id = "PT_Opensource_PostgreSQL_syslog_user_connect_failed"

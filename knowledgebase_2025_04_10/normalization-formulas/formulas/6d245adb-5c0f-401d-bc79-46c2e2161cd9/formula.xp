@@ -1,0 +1,36 @@
+TEXT = '[{time=DATETIME}] INFO Kernel: Login succeeded {"as"|". User:"}[{NUMBER}]
+        {$tmp_subject.name=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+# разбиваем имя субъекта на домен и имя пользователя
+if find_substr($tmp_subject.name, "\\") != null and find_substr($tmp_subject.name, "(") == null then
+    $slash = find_substr($tmp_subject.name, "\\")
+    subject.account.domain = substr($tmp_subject.name, 0, $slash)
+    subject.account.name = substr($tmp_subject.name, $slash+1, length($tmp_subject.name))
+# разбиваем имя объекта на домен, имя пользователя и id, удаляем ")" на конце
+elif find_substr($tmp_subject.name, "\\") != null and find_substr($tmp_subject.name, "(") != null then
+    $bracket = find_substr($tmp_subject.name, "(")
+    $slash = find_substr($tmp_subject.name, "\\")
+    $length_name = $bracket - $slash - 1
+    subject.account.name = substr($tmp_subject.name, $slash+1, $length_name)
+    subject.account.id = strip(substr($tmp_subject.name, $bracket+1, length($tmp_subject.name)), "", ")")
+    subject.account.domain = substr($tmp_subject.name, 0, $slash)
+elif find_substr($tmp_subject.name, "\\") == null then
+    subject.account.name = strip($tmp_subject.name, "", ",")
+endif
+
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_user_login_success"

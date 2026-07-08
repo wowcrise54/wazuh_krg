@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+        wms[{NUMBER}]: <{msgid=NUMBER}> <WARN> < {WORDDASH}
+        {event_src.ip=IPV4|event_src.ip=IPV6} > |ids| AP({datafield1=MACADDR}@{subject.name=HOSTNAME}):
+        Signature Match: Deauth Broadcast: An AP detected a factory default signature match
+        (Deauth-Broadcast) in a frame with BSSID {datafield2=MACADDR} on channel
+        {NUMBER} from transmitter {src.mac=MACADDR} to receiver {dst.mac=MACADDR} {REST}'
+
+subject = "system"
+action = "detect"
+object = "alert"
+status = "success"
+
+subject.type = "access point"
+
+object.property = "signature"
+object.value = "Broadcast Deauthentication"
+
+# datafield1 - detector AP mac
+# datafield2 - mac-address of target AP
+
+importance = "medium"
+
+event_src.title = "arubaos"
+event_src.vendor = "aruba_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Wireless"
+
+id = "PT_Aruba_Networks_ArubaOS_syslog_detecting_broadcast_deauthentication"

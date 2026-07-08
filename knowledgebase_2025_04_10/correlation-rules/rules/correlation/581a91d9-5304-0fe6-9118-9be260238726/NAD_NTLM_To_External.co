@@ -1,0 +1,84 @@
+event NTLM_To_External_Event:
+    key:
+        src.ip
+    filter { 
+        filter::NotFromCorrelator()
+        and id == "PT_Positive_Technologies_NAD_filemonitor_alert"
+        and in_list(["policy [ptsecurity] http ntlm auth request to external net", "policy [ptsecurity] ldap ntlm auth request to external net", "policy [ptsecurity] smb ntlm auth request to external net", "policy [ptsecurity] rpc ntlm auth request to external net"], lower(object.name))
+        and filter::CheckWL_NAD_Alert("NAD_NTLM_To_External", lower(join([src.host, object.name, dst.host], "|")))
+}
+
+rule NAD_NTLM_To_External: NTLM_To_External_Event
+
+    init {
+        $labels = "w_auto|CheckWL_NAD_Alert"
+    }
+
+    on NTLM_To_External_Event {
+        $object = object
+        $object.name = object.name
+        $object.id = object.id
+        $object.group = object.group
+        $object.type = object.type
+        $object.version = object.version
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.mac = src.mac
+        $src.port = src.port
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.mac = dst.mac
+        $dst.port = dst.port
+
+        $protocol = protocol
+        $direction = direction
+        
+        $datafield1 = datafield1
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+        $datafield6 = datafield6
+        $datafield7 = datafield7
+        $datafield8 = datafield8
+        $datafield9 = datafield9
+        
+        $external_link = external_link
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule  
+        
+        $alert.key = lower(join([$src.host, $object.name, $dst.host], "|"))
+    }  
+
+emit {  
+    $correlation_type = "incident"
+    
+    $subject = "host"
+    $action = "detect"
+    $object = "alert"
+    $status = "success"
+    
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Forced Authentication"
+    
+    $incident.aggregation.key = join([$correlation_name, $src.ip], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

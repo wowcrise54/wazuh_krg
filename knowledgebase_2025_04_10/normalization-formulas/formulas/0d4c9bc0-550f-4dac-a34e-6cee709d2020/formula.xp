@@ -1,0 +1,21 @@
+TEXT = '{time=DATETIME} [{WORD}] info:     Очистка списка ipset с именем {$list_name=STRING} {"{"} {$raw_kv=STRING}'
+
+subject = "account"
+action = "clean"
+object = "resource"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.name = strip($list_name, "", ":")
+object.type = "список ipset"
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_clean_ipset_list"

@@ -1,0 +1,40 @@
+TABULAR = ' Additional_Info,
+            Administrator,
+            Machine,
+            {msgid=Operation},
+            Operation_Number,
+            Subject,
+            action,
+            client_ip,
+            orig,
+            origin_sic_name,
+            product,
+            time'
+
+COND = $product == "SmartView Tracker" 
+       and $Operation == "Log Switch" 
+       and find_substr($Additional_Info, "Active log file was switched to") != null
+
+action = "modify"
+object = "file"
+status = "success"
+
+submessage("TEXT", "File_Name", $Additional_Info)
+subformula "File_Name"
+    TEXT = "Active log file was switched to '{$object_name=REST}"
+    object.name = strip($object_name, "","'")
+endsubformula
+
+src.hostname = $Machine
+src.ip = $client_ip
+
+time = $time
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($product)
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Smart_view_tracker_Log_switch"

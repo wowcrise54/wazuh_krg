@@ -1,0 +1,54 @@
+JSON = ''
+COND = $SLGTYPE.SUBID == "W" and $SLGTYPE.AREA == "AU" and (find_substr($SLGREPNA, '/1BCDWB/DB') == 0 or find_substr($SLGDATA, '/1BCDWB/DB') == 0)
+
+action = "view"
+object = "table"
+status = "success"
+
+if $SLGUSER != "" then
+    subject = "account"
+    subject.id = $SLGUSER
+endif
+
+if find_substr($SLGREPNA, '/1BCDWB/DB') == 0 then
+    submessage("TEXT", "tablename_formula", $SLGREPNA)
+    
+    if $SLGREPNA != "" then
+        datafield4 = $SLGREPNA                                                              # Report name
+    endif
+else
+    submessage("TEXT", "tablename_formula", $SLGDATA)
+    if $SLGDATA != "" then
+        datafield4 = $SLGDATA                                                              # Report name
+    endif
+endif
+
+subformula "tablename_formula"
+    TEXT = "{'/1BCDWB/DB'object.name=REST}"
+endsubformula
+
+if maybe_ipv4($SLGLTRM2) == null && $SLGLTRM2 != "" then
+    src.hostname = $SLGLTRM2
+elif maybe_ipv4($SLGLTRM2) != null then
+    src.ip = $SLGLTRM2
+endif
+
+if $SLGMAND != "" then
+    datafield1 = $SLGMAND                                                               # Client or mandant
+endif
+datafield2 = $SLGPROC.UNIXPID + $SLGPROC.TASKTNO + $SLGPROC.SLGTTYP + $SLGPROC.SLGMODE  # Other information
+if $SLGTC != "" then
+    datafield3 = $SLGTC                                                                 # Transaction code
+endif
+
+
+time = $SLGDATTIM.DATE + $SLGDATTIM.TIME
+msgid = $SLGTYPE.AREA + $SLGTYPE.SUBID
+importance = "low"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_ABAP_filemonitor_Browse_table"

@@ -1,0 +1,23 @@
+event Command_used:
+    filter {
+        filter::MSSQL_Query("EX", "X")
+        and datafield6 == null
+        and (
+             match(lower(object.query), "*xp_cmdshell*")
+             or match(lower(object.query), "*sp_oamethod*@shell*run*")
+             or match(lower(object.query), "*xp_servicecontrol*")
+            )
+
+    }
+
+enrichment MSSQL_user_command
+    enrich Command_used:
+        enrich_fields {
+            if find_substr(object.query, "xp_cmdshell") != null then
+                datafield6 = lower(string(regex(object.query, "'(.*?)'", 1)))                # имя выполняемой команды
+            elif find_substr(object.query, "sp_oamethod") != null then
+                datafield6 = lower(string(regex(object.query, ", '.*?', .*?, '(.*?)'", 1)))  # имя выполняемой команды
+            else
+                datafield6 = lower(string(regex(object.query, ", (.*)", 1)))                 # имя процесса, с которым взаимодействует пользователь
+            endif
+       }

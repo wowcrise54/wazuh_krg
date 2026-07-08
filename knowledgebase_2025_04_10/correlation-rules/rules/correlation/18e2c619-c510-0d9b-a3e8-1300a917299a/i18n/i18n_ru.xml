@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Подключение к именованным каналам samr и wkssvc от имени одного и того же пользователя с одного и того же узла, что может свидетельствовать об использовании метода сбора информации Session утилиты SharpHound (BloodHound)</Description>
+  <EventDescriptions>
+    <EventDescription id="0938d9ce-6bfe-4d66-b888-7f87d8b63afb">Пользователь {subject.account.name} с узла {src.host} с помощью утилиты {object.process.name} подключился к именованному каналу srvsvc узла {event_src.host}</EventDescription>
+    <EventDescription id="d561bd91-cffc-47dc-9653-6cd8669f319d">Пользователь {subject.account.name} с узла {src.host} с помощью утилиты {object.process.name} последовательно подключился к именованным каналам srvsvc и wkssvc узла {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

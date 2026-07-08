@@ -1,0 +1,54 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.fqdn=HOSTNAME} 
+        {$product_name=UNTIL("|")}{NUMBER}.{NUMBER}.{NUMBER}.{NUMBER} - 
+        {msgid="000000d8"}
+        [event@{NUMBER} {$raw_kv=UNTIL("]")} {$data=REST}' 
+
+subject = "application"
+action = "info"
+object = "file_object"
+status = "success"
+
+$description = replace($data, " ", "\\\\r")
+$kv = keyvalue($description, " \\n", ":")
+$kv_extra = keyvalue($raw_kv, " ", "=", "\"")
+
+$name_domain = csv(strip($kv["Пользователь"], "", " (Системный пользователь)"), "\\", "'")
+if length($name_domain) == 2 then
+    subject.account.name = $name_domain[1]
+    subject.account.domain = $name_domain[0]
+else
+    subject.account.name = $name_domain
+endif
+
+subject.process.name = lower($kv["Название"])
+subject.process.path = lower($kv["Путь к приложению"])
+if subject.process.path != null then
+    subject.process.fullpath = lower($kv["Путь к приложению"] + "\\" + $kv["Название"])
+endif
+subject.process.id = $kv["ID процесса"]
+
+datafield1 = $kv_extra["gn"]               # имя группы администрирования, в которую входит узел-источник
+datafield5 = $kv_extra["tdn"] # обозначение типа действия или категории события
+
+reason = $kv_extra["etdn"]
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $product_name
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if $kv_extra["hip"] != "127.0.0.1" then
+    event_src.ip = $kv_extra["hip"]
+endif
+
+event_src.hostname = lower($kv_extra["hdn"])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_plain_not_processed_files_found"

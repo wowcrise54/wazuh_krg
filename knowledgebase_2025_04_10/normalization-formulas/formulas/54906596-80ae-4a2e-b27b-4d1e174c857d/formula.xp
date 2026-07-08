@@ -1,0 +1,33 @@
+EVENTLOG = 'EventID="4817"'
+COND = lower($Channel)=="security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+action = "modify"
+object = "policy"
+status = "success"
+
+object.property = "Object name"
+object.value = $Data["ObjectName"]
+
+datafield1 = maybe_number16($Data["SubjectLogonId"])  # ID сессии
+datafield2 = $Data["OldSd"]                           # Старые парметры аудита объекта
+datafield3 = $Data["NewSd"]                           # Новые параметры аудита объекта
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_4817_Auditing_setting_on_object_were_changed"

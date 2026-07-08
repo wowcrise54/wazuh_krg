@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {$Computer=HOSTNAME} ISIM: @cee:{$json = REST}'
+
+subject = "rule"
+action = "detect"
+object = "connection"
+status = "success"
+
+subformula 'json_parse'
+  JSON = ''
+  COND = $msg['tag'] != null
+
+  subject.name = coalesce($class, $class_name)  # имя сработавшего правила в ISIM
+
+  src.ip = coalesce($src.ip, $Network.IPv4.src_addr)
+  src.port = $src.port
+  src.mac = $src.mac
+
+  dst.ip = coalesce($dst.ip, $Network.IPv4.dst_addr)
+  dst.port = $dst.port
+  dst.mac = $dst.mac
+
+  protocol = $protocol
+
+  time = $time
+endsubformula
+
+submessage("JSON", "json_parse", $json)
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "State"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "isim_netview_sensor"
+event_src.category = "SIEM"
+
+id = "PT_Positive_Technologies_ISIM_netView_Sensor_syslog_created_event"

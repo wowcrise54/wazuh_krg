@@ -1,0 +1,97 @@
+# {"class":"vim.event.VmInstanceUuidAssignedEvent","key":4320,"chainId":4318,"createdTime":"2022-02-10 20:47:47.279000+00:00","userName":"VSPHERE.LOCAL\\vpxd-extension-b8e76ece-a298-4e77-ae41-3d8b5ceebdec","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"Datacenter","datacenter":"vim.Datacenter:datacenter-3"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"10.125.4.3","computeResource":"vim.ComputeResource:domain-s8"},"host":{"class":"vim.event.HostEventArgument","name":"10.125.4.3","host":"vim.HostSystem:host-10"},"vm":{"class":"vim.event.VmEventArgument","name":"sharepoint","vm":"vim.VirtualMachine:vm-1006"},"fullFormattedMessage":"Assign a new instance UUID (503a9d78-f98e-c045-50ab-9f2a832accbe) to sharepoint","template":false,"instanceUuid":"503a9d78-f98e-c045-50ab-9f2a832accbe"}
+
+JSON = ''
+COND = in_list([
+           "VmUuidConflictEvent",
+           "VmUuidAssignedEvent",
+           "VmUuidChangedEvent",
+           "VmInstanceUuidAssignedEvent",
+           "VmInstanceUuidChangedEvent",
+           "VmInstanceUuidConflictEvent"
+       ], strip($class, "vim.event.", ""))
+ 
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+if in_list(["VmUuidConflictEvent", "VmInstanceUuidConflictEvent"], strip($class, "vim.event.", "")) then
+    action = "info"
+else
+    action = "configure"
+endif
+
+object = "virtual_machine"
+status = "success" 
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.name = $vm["name"]
+object.id = strip($vm["vm"], "vim.VirtualMachine:", "")
+
+switch strip($class, "vim.event.", "")
+    case "VmUuidConflictEvent"
+        object.property = "conflicted_vm|bios_uuid"
+        object.value = $conflictedVm["name"] + " | " + $uuid
+    case "VmUuidAssignedEvent"
+        object.property = "bios_uuid"
+        object.new_value = $uuid
+    case "VmUuidChangedEvent"
+        object.property = "bios_uuid"
+        object.value = $oldUuid
+        object.new_value = $newUuid
+    case "VmInstanceUuidAssignedEvent"
+        object.property = "instance_uuid"
+        object.new_value = $instanceUuid
+    case "VmInstanceUuidChangedEvent"
+        object.property = "instance_uuid"
+        object.value = $oldInstanceUuid
+        object.new_value = $newInstanceUuid
+    case "VmInstanceUuidConflictEvent"
+        object.property = "conflicted_vm|instance_uuid"
+        object.value = $conflictedVm["name"] + " | " + $instanceUuid
+endswitch
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+ 
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = object.name  # Entity Name
+datafield5 = $vm["name"]  # Virtual Machine Name
+datafield6 = $host["name"]  # Host Name
+datafield10 = object.id  # Internal Entity ID
+ 
+chain_id = $chainId
+ 
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "info"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_UUID_Management"

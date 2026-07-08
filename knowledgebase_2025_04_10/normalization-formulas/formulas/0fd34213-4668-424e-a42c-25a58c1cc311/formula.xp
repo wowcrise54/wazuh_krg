@@ -1,0 +1,114 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[vob.user.maintenancemode."WORD"]"?}
+{$subsys="vobd:""[UserLevelCorrelator]" WORD":" "[esx.audit.maintenancemode."WORD"]"?}
+{$subsys="Hostd:" WORD "hostd["WORD"] [Originator@"NUMBER $kv=UNTIL("]") "Event"NUMBER":"?}
+{$prefix="The host has"|$prefix="Host"}{$rest=REST}'
+COND = (
+    substr($rest, -16, 16) == "maintenance mode"
+    or substr($rest, -17, 17) == "maintenance mode."
+)
+
+subject = "account"
+action = "configure"
+object = "host"
+
+subformula "parse_vim_event"
+    TEXT = '{$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$datacenter_name=STRING+} has {$operation=UNTIL(" maintenance mode")}{"."?}'
+    
+    switch $operation
+        case "started to enter"
+            status = "ongoing"
+            msgid = "EnteringMaintenanceModeEvent"
+        case "entered"
+            status = "success"
+            msgid = "EnteredMaintenanceModeEvent"
+        case "exited"
+            status = "success"
+            msgid = "ExitMaintenanceModeEvent"
+    endswitch
+endsubformula
+
+subformula "parse_hostdiag_event"
+    TEXT = '{$operation=UNTIL(" maintenance mode")?}{"."?}'
+    
+    switch $operation
+        case "begun entering"
+            status = "ongoing"
+            msgid = "esx.audit.maintenancemode.entering"
+        case "canceled entering"
+            status = "failure"
+            msgid = "esx.audit.maintenancemode.canceled"
+        case "entered"
+            status = "success"
+            msgid = "esx.audit.maintenancemode.entered"
+        case "exited"
+            status = "success"
+            msgid = "esx.audit.maintenancemode.exited"
+        case "failed entering"
+            status = "failure"
+            msgid = "esx.audit.maintenancemode.failed"
+    endswitch
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+if ($prefix == "The host has") then
+    submessage("TEXT", "parse_hostdiag_event", $rest)
+else
+    submessage("TEXT", "parse_vim_event", $rest)
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = "esxi"
+
+object.property = "maintenance_mode"
+
+if in_list(["esx.audit.maintenancemode.exited", "ExitMaintenanceModeEvent"], msgid) then
+    object.new_value = "off"
+else
+    object.new_value = "on"
+endif
+
+datafield1 = $datacenter_name  # Datacenter Name
+datafield6 = $host_name  # Host Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = lower(strip($subsys, "", ":"))
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_6_0_syslog_Host_Maintenance_Mode"

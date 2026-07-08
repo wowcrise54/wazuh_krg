@@ -1,0 +1,134 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_REMOVE_DISK_INITIATED",  # 2,038
+           "USER_REMOVE_DISK_ATTACHED_TO_VMS_INITIATED",  # 2,044
+           "USER_FINISHED_REMOVE_DISK",  # 2,014
+           "USER_FINISHED_REMOVE_DISK_ATTACHED_TO_VMS",  # 2,042
+           "USER_FINISHED_FAILED_REMOVE_DISK",  # 2,015
+           "USER_FINISHED_REMOVE_DISK_NO_DOMAIN",  # 2,012
+           "USER_FINISHED_REMOVE_DISK_ATTACHED_TO_VMS_NO_DOMAIN",  # 2,043
+           "USER_FINISHED_FAILED_REMOVE_DISK_NO_DOMAIN"  # 2,013
+       ], $event_class)
+
+subject = "account"
+action = "remove"
+object = "resource"
+
+if in_list(["USER_REMOVE_DISK_INITIATED", "USER_REMOVE_DISK_ATTACHED_TO_VMS_INITIATED"], $event_class) then
+    status = "ongoing"
+elif in_list([
+    "USER_FINISHED_REMOVE_DISK", "USER_FINISHED_REMOVE_DISK_ATTACHED_TO_VMS",
+    "USER_FINISHED_REMOVE_DISK_NO_DOMAIN", "USER_FINISHED_REMOVE_DISK_ATTACHED_TO_VMS_NO_DOMAIN"
+    ], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "2038"
+    # USER_REMOVE_DISK_INITIATED
+    TEXT = "Removal of Disk {$disk_alias=STRING+} from domain {$storage_domain_name=STRING+} was initiated by {$user=REST}"
+endsubformula
+
+subformula "2044"
+    # USER_REMOVE_DISK_ATTACHED_TO_VMS_INITIATED
+    TEXT = "Removal of Disk {$disk_alias=STRING+} associated to the VMs {$vm_names=STRING+} from domain {$storage_domain_name=STRING+} was initiated by {$user=REST}"
+endsubformula
+
+subformula "2014"
+    # USER_FINISHED_REMOVE_DISK
+    TEXT = "Disk {$disk_alias=STRING+} was successfully removed from domain {$storage_domain_name=STRING+} (User {$user=REST}"
+endsubformula
+
+subformula "2042"
+    # USER_FINISHED_REMOVE_DISK_ATTACHED_TO_VMS
+    TEXT = "Disk {$disk_alias=STRING+} associated to the VMs {$vm_names=STRING+} was successfully removed from domain {$storage_domain_name=STRING+} (User {$user=REST}"
+endsubformula
+
+subformula "2012"
+    # USER_FINISHED_REMOVE_DISK_NO_DOMAIN
+    TEXT = "Disk {$disk_alias=STRING+} was successfully removed (User {$user=REST}"
+endsubformula
+
+subformula "2043"
+    # USER_FINISHED_REMOVE_DISK_ATTACHED_TO_VMS_NO_DOMAIN
+    TEXT = "Disk {$disk_alias=STRING+} associated to the VMs {$vm_names=STRING+} was successfully removed (User {$user=REST}"
+endsubformula
+
+subformula "2013"
+    # USER_FINISHED_FAILED_REMOVE_DISK_NO_DOMAIN
+    TEXT = "Failed to remove disk {$disk_alias=STRING+} (User {$user=REST}"
+endsubformula
+
+subformula "2015"
+    # USER_FINISHED_FAILED_REMOVE_DISK
+    TEXT = "Failed to remove disk {$disk_alias=STRING+} from storage domain {$storage_domain_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+if $event_class == "USER_REMOVE_DISK_INITIATED" then
+    submessage("TEXT", "2038", $raw_message)
+elif $event_class == "USER_REMOVE_DISK_ATTACHED_TO_VMS_INITIATED" then
+    submessage("TEXT", "2044", $raw_message)
+elif $event_class == "USER_FINISHED_REMOVE_DISK" then
+    submessage("TEXT", "2014", $raw_message)
+elif $event_class == "USER_FINISHED_REMOVE_DISK_ATTACHED_TO_VMS" then
+    submessage("TEXT", "2042", $raw_message)
+elif $event_class == "USER_FINISHED_REMOVE_DISK_NO_DOMAIN" then
+    submessage("TEXT", "2012", $raw_message)
+elif $event_class == "USER_FINISHED_REMOVE_DISK_ATTACHED_TO_VMS_NO_DOMAIN" then
+    submessage("TEXT", "2043", $raw_message)
+elif $event_class == "USER_FINISHED_FAILED_REMOVE_DISK_NO_DOMAIN" then
+    submessage("TEXT", "2013", $raw_message)
+elif $event_class == "USER_FINISHED_FAILED_REMOVE_DISK" then
+    submessage("TEXT", "2015", $raw_message)
+endif
+
+if in_list(["USER_REMOVE_DISK_INITIATED", "USER_REMOVE_DISK_ATTACHED_TO_VMS_INITIATED"], $event_class) then
+    $user = strip($user, "", ".")
+else
+    $user = strip($user, "", ").")
+endif
+
+if in_list(["", "the system"], $user) then
+    $user = null
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = "disk"
+object.name = $disk_alias
+
+logon_service = $authz_provider
+
+datafield2 = $storage_domain_name  # Storage Domain Name
+datafield5 = $vm_names  # Virtual Machines Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_Disk_Remove"

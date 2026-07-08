@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}: %{msgid="HSRP_ENGINE-4-BADAUTH"}: Bad authentication from {src.ip=IPV4|src.ip=IPV6},
+        group {subject.group=NUMBER}, remote state Active'
+
+subject = "system"
+action = "validate"
+object = "message"
+status = "failure"
+
+subject.type = "Redundancy protocol"
+
+object.type = "FHRP"
+
+protocol = "hsrp"
+
+reason = "Authentication type or key mismatch"
+
+importance = "medium"
+
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_hsrp_bad_auth"

@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="Sudoers_Action"} {subject.account.name=STRING} {$status="OK"|"FAIL"|"FAILURE"}
+        {UNTIL("audit object ")}{$action="read"|$action="write"} event detected
+        {$file_path="/etc/sudoers"}'
+
+subject = "account"
+if $action == "read" then
+    action = "view"
+else
+    action = "modify"
+endif
+object = "file_object"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.fullpath = $file_path
+$csv_temp = csv($file_path, "/", "")
+object.name = $csv_temp[length($csv_temp) - 1]
+if length($csv_temp) > 1 then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+importance = "high"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+    
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_sudoers_action"

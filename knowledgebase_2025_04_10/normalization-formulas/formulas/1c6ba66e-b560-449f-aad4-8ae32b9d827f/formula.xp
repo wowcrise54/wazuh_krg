@@ -1,0 +1,170 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} api_json.log: {$json=REST}'
+COND = (
+    (
+        find_substr($json, '"method":"PUT"') != null
+        and find_substr($json, '"route":"/api/:version/jobs/:id"') != null
+    )
+    or (
+        find_substr($json, '"method":"POST"') != null
+        and find_substr($json, '"route":"/api/:version/jobs/request"') != null
+    )
+)
+
+subject = "application"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_path"
+    TEXT = '/api/v{NUMBER}/jobs/{object.process.id=NUMBER}'
+endsubformula
+
+subformula "parse_path"
+    TEXT = '/api/v{NUMBER}/jobs/request'
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+submessage("TEXT", "parse_path", $path)
+
+$value_0 = $params[0]["value"]
+$value_1 = $params[1]["value"]
+$value_2 = $params[2]["value"]
+$value_3 = $params[3]["value"]
+$value_4 = $params[4]["value"]
+$value_5 = $params[5]["value"]
+$value_6 = $params[6]["value"]
+
+switch $params[0]["key"]
+    case "info" $params_info = $value_0
+    case "state" $job_state = $value_0
+    case "failure_reason" $failure_reason = $value_0
+    case "session" $session_info = $value_0
+endswitch
+switch $params[1]["key"]
+    case "info" $params_info = $value_1
+    case "state" $job_state = $value_1
+    case "failure_reason" $failure_reason = $value_1
+    case "session" $session_info = $value_1
+endswitch
+switch $params[2]["key"]
+    case "info" $params_info = $value_2
+    case "state" $job_state = $value_2
+    case "failure_reason" $failure_reason = $value_2
+    case "session" $session_info = $value_2
+endswitch
+switch $params[3]["key"]
+    case "info" $params_info = $value_3
+    case "state" $job_state = $value_3
+    case "failure_reason" $failure_reason = $value_3
+    case "session" $session_info = $value_3
+endswitch
+switch $params[4]["key"]
+    case "info" $params_info = $value_4
+    case "state" $job_state = $value_4
+    case "failure_reason" $failure_reason = $value_4
+    case "session" $session_info = $value_4
+endswitch
+switch $params[5]["key"]
+    case "info" $params_info = $value_5
+    case "state" $job_state = $value_5
+    case "failure_reason" $failure_reason = $value_5
+    case "session" $session_info = $value_5
+endswitch
+switch $params[6]["key"]
+    case "info" $params_info = $value_6
+    case "state" $job_state = $value_6
+    case "failure_reason" $failure_reason = $value_6
+    case "session" $session_info = $value_6
+endswitch
+
+if $route == "/api/:version/jobs/:id" then
+    action = "info"
+    object = "process"
+    
+    object.type = "job"
+
+    if $failure_reason != null then
+        object.state = $job_state + ": " + $failure_reason
+    else
+        object.state = $job_state
+    endif
+
+elif $route == "/api/:version/jobs/request" then
+    action = "sync"
+    object = "process"
+    
+    if substr($['meta.client_id'], 0, 7) == "runner/" then
+        subject.id = strip($['meta.client_id'], "runner/", "")  # Runner ID
+    endif
+    
+    object.type = "job"
+    object.process.id = $['meta.job_id']
+    
+    object.state = switch $status
+        case 201 "Content Exists"
+        case 204 "No Content"
+    endswitch
+endif
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $['meta.user']
+
+if substr($['meta.client_id'], 0, 5) == "user/" then
+    subject.account.id = strip($['meta.client_id'], "user/", "")
+endif
+
+subject.type = "runner:" + $params_info["platform"] + ":" + $params_info["executor"] + ":" + $params_info["shell"]
+subject.process.meta = $ua
+subject.process.name = $params_info["name"]
+subject.process.version = $params_info["version"]
+
+src.ip = $['meta.remote_ip']
+if $session_info != null then
+    external_link = $session_info['url']
+    $temp_src_fqdn = csv(external_link, '/', '"')[2]
+    $temp_src_fqdn = substr($temp_src_fqdn, 0, find_substr($temp_src_fqdn, ":"))
+    $dot_pos = find_substr($temp_src_fqdn, '.')
+    if ipv4($temp_src_fqdn) == null and $dot_pos != null then
+        src.fqdn = $temp_src_fqdn
+        src.hostname = substr($temp_src_fqdn, 0, $dot_pos)
+    else 
+        src.hostname = $temp_src_fqdn
+    endif
+endif
+
+$project_list = csv($['meta.project'], "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($['meta.project'], "", "/" + $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = coalesce($project_namespace_fullpath, $['meta.root_namespace'])  # Namespace Fullpath
+
+numfield4 = number($['meta.pipeline_id'])  # Pipeline ID
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "api"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_API_JSON_Job"

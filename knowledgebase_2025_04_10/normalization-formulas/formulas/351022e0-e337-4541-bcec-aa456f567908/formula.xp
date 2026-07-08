@@ -1,0 +1,25 @@
+TEXT = '{"S"|"Z"} {WORD} {time=DATETIME}:{NUMBER} secinfo {"denied"|"(no rule found)"}: USER={datafield1=UNTIL(",")}
+        USER-HOST={$src_ip_1=IPV4|src.hostname=HOSTNAME} ({$src_ip_2=IPV4}),
+        HOST={$dst_ip_1=IPV4|dst.hostname=HOSTNAME} ({$dst_ip_2=IPV4}), TP={object.name=STRING} {REST}'
+
+subject = "rule"
+action = "deny"
+object = "application"
+status = "success"
+
+subject.name = "secinfo policy"
+object.type = "transport control program (tp)"
+
+src.ip = coalesce($src_ip_1, $src_ip_2)
+dst.ip = coalesce($dst_ip_1, $dst_ip_2)
+
+# datafield1 - username
+
+importance = "high"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.category = "Application server"
+event_src.subsys = "gateway log"
+
+id = "PT_SAP_SAP_AS_ABAP_Gateway_Log_filemonitor_Secinfo_denied"

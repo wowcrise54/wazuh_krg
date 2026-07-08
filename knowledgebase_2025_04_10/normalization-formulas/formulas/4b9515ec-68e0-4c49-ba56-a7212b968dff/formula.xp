@@ -1,0 +1,225 @@
+JSON = ''
+COND = (
+    $eventid != null
+    and $node != null
+    and $timestamp != null
+    and $items["USER_CHAUTHTOK"] != null
+)
+
+$kv_main = keyvalue($items["USER_CHAUTHTOK"][0], " ", "=", "'")
+$kv_msg = keyvalue($kv_main["msg"], " ", "=", '"')
+
+if $kv_main["auid"] != "4294967295" then
+    subject = "account"
+endif
+
+if $kv_msg["exe"] != "?" then
+    # Декодируем HEX, если требуется
+    $exe = strip($kv_msg["exe"], '"', '"')
+    if $exe == $kv_msg["exe"] then
+        $exe = hex_to_string($kv_msg["exe"])
+    endif
+    
+    $process_path_and_name = csv($exe, "/", "")
+    $process_fullpath = $exe
+    $process_name = $process_path_and_name[length($process_path_and_name) - 1]
+    $process_path = strip($exe, "", $process_name)
+endif
+
+action = "modify"
+
+$usermod_group_ops = [
+    "changing group member", "changing member in shadow group",
+    "removing group member", "removing user from shadow group",
+    "adding user to group", "adding user to shadow group", 
+    "changing admin name in shadow group"
+]
+
+$usermod_lock_unlock_bugged_res = ["updating passwd", "updating password"]
+
+# usermod
+if $process_name == "usermod" then
+    if in_list($usermod_group_ops, $kv_msg["op"]) then
+        object = "user_group"
+    else
+        object = "account"
+    endif
+
+# chage & passwd
+elif in_list(["chage", "passwd"], $process_name) then
+    object = "account"
+
+# gpasswd
+elif $process_name == "gpasswd" then
+    object = "user_group"
+endif
+
+if in_list($usermod_lock_unlock_bugged_res, $kv_msg["res"]) then
+    status = "success"
+else
+    status = if ($kv_msg["res"] == "success") then "success" else "failure" endif
+endif
+
+# Декодируем HEX, если требуется
+$auid_en = strip($kv_main["AUID"], '"', '"')
+if $auid_en == $kv_main["AUID"] then
+    $auid_en = hex_to_string($kv_main["AUID"])
+endif
+
+$auid_list = csv($auid_en, "@", "")
+
+# Декодируем HEX, если требуется
+$uid_en = strip($kv_main["UID"], '"', '"')
+if $uid_en == $kv_main["UID"] then
+    $uid_en = hex_to_string($kv_main["UID"])
+endif
+
+$uid_list = csv($uid_en, "@", "")
+
+if $kv_main["auid"] != "4294967295" then
+    subject.account.name = $auid_list[0]
+    subject.account.domain = $auid_list[1]
+
+    subject.account.id = $kv_main["auid"]
+else
+    subject.account.name = $uid_list[0]
+    subject.account.domain = $uid_list[1]
+
+    subject.account.id = $kv_main["uid"]
+endif
+
+subject.account.session_id = $kv_main["ses"]
+subject.account.privileges = $kv_main["uid"]
+
+subject.process.fullpath = $process_fullpath
+subject.process.name = $process_name
+subject.process.path = $process_path
+subject.process.id = $kv_main["pid"]
+
+# Декодируем HEX, если требуется
+$id_en = strip($kv_main["ID"], '"', '"')
+if $id_en == $kv_main["ID"] then
+    $id_en = hex_to_string($kv_main["ID"])
+endif
+
+$id_list = csv($id_en, "@", "")
+
+# Декодируем HEX, если требуется
+$acct = strip($kv_msg["acct"], '"', '"')
+if $acct == $kv_msg["acct"] then
+    $acct = hex_to_string($kv_msg["acct"])
+endif
+
+$acct_list = csv($acct, "@", "")
+
+# chage & usermod (account)
+if object == "account" then
+    if ($kv_msg["id"] != null) then
+        object.account.id = $kv_msg["id"]
+        object.account.name = $id_list[0]
+        object.account.domain = $id_list[1]
+    else
+        object.account.name = $acct_list[0]
+        object.account.domain = $acct_list[1]
+    endif
+    
+    # chage
+    $op = strip($kv_msg["op"], "change ", "")
+    
+    # usermod
+    $op = strip($op, "modifying ", "")
+    $op = strip($op, "changing ", "")
+    $op = strip($op, "updating ", "")
+    $op = strip($op, "moving ", "")
+    
+    $op = lower($op)
+    $op = replace($op, "_", " ")
+    
+    if $kv_msg["op"] != "PAM:chauthtok" then
+        object.property = $op
+    endif
+
+# gpasswd
+elif ($process_name == "gpasswd") then
+    object.name = coalesce($id_en, $acct)
+    object.id = $kv_msg["id"]
+    
+    if find_substr($kv_msg['op'], "password of group ") != null then
+        object.property = "password"
+    elif find_substr($kv_msg['op'], "access to group ") != null then
+        object.property = "access"
+    endif
+
+# usermod (group)
+elif ($process_name == "usermod") and in_list($usermod_group_ops, $kv_msg["op"]) then
+    if in_list(["changing group member", "changing member in shadow group"], $kv_msg['op']) then
+        object.property = "changed_user"
+        object.value = coalesce($id_list[0], $acct_list[0])
+    elif in_list(["removing group member", "removing user from shadow group"], $kv_msg['op']) then
+        object.property = "removed_user"
+        object.value = coalesce($id_list[0], $acct_list[0])
+    elif in_list(["adding user to group", "adding user to shadow group"], $kv_msg['op']) then
+        object.property = "added_user"
+        object.new_value = coalesce($id_list[0], $acct_list[0])
+    elif $kv_msg['op'] == "changing admin name in shadow group" then
+        object.property = "changed_admin"
+        object.value = coalesce($id_list[0], $acct_list[0])
+    endif
+endif
+
+object.state = $kv_msg["op"]
+
+if $kv_msg["terminal"] != "?" then
+    logon_service = strip($kv_msg["terminal"], "/dev/", "")
+endif
+
+chain_id = $eventid  # AuditD Event ID
+
+if object == "account" then
+    category.generic = "Account"
+else
+    category.generic = "Group"
+endif
+
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+time = epoch_ms_to_datetime(number($timestamp + $timestampfractional))
+msgid = "USER_CHAUTHTOK"
+importance = "low"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.subsys = "auditd"
+event_src.category = "Operating system"
+
+if $node != "" then
+    if maybe_ipv4($node) != null or maybe_ipv6($node) != null then
+        if (in_subnet($node, "127.0.0.0/8") == False and $node != "::1") then
+            event_src.ip = $node
+            labels = "node_contains_ext_ip"
+        else
+            event_src.ip = recv_ipv4
+        endif
+    else
+        $first_dot = find_substr($node, ".")
+        if $first_dot != null then
+            event_src.fqdn = $node
+            event_src.hostname = substr($node, 0, $first_dot)
+        else
+            event_src.hostname = $node
+        endif
+    endif
+else
+    event_src.ip = recv_ipv4
+endif
+
+if (event_src.hostname == null) and not in_list([$kv_msg["addr"], "?"], $kv_msg["hostname"]) then
+    event_src.hostname = $kv_msg["hostname"]
+endif
+
+if (event_src.ip == null) and ($kv_msg["addr"] != "?") then
+    event_src.ip = $kv_msg["addr"]
+endif
+
+id = "PT_UNIX_like_auditd_syslog_structured_user_chauthtok"

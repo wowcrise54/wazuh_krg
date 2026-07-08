@@ -1,0 +1,45 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "Health Service Script" and $number == 17
+
+submessage("XML","Event_data",$eventdata)
+submessage("TEXT","Script_info",$script_info)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    $script_info = $DataItem / eventdata / Data [1]  # информация об имени скрипта и времени выполнения
+endsubformula
+
+subformula "Script_info"
+    TEXT = 'The script {$script=STRING+} completed successfully in {datafield3=NUMBER} seconds.'
+endsubformula
+
+object.name = strip($script, "'", "'")
+
+msgid = $number
+
+object = "application"
+action = "execute"
+status = "success"
+subject = "host"
+
+importance = "info"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_17_script_completed_successfully"

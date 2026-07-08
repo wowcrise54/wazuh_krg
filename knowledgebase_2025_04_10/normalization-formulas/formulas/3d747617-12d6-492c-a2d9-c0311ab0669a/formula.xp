@@ -1,0 +1,46 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1214"
+       and (
+        $event_category == "ЦУ КЦ-ЗПС"
+        or $event_category == "IC-AEC"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+action = "create"
+object = "task"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Создано задание"|"Job creation"}. {"Имя"|"Name"}: {object.name=STRING+} {"Тип"|"Type"}: {REST}'
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "ЦУ КЦ-ЗПС" then
+    event_src.subsys = "ic-aec"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1214_task_created"
+

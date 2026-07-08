@@ -1,0 +1,30 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "POLICY"
+       and $parameter == 1
+       and $action == 45
+
+action = "stop"
+object = "system"
+status = "ongoing"
+
+if $computer_name != "" then
+    src.hostname = $computer_name
+endif
+
+importance = "info"
+
+event_src.vendor = "confident"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_policy_os_stopped"

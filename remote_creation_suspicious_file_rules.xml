@@ -1,0 +1,41 @@
+<!--
+  Native Wazuh port of MP SIEM PT-CR-1373 / Remote_Creation_Suspicious_File.
+  Data source: Windows Security Event ID 5145 (Detailed File Share auditing).
+-->
+<group name="windows,remote_creation_suspicious_file,">
+
+  <!-- Select remote access to a suspicious file through an SMB share. -->
+  <rule id="110210" level="0" noalert="1">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^5145$</field>
+    <field name="win.eventdata.ipAddress" type="pcre2" negate="yes">^(?:-|127(?:\.[0-9]{1,3}){3}|::1|0:0:0:0:0:0:0:1)$</field>
+    <field name="win.eventdata.accessList" type="pcre2">(?i)(?:%%4416|%%4417)</field>
+    <field name="win.eventdata.relativeTargetName" type="pcre2">(?i)(?:\.sh|\.hta|\.ps1|\.py|\.vba|\.vbe|\.com|\.cmd|\.bat|\.vbs|\.js|\.xsl|\.sct|\.scr|\.dll|\.exe|\.dmp|\.ace|\.kirbi|\.mof|mimilsa\..+|\.cs|\.csproj|\.proj|ntds\.dit)$</field>
+    <description>Remote access to a potentially dangerous file through a Windows share.</description>
+    <group>security_event,windows_security,</group>
+  </rule>
+
+  <!-- Higher confidence artifacts associated with credential dumping. -->
+  <rule id="110211" level="12">
+    <if_sid>110210</if_sid>
+    <field name="win.eventdata.relativeTargetName" type="pcre2">(?i)(?:\.dmp|\.kirbi|mimilsa\..+|ntds\.dit)$</field>
+    <description>User $(win.eventdata.subjectUserName) from $(win.eventdata.ipAddress) remotely accessed suspicious artifact $(win.eventdata.shareName)\$(win.eventdata.relativeTargetName).</description>
+    <mitre>
+      <id>T1003</id>
+      <id>T1570</id>
+    </mitre>
+    <group>attack,credential_access,lateral_movement,os_credential_dumping,lateral_tool_transfer,</group>
+  </rule>
+
+  <!-- Scripts, executables and other suspicious files from the source rule. -->
+  <rule id="110212" level="10">
+    <if_sid>110210</if_sid>
+    <field name="win.eventdata.relativeTargetName" type="pcre2" negate="yes">(?i)(?:\.dmp|\.kirbi|mimilsa\..+|ntds\.dit)$</field>
+    <description>User $(win.eventdata.subjectUserName) from $(win.eventdata.ipAddress) remotely accessed potentially dangerous file $(win.eventdata.shareName)\$(win.eventdata.relativeTargetName).</description>
+    <mitre>
+      <id>T1570</id>
+    </mitre>
+    <group>attack,lateral_movement,lateral_tool_transfer,</group>
+  </rule>
+
+</group>

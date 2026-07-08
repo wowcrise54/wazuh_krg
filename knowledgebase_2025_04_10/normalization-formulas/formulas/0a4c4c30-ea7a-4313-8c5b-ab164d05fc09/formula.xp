@@ -1,0 +1,58 @@
+EVENTLOG = 'EventID="4887"'
+COND = $Channel == "Security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "allow"
+object = "certificate"
+status = "success"
+
+$raw_text = csv($Data['Requester'],"\\", "`")
+subject.account.name = lower($raw_text[1])
+subject.account.domain = lower($raw_text[0])
+
+object.property = $Data["Attributes"]
+object.name = $Data["Subject"]
+object.id = $Data["SubjectKeyIdentifier"]
+
+datafield1 = $Data["RequestId"]
+numfield1 = $Execution["ThreadID"]
+
+submessage('TEXT', 'attributes', $Data["Attributes"])
+subformula 'attributes'
+    TEXT = '{$f1=KEYVALUE("\n",":")}'
+    datafield2 = $f1["cdc"] # CDC (Client DC name)
+    datafield3 = $f1["rmd"] # RMD (Request Machine DNS name)
+    datafield4 = $f1["ccm"] # CCM (Cert Client Machine)
+    datafield5 = $f1["SAN"] # SAN (Subject Alternative Names)
+    datafield6 = $f1["CertificateTemplate"] # CertificateTemplate
+endsubformula
+
+object.state = switch $Data["Disposition"]  # Disposition Codes
+    case "0" "The request was not completed"    # CR_DISP_INCOMPLETE
+    case "1" "The request failed"  # CR_DISP_ERROR  
+    case "2" "The request was denied"  # CR_DISP_DENIED
+    case "3" "The request was processed and the certificate has been issued"  # CR_DISP_ISSUED
+    case "4" "The certificate was issued separately, independent of this request"  # CR_DISP_ISSUED_OUT_OF_BAND
+    case "5" "The request has been taken under submission" # CR_DISP_UNDER_SUBMISSION
+    case "6" "The certificate was revoked" # CR_DISP_REVOKED
+endswitch
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.category = "Certification authority"
+
+id = "PT_Microsoft_Certification_Authority_eventlog_4887_Certificate_Services_approved_certificate_request"

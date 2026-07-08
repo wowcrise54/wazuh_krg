@@ -1,0 +1,18 @@
+!TEXT = '{time=DATETIME} - OK,{msgid="RECORDING_RULE_ADD"},{subject.name=WORDDASH+},
+        New recording rule added: RecRulesAddForm {LITERAL} typeRule=\'{object.type=WORD}\',
+        roleId={STRING} policy=\'{object.value=WORD} {REST}'
+
+subject = "account"
+action = "create"
+object = "rule"
+status = "success"
+
+object.property = "policy"
+
+importance = "info"
+
+event_src.vendor = "zoom_international"
+event_src.title = "call_recording"
+event_src.category = "Telecom"
+
+id = "PT_ZOOM_International_Call_Recording_filemonitor_Recording_rule_add"

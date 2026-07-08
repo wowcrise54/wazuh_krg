@@ -1,0 +1,33 @@
+EVENTLOG = 'Channel="Application"'
+!COND = $EventID["text"] == "11011" and $Provider["Name"] == "KSHSecurityService"
+
+subject = "account"
+action = "stop"
+object = "application"
+status = "success"
+
+submessage("TEXT","SPLIT",$Data[0])
+
+subformula "SPLIT"
+    # Извлечение subject.domain, subject.name и object.name из $Data[0]
+    TEXT='Пользователь {subject.name=UNTIL(" (")} {subject.domain=UNTIL(")")} закрыл {object.name="Консоль управления"}'
+endsubformula
+
+subformula "SPLIT"
+    # Извлечение subject.name и object.name из $Data[0]
+    TEXT='Пользователь {UNTIL("\\\\")} {subject.name=UNTIL(" закрыл")} {object.name="Консоль управления"}'
+endsubformula
+
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_sharepoint_server"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Security_for_SharePoint_Server_eventlog_11011_user_has_closed_management_console"

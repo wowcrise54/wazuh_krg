@@ -1,0 +1,47 @@
+TABULAR = "{time=time},
+           station,
+           event_category,
+           event_id,
+           event_message
+           "
+
+COND = $event_category == "Система печати"
+       and ($event_id == 117768710
+            or $event_id == 117768704)
+
+subject = "account"
+action = "print"
+object = "resource"
+status = "ongoing"
+
+submessage("TEXT", "message", $event_message)
+
+subformula "message"
+    # Извлечение subject.name, object.value и $nameprint из $event_message
+    TEXT = "{'Начало печати документа'?}\n\r\n\rUser {subject.name=STRING}
+            start print job {object.value=NUMBER} on {$nameprint=REST}"
+
+    object.property = "job number"
+
+    datafield1 = strip($nameprint, "", ".")                 # Имя принтера
+endsubformula
+
+object.type = "file"
+
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "secret_net_lsp"
+
+$dot_pos = find_substr($station, '.')
+
+if $dot_pos != null then
+    event_src.fqdn = $station
+    event_src.hostname = substr($station, 0, $dot_pos)
+else
+    event_src.hostname = $station
+endif
+
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_Secret_Net_LSP_odbc_print_start"

@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = strip($kv["message"], " ", " ") == "remote access client IP address and port were changed"
+       and $kv["fw_subproduct"] == "VPN-1"
+
+subject = "account"
+action = "info"
+object = "session"
+status = "success"
+
+subject.account.name = $kv["user"]
+subject.account.session_id = strip($kv["session_uid"], "{", "}")
+
+src.ip = $kv["new_ip"]
+src.port = $kv["new_port"]
+
+datafield1 = $kv["loguid"]          # идентификатор события в журнале, по которому можно связать цепочку многострочных событий
+datafield5 = $kv["old_ip"]          # старый IP-адрес
+datafield6 = $kv["old_port"]        # старый порт
+datafield8 = $kv["originsicname"]   # полное доменное имя
+datafield9 = $hostname              # имя устройства с LogExporter
+
+reason = strip($kv["message"], "", " ")
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = "vpn-gateway"
+event_src.ip = $kv["origin"]
+event_src.category = "VPN"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_VPN_and_Firewall_Multiple_VPN_connections"

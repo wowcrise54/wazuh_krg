@@ -1,0 +1,36 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "1156"
+       and $event_category == "Integrity control"
+       and $event_type == "Audit success"
+
+action = "modify"
+object = "task"
+status = "success"
+
+submessage("TEXT", "message", $event_message)
+subformula "message"
+    TEXT = 'Job change. Name: {object.name=STRING+} Description: {reason=REST}'
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Контроль целостности" then
+    event_src.subsys = "integrity control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1156_job_change_ldb"

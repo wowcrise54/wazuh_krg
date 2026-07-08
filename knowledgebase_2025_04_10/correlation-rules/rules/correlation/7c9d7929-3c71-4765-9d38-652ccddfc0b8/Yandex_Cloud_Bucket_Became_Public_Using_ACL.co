@@ -1,0 +1,87 @@
+event Bucket_Became_Public_Using_ACL:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "yandex_cloud"
+        and event_src.subsys == "storage"
+        and action == "modify"
+        and object == "rule"
+        and object.type == "acl"
+        and status == "success"
+        and regex(object.new_value, "(?i)grant\s+type:\s+(?:all_users|all_authenticated_users)", 0) != null
+        and filter::CheckWL_Specific_Only("Yandex_Cloud_Bucket_Became_Public_Using_ACL", lower(join([src.ip, object.storage.fullpath, datafield4], "|")))
+    }
+
+rule Yandex_Cloud_Bucket_Became_Public_Using_ACL: Bucket_Became_Public_Using_ACL
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Bucket_Became_Public_Using_ACL {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+
+        $subject.process.meta = subject.process.meta
+
+        $subject.state = subject.state
+        $subject.type = subject.type
+
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.name = object.name
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.type = object.type
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $logon_auth_method = logon_auth_method
+
+        $datafield1 = datafield1  # Наименование организации
+        $datafield2 = datafield2  # Наименование облака
+        $datafield3 = datafield3  # Наименование каталога
+        $datafield4 = datafield4  # Идентификатор бакета
+
+        $chain_id = chain_id
+
+        $alert.key = lower(join([src.ip, object.storage.fullpath, datafield4], "|"))
+        $alert.context = lower(join(remove([subject.account.name, src.ip, object.storage.fullpath, datafield4, datafield6], null), " | "))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "rule"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "File and Directory Permissions Modification"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id, $object.storage.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

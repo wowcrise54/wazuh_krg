@@ -1,0 +1,23 @@
+event File_Created:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and status == "success"
+        and object == "file_object"
+        and action == "create"
+        and in_list(["wget", "x86_64-linux-gnu-ld.bfd", "curl", "ftp", "scp", "git"], subject.process.name)
+    }
+
+enrichment Unix_Suspicious_File_Created
+    
+    enrich File_Created:
+        #enrich_fields {
+        
+        #}
+
+    insert_into Unix_Suspicious_Created_Files {
+        host = event_src.host
+        file_name = object.name
+        process_name = subject.process.name
+        cmdline = subject.process.meta
+    }

@@ -1,0 +1,153 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} production_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"controller":"Admin::UsersController"') != null
+    and (
+        (
+            find_substr($json, '"method":"POST"') != null
+            and find_substr($json, '"action":"create"') != null
+        )
+        or (
+            find_substr($json, '"method":"PATCH"') != null
+            and find_substr($json, '"action":"update"') != null
+        )
+        or (
+            find_substr($json, '"method":"DELETE"') != null
+            and find_substr($json, '"action":"destroy"') != null
+        )
+        or (
+            find_substr($json, '"method":"PUT"') != null
+            and find_substr($json, '"action":"block"') != null
+        )
+        or (
+            find_substr($json, '"method":"PUT"') != null
+            and find_substr($json, '"action":"unblock"') != null
+        )
+    )
+)
+
+subject = "account"
+object = "account"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+action = switch $action
+    case "create" "create"
+    case "update" "modify"
+    case "destroy" "remove"
+    case "block" "lock"
+    case "unblock" "unlock"
+endswitch
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+$value_0 = $params[0]["value"]
+$value_1 = $params[1]["value"]
+$value_2 = $params[2]["value"]
+$value_3 = $params[3]["value"]
+$value_4 = $params[4]["value"]
+
+switch $params[0]["key"]
+    case "username" $params_acct_fullname = $value_0
+    case "user" $params_user = $value_0
+    case "id" $params_acct_name = $value_0
+endswitch
+switch $params[1]["key"]
+    case "username" $params_acct_fullname = $value_1
+    case "user" $params_user = $value_1
+    case "id" $params_acct_name = $value_1
+endswitch
+switch $params[2]["key"]
+    case "username" $params_acct_fullname = $value_2
+    case "user" $params_user = $value_2
+    case "id" $params_acct_name = $value_2
+endswitch
+switch $params[3]["key"]
+    case "username" $params_acct_fullname = $value_3
+    case "user" $params_user = $value_3
+    case "id" $params_acct_name = $value_3
+endswitch
+switch $params[4]["key"]
+    case "username" $params_acct_fullname = $value_4
+    case "user" $params_user = $value_4
+    case "id" $params_acct_name = $value_4
+endswitch
+
+$acct_name = coalesce($params_user["username"], $params_acct_name)
+$acct_fullname = coalesce($params_user["name"], $params_acct_fullname)
+$acct_contact = $params_user["email"]
+$acct_privileges = $params_user["access_level"]
+
+if in_list(["create", "update"], $action) then
+    $start_user = find_substr($json, '"key":"user","value":{')
+    $end_user_1 = find_substr(substr($json, $start_user, length($json)), '}},')
+    $end_user_2 = find_substr(substr($json, $start_user, length($json)), '}}],')
+    $end_user = coalesce($end_user_1, $end_user_2)
+    object.property = "configuration"
+    object.new_value = replace(substr($json, $start_user+22, $end_user-22), "'", '"')
+endif
+
+if ($action == "create") then
+    object.account.name = $acct_name
+    object.account.fullname = $acct_fullname
+    object.account.contact = $acct_contact
+    object.account.privileges = $acct_privileges
+elif ($action == "update") then
+    $user_from_path = strip($path, "/admin/users/", "")
+    if ($user_from_path != $acct_name) and ($user_from_path != null) then
+        object.account.name = $user_from_path
+    else
+        object.account.name = $acct_name
+    endif
+elif ($action == "destroy") then
+    object.account.name = coalesce($acct_name, strip($path, "/admin/users/", ""))
+    object.account.fullname = $acct_fullname
+elif ($action == "block") then
+    object.account.name = coalesce($acct_name, strip($path, "/admin/users/", "/block"))
+elif ($action == "unblock") then
+    object.account.name = coalesce($acct_name, strip($path, "/admin/users/", "/unblock"))
+endif
+
+src.ip = $remote_ip
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+
+if in_list(["create", "modify", "remove"], action) then
+    category.low = "Manipulation"
+else
+    category.low = "Control"
+endif
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "production"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Production_User_Management"

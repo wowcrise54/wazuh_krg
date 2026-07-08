@@ -1,0 +1,51 @@
+JSON = ""
+
+COND = $ENTITY_TYPE == "User" 
+        and $OPERATION == "update"
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.account.name = $user_or_token['USERNAME']
+subject.account.id = $USER_ID
+subject.account.fullname = $user_or_token['DISPLAY_NAME']
+subject.account.contact = $user_or_token['EMAIL']
+
+object.account.id = $ENTITY_ID
+
+# For IW TM 7.9 (begin)
+object.account.name = $PROPERTY_CHANGES["old"]["USERNAME"]
+
+object.account.fullname = coalesce($old["DISPLAY_NAME"], $ENTITY_DISPLAY_NAME)
+object.account.contact = $PROPERTY_CHANGES["old"]["EMAIL"]
+# For IW TM 7.9 (end)
+
+submessage("JSON", "additional_info", $PROPERTY_CHANGES)
+subformula "additional_info"
+    JSON = "old"
+
+    object.account.name = $old["USERNAME"]
+
+    object.account.fullname = coalesce($old["DISPLAY_NAME"], $ENTITY_DISPLAY_NAME)
+    object.account.contact = $old["EMAIL"]
+endsubformula
+
+object.property = "new values"
+$temp = csv($PROPERTY_CHANGES, "new\":", "")[1]
+object.value = replace(strip($temp, "{", "}}"), "", "\"")
+
+time = $CHANGE_DATE + $user_or_token['TIMEZONE']
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_User_modified"

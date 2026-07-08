@@ -1,0 +1,39 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            channel,
+            {event_src.fqdn=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "RemoteAccess" and $number == 20255
+
+submessage("XML","Event_data",$eventdata)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    object.name = $DataItem / eventdata / Data [1]  # название интерфейса
+    datafield3 = $DataItem / eventdata / Data [2]   # имя пользователя
+endsubformula
+
+msgid = $number
+
+object = "interface"
+action = "alert"
+status = "success"
+subject = "host"
+
+importance = "high"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Microsoft_SCOM_odbc_20255_error_occurred_in_ppp_module"

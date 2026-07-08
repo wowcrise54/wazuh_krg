@@ -1,0 +1,40 @@
+!JSON = "EventCode=5137"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "create"
+object = "ds_object"
+status = "success"
+
+subject.account.id = $InsertionStrings[2]
+subject.account.domain = lower($InsertionStrings[4])
+subject.account.name = lower($InsertionStrings[3])
+subject.account.session_id = maybe_number16($InsertionStrings[5])
+
+object.name = $InsertionStrings[8]
+object.type = $InsertionStrings[10]
+
+chain_id = $InsertionStrings[0]
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "medium"
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Directory service"
+event_src.title = "active_directory"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_5137_A_directory_service_object_was_created"

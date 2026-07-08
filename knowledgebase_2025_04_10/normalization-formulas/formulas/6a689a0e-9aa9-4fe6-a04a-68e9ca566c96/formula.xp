@@ -1,0 +1,65 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.EventEx] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+[{$node_type="PSC"|$node_type="vCenter"|$node_type="vSphere"|}{$resource=STRING+} status changed from {$old_status=WORD} to {$new_status=WORD} on {$host_name=IPV4|$host_name=IPV6|$host_name=HOSTNAME} {$reason=REST}'
+
+action = "info"
+object = "resource"
+status = "success"
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $resource
+object.group = $node_type
+
+object.state = lower(strip($old_status, "'", "'"))
+object.property = "state"
+object.value = lower(strip($old_status, "'", "'"))
+object.new_value = lower(strip($new_status, "'", "'"))
+
+if coalesce(ipv4($host_name), ipv6($host_name)) != null then
+    dst.ip = coalesce(ipv4($host_name), ipv6($host_name))
+else
+    dst.hostname = $host_name
+endif
+
+datafield1 = $def_dc_name  # Datacenter Name
+datafield6 = $host_name  # Host Name
+
+reason = strip($reason, "", "]")
+
+msgid = "vim.event.ResourceExhaustionStatusChangedEvent"
+importance = "info"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Resource_Exhaustion_Status"

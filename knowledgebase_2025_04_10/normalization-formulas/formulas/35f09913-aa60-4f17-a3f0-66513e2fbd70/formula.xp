@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?}{DATETIME?}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} FTPXfer {WORD?} {time=DATETIME} {duration=NUMBER} {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} {object.value=NUMBER} {object.fullpath=STRING} {$transfer_type=LITERAL} _ o {$access_mode=LITERAL} {$user_id_raw=UNTIL("ftp")} {"0 *"|"1 "}{datafield3=STRING?} {$status_raw=LITERAL}'
+
+subject = "application"
+action = "receive" 
+object = "file_object"
+
+status = if $status_raw == "c" then "success" else "ongoing" endif
+
+switch $access_mode  
+    case "r"
+    # если access mode - real (r) (присутствует в /etc/passwd), то в user_id_raw лежит имя пользователя;
+        subject.account.name = strip($user_id_raw, ' ', ' ')
+        datafield2 = "real_user" # user access mode
+    case "a"
+    # если access mode - anonymous(a), то в user_id_raw лежит идентификационная строка (вводимая вместо пароля)
+        subject.account.id = strip($user_id_raw, ' ', ' ')
+        datafield2 = "anonymous" # user access mode
+    case "g"
+    # если access mode - guest(g), то в user_id_raw лежит идентификационная строка (вводимая вместо пароля)
+        subject.account.id = strip($user_id_raw, ' ', ' ')
+        datafield2 = "guest"     # user access mode
+endswitch
+
+object.property = "size_in_bytes" 
+$file_path_and_name = csv(object.fullpath, "/", "")
+object.name = $file_path_and_name[length($file_path_and_name) - 1]
+object.path = strip(object.fullpath, "", object.name)
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+protocol.layer7 = "ftp"
+ 
+datafield1 = if $transfer_type == "a" then "ascii" else "binary" endif
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "proftpd"
+event_src.category = "File service"
+
+id = "PT_SIEM_Opensource_Proftpd_syslog_download_file_event"

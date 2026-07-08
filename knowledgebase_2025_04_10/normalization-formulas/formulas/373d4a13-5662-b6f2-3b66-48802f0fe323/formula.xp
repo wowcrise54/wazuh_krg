@@ -1,0 +1,45 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} 
+        {$Computer=HOSTNAME} {subject.process.name="php-fpm"}
+        {subject.process.id=NUMBER} - - 
+        /{event_src.subsys="system_usermanager.php"}: 
+        Configuration Change: 
+        {subject.account.name=WORD}@{src.ip=IPV4|src.ip=IPV6} 
+        ({$database=UNTIL(")")}: 
+        Successfully {$orig_action=WORD} user{":"?} 
+        {object.account.name=WORD}'
+
+subject = "account"
+
+action = switch $orig_action
+    case "created" "create"
+    case "edited" "modify"
+    case "deleted" "remove"
+endswitch
+
+object = "account"
+status = "success"
+
+datafield1 = $database # Belonging to the database
+
+importance = switch action
+    case "create" "medium"
+    case "modify" "low"
+    case "remove" "low"
+endswitch
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.title = "php"
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Other"
+
+id = "PT_Opensource_PHP_syslog_Account_actions"

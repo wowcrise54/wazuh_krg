@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-"?}{WORD?}-{NUMBER}-{msgid="750007"}:
+        Local: {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}:{dst.port=NUMBER} Remote: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}:{src.port=NUMBER}
+        Username:{subject.name=WORD} {WORD+}. Reason: {reason=REST}'
+
+subject = "account"
+action = "stop"
+object = "session"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.subsys = "vpn-gateway"
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_750007_SA_was_torn_down_deleted"

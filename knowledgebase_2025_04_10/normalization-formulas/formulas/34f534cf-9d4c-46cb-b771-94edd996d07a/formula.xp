@@ -1,0 +1,66 @@
+TABULAR = 'time_stamp,
+           {time=datetime},
+           event_id,
+           hostname,
+           user_name,
+           antivirus_version,
+           traffic_direction,
+           local_ip,
+           remote_ip,
+           event_ip'
+
+COND = $event_id == 211
+
+action = "detect"
+object = "connection"
+status = "success"
+
+src.ip = $remote_ip
+dst.ip = $local_ip
+
+if $traffic_direction != 0 then
+    direction =
+        switch $traffic_direction
+            case 1 "ingress"
+            case 2 "egress"
+        endswitch
+endif
+
+submessage("TEXT", "obj_param", $event_desc)
+subformula "obj_param"
+    TEXT = 'Активный ответ, начатый в {UNTIL(", ")?}выключен. Трафик с IP-адреса {IPV4|IPV6|HOSTNAME} блокирован на {duration=NUMBER} секунд.'
+endsubformula
+
+subformula "obj_param"
+    TEXT = 'Active Response that started at {UNTIL(" is ")}disengaged. The traffic from IP address {IPV4|IPV6|HOSTNAME} was blocked for {duration=NUMBER} second(s).'
+endsubformula
+
+if $user_name !="none" then
+    datafield6 = $user_name
+endif
+
+if $domain_name !="none" then
+    datafield7 = $domain_name
+endif
+
+msgid = $event_id
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Information Security"
+category.low = "State"
+
+event_src.ip = $event_ip
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($hostname)
+    event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    event_src.hostname = lower($hostname)
+endif
+event_src.vendor = "symantec"
+event_src.title = "endpoint_protection_manager"
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_odbc_active_answ_blocking"

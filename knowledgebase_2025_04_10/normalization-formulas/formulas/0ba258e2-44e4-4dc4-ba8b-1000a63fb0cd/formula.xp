@@ -1,0 +1,52 @@
+EVENTLOG = ''
+
+COND = (
+            $Channel == "Kaspersky Endpoint Security"
+            and $Provider["Name"] == "avp"
+            and $EventID["text"] == "212"
+        )
+        or
+        (
+            $Channel == "Kaspersky Event Log"
+            and $Provider["Name"] == "klnagent"
+            and $EventID["text"] == "1"
+            and find_substr($Data[0], "Не удалось выполнить задачу") != null
+        )
+
+subject = "account"
+action = "start"
+object = "task"
+status = "failure"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+$csv = csv(substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' (')), "\\", "'")
+subject.domain = $csv[0]
+subject.name = $csv[1]
+
+object.name = $kv["Объект\\Название"]
+
+reason = $kv["Причина"]
+
+time = $TimeCreated["SystemTime"]
+
+msgid = switch $EventID["text"]
+    case "1" "Не удалось выполнить задачу"
+    case "212" $EventID["text"]
+endswitch
+
+importance = "low"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_212_task_failed"

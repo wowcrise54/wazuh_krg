@@ -1,0 +1,270 @@
+JSON = ''
+
+COND = in_list(["roles", "clusterroles"], $payload["objectRef"]["resource"])
+
+subject = "account"
+
+action = switch $payload["verb"]
+    case "create" "create"
+    case "get" "view"
+    case "list" "view"
+    case "watch" "view"
+    case "update" "modify"
+    case "patch" "modify"
+    case "delete" "remove"
+    case "deletecollection" "remove"
+endswitch
+
+object = "policy"
+
+if in_list(["ResponseStarted", "RequestReceived"], $payload["stage"]) then 
+    status = "ongoing"
+
+elif $payload["stage"] == "ResponseComplete" then
+    $code = number($payload["responseStatus"]["code"])
+    if $code == 101 or ($code >= 200 and $code < 300) then
+        status = "success"
+    else
+        status = "failure"
+    endif
+else
+    status = "failure"
+endif
+
+subformula "item_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $next = bool($array[$current + 1])   
+endsubformula
+
+subject.account.id = $payload["user"]["uid"]
+subject.account.name = $payload["user"]["username"]
+subject.account.group = join($payload["user"]["groups"], "|")
+
+$space = find_substr($payload["userAgent"], " ")
+$csv_process = csv(substr($payload["userAgent"], 0, coalesce($space, length($payload["userAgent"]))), "/", "")
+subject.process.name = $csv_process[0]
+subject.process.version = strip($csv_process[1], "v", "")
+subject.process.meta = $payload["userAgent"]
+
+if $payload["impersonatedUser"] != null then
+    object.account.id = $payload["impersonatedUser"]["uid"]
+    object.account.name = $payload["impersonatedUser"]["username"]
+    object.account.group = join($payload["impersonatedUser"]["groups"], "|")
+else
+    object.account.id = subject.account.id
+    object.account.name = subject.account.name
+    object.account.group = subject.account.group
+endif
+
+$name = coalesce($payload["objectRef"]["name"], $payload["responseObject"]["metadata"]["name"])
+$type = join(remove([$payload["objectRef"]["resource"], $payload["objectRef"]["subresource"]], null), "/")
+object.storage.fullpath = join(remove([$type, $payload["objectRef"]["namespace"], $name], null), "/")
+
+object.id = coalesce($payload["responseObject"]["metadata"]["uid"], $payload["responseObject"]["details"]["uid"], $payload["objectRef"]["uid"])
+
+object.name = $name
+object.domain = $payload["objectRef"]["namespace"]
+object.group = $payload["objectRef"]["apiGroup"]
+object.state = $payload["responseStatus"]["code"]
+object.type = $type
+
+if (in_list(["Role", "ClusterRole"], $payload["responseObject"]["kind"])) then
+    $obj = $payload["responseObject"]
+elif (in_list(["Role", "ClusterRole"], $payload["requestObject"]["kind"])) then
+    $obj = $payload["requestObject"]
+endif
+if in_list(["create", "modify"], action) and $obj != null then
+    object.property = "binding objects"
+
+    $array = $obj["rules"]
+    $current = -1
+    submessage("TEXT", "item_handler", "")
+    if bool($item) then
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+    if $next then
+        submessage("TEXT", "item_handler", "")
+        $values = append($values, join(remove([strip("verbs: " + join(remove($item["verbs"], ""), ", "), "", "verbs: "),
+                                               strip("apigroups: " + join(remove($item["apiGroups"], ""), ", "), "", "apigroups: "),
+                                               strip("resources: " + join(remove($item["resources"], ""), ", "), "", "resources: ")], ""), "; "))
+    endif
+
+    object.new_value = join($values, "|")
+endif
+
+if $payload["sourceIPs"][0] != "::1" then
+    src.ip = $payload["sourceIPs"][0]
+endif
+
+start_time = datetime($payload["requestReceivedTimestamp"])
+
+datafield1 = join([$payload["verb"], $payload["requestURI"]], " ")                 # Запрос
+datafield2 = $payload["responseObject"]["metadata"]["ownerReferences"][0]["kind"]  # тип ресурса-владельца
+datafield3 = $payload["responseObject"]["metadata"]["ownerReferences"][0]["name"]  # имя ресурса-владельца
+datafield4 = $payload["responseObject"]["metadata"]["ownerReferences"][0]["uid"]   # ID ресурса-владельца
+
+if $payload["annotations"]["authorization.k8s.io/reason"] != "" then
+    datafield5 = $payload["annotations"]["authorization.k8s.io/reason"]  # RBAC subsystem message
+endif
+
+chain_id = $payload["auditID"]
+
+if not in_list([null, ""], $payload["responseObject"]["message"]) then
+    reason = $payload["responseObject"]["message"]
+elif not in_list([null, ""], $payload["responseStatus"]["reason"]) then
+    reason = $payload["responseStatus"]["reason"]
+else
+    reason = switch $payload["responseStatus"]["code"]
+        case 304 "NotModified"
+        case 307 "TemporaryRedirect"
+        case 400 "BadRequest"
+        case 401 "Unauthorized"
+        case 403 "Forbidden"
+        case 404 "NotFound"
+        case 405 "MethodNotAllowed"
+        case 409 "Conflict"
+        case 410 "Gone"
+        case 422 "UnprocessableEntity"
+        case 429 "TooManyRequests"
+        case 500 "InternalServerError"
+        case 503 "ServiceUnavailable"
+        case 504 "ServerTimeout"
+    endswitch
+endif
+
+time = datetime($payload["stageTimestamp"])
+msgid = "K8S_Role_Management"
+
+if in_list(["cluster-admin", "admin"], $name) and $type == "clusterroles" and action != "view" then
+    importance = "medium"
+elif in_list(["create", "modify", "remove"], action) then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = "kube-apiserver"
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_Kubernetes_Role_Management"

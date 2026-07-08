@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+User {subject.account.name=STRING} logged out from session
+        {subject.account.session_id=WORD} because of {reason=REST}'
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+logon_auth_method = "remote"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_logout_webui"

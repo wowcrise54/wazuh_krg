@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["operation"] == "Push SIC Certificate"
+
+subject = "account"
+action = "apply"
+object = "certificate"
+status = "success"
+
+subject.name = $kv["administrator"]
+
+object.property = "shared application"
+object.value = strip($kv["objectname"], "cpshared_application_", "")
+
+if maybe_ipv4($kv["machine"]) == null and maybe_ipv6($kv["machine"]) == null then
+    src.hostname = $kv["machine"]
+endif
+
+src.ip = $kv["client_ip"]
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+msgid = $kv["operation"]
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Smart_dashboard_Push_sic_certificate"

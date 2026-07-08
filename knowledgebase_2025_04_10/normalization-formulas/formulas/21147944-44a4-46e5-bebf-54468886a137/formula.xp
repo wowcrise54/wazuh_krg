@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}
+        %%10PORTSEC/{NUMBER}/{msgid="PORTSEC_DOT1X_LOGIN_SUCC"|msgid="PORTSEC_DOT1X_LOGIN_FAILURE"}(l): {"-DevIP="?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|}{";"?} -IfName={UNTIL("-MACAddr=")} {src.mac=MACADDR} -VlanId= {UNTIL("-UserName=")}
+        {$sname=UNTIL(";")} {"The user passed 802.1X authentication and got online successfully"|"The user failed the 802.1X authentication"}.'
+
+subject = "account"
+action = "connect"
+object = "host"
+switch msgid
+    case "PORTSEC_DOT1X_LOGIN_SUCC"
+        status = "success"
+        importance = "info"
+    case "PORTSEC_DOT1X_LOGIN_FAILURE"
+        status = "failure"
+        importance = "medium"
+endswitch
+
+if $sname != "NULL" then
+    subject.name = $sname
+endif
+
+dst.ip = event_src.ip
+dst.hostname = event_src.hostname
+
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.title = "comware_software"
+event_src.subsys = "shell"
+event_src.category = "Network device"
+
+id = "PT_Hewlett_Packard_Enterprise_Comware_Software_syslog_portsec_dot1x_login"

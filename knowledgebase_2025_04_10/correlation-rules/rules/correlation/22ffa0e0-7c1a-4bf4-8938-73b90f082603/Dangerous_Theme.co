@@ -1,0 +1,111 @@
+event Open_Theme:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows("rundll32.exe") 
+        and regex(lower(object.process.cmdline), "themecpl\.dll.*?openthemeaction\s+.*?\.theme\\b", 0) != null
+        and filter::CheckWL_Process_Creation("Dangerous_Theme", lower(object.process.cmdline))
+    }
+
+event Dangerous_Theme:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and (
+            lower(subject.process.name) == "systemsettings.exe" 
+            or lower(subject.process.name) == "explorer.exe"
+        )
+        and (
+            match(lower(object.path), "*\\control panel\\desktop\\")
+            or match(lower(object.path), "*\\software\\microsoft\\windows\\currentversion\\explorer\\wallpapers\\")
+        )
+        and regex(lower(object.value), "^(\\\\\\\\|http(s)?:)", 0) != null
+    }
+
+rule Dangerous_Theme: (Open_Theme and Dangerous_Theme) timer 10s 
+
+    init {
+        $labels = "w_auto"
+    }
+    
+    on Open_Theme {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $object.fullpath = regex(lower(object.process.cmdline), "themecpl\.dll.*?openthemeaction(\s)+(.*\.theme\\b)", 2)
+        
+        $datafield6 = datafield6  # Идентификатор сессии субъекта в формате UUID
+
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+    
+    on Dangerous_Theme {
+        $object.value = object.value
+        $object.new_value = object.new_value
+        $datafield3 = object.path
+        $datafield4 = object.fullpath
+    }
+    
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "high"
+
+    $alert.key = lower($object.process.cmdline)
+    $alert.context = coalesce($object.value, $object.new_value)
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Forced Authentication"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}    

@@ -1,0 +1,26 @@
+EVENTLOG = 'EventID="4868"'
+!COND = $Channel=="Security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "reject"
+object = "certificate"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+datafield1 = $Data["RequestId"]
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+event_src.category = "Certification authority"
+
+
+subject.id = $Data["SubjectUserSid"]
+subject.name = lower($Data["SubjectUserName"])
+subject.domain = lower($Data["SubjectDomainName"])
+
+
+id = "PT_Microsoft_Certification_Authority_eventlog_4868_Admin_denied_certificate_request"
+importance = "info"

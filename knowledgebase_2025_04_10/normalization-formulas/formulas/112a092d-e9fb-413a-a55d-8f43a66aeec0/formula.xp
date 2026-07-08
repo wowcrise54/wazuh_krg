@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        snort{"["NUMBER"]"?}: WARNING: {$object_path_raw=STRING} GID {NUMBER} SID {NUMBER}
+        in rule duplicates previous rule. Ignoring old rule.'
+
+action = "alert"
+object = "file"
+status = "success"
+
+object.type = "configuration"
+object.property = "warning line number"
+# assume that the line can't be greater than 1e6 - 1
+$tmp = substr($object_path_raw, -8, 8)
+$line_num_raw = substr($tmp, find_substr($tmp, "("), 7)
+object.value = strip($line_num_raw, "(", ")")
+object.path = strip($object_path_raw, "", $line_num_raw)
+
+reason = "duplicate rule found"
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "snort"
+event_src.category = "IDS/IPS"
+
+id = "PT_Opensource_Snort_syslog_rule_duplicates_previous_rule"

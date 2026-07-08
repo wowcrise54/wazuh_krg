@@ -1,0 +1,193 @@
+TEXT = '-
+        {STRING} {time=DATETIME}: {NUMBER}: [{NUMBER}] Session { event_src.id=NUMBER}{UNTIL(" from ")}
+        {src.ip=IPV4}:{src.port=NUMBER} to {dst.ip=IPV4}:{dst.port=NUMBER}
+        {UNTIL(" EHLO ")}
+        {event_src.fqdn=STRING}
+        {UNTIL("MAIL FROM:")}<{subject.account.contact=UNTIL(">")}
+        {$temp=REST}'
+
+subject = "account"
+action = "open"
+object = "session"
+status = "success"
+
+# Разбор вариантов поля с одним или двумя сообщениями
+
+submessage ("TEXT", "parse_message", $temp)
+
+subformula "parse_message"
+    TEXT = '{$recipients_1=UNTIL("Message size:")} {$count_bytes_1=NUMBER} bytes
+            {UNTIL("Message creation successful:")} {$path_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> {object.value=NUMBER} 2.{NUMBER}.{NUMBER} Ok, message saved
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- QUIT
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> {NUMBER} {STRING?} {WORDDASH*}
+            {UNTIL("SMTP session")} {object.state="successful"} (Bytes in/out: {count.bytes_in=NUMBER}/{count.bytes_out=NUMBER})
+            {STRING} {DATETIME}: {NUMBER}:'
+endsubformula
+
+subformula "parse_message"
+    TEXT = '{$recipients_1=UNTIL("Message size:")} {$count_bytes_1=NUMBER} bytes
+            {UNTIL("Message creation successful:")} {$path_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> {object.value=NUMBER} 2.{NUMBER}.{NUMBER} Ok, message saved
+            {UNTIL("MAIL FROM:")}<{subject.account.contact=UNTIL(">")}
+            {$recipients_2=UNTIL("Message creation successful:")} {$path_2=STRING}
+            {datafield1=UNTIL("QUIT")}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> {NUMBER} {STRING?} {WORDDASH*}
+            {UNTIL("SMTP session")} {object.state="successful"} (Bytes in/out: {count.bytes_in=NUMBER}/{count.bytes_out=NUMBER})
+            {STRING} {DATETIME}: {NUMBER}:'
+endsubformula
+
+
+# Разбор вариантов полей с количеством получателей для первого письма
+
+submessage ("TEXT", "parse_sender_1", $recipients_1)
+
+subformula "parse_sender_1"
+    TEXT = '{STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Sender OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- DATA {STRING+?}'
+endsubformula
+
+subformula "parse_sender_1"
+    TEXT = '{STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Sender OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_2=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- DATA {STRING+?}' 
+endsubformula
+
+subformula "parse_sender_1"
+    TEXT = '{STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Sender OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK 
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_2=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_3=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- DATA {STRING+?}'
+endsubformula
+
+subformula "parse_sender_1"
+    TEXT = '{STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Sender OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_2=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_3=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_1_4=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK 
+            {datafield2 = REST}'
+endsubformula
+
+# Разбор вариантов поля с количеством получателей для второго письма
+
+submessage ("TEXT", "parse_sender_2", $recipients_2)
+
+subformula "parse_sender_2"
+    TEXT = '{STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Sender OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- DATA
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 354 Enter mail, end with <CRLF>.<CRLF>
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] Message size: {$count_bytes_2=NUMBER} bytes {REST}'
+endsubformula
+
+subformula "parse_sender_2"
+    TEXT = '{STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Sender OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_2=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- DATA
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 354 Enter mail, end with <CRLF>.<CRLF>
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] Message size: {$count_bytes_2=NUMBER} bytes {REST}' 
+endsubformula
+
+subformula "parse_sender_2"
+    TEXT = '{STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Sender OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK 
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_2=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_3=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- DATA
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 354 Enter mail, end with <CRLF>.<CRLF>
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] Message size: {$count_bytes_2=NUMBER} bytes {REST}'
+endsubformula
+
+subformula "parse_sender_2"
+    TEXT = '{STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Sender OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_1=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_2=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_3=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] <-- RCPT TO:{$account_to_2_4=STRING}
+            {STRING} {DATETIME}: {NUMBER}: [{NUMBER}] --> 250 2.{NUMBER}.{NUMBER} Recipient OK 
+            {datafield3 = UNTIL("Message size:")} {$count_bytes_2=NUMBER} bytes {REST}'
+endsubformula
+
+$account_to_1_1 = lower(strip($account_to_1_1, "<", ">"))
+$account_to_1_2 = lower(strip($account_to_1_2, "<", ">"))
+$account_to_1_3 = lower(strip($account_to_1_3, "<", ">"))
+$account_to_1_4 = lower(strip($account_to_1_4, "<", ">"))
+
+$account_to_2_1 = lower(strip($account_to_2_1, "<", ">"))
+$account_to_2_2 = lower(strip($account_to_2_2, "<", ">"))
+$account_to_2_3 = lower(strip($account_to_2_3, "<", ">"))
+$account_to_2_4 = lower(strip($account_to_2_4, "<", ">"))
+
+$account_list = []
+if $account_to_1_1 != null then
+    $account_list = append($account_list,$account_to_1_1)
+endif
+if not in_list($account_list, $account_to_1_2) then
+    $account_list = append($account_list,$account_to_1_2)
+endif
+if not in_list($account_list, $account_to_1_3) then
+    $account_list = append($account_list, $account_to_1_3)
+endif
+if not in_list($account_list, $account_to_1_4) then
+    $account_list = append($account_list, $account_to_1_4)
+endif
+if not in_list($account_list, $account_to_2_1) then
+    $account_list = append($account_list,$account_to_2_1)
+endif
+if not in_list($account_list, $account_to_2_2) then
+    $account_list = append($account_list, $account_to_2_2)
+endif
+if not in_list($account_list, $account_to_2_3) then
+    $account_list = append($account_list, $account_to_2_3)
+endif
+if not in_list($account_list, $account_to_2_4) then
+    $account_list = append($account_list, $account_to_2_4)
+endif
+
+object.account.contact = (join(remove($account_list, null), " | "))
+
+object.property = "smtp code"
+
+if $path_2 != null then
+    object.fullpath = $path_1 + " | " +  $path_2
+else
+    object.fullpath = $path_1
+endif
+
+count.bytes = $count_bytes_1 + $count_bytes_2
+
+# datafield1 - Все остальные сообщения и получатели когда их больше двух
+# datafield2 - Получатели для первого сообщения, когда их больше четырех
+# datafield3 - Получатели для второго сообщения, когда их больше четырех
+
+importance = "info"
+
+event_src.vendor = "mdaemon_technologies"
+event_src.title = "mdaemon_email_server"
+event_src.category = "Mail server"
+
+id = "PT_MDaemon_Technologies_MDaemon_Email_Server_filemonitor_smtp_session_success"

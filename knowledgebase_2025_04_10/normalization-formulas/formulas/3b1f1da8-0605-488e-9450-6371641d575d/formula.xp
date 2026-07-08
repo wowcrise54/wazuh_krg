@@ -1,0 +1,113 @@
+JSON = ''
+
+COND = in_list(["yandex.cloud.audit.kms.ScheduleSymmetricKeyVersionDestruction",
+                "yandex.cloud.audit.kms.CancelSymmetricKeyVersionDestruction"], $event_type)
+
+subject = "account"
+action = "remove"
+object = "resource"
+
+$operation = strip($event_type, "yandex.cloud.audit.kms.", "")
+
+if $operation == "ScheduleSymmetricKeyVersionDestruction" then
+    status = switch $event_status
+        case "DONE" "ongoing"
+        case "STARTED" "ongoing"
+        case "ERROR" "failure"
+        case "CANCELLED" "failure"
+    endswitch
+else
+    status = switch $event_status
+        case "DONE" "failure"
+        case "STARTED" "ongoing"
+        case "ERROR" "ongoing"
+        case "CANCELLED" "ongoing"
+    endswitch
+endif
+
+subject.account.id = $authentication["subject_id"]
+
+$at_sign = find_substr($authentication["subject_name"], "@")
+if $at_sign != null then
+    $account = substr($authentication["subject_name"], 0, $at_sign)
+    subject.account.name = $account
+    subject.account.domain = strip($authentication["subject_name"], $account + "@", "")
+else
+    subject.account.name = $authentication["subject_name"]
+endif
+
+subject.account.group = $authentication["federation_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+$cloud = $resource_metadata["path"][1]["resource_name"] 
+$folder = $resource_metadata["path"][2]["resource_name"]
+object.storage.fullpath = join([$organization, $cloud, $folder], "|")
+
+object.id = $details["key_id"]
+object.name = $details["key_name"]
+object.version = $details["version_id"]
+object.state = $details["key_status"]
+object.type = "virtual key"
+
+if $details["destroy_at"] != null then
+    object.property = "destroy time"
+    object.value = coalesce(datetime($details["destroy_at"]), $details["destroy_at"])
+endif
+
+$remote_address = coalesce(ipv4($request_metadata["remote_address"]), ipv6($request_metadata["remote_address"]))
+if $remote_address != null then
+    src.ip = $remote_address
+else
+    logon_service = $request_metadata["remote_address"]
+endif
+
+datafield1 = $organization  # Наименование организации
+datafield2 = $cloud         # Наименование облака
+datafield3 = $folder        # Наименование каталога
+
+if $details["default_algorithm"] != null then
+    $key_info = append($key_info, "default algorithm: " + $details["default_algorithm"])
+endif
+if $details["primary_version_status"] != null then
+    $key_info = append($key_info, "primary version status: " + $details["primary_version_status"])
+endif
+if $details["primary_version_algorithm"] != null then
+    $key_info = append($key_info, "primary version algorithm: " + $details["primary_version_algorithm"])
+endif
+if $request_parameters["pending_period"] != null then
+    $key_info = append($key_info, "pending period: " + $request_parameters["pending_period"])
+endif
+datafield4 = join($key_info, " | ")  # Свойства объекта
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = $operation
+importance = "info"
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = $event_source
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_KMS_Key_Destruction"

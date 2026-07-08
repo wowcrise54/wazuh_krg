@@ -1,0 +1,76 @@
+query GetMergeRequestInfo($asset, $host, $repo, $mr_id) from SupplyChain_Merge_Requests {
+    (
+     column::event_src_asset == $asset 
+     or (
+         column::event_src_asset == null
+         and column::event_src_host == $host
+     )
+    )
+    and column::repository == $repo
+    and column::merge_request_id == $mr_id
+}
+    qhandler {
+        $source_branch = column::source_branch
+        $target_branch = column::target_branch
+        $creator = column::creator
+        $approvers = column::approvers
+     }
+
+
+event Merge_Request_Approve:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "gitlab"
+        and action == "allow"
+        and object.type == "merge_request"
+        and status == "success"
+        and not in_list([subject.account.name, numfield3], null)
+    }
+
+
+enrichment SupplyChain_Merge_Request_Approve
+    enrich Merge_Request_Approve:
+
+        enrich_fields {
+            $repository = join([datafield2, datafield1], "/")
+            $account = lower(subject.account.name)
+
+            # TL SupplyChain_Merge_Requests
+            $tl_data = exec_query("GetMergeRequestInfo", [event_src.asset, event_src.host, $repository, numfield3])
+
+            $source_branch = $tl_data["$source_branch"]
+            $target_branch = $tl_data["$target_branch"]
+            $creator = lower($tl_data["$creator"])
+
+            $approvers = if $tl_data["$approvers"] == "cleared by enrichment" then null else lower($tl_data["$approvers"]) endif
+
+            if $approvers != $account
+               and find_substr($approvers, $account + "|") != 0
+               and find_substr($approvers, "|" + $account + "|") == null
+               and substr($approvers, length($approvers) - length($account) - 1, length($account) + 1) != ("|" + $account) then
+
+                $approvers = join(remove([$approvers, $account], null), "|")
+            endif
+
+            if $creator == $account and object.state == null then
+                object.state = "approved by creator"
+            endif
+
+            if object.property == null then
+                object.property = "branch"
+                object.value = $source_branch
+                object.new_value = $target_branch
+            endif
+        }
+
+        insert_into SupplyChain_Merge_Requests if (
+            not in_list([event_src.host, $repository, numfield3, $target_branch, $creator], null)
+        ) {
+            column::event_src_asset = event_src.asset
+            column::event_src_host = event_src.host
+            column::repository = $repository
+            column::merge_request_id = numfield3
+            column::target_branch = $target_branch
+            column::creator = $creator
+            column::approvers = $approvers
+        }

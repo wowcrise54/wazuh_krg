@@ -1,0 +1,61 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|"localhost"|$Computer=HOSTNAME} TDS: {$json=REST}'
+
+subject = "application"
+object = "file"
+status = "success"
+
+subject.name = "TDS Polygon"
+
+subformula "log"
+    # parse included JSON message
+    JSON = ''
+
+    COND = $event_type == "polygon_alert"
+
+    if $blocked == true then
+        action = "deny"
+    else
+        action = "allow"
+    endif
+
+    object.name = $filename
+    object.type = "mail attachment"
+    object.hash = $sha256
+    object.property = "probability of infection, %"
+    object.value = $probability
+
+    if $verdict == true then
+        object.state = "infected"
+    else
+        object.state = "not infected"
+    endif
+
+    datafield1 = $from            # Отправитель письма с анализируемым вложением
+    datafield2 = join($to, ", ")  # Список получателей письма
+    datafield3 = $md5             # MD5-хеш вложения
+    datafield4 = $sha1            # SHA1-хеш вложения
+
+    time = $timestamp
+endsubformula
+
+submessage("JSON", "log", $json)
+
+importance = "medium"
+
+category.high = "Information Security"
+category.generic = "Malware"
+category.low = "Detection"
+
+event_src.title = "bot_trek_tds"
+event_src.vendor = "group_ib"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network security"
+
+id = "PT_Group_IB_Bot_Trek_TDS_syslog_mail_anomaly"
+

@@ -1,0 +1,126 @@
+ event Start_Exploit_Process:
+    key:
+        event_src.host, object.process.guid, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::ProcessStart_Windows_any()
+        and ( 
+                (object.account.id != null
+                and not filter::SystemAccount_Windows(object.account.id)
+            ) or (
+                (object.account.id == null
+                and not filter::SystemAccount_Windows(subject.account.id))     
+            )
+        )
+        and object.process.name != null
+        and lower(object.process.path) != "c:\\windows\\system32\\"
+    }
+
+event Start_Elevated_Process:
+    key:
+        event_src.host, object.process.parent.guid, object.process.parent.id, object.process.parent.name
+    filter {
+        filter::NotFromCorrelator() 
+        and filter::ProcessStart_Windows_any()
+        and (  (
+                object.account.id != null
+                and (filter::SystemAccount_Windows(object.account.id)
+                    or object.account.session_id == "999"
+                )
+            ) or (
+                object.account.id == null
+                and (filter::SystemAccount_Windows(subject.account.id)
+                    or subject.account.session_id == "999"
+                )
+            )
+        )
+        and object.process.name != null
+        and filter::CheckWL_Specific_Only("Subrule_Elevated_Process_Run", join([lower(object.process.parent.fullpath), lower(object.process.name)], "|"))   
+    }
+
+rule Subrule_Elevated_Process_Run: (Start_Exploit_Process -> Start_Elevated_Process) within 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only" 
+    }
+ 
+    on Start_Exploit_Process {
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges 
+
+        $object.process.parent.id = object.process.id
+        $object.process.parent.name = object.process.name
+        $object.process.parent.path = object.process.path
+        $object.process.parent.fullpath = object.process.fullpath
+        $object.process.parent.guid = object.process.guid
+        $object.process.parent.cmdline = object.process.cmdline
+    }
+
+    on Start_Elevated_Process {
+        if $subject.account.name == null then
+            $subject.account.name = subject.account.name
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+        endif
+
+        $object.account.name = object.account.name
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $alert.key = join([lower(object.process.parent.fullpath), lower(object.process.name)], "|")
+        $alert.context = $subject.account.name + " → NT Authority\System"
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $object = "process"
+    $action = "start"
+    $status = "success"
+
+    $importance = "info"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+}

@@ -1,0 +1,79 @@
+JSON = 'source="cinder"'
+
+COND = $action == "action-volume"
+       and coalesce($request_body["os-attach"], $request_body["os-detach"]) != null
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+if $request_body["os-attach"] != null then
+    action = "create"
+
+    $properties = $request_body["os-attach"]
+
+    object.path = $properties["mountpoint"]
+
+    if $properties["mode"] != null then
+        object.property = "mode"
+        object.value = $properties["mode"]
+    endif
+
+    datafield7 = $properties["instance_uuid"]  # The UUID of the attaching instance
+
+    msgid = "os-attach"
+
+elif $request_body["os-detach"] != null then
+    action = "remove"
+
+    msgid = "os-detach"
+endif
+
+object = "file_object"
+
+$csv_uri = csv(strip($uri, "/infra/volume", ""), "/", "")
+object.id = $csv_uri[4]
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+object.type = "volume"
+
+datafield1 = $method      # Method
+datafield2 = $uri         # URL
+datafield6 = $csv_uri[2]  # The ID of the project
+
+if $success == "no" then
+    $message_path = coalesce($response_body["itemNotFound"], $response_body["badRequest"])
+    reason = coalesce($message_path["message"], $response_body)
+endif
+
+time = $timestamp
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Cinder_Mount_operations"

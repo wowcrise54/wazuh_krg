@@ -1,0 +1,23 @@
+TEXT = ":T={$timestamp=NUMBER};:M={NUMBER} {NUMBER};Timeout_client_u_s,{NUMBER}=[WARN] [SECURITY] :C={NUMBER};
+        :A={src.ip=IPV4};Таймаут клиента '{subject.account.name=UNTIL(\"'\")}"
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+reason = "timeout"
+
+time = epoch_to_datetime($timestamp)
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "elvis_plus"
+event_src.title = "zastava"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Elvis_plus_Zastava_filemonitor_User_logout_timeout"

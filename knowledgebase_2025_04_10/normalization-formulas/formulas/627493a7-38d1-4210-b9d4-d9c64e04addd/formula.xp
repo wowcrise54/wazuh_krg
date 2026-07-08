@@ -1,0 +1,27 @@
+!TEXT='{"<"NUMBER">"} {NUMBER?} {DATETIME}
+       {IPV4|IPV6|$Computer=HOSTNAME} local_menu - -
+       [ {STRING?} timestamp="{time=DATETIME}" {UNTIL("SourceModuleName=")}
+       "syslog_dbi_in_{event_src.ip=IPV4}" SourceModuleType="{WORD}"]
+       Событие локального меню : пользователь \'{$subject_name=STRING} выполнил действие: \'Завершение работы устройства\''
+
+subject = "account"
+action = "stop"
+object = "system"
+status = "success"
+
+subject.name = strip ($subject_name,"","\'")
+
+importance = "info"
+
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kontinent"
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_syslog_User_shutdown_system"

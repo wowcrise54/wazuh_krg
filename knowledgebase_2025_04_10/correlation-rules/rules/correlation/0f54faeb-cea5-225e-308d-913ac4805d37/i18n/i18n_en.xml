@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Execution of some SQL commands may indicate that information about the PostgreSQL database users is retrieved, which may indicate attacker activity</Description>
+  <EventDescriptions>
+    <EventDescription id="164e6a2d-9114-31d4-fa04-3ae63bd18869">User {subject.application.account.name} retrieved the PostgreSQL database role list using an SQL command on host {event_src.host}</EventDescription>
+    <EventDescription id="183311cf-7ea5-469b-55cf-aca46c233272">User {subject.application.account.name} retrieved information about their account name in the PostgreSQL database using an SQL command on host {event_src.host}</EventDescription>
+    <EventDescription id="35231357-b438-d6af-a606-8f61053db50b">User {subject.application.account.name} retrieved the PostgreSQL database user information using an SQL command on host {event_src.host}</EventDescription>
+    <EventDescription id="e8434082-0f6d-9d01-23e7-1a5c62ecb34c">User {subject.application.account.name} checked whether they have the superuser permissions in the PostgreSQL database using an SQL command on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

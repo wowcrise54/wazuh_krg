@@ -1,0 +1,114 @@
+JSON = 'source="nova"'
+
+COND = in_list(["vm-attach-interface", "vm-detach-interface"], $action)
+       and not in_list([$event_id, $method, $request_body, $response_body, $source, $success, $timestamp], null)
+
+$at = find_substr($user_email, "@")
+if $at != null then
+    subject = "account"
+
+    subject.account.name = substr($user_email, 0, $at)
+    subject.account.domain = substr($user_email, $at + 1, length($user_email))
+    subject.account.contact = $user_email
+else
+    subject = "service"
+
+    subject.account.name = $user_email
+endif
+
+action = "modify"
+object = "virtual_machine"
+
+status = switch $success
+    case "yes" "success"
+    case "no" "failure"
+endswitch
+
+subformula "fixed_ips_item_handler"
+    TEXT = "{REST}"
+
+    $current = $current + 1
+    $item = $array[$current]
+    $is_next = bool($array[$current + 1])
+
+    $fixed_ips_values = append(
+        $fixed_ips_values,
+        join(remove([if $item["subnet_id"] != null then "subnet id: " + $item["subnet_id"] else null endif,
+                     if $item["ip_address"] != null then "ip address: " + $item["ip_address"] else null endif], null), "; ")
+    )
+endsubformula
+
+subject.account.id = $user_id
+
+subject.process.meta = $user_agent
+
+$properties = $response_body["interfaceAttachment"]
+
+$csv_uri = csv($uri, "/", "")
+object.id = $csv_uri[3]
+
+if $action == "vm-attach-interface" then
+    object.property = "attached interface id"
+    object.value = $properties["port_id"]
+
+elif $action == "vm-detach-interface" then
+    object.property = "detached interface id"
+    object.value = $csv_uri[5]
+endif
+
+datafield1 = $method                # Method
+datafield2 = $uri                   # URL
+datafield3 = $properties["net_id"]  # The ID of the network
+
+$array = $properties["fixed_ips"]
+$current = -1
+submessage("TEXT", "fixed_ips_item_handler", "")
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+if $is_next then
+    submessage("TEXT", "fixed_ips_item_handler", "")
+endif
+$fixed_ips_values = remove($fixed_ips_values, null)
+if length($fixed_ips_values) > 0 then
+    datafield4 = join($fixed_ips_values, " | ")  # Fixed IP addresses
+endif
+
+if $success == "no" then
+    $message_path = coalesce($response_body["itemNotFound"], $response_body["badRequest"],
+                             $response_body["computeFault"], $response_body["conflictingRequest"])
+
+    reason = coalesce($message_path["message"], $response_body["message"])
+endif
+
+time = $timestamp
+msgid = $action
+importance = "low"
+
+event_src.vendor = "vk"
+event_src.title = "vk_cloud"
+event_src.subsys = $source
+event_src.category = "Application server" 
+
+id = "PT_VK_VK_Cloud_customeventcollector_Nova_VM_interface_operations"

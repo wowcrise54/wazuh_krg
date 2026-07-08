@@ -1,0 +1,23 @@
+TEXT = '[{time=DATETIME}] INFO  Reporter: Report generation to cache {$act="started"|$act="finished"} [{$kv=KEYVALUE(", ", ": ", "\'")}'
+
+subject = "account"
+action = "create"
+object = "file"
+
+if $act == "started" then
+    status = "ongoing"
+else
+    status = "success"
+endif
+
+subject.id = $kv["User ID"]
+object.name = $kv["Report Name"]
+object.id = $kv["Report ID (tmp)"]
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_report_status"

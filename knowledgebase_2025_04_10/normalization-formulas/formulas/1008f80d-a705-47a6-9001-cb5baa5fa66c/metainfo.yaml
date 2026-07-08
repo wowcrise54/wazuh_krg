@@ -1,0 +1,10 @@
+EventDescriptions:
+- Criteria: 'id = "PT_Kerio_Technologies_Kerio_Control_syslog_intrusion_detected" and action = "detect"'
+  LocalizationId: 1d8c0d8b-fd1b-4f5d-930b-120d7f43c00e
+- Criteria: 'id = "PT_Kerio_Technologies_Kerio_Control_syslog_intrusion_detected" and action = "deny" and src.port != null and dst.port != null'
+  LocalizationId: c89f92f9-3dd3-4429-886c-646c4c2c2d95
+- Criteria: 'id = "PT_Kerio_Technologies_Kerio_Control_syslog_intrusion_detected" and action = "deny" and (src.port = null or dst.port = null)'
+  LocalizationId: d3f8b80b-c43f-4da6-b170-eff2720eb717
+PtkbId: 1008f80d-a705-47a6-9001-cb5baa5fa66c
+ObjectId: PT-NF-6763
+Origin: PT

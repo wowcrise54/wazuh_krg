@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME} {$Computer=HOSTNAME} ng-admin {NUMBER}: INFO {STRING} {STRING} 
+        {NUMBER} - {subject.name=WORDDASH} - Applying configuration is completed Configuration {object.name=STRING}  
+        - configuration@{object.id=WORD} {REST}'
+
+subject = "account"
+action = "apply"
+object = "configuration"
+status = "success"
+
+importance = "medium"
+
+event_src.vendor = "cryptopro"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ngate"
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_CryptoPro_NGate_syslog_configuration_activated"

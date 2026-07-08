@@ -1,0 +1,57 @@
+<!--
+  Wazuh 4.14 port of MaxPatrol SIEM rules PT-CR-521
+  (Debugger_In_Image_File_Execution_Options) and PT-CR-261
+  (GlobalFlags_In_Image_File_Execution_Options).
+  MITRE ATT&CK T1546.012. Data source: Sysmon Event ID 13.
+-->
+<group name="windows,ifeo_injection,t1546_012,">
+
+  <!-- PT-CR-521: Debugger value set for an executable under IFEO. -->
+  <rule id="110310" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\[^\\]+\\Debugger$</field>
+    <description>IFEO Debugger persistence configured by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre><id>T1546.012</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,ifeo_injection,</group>
+  </rule>
+
+  <!-- Internal first stage of PT-CR-261. -->
+  <rule id="110311" level="5">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\[^\\]+\\GlobalFlag$</field>
+    <description>IFEO GlobalFlag modification candidate.</description>
+    <options>no_log</options>
+    <group>sysmon,ifeo_injection,silent_process_exit,</group>
+  </rule>
+
+  <!-- GlobalFlag followed by SilentProcessExit ReportingMode on the same agent. -->
+  <rule id="110312" level="5" frequency="1" timeframe="1800">
+    <if_sid>61615</if_sid>
+    <if_matched_sid>110311</if_matched_sid>
+    <same_location />
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\[^\\]+\\ReportingMode$</field>
+    <description>IFEO SilentProcessExit ReportingMode correlation candidate.</description>
+    <options>no_log</options>
+    <group>sysmon,ifeo_injection,silent_process_exit,</group>
+  </rule>
+
+  <!-- High-value standalone behavior: payload configured as MonitorProcess. -->
+  <rule id="110313" level="10">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit\\[^\\]+\\MonitorProcess$</field>
+    <description>SilentProcessExit MonitorProcess configured by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre><id>T1546.012</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,ifeo_injection,silent_process_exit,</group>
+  </rule>
+
+  <!-- PT-CR-261 complete sequence within 30 minutes on the same Wazuh agent. -->
+  <rule id="110314" level="12" frequency="1" timeframe="1800">
+    <if_sid>110313</if_sid>
+    <if_matched_sid>110312</if_matched_sid>
+    <same_location />
+    <description>Complete IFEO SilentProcessExit persistence sequence detected: GlobalFlag, ReportingMode and MonitorProcess.</description>
+    <mitre><id>T1546.012</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,ifeo_injection,silent_process_exit,</group>
+  </rule>
+
+</group>

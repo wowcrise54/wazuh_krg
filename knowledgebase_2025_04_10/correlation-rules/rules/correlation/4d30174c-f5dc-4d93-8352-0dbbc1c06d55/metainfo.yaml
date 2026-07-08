@@ -1,0 +1,11 @@
+Category:
+EventDescriptions:
+- Criteria: 'correlation_name = "Credential_Dump_In_Local_Registry" and reason != null'
+  LocalizationId: 2b53e3c0-1b5a-4e6a-a709-37ba2d7ff57e
+- Criteria: 'correlation_name = "Credential_Dump_In_Local_Registry" and object = "command" and action = "execute"'
+  LocalizationId: 565e601f-e563-4b64-962e-f2b408cee0c7
+- Criteria: 'correlation_name = "Credential_Dump_In_Local_Registry" and ((object = "process" and action = "start") or (object = "file" and action = "execute"))'
+  LocalizationId: 64611eb9-6eb4-4aa3-8c02-fe2987281478
+PtkbId: 4d30174c-f5dc-4d93-8352-0dbbc1c06d55
+ObjectId: PT-CR-301
+Origin: PT

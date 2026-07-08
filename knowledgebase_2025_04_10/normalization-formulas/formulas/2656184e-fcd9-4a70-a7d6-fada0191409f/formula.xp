@@ -1,0 +1,84 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.{$event_class=WORD}] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+{$raw_message=REST}'
+COND = ($event_class == "HostShutdownEvent")
+    or (
+        $event_class == "EventEx"
+        and in_list(["[Host is rebooting.]", "[Host is shutting down.]"], $raw_message)
+    )
+
+action = if $raw_message == "[Host is rebooting.]" then "restart" else "stop" endif
+object = "host"
+status = "ongoing"
+
+subformula "shutdown"
+    TEXT = '[Shut down of {$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} in {$rest=REST}'
+    
+    $rest = strip($rest, "", "]")
+    $list = csv($rest, ": ", "'")
+    if length($list) == 2 then
+        $datacenter_name = $list[0]
+        reason = $list[1]
+    else
+        reason = $rest
+    endif
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+if $event_class == "HostShutdownEvent" then
+    submessage("TEXT", "shutdown", $raw_message)
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $host_name
+
+if coalesce(ipv4($host_name), ipv6($host_name)) != null then
+    dst.ip = coalesce(ipv4($host_name), ipv6($host_name))
+else
+    dst.hostname = $host_name
+endif
+
+datafield1 = coalesce($datacenter_name, $def_dc_name)  # Datacenter Name
+datafield6 = $host_name  # Host Name
+
+if $raw_message == "[Host is rebooting.]" then 
+    msgid = "esx.audit.host.stop.reboot"
+elif $raw_message == "[Host is shutting down.]" then
+    msgid = "esx.audit.host.stop.shutdown"
+else
+    msgid = $event_class
+endif
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Host_Reboot_Shutdown"

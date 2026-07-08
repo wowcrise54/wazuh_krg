@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} ports:
+        port {object.name=NUMBER} is Blocked by LACP'
+
+action = "lock"
+object = "port"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "hp"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "small_business_solution"
+event_src.category = "Network device"
+
+id = "PT_HP_SBS_syslog_port_blocked"

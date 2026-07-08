@@ -1,0 +1,57 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "PRINT"
+
+if $user_name != "" then
+    subject = "account"
+    submessage("TEXT", "subject_name", $user_name)
+endif
+action = "print"
+object = "file"
+if $pages_printed == 0 then
+    status = "ongoing"
+else
+    status = "success"
+endif
+
+subformula "subject_name"
+    TEXT = "{subject.domain=WORDDASH}\\{subject.name=WORDDASH}"
+endsubformula
+subformula "subject_name"
+    TEXT = "{subject.name=WORDDASH}"
+endsubformula
+
+object.name = $document
+object.property = "printer"
+object.value = $printer_name
+
+if $computer_name != "" then
+    src.hostname = $computer_name
+endif
+
+# Name of involved process
+datafield1 = $process_name
+# ID of the shadow copy (if it was created)
+if $shadow_copy != null and $shadow_copy != "" then
+    datafield2 = $shadow_copy
+endif
+
+# Printer port
+datafield3 = $printer_port
+
+importance = "info"
+
+event_src.vendor = "confident"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_print_resource_print"

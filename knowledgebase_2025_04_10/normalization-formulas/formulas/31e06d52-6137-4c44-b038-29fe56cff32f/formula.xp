@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = find_substr($kv["default_device_message"], "clish") != null
+       and find_substr($kv["default_device_message"], "User") != null
+       and find_substr($kv["default_device_message"], "logged in with") != null
+       and find_substr($kv["default_device_message"], "permission") != null
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+$symb1 = find_substr($kv["default_device_message"], "User") + 5
+$symb2 = find_substr($kv["default_device_message"], " logged")
+subject.account.name = substr($kv["default_device_message"], $symb1, $symb2 - $symb1)
+
+$symb3 = find_substr($kv["default_device_message"], "with") + 5
+$symb4 = find_substr($kv["default_device_message"], " permission")
+subject.account.privileges = substr($kv["default_device_message"], $symb3, $symb4 - $symb3)
+
+object.name = "clish"
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Clish_login"

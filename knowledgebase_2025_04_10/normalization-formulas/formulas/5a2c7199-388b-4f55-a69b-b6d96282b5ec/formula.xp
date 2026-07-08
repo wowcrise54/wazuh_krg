@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?} CEF:0|Imperva Inc.|SecureSphere|{NUMBER}.{NUMBER}.{NUMBER}|Purging items has ended|
+        Purged {object.type=UNTIL(" successfully")}|{$severity=WORDDASH}|{$kv=KEYVALUE(" ", "=")}'
+
+action = "clean"
+object = "resource"
+status = "success"
+
+time = $kv["rt"]
+
+importance = switch $severity
+    case "Informative" "info"
+    case "Low" "low"
+    case "Medium" "medium"
+    case "High" "high"
+endswitch
+
+event_src.vendor = "imperva"
+event_src.title = "securesphere"
+event_src.category = "Application security"
+
+id = "PT_Imperva_SecureSphere_syslog_Items_purged"

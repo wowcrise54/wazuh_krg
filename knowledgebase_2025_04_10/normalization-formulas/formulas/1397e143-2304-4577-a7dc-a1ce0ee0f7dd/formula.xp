@@ -1,0 +1,27 @@
+EVENTLOG = 'EventID.text="1793"'
+!COND = $Channel=="TrustAccess"
+
+action = "start"
+object = "service"
+status = "success"
+
+object.type = "integrity control subsystem"
+
+object.account.id = $Security["UserID"] 
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Service"
+category.low = "Control"
+
+event_src.hostname = lower($Computer)
+
+event_src.vendor = "security_code"
+event_src.title = "trustaccess"
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_TrustAccess_eventlog_integrity_control_subsystem_start"

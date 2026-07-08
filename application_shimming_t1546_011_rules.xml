@@ -1,0 +1,66 @@
+<!--
+  Wazuh 4.14 detection rules for MITRE ATT&CK T1546.011:
+  Event Triggered Execution - Application Shimming.
+  Data source: Microsoft Sysmon Event IDs 1, 11, 12, 13 and 14.
+-->
+<group name="windows,application_shimming,t1546_011,">
+
+  <!-- Installation of a shim database through the native Windows utility. -->
+  <rule id="110330" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\sdbinst\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\.sdb(?:[&quot;'\s]|$)</field>
+    <field name="win.eventdata.commandLine" type="pcre2" negate="yes">(?i)(?:^|\s)[-/](?:u|uninstall)\b</field>
+    <description>Application shim database installation through sdbinst.exe: $(win.eventdata.commandLine), user $(win.eventdata.user).</description>
+    <mitre><id>T1546.011</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,application_shimming,</group>
+  </rule>
+
+  <!-- Custom shim database created in a standard protected AppPatch path. -->
+  <rule id="110331" level="10">
+    <if_sid>61613</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)^[A-Z]:\\Windows\\AppPatch\\(?:Custom|AppPatch64\\Custom)\\.+\.sdb$</field>
+    <description>Custom application shim database created by $(win.eventdata.image): $(win.eventdata.targetFilename), user $(win.eventdata.user).</description>
+    <mitre><id>T1546.011</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,file_creation,application_shimming,</group>
+  </rule>
+
+  <!-- Registration of installed/custom shim databases. -->
+  <rule id="110332" level="10">
+    <if_sid>61614,61615,61616</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\(?:InstalledSDB|Custom)(?:\\|$)</field>
+    <description>Application shim registration modified by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre><id>T1546.011</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,application_shimming,</group>
+  </rule>
+
+  <!-- Compatibility layer changes are useful but commonly legitimate. -->
+  <rule id="110333" level="7">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers\\</field>
+    <description>Application compatibility layer modified by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details), user $(win.eventdata.user).</description>
+    <mitre><id>T1546.011</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,application_shimming,</group>
+  </rule>
+
+  <!-- Registry artifact shortly after sdbinst execution. -->
+  <rule id="110334" level="13" frequency="1" timeframe="60">
+    <if_sid>110332</if_sid>
+    <if_matched_sid>110330</if_matched_sid>
+    <same_location />
+    <description>High-confidence application shimming: sdbinst.exe execution followed by AppCompatFlags database registration.</description>
+    <mitre><id>T1546.011</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,registry,application_shimming,</group>
+  </rule>
+
+  <!-- Custom .sdb creation shortly after sdbinst execution. -->
+  <rule id="110335" level="13" frequency="1" timeframe="60">
+    <if_sid>110331</if_sid>
+    <if_matched_sid>110330</if_matched_sid>
+    <same_location />
+    <description>High-confidence application shimming: sdbinst.exe execution followed by custom database creation at $(win.eventdata.targetFilename).</description>
+    <mitre><id>T1546.011</id></mitre>
+    <group>sysmon,attack,persistence,privilege_escalation,event_triggered_execution,file_creation,application_shimming,</group>
+  </rule>
+
+</group>

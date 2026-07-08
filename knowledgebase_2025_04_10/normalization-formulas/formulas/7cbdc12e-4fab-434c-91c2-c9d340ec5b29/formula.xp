@@ -1,0 +1,143 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL("]")} INFO - {$class=STRING} - {$tag=WORD}: {$raw_message=REST}'
+COND = in_list([
+           "agent_authorize", "agent_unauthorize",
+           "agent_enable", "agent_disable", 
+           "agent_reboot_requested", "agent_delete",
+           "created_agent_interactive_session"
+       ], $tag)
+
+subject = "account"
+
+action = switch $tag
+    case "agent_authorize" "modify"
+    case "agent_unauthorize" "modify"
+    case "agent_enable" "enable"
+    case "agent_disable" "disable"
+    case "agent_reboot_requested" "restart"
+    case "agent_delete" "remove"
+    case "created_agent_interactive_session" "connect"
+endswitch
+
+object = "resource"
+status = "success"
+
+subformula "parse_user"
+    TEXT = "'{$user_name=UNTIL('\\'')} {'('$user_fullname=UNTIL(')')?} {'{'}id={$user_id=NUMBER}{'}'}"
+endsubformula
+
+subformula "parse_user"
+    # since version 2023
+    TEXT = "user with id={$user_id=NUMBER}"
+endsubformula
+
+subformula "parse_agent"
+    TEXT = "{$prefix='Unregistered agent'?} \"{$agent_name=STRING+} {'{'}id={$agent_id=NUMBER}{'}'}"
+    
+    $agent_name = strip($agent_name, '', '"')
+    if $prefix != null then
+        $agent_state = "unregistered"
+    endif
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\" with comment \"')} {$comment=REST}"
+    
+    reason = strip($comment, '"', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "by \"{$user=UNTIL('\"')}"
+endsubformula
+
+subformula "by_comment"
+    TEXT = "with comment {$comment=REST}"
+    
+    reason = strip($comment, '"', '"')
+endsubformula
+
+subformula "by_comment"
+    TEXT = "{REST}"
+endsubformula
+
+subformula "authorize"
+    TEXT = "Agent \"{$agent=UNTIL('\" was authorized')} {$by_comment=REST}"
+endsubformula
+
+subformula "unauthorize"
+    TEXT = "Agent \"{$agent=UNTIL('\" was unauthorized')} {$by_comment=REST}"
+endsubformula
+
+subformula "enable"
+    TEXT = "Agent \"{$agent=UNTIL('\" was enabled')} {$by_comment=REST}"
+endsubformula
+
+subformula "disable"
+    TEXT = "Agent \"{$agent=UNTIL('\" was disabled')} {$by_comment=REST}"
+endsubformula
+
+subformula "reboot_requested"
+    TEXT = "Agent \"{$agent=UNTIL('\" reboot requested.')} {$by_comment=REST}"
+endsubformula
+
+subformula "delete"
+    TEXT = "Agent \"{$agent=UNTIL('\" was removed')} {$by_comment=REST}"
+endsubformula
+
+subformula "interactive_session"
+    TEXT = "User \"{$user=LITERAL*}\" has opened an interactive session to the agent \"{$agent_name=STRING+} {'{'}id={$agent_id=NUMBER}{'}'} {$by_comment=REST}"
+    
+    $agent_name = strip($agent_name, '"', '"')
+endsubformula
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+switch $tag
+    case "agent_authorize" submessage("TEXT", "authorize", $raw_message)
+    case "agent_unauthorize" submessage("TEXT", "unauthorize", $raw_message)
+    case "agent_enable" submessage("TEXT", "enable", $raw_message)
+    case "agent_disable" submessage("TEXT", "disable", $raw_message)
+    case "agent_reboot_requested" submessage("TEXT", "reboot_requested", $raw_message)
+    case "agent_delete" submessage("TEXT", "delete", $raw_message)
+    case "created_agent_interactive_session" submessage("TEXT", "interactive_session", $raw_message)
+endswitch
+
+submessage("TEXT", "by_comment", $by_comment)
+submessage("TEXT", "parse_user", $user)
+submessage("TEXT", "parse_agent", $agent)
+
+subject.account.fullname = $user_fullname
+subject.account.name = $user_name
+subject.account.id = $user_id
+
+object.type = "agent"
+object.name = $agent_name
+object.id = $agent_id
+object.state = $agent_state
+
+datafield2 = $agent_name  # Agent Name
+
+numfield2 = $agent_id  # Agent ID
+
+time = replace($time, ".", ",")
+msgid = $tag
+importance = "low"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Activities_Agent_Management"

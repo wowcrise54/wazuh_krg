@@ -1,0 +1,155 @@
+event Request_Sent:
+    key:
+        subject.account.name, subject.account.domain, external_src.host, event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "multifactor"
+        and subject == "account"
+        and action == "send"
+        and object == "request"
+        and status == "success"
+        and filter::CheckWL_External_Connection(
+            "Multifactor_Bypass_From_Local_Network_Side", 
+            lower(join([subject.account.name, subject.account.domain, external_src.host], "|"))   
+        )
+    }
+
+event Second_Factor_Verified_Twice_At_Same_Time:
+    key:
+        object.account.name, object.account.domain, external_src.host, event_src.host
+    filter {
+        correlation_name == "Subrule_Multifactor_Bypass_From_Local_Network_Side"
+    }
+
+rule Multifactor_Bypass_From_Local_Network_Side: (
+                                                  (
+                                                   Request_Sent[2] with different dst.host
+                                                  ) -> Second_Factor_Verified_Twice_At_Same_Time
+                                                 ) within 1m
+
+    init {
+        $labels = "w_auto|CheckWL_External_Connection"
+        $first_event = true
+    }
+
+    on Request_Sent {
+        if $first_event then
+            $first_event = false
+
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.contact = subject.account.contact
+            $subject.account.fullname = subject.account.fullname
+
+            $object.id = object.id      # request id
+
+            $dst.host = dst.host
+            $dst.fqdn = dst.fqdn
+            $dst.hostname = dst.hostname
+            $dst.ip = dst.ip
+            $dst.port = dst.port
+            $dst.asset = dst.asset
+
+            $datafield8 = datafield8    # phone number
+            $datafield12 = datafield12  # настраивать второй фактор
+            $datafield13 = datafield13  # Callback action
+            $datafield14 = datafield14  # raw user name
+
+            $external_src_host = external_src.host
+            $external_src_fqdn = external_src.fqdn
+            $external_src_hostname = external_src.hostname
+            $external_src_ip = external_src.ip
+            $external_src_geo_asn = external_src.geo.asn
+            $external_src_geo_city = external_src.geo.city
+            $external_src_geo_country = external_src.geo.country
+            $external_src_geo_org = external_src.geo.org
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.key = lower(join([subject.account.name, subject.account.domain, external_src.host], "|"))
+        endif
+
+        if dst.asset != null then
+            $dst_asset = append($dst_asset, dst.asset)
+        endif
+
+        if dst.host != null then
+            $dst_host = append($dst_host, dst.host)
+        endif
+    }
+
+    on Second_Factor_Verified_Twice_At_Same_Time {
+        if $external_src_host == null then
+            $external_src_host = external_src.host
+        endif
+        if $external_src_fqdn == null then
+            $external_src_fqdn = external_src.fqdn
+        endif
+        if $external_src_hostname == null then
+            $external_src_hostname = external_src.hostname
+        endif
+        if $external_src_ip == null then
+            $external_src_ip = external_src.ip
+        endif
+        if $external_src_geo_asn == null then
+            $external_src_geo_asn = external_src.geo.asn
+        endif
+        if $external_src_geo_city == null then
+            $external_src_geo_city = external_src.geo.city
+        endif
+        if $external_src_geo_country == null then
+            $external_src_geo_country = external_src.geo.country
+        endif
+        if $external_src_geo_org == null then
+            $external_src_geo_org = external_src.geo.org
+        endif
+
+        $datafield2 = datafield2    # MobileApp
+        $datafield17 = datafield17  # Локация
+    }
+
+    emit {
+        $correlation_type = "incident"
+
+        $subject = "account"
+        $action = "send"
+        $object = "request"
+        $status = "success"
+
+        if length($dst_asset) == 1 then
+            $dst.asset = join($dst_asset, "")
+        endif
+
+        $datafield10 = join($dst_host, ", ")
+
+        $alert.context = join($dst_host, " | ")
+
+        $external_src.host = $external_src_host
+        $external_src.fqdn = $external_src_fqdn
+        $external_src.hostname = $external_src_hostname
+        $external_src.ip = $external_src_ip
+        $external_src.geo.asn = $external_src_geo_asn
+        $external_src.geo.city = $external_src_geo_city
+        $external_src.geo.country = $external_src_geo_country
+        $external_src.geo.org = $external_src_geo_org
+
+        $importance = "medium"
+
+        $category.generic = "Attack"
+        $category.high = "Credential Access"
+        $category.low = "Modify Authentication Process: Multi-Factor Authentication"
+
+        $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+        $incident.severity = $importance
+        $incident.category = "ProtectionBypassing"
+        $incident.aggregation.timeout = 2h
+    }

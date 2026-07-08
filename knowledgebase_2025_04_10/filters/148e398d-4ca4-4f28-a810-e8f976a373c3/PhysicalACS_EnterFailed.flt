@@ -1,0 +1,11 @@
+filter PhysicalACS_EnterFailed() {
+(
+        id == "PT_Parsec_ParsecNET_3_odbc_user_login_logout"
+        and in_list(["enter failed", "exit failed"], object.state)
+    )
+    or (
+        id == "PT_RusGuard_RusGuard_Soft_odbc_Entrance_Exit"
+        and in_list(["enter", "exit"], object.state)
+        and status == "failure"
+    )
+}

@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} pfsp: High disk utilization alert ended for device:
+        {object.name=WORDDASH} at {DATETIME} {WORD?}, alert id: {datafield1=NUMBER}'
+
+action = "info"
+object = "device"
+status = "success"
+
+reason = "The alert of disk space utilization is ended"
+importance = "info"
+
+# datafield1 - ID
+
+event_src.title = "peakflow_sp"
+event_src.vendor = "arbor_networks"
+event_src.category = "Network security"
+
+id = "PT_Arbor_Networks_Peakflow_SP_syslog_disk_utilization_alert_end"

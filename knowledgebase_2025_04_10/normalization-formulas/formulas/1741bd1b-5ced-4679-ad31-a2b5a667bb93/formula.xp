@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{$time=STRING+}{event_src.ip=IPV4|event_src.ip=IPV6}-{NUMBER} DOT1S[{NUMBER}]:
+        {STRING} {NUMBER} %% Setting Port({object.name=NUMBER}) instance({datafield1=NUMBER}) State: {$state=STRING}'
+
+action = "modify"
+object = "port"
+status = "success"
+
+object.state = lower($state)
+
+# datafield1 - зона MSTP
+
+importance = "info"
+time = datetime(substr($time, 0, 1)+lower(substr($time, 1, number(length($time)) - 1)))  # потому что FEB, а не Feb
+
+event_src.vendor = "enterasys"
+event_src.title = "small_business_solution"
+event_src.category = "Network device"
+
+id = "PT_Enterasys_SBS_syslog_change_port_state"

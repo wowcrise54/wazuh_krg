@@ -1,0 +1,63 @@
+event Procedure_To_Clear_Log:
+    key:
+        event_src.host
+    filter {
+        id == "PT_Oracle_Oracle_Database_odbc_Execute_procedure"
+        and object.name == "DBMS_AUDIT_MGMT" 
+        and find_substr(lower(object.query), "clean_audit_trail") != null
+        and filter::CheckWL_Database_Actions("Oracle_Unified_Audit_Clean", lower(object.query))
+    }
+
+rule Oracle_Unified_Audit_Clean: Procedure_To_Clear_Log
+
+    init {
+        $labels = "w_auto"
+    }
+    
+    on Procedure_To_Clear_Log {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = datafield5
+
+        $object.query = object.query
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $labels = $labels + "|CheckWL_Database_Actions"
+        
+        $alert.key = lower(object.query)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "clean"
+    $object = "log"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Indicator Removal: Clear Persistence"
+    
+    $importance = "medium"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataDeletion"
+    $incident.aggregation.timeout = 2h
+}

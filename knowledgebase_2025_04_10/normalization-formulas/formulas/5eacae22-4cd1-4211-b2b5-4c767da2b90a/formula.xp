@@ -1,0 +1,60 @@
+EVENTLOG = ''
+!COND = in_list(["1009", "1010", "1011", "1012"], $EventID)
+        and $Channel=="Microsoft-Windows-Windows Defender/Operational"
+        and $Provider["Name"]=="Microsoft-Windows-Windows Defender"
+
+subject = "account"
+object = "resource"
+
+if $EventID == "1009" then
+    action = "restore"
+    status = "success"
+    importance = "medium"
+elif $EventID == "1010" then
+    action = "restore"
+    status = "failure"
+    importance = "medium"
+elif $EventID == "1011" then
+    action = "remove"
+    status = "success"
+    importance = "info"
+elif $EventID == "1012" then
+    action = "remove"
+    status = "failure"
+    importance = "info"
+endif
+
+subject.id = $Data["SID"]
+subject.name = lower($Data["User"])
+subject.domain = lower($Data["Domain"])
+
+object.type = $Data["Threat Name"]
+$tmp_path = csv($Data["Path"],'\\','"')
+object.name = $tmp_path[length($tmp_path) - 1]  # Часть пути после последнего слеша
+object.path = strip($Data["Path"], "", object.name)
+object.property = "threat level"
+object.value = $Data["Severity Name"]
+
+datafield1 = $Data["Product Version"]      # Версия ПО
+datafield2 = $Data["Engine Version"]       # Версия модуля
+datafield3 = $Data["Signature Version"]    # Версия сигнатур
+datafield8 = $Data["FWLink"]               # Ссылка на описание данного типа угроз
+reason = $Data["Error Description"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Host security"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_1009_1010_1011_1012_Quarantine"

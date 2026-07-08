@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        % {msgid="USER-2-SYSTEM_MSG"}: Authenticaiton failed for User: {subject.account.name=STRING} - {WORD}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "ucs_manager"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_UCS_Manager_syslog_Authentication_failed"

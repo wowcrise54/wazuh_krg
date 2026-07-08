@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?} 
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} 
+        {"%%"?}{WORD+}/{NUMBER}/{msgid="MAC_FLAPPING_ALARM"}{"(l)"?}{"["NUMBER"]"?}:OID {STRING} 
+        {"The"?} mac-address has flap value . ({$kv=KEYVALUE}'
+          
+action = "alert"
+object = "device"
+status = "success"
+
+src.mac = replace($kv["MacAdd"], ".", "-")
+
+datafield1 = $kv["vlanid"]              # VLAN ID
+datafield2 = $kv["FormerIfDescName"]    # Previous interface
+datafield3 = $kv["CurrentIfDescName"]   # Current interface
+reason = "Host is flapping between ports"
+
+importance = "medium"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_MAC_flap"

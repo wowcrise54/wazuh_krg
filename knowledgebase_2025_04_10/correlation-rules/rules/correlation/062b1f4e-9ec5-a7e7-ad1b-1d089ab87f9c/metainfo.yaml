@@ -1,0 +1,15 @@
+Category:
+EventDescriptions:
+- Criteria: 'correlation_name = "Unix_Hidden_User" and object = "file_object" and object.account.name != null'
+  LocalizationId: 28ba1515-3045-d09d-0745-886c112a7a15
+- Criteria: 'correlation_name = "Unix_Hidden_User" and object.process.name = "gsettings"'
+  LocalizationId: 28f4e5be-aa52-5e63-bd41-9b3ce545e169
+- Criteria: 'correlation_name = "Unix_Hidden_User" and object.account.name != null and reason = "crudini_pattern" and object.state != "User UID changed" and subject.process.name != "usermod"'
+  LocalizationId: aaa1eacf-2dfb-e839-eb88-d5cfc80b99b0
+- Criteria: 'correlation_name = "Unix_Hidden_User" and object = "account" and (object.state = "User UID changed" or subject.process.name = "usermod")'
+  LocalizationId: e7e317b2-605f-086e-6647-32c950bb756b
+- Criteria: 'correlation_name = "Unix_Hidden_User" and object = "file_object" and object.account.name = null'
+  LocalizationId: faa00ec8-4663-3977-220b-be3c33bdaf4e
+PtkbId: 062b1f4e-9ec5-a7e7-ad1b-1d089ab87f9c
+ObjectId: PT-CR-1661
+Origin: PT

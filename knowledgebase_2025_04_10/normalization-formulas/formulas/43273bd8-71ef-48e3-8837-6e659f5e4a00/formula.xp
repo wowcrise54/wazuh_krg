@@ -1,0 +1,66 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           user_domain,
+           user_name
+           "
+
+COND = string($event_id) == "1208"
+       and (
+        $event_category == "Logon/logoff"
+        or $event_category == "Вход/выход"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Завершение работы пользователя"|"User logoff"}. {$kv=KEYVALUE("\n", ": ", "")}'
+
+    $user_csv = csv(coalesce($kv["Имя пользователя"], $kv["User name"]), "\\", "")
+    $session_id = coalesce($kv["ID сессии"], $kv["Session ID"])
+    subject.account.domain = $user_csv[0]
+    subject.account.name = $user_csv[1]
+    # расшифровываем значение Session ID/ID сессии
+    subject.account.session_id = maybe_number16(strip($session_id, "(0x0, ", ")"))
+    $session_type = coalesce($kv["Тип сессии"], $kv["Session type"])
+endsubformula
+
+submessage("TEXT", "message", $event_message)
+
+dst.hostname = event_src.hostname
+if find_substr($session_type, "Локальная") != null then
+    src.hostname = event_src.hostname
+endif
+
+msgid = $event_id
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Вход/выход" then
+    event_src.subsys = "logon/logoff"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1208_user_logoff"

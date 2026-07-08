@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{event_src.hostname=HOSTNAME|STRING} : {$st=LITERAL}
+        {protocol=WORD} ({src.ip=IPV4|src.ip=IPV6}): {NUMBER} days, {STRING} {object.process.cmdline = REST}'
+
+action = "execute"
+object = "command"
+
+if $st == "S" then
+    status = "success"
+elif $st == "F" then
+    status = "failure"
+endif
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.title = "ers_5500"
+event_src.vendor = "avaya"
+event_src.category = "Network device"
+
+id = "PT_Avaya_ERS_5500_syslog_conf_command_execution"

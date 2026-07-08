@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}
+        {logon_service="webgui-fcgi-server"|logon_service="rvpn_shell"}{"["NUMBER"]"}:{"["?}{UNTIL("]")?}
+        {subject.account.name="User"|subject.account.name="Admin"}{"(ip:"src.ip=IPV4")"?}
+        {$f1="login failed"|$f1="is logged in"}{"due to"?}{reason="wrong password"?}{"("?}
+        {$f2="attempt"|$f2="sid"|}{":"?}{$f3=UNTIL(")")?}{"."?}'
+
+subject = "account"        
+action = "login"
+object = "system"
+if $f1 == "login failed" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subject.account.name = lower(subject.account.name)
+
+logon_auth_method = "remote"
+
+if $f2 == "attempt" then
+    datafield1 = $f3  # Число попыток
+else
+    object.account.session_id = $f3
+endif
+
+if $f1 == "login failed" then
+    importance = "medium"
+else
+    importance = "info"
+endif
+
+category.high = "Access Management"
+category.generic = "Operating System"
+category.low = "Communication"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_coordinator"
+event_src.category = "Network device"
+
+id = "PT_Infotecs_VipNet_Coordinator_HW_syslog_Authentication"

@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-vpn"?}-{NUMBER}-{msgid="713120"}:
+        Group = {$tunnel_group=STRING} {"Username ="subject.account.name=UNTIL(",")?} IP = {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}, PHASE 2 COMPLETED (msgid={object.id=WORD})'
+
+subject = if subject.account.name != null then "account" else null endif
+action = "start"
+object = "session"
+status = "success"
+
+protocol = "ipsec"
+
+datafield4 = strip($tunnel_group, '', ',')  # tunnel group
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.subsys = "vpn-gateway"
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_713120_Phase_2_completed_successfully_IKE"

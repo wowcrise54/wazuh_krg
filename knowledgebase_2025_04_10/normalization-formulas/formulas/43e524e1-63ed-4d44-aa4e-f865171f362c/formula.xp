@@ -1,0 +1,37 @@
+TABULAR = '{$temp_time=TIME_STAMP},
+           {object.account.name=USER_NAME},
+           {src.hostname=COMPUTER_NAME},
+           {object.name=NAME},
+           ACTION'
+
+COND = $ACTION == 0 or $ACTION == 1
+
+if $ACTION == 0 then
+    action = "allow"
+else
+    action = "deny"
+endif
+object = "application"
+status = "success"
+
+object.account.name = lower(object.account.name)
+
+if length($VERSION) > 0 then
+    object.version = $VERSION
+endif
+object.name = lower(object.name)
+
+src.hostname = lower(src.hostname)
+
+# Замена символа . на : во временной зоне
+if substr($temp_time, 22, 1) == "." then
+    $temp_time = join([substr($temp_time, 0, 22), substr($temp_time, 23, 5)], ":")
+endif
+time = $temp_time
+importance = "medium"
+
+event_src.vendor = "entensys"
+event_src.title = "usergate_proxy_and_firewall"
+event_src.category = "Proxy server"
+
+id = "PT_Entensys_UserGate_Proxy_and_Firewall_odbc_application_firewall"

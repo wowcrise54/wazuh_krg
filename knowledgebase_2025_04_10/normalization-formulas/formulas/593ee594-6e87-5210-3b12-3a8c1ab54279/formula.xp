@@ -1,0 +1,42 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORD}.log: [{$time=UNTIL(']')} {WORD} [{UNTIL(']')} - {numfield1=NUMBER} successful logins for user {subject.account.name=UNTIL(' with id=')} {subject.account.id=UNTIL(' with auth module ')} \"{logon_service=UNTIL('\"')} from client '{src.ip=IPV4|src.ip=IPV6|'<unknown IP address>'}' in the last {$minutes=NUMBER} min {$seconds=NUMBER} sec"
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+if number(subject.account.id) == -42 then
+    subject.account.privileges = "super_user"
+elif number(subject.account.id) == -1000 then
+    subject.account.privileges = "guest_user"
+endif
+
+time = replace($time, ".", ",")
+importance = "medium"
+duration = $minutes * 60 + $seconds
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_Auth_Login_Stats"

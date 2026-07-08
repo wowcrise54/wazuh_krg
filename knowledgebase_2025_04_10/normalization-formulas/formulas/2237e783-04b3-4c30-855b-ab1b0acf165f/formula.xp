@@ -1,0 +1,33 @@
+!TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"pguard"}: {NUMBER} ({WORD}:{WORD}) [INFO] : {object.name=WORDDASH} Started {$path=STRING} 
+        pid {object.process.id=NUMBER}'
+
+action = "start"
+object = "service"
+status = "success"
+
+$path = strip($path, "", ",")
+$path_csv = csv($path, "/", "'")
+object.process.fullpath = $path
+object.process.name = $path_csv[length($path_csv) - 1]
+if length($path_csv) > 1 then
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+endif
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "infowatch"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "traffic_monitor"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_6_syslog_Service_started"

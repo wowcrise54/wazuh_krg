@@ -1,0 +1,25 @@
+query CheckLDAPConnectionNumber($conn_number, $dst_host) from FreeIPA_LDAP_Connections {
+    conn_number == $conn_number
+    and dst_host == $dst_host
+}
+
+event IPA_LDAP_Conn:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "freeipa"
+        and msgid == "connection"
+        and src.ip != null
+        and dst.ip != null
+        and not exec_query("CheckLDAPConnectionNumber", [string(numfield1), lower(coalesce(dst.host, event_src.host))])
+    }
+
+enrichment FreeIPA_LDAP_Connections_to_Table_List
+    enrich IPA_LDAP_Conn:
+        insert_into FreeIPA_LDAP_Connections {
+            src_ip = src.ip
+            src_host = lower(src.host)
+            dst_ip = dst.ip
+            dst_host = lower(event_src.host)
+            conn_number = string(numfield1)
+        }
+

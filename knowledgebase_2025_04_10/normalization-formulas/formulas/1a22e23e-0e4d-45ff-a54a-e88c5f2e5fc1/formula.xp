@@ -1,0 +1,36 @@
+!TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+         CEF:{NUMBER}|Cyber-Ark|Vault|10.{NUMBER}.{NUMBER}|{msgid="22"}|CPM Verify Password|
+        {NUMBER}|{$kv=KEYVALUE(" ", "=")}'
+
+subject = "application"
+action = "check"
+object = "account"
+status = "success"
+
+subject.name = $kv["suser"]
+object.name = $kv["duser"]
+
+if maybe_ipv4($kv["shost"]) != null or maybe_ipv6($kv["shost"]) != null then
+    if $kv["shost"] != "0.0.0.0" and $kv["shost"] != "::" then
+        src.ip = $kv["shost"]
+    endif
+else
+    src.hostname = $kv["shost"]
+endif
+
+datafield2 = $kv["fname"]       # Расположение базы с паролем для учетной записи пользователя
+
+importance = "info"
+
+event_src.vendor = "cyberark"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "enterprise_password_vault"
+event_src.category = "Other"
+
+id = "PT_CyberArk_Enterprise_Password_Vault_syslog_CEF_22_CPM_verify_password"

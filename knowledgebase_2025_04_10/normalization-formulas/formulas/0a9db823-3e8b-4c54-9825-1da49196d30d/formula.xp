@@ -1,0 +1,18 @@
+TEXT = '{WORD} {time=DATETIME} ESTABLISHED {object.id=STRING}'
+
+action = "open"
+object = "connection"
+status = "success"
+
+msgid = "ESTABLISHED"
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "sap"
+event_src.title = "sap_router"
+event_src.category = "Firewall"
+
+id = "PT_SAP_SAP_ROUTER_filemonitor_Connection_established"

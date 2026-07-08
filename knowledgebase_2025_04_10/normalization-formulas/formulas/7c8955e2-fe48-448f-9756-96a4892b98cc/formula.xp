@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?} {STRING} CEF:0|FireEye|{WORDDASH}|{NUMBER}{"."?}{NUMBER?}{"."?}{NUMBER?}
+        {"."?}{NUMBER?}|MO|{msgid="malware-object"}|{object.value=NUMBER}|rt={time=DATETIME}
+        {"cn2Label=sid"?} {"cn2="?}{object.id=NUMBER?} fileHash={object.hash=STRING*}
+        filePath={object.path=STRING*} act=notified dvchost={$Computer=HOSTNAME}
+        cs4Label=link cs4={datafield4=STRING*} duser={datafield2=STRING*} cn1Label=vlan
+        cn1={NUMBER} externalId={NUMBER} dvc={event_src.ip=IPV4} suser={datafield1=STRING*}
+        msg={datafield3=STRING*} cs1Label=sname cs1={object.name=STRING*} devicePayloadId={REST}'
+
+action = "detect"
+object = "malware"
+status = "success"
+
+object.property = "threat level"
+
+# datafield1 - source UserName
+# datafield2 - destination UserName
+# datafield3 - msg
+# datafield4 - link
+
+if number(object.value) <= 3 then
+    importance = "low"
+elif number(object.value) > 3 and number(object.value) <= 6 then
+    importance = "medium"
+elif number(object.value) > 6 then
+    importance = "high"
+endif
+
+event_src.vendor = "fireeye"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ex"
+event_src.category = "Network security"
+
+id = "PT_FireEye_EX_CEF_malware_object_2"

@@ -1,0 +1,254 @@
+query Get_host_info($fqdn, $hostname, $ip) from IOCs_Value {
+    (
+        value == $fqdn
+        and category == "fqdn"
+    )
+    or (
+        value == $hostname
+        and category == "hostname"
+    ) 
+    or (
+        value == $ip
+        and category == "ip"
+    )
+}
+    qhandler {
+        $value = value
+        $category = category
+    }    
+
+query Get_host_info_regex($regex_result_1, $regex_result_2) from IOCs_Value {
+    (
+        value == $regex_result_1
+        and category == "fqdn"
+    )
+    or (
+        value == $regex_result_2
+        and category == "ip"
+    ) 
+}
+    qhandler {
+        $value = value
+    } 
+
+query Get_host_info_dns($fqdn) from IOCs_Value {
+    value == $fqdn
+    and category == "fqdn"
+}
+    qhandler {
+        $value = value
+    } 
+
+event enrich_by_src_info:
+    filter {
+        filter::NotFromCorrelator()
+        and src.host != null
+        and find_substr(alert.ioc_provider,"ioc:src") == null
+    }
+    
+event enrich_by_dst_info:
+    filter {
+        filter::NotFromCorrelator()
+        and dst.host != null
+        and find_substr(alert.ioc_provider,"ioc:dst") == null
+    }
+
+event enrich_by_external_src_info:
+    filter {
+        filter::NotFromCorrelator()
+        and external_src.host != null
+        and find_substr(alert.ioc_provider,"ioc:external_src") == null
+    }
+    
+event enrich_by_external_dst_info:
+    filter {
+        filter::NotFromCorrelator()
+        and external_dst.host != null
+        and find_substr(alert.ioc_provider,"ioc:external_dst") == null
+    }
+    
+event enrich_by_cmdline_info:
+    filter {
+        filter::NotFromCorrelator()
+        and object.process.cmdline != null
+        and find_substr(alert.ioc_provider,"ioc:commandline") == null
+    }
+
+event enrich_by_dns_query_info:
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "22"
+        and event_src.title == "sysmon"
+        and object.query != null
+        and find_substr(alert.ioc_provider,"ioc:dns") == null
+    }
+    
+event enrich_by_event_src_info:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.host != null
+        and find_substr(alert.ioc_provider,"ioc:event_src") == null
+    }
+    
+enrichment IOC_Host_in_Normalization
+ 
+enrich enrich_by_src_info:
+    enrich_fields {
+       $ioc_info = exec_query("Get_host_info", [src.fqdn, src.hostname, src.ip])
+       
+       if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:src"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:src"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }
+
+enrich enrich_by_dst_info:
+    enrich_fields {
+        $ioc_info = exec_query("Get_host_info", [dst.fqdn, dst.hostname, dst.ip])
+       
+       if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:dst"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:dst"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }
+
+enrich enrich_by_external_src_info:
+    enrich_fields {
+       $ioc_info = exec_query("Get_host_info", [external_src.fqdn, external_src.hostname, external_src.ip])
+       
+       if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:external_src"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:external_src"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }
+
+enrich enrich_by_external_dst_info:
+    enrich_fields {
+        $ioc_info = exec_query("Get_host_info", [external_dst.fqdn, external_dst.hostname, external_dst.ip])
+       
+       if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:external_dst"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:external_dst"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }
+
+enrich enrich_by_cmdline_info:
+    enrich_fields {
+        $ioc_info = exec_query("Get_host_info_regex", [regex(lower(object.process.cmdline), "(https?:\/\/|@)([a-z0-9-\.]+)(\/|:|\\b)", 2), regex(lower(object.process.cmdline),"\\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b",0)])
+       
+       if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:commandline"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:commandline"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }    
+
+enrich enrich_by_event_src_info:
+    enrich_fields {
+        $ioc_info = exec_query("Get_host_info", [event_src.fqdn, event_src.hostname, event_src.ip])
+       
+       if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:event_src"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:event_src"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }
+
+enrich enrich_by_dns_query_info:
+    enrich_fields {
+        $ioc_info = exec_query("Get_host_info_dns", [object.query])
+       
+       if $ioc_info["$value"] != null then
+           if alert.ioc_value != null then
+                alert.ioc_value = join([alert.ioc_value, $ioc_info["$value"]], " | ")
+            else
+                alert.ioc_value = $ioc_info["$value"]
+            endif
+           if alert.ioc_provider != null then
+                alert.ioc_provider = join([alert.ioc_provider, "ioc:dns"], " | ")
+            else
+                alert.ioc_provider = "local TL IOCs_Value | ioc:dns"
+            endif
+            importance = switch importance
+                case "info" "low"
+                case "low" "medium"
+                case "medium" "high"
+            endswitch
+        endif
+    }

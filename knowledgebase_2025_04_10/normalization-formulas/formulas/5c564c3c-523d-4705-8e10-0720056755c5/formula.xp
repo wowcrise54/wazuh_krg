@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        %{"%"?}10{$tmp_subsys="SHELL"}/{NUMBER}/{msgid="SHELL_CMD"}{"("WORD")"?}:
+        -Line={WORD}-IPAddr={src.ip=IPV4|src.ip=IPV6}-User={subject.account.name=WORDDASH};
+        Command is {object.process.cmdline=REST}'
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+object.account.name = subject.account.name
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.title = "vsr"
+event_src.subsys = lower($tmp_subsys)
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.category = "Network device"
+
+id = "PT_Hewlett_Packard_Enterprise_VSR_syslog_Shell_command"

@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} 
+        {"%%"?}{WORD+}/{NUMBER}/{msgid="CPU_USAGE_RESUME"}{"(l)"?}{"["NUMBER"]"?}:CPU utilization recovered to the normal range.'
+
+action = "info"
+object = "device"
+status = "success"
+
+importance = "medium"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_CPU_utilization_recovered"

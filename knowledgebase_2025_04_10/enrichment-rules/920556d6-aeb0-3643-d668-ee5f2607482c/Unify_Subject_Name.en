@@ -1,0 +1,55 @@
+event EnrichmentEvent:
+filter {
+    filter::NotFromCorrelator()
+    and not in_list(["unix_like", "windows"], lower(event_src.title))
+    and in_list(["login", "assign"], action)
+    and (
+        find_substr(lower(subject.account.name), "@") != null
+        or find_substr(lower(subject.account.name), "\\") != null
+        or find_substr(lower(object.account.name), "@") != null
+        or find_substr(lower(object.account.name), "\\") != null
+        or (
+            (
+                subject.name != null
+                or object.account.name != null
+            )
+            and subject.account.name == null
+        )
+    )
+    
+}
+
+enrichment Unify_Subject_Name
+
+    enrich EnrichmentEvent:
+        enrich_fields {
+            if subject.account.name == null and (subject.name != null or object.account.name != null) then
+                subject.account.name = coalesce(subject.name, object.account.name)  # coalesce для OpenVPN_syslog_primary_virtual_ip 
+                labels = labels + "|subj_acc_name_enriched"
+                if subject.domain != null or object.account.domain != null then
+                    subject.account.domain = coalesce(subject.domain, object.account.domain)
+                    labels = labels + "|subj_acc_domain_enriched"
+                endif
+            endif
+            
+            if  subject.account.id == null and (subject.id != null or object.account.id != null) then
+                subject.account.id = coalesce(subject.id, object.account.id)
+            endif
+
+
+            if find_substr(lower(subject.account.name), "@") != null then
+                subject.account.domain = regex(lower(subject.account.name),"@(.*)", 1)
+                subject.account.name = regex(lower(subject.account.name),"(.*)@", 1)
+            elif find_substr(lower(subject.account.name), "\\") != null then
+                subject.account.domain = regex(lower(subject.account.name),"(.*)\\\\", 1)
+                subject.account.name = regex(lower(subject.account.name),"\\\\(.*)", 1)
+            endif
+
+            if find_substr(lower(object.account.name), "@") != null then
+                object.account.domain = regex(lower(object.account.name),"@(.*)", 1)
+                object.account.name = regex(lower(object.account.name),"(.*)@", 1)
+            elif find_substr(lower(object.account.name), "\\") != null then
+                object.account.domain = regex(lower(object.account.name),"(.*)\\\\", 1)
+                object.account.name = regex(lower(object.account.name),"\\\\(.*)", 1)
+            endif            
+        }

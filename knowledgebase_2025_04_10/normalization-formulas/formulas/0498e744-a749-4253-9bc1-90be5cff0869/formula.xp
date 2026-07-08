@@ -1,0 +1,73 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "LOGON" and $logon_mode == 30
+
+subject = "account"
+action = "unlock"
+object = "computer"
+
+if $result < 0 then     # error
+    status = "failure"
+    
+    importance = "high"
+elif $result > 0 then   # warning
+    status = "success"
+    
+    importance = "low"
+else                    # OK
+    status = "success"
+    
+    importance = "info"
+endif
+
+subformula "account_name"
+    TEXT = "{subject.account.domain=UNTIL('\\\\')}{subject.account.name=REST}"
+endsubformula
+
+subformula "account_name"
+    TEXT = "{subject.account.name=WORDDASH}"
+endsubformula
+
+submessage("TEXT", "account_name", $user_name)
+
+if $computer_name != "" then
+    src.hostname = $computer_name
+endif
+
+dst.hostname = $Computer
+
+if $wrong_user_pw != "" then
+    datafield2 = $wrong_user_pw  # Wrong password
+endif
+
+$reason_raw = switch $result
+    case -1073741718 "Указан неверный пароль"
+    case -1073741715 "Вход в систему запрещен"
+    case -1073741566 "Нарушена целостность контролируемых файлов"
+    case -536870816 "Предъявлен неверный аппаратный идентификатор"
+    case -536870624 "Мандатный уровень указан неверно"
+    case -536870258 "Превышено число максимально разрешенных сеансов доступа"
+    case -536870139 "Достигнуто допустимое количество ошибок ввода пароля. Учетная запись заблокирована"
+    case 0 "ОК"
+    case 1610612737 "Результат неизвестен"
+    case 1610612994 "Нарушена целостность контролируемых файлов, доступ учетной записи разрешен"
+endswitch
+reason = coalesce($reason_raw, "Неизвестная причина")
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "confident"
+if find_substr($Computer, '.') != null then
+    event_src.fqdn = lower($Computer)
+    event_src.hostname = lower(substr($Computer, 0, find_substr($Computer, '.')))
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_logon_workstation_unblock"

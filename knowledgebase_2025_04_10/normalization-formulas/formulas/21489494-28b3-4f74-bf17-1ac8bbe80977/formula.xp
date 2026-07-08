@@ -1,0 +1,176 @@
+TEXT = '{"<"NUMBER">"?}  {$sys_time=STRING+}  {event_src.hostname=HOSTNAME} {NUMBER"-"?}PPE-{NUMBER} :
+        {"default"?} {event_src.subsys="DNS"} {msgid="DNS_QUERY"|msgid="DNS_ERROR"|msgid="DNS_RESPONSE"} {NUMBER+} :  
+        {$protocol4=WORD}:{$client_ip=IPV4|$client_ip=IPV6}#{$client_port=NUMBER}:
+        {$citrix_ip=IPV4|$citrix_ip=IPV6}#{$citrix_port=NUMBER}/
+        {object.id=NUMBER}/{$operation_code=WORD}/({$header_flags=UNTIL(")")}/{$response_code=WORD}/
+        {$question_section_count=NUMBER}/{$answer_section_count=NUMBER}/
+        {$auth_section_count=NUMBER}/{$additional_section_count=NUMBER}#
+        {object.value=HOSTNAME|object.value=IPV4|object.value=IPV6}{"."?}/{NUMBER}#{$sections=REST}'
+
+subject = "host"
+if msgid == "DNS_QUERY" then
+    action = "receive"
+    
+    src.ip = $client_ip
+    src.port = $client_port
+    
+    dst.ip = $citrix_ip
+    dst.port = $citrix_port
+else
+    if msgid == "DNS_ERROR" then
+        action = "info"
+    else
+        action = "send"
+    endif
+    
+    src.ip = $citrix_ip
+    src.port = $citrix_port
+    
+    dst.ip = $client_ip
+    dst.port = $client_port
+endif
+
+object = "request"
+if msgid == "DNS_ERROR" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+object.type = "unassigned values"    
+switch $operation_code
+    case "Q"
+        object.type = "query"
+    case "I"
+        object.type = "inverse query"
+    case "S"
+        object.type = "status"
+    case "X0"
+        object.type = "unassigned"
+    case "N"
+        object.type = "notify"
+    case "U"
+        object.type = "update"
+endswitch
+    
+object.state = "unassigned"
+switch $response_code
+    case "NO"
+        object.state = "no error"
+    case "F"
+        object.state = "format error"
+    case "S"
+        object.state = "server failure"
+    case "NX"
+        object.state = "non-existent domain"
+    case "NI"
+        object.state = "not implemented"
+    case "R"
+        object.state = "query refused"
+    case "YX"
+        object.state = "Name Exists when it must not"
+    case "YXR"
+        object.state = "RR Set Exists when it must not"
+    case "NXR"
+        object.state = "RR Set that must exist does not"
+    case "NAS"
+        object.state = "Server Not Authoritative for zone"
+    case "NA"
+        object.state = "Not Authorized"
+    case "NZ"
+        object.state = "Name not contained in zone"
+endswitch
+
+object.property = "IP address or hostname in request"    
+    
+switch $protocol4
+    case "U"
+        protocol = "UDP"
+    case "T"
+        protocol = "TCP"
+endswitch
+
+# header flags parsing to datafield1
+$header_flags = replace($header_flags,'|',',')
+$header_flags = replace($header_flags,'recursion desired','RD')
+$header_flags = replace($header_flags,'truncated','TC')
+$header_flags = replace($header_flags,'authoritative response','AA')
+$header_flags = replace($header_flags,'check disabled','CD')
+$header_flags = replace($header_flags,'authenticated data','AD')
+$header_flags = replace($header_flags,'unassigned','Z')
+$header_flags = replace($header_flags,'recursion available','RA')
+$header_flags = replace($header_flags,'response','R')
+datafield1 = $header_flags
+
+$sections_csv = csv($sections,"##",'$')
+$last_sect_csv = csv($sections_csv[length($sections_csv)-1],"/",'$')
+if not in_list(['A', 'AAAA', 'SOA', 'NS', 'MX', 'CNAME', 'SRV', 'TXT', 'NAPTR', 'DNSKEY', 'PTR'],$last_sect_csv[0]) then
+    reason = $sections_csv[length($sections_csv)-1]
+    $sections = strip($sections,null,reason)
+    $sections = strip($sections,null,"##")
+endif
+
+# OPT section
+# format: OPT/<edns version>/UDP max payload size/DO
+# or format: OPT/<EDNS version>/<UDP payload size>/<“DO”or empty based on whether DNSSEC OK bit is set or not>/
+# <value of RDLEN>/ECS/<Q/R>/<option length>/<Family>/<Source Prefix-Length>/<Scope Prefix-Length>/<ECS Address>
+if find_substr($sections,"OPT") != null then
+    $opt = substr($sections,find_substr($sections,"OPT"),(length($sections)-find_substr($sections,"OPT")))
+    datafield5 = $opt                          
+    $sections = strip($sections,null,$opt)
+    $sections = strip($sections,null,"##")
+endif
+
+# Additional section
+# "##" - between different answers in section; 
+# "#" - between values of the same type in answer;
+# format: <domainname>/<record type>/ <record ttl> / <resource record data>#<resource record data>#......##
+if find_substr($sections,"ADD") != null then
+    $add = substr($sections,find_substr($sections,"ADD"),(length($sections)-find_substr($sections,"ADD")))
+    datafield4 = strip($add, "ADD#", null)      
+    $sections = strip($sections,null,$add)
+    $sections = strip($sections,null,"##")
+endif
+
+# Authority section
+# "##" - between different answers in section; 
+# "#" - between values of the same type in answer;
+# format: <domainname>/<record type>/ <record ttl> / <resource record data>#<resource record data>#......##
+if find_substr($sections,"AUTH") != null then
+    $auth = substr($sections,find_substr($sections,"AUTH"),(length($sections)-find_substr($sections,"AUTH"))) 
+    datafield3 = strip($auth, "AUTH#", null)
+    $sections = strip($sections,null,$auth)
+    $sections = strip($sections,null,"##")
+endif
+
+# Answer section
+# format: <record type>/<ttl>/..
+if find_substr($sections,"ANS") != null then
+    $ans = substr($sections,find_substr($sections,"ANS"),(length($sections)-find_substr($sections,"ANS")))
+    datafield2 = strip($ans, "ANS#", null)
+    $sections = strip($sections,null,$ans)
+    $sections = strip($sections,null,"##")
+endif
+    
+# Converting time to mm/dd/yyyy:hh:mm:ss format
+if find_substr($sys_time, "/") == 4 then
+    $yyyy = substr($sys_time, 0, 4)
+    $mm_dd = substr($sys_time, 5, 5)
+    $sys_time = $mm_dd + "/" + $yyyy + substr($sys_time, 10, 20)
+endif
+
+# Adding/removing a space in $sys_time depending on the time zone format
+if find_substr($sys_time, " ") != null and (find_substr($sys_time, "+") != null or find_substr($sys_time, "-") != null) then
+    $sys_time = substr($sys_time, 0, 19) + substr($sys_time, 20, 10)
+elif find_substr($sys_time, " ") == null and find_substr($sys_time, "+") == null and find_substr($sys_time, "-") == null then
+    $sys_time = substr($sys_time, 0, 19) + " " + substr($sys_time, 19, 10)
+endif
+
+time = strip($sys_time, "", " ")
+importance = "low"
+
+event_src.title = "netscaler"
+event_src.vendor = "citrix"
+event_src.category = "Terminal services"
+
+id = "PT_Citrix_NetScaler_syslog_dns_request"

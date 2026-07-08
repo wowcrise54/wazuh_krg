@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} pfsp: {protocol="BGP"}
+        {$tmp_state="down"|$tmp_state="restored"} for router
+        {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME|} session {datafield1=WORD}, leader
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {"since"|"at"} {DATETIME}
+        {REST}'
+
+object = "session"
+status = "success"
+
+if $tmp_state == "down" then
+      action = "stop"
+      importance = "high"
+elif $tmp_state == "restored" then
+      action = "start"
+      importance = "low"
+endif
+
+# datafield1 - ID
+
+event_src.title = "peakflow_sp"
+event_src.vendor = "arbor_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network security"
+
+id = "PT_Arbor_Networks_Peakflow_SP_syslog_bgp_down_restored"

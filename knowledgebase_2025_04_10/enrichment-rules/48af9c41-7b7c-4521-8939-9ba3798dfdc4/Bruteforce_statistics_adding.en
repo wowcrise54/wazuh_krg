@@ -1,0 +1,121 @@
+query GetCount($name, $domain, $id, $src, $dst, $vendor, $title) from Bruteforce_Hosts_And_Entities {
+    event_src_vendor == $vendor
+    and event_src_title == $title
+    and src_host == $src
+    and dst_host == $dst
+    and user_name == $name
+    and user_domain == $domain
+    and user_id == $id
+}
+qhandler {
+    $count = count
+    $first_event_time = first_event_time
+}
+
+query GetCountByUser($name, $domain, $id, $vendor, $title) from Bruteforce_Hosts_And_Entities {
+    event_src_vendor == $vendor
+    and event_src_title == $title
+    and user_name == $name
+    and user_domain == $domain
+    and user_id == $id
+}
+qhandler {
+    $count_by_user = sum(count)
+}
+
+query GetCountBySrcWithVendor($src, $vendor, $title) from Bruteforce_Hosts_And_Entities {
+    event_src_vendor == $vendor
+    and event_src_title == $title
+    and src_host == $src
+}
+qhandler {
+    $count_by_src_with_vendor = sum(count)
+}
+
+query GetCountBySrcWithoutVendor($src) from Bruteforce_Hosts_And_Entities {
+    src_host == $src
+}
+qhandler {
+    $count_by_src_without_vendor = sum(count)
+}
+
+query GetCountByDst($dst, $vendor, $title) from Bruteforce_Hosts_And_Entities {
+    event_src_vendor == $vendor
+    and event_src_title == $title
+    and dst_host == $dst
+}
+qhandler {
+    $count_by_dst = sum(count)
+}
+
+event Correlated_Bruteforce:
+    filter {
+        (
+            match(correlation_name, "*Password_Brute")
+            or correlation_name == "Windows_Ticket_Brute"
+        )
+        and correlation_type != "subrule"
+    }
+
+enrichment Bruteforce_statistics_adding
+    
+    enrich Correlated_Bruteforce:
+        enrich_fields {
+            $correlated_count = coalesce(count.subevents, 1)
+
+            $event_src_vendor = lower(coalesce(event_src.vendor, "-"))
+            $event_src_title = lower(coalesce(event_src.title, "-"))
+
+            $user_name = lower(coalesce(subject.account.name, subject.name, "-"))
+            $user_domain = lower(coalesce(subject.account.domain, subject.domain, "-"))
+            $user_id = lower(coalesce(subject.account.id, subject.id, "-"))
+
+            if $user_name != "-" or $user_id != "-" then
+                $count_by_user = $correlated_count + exec_query("GetCountByUser", [$user_name, $user_domain, $user_id, $event_src_vendor, $event_src_title])["$count_by_user"]
+            else
+                $count_by_user = 0
+            endif
+
+            if src.host == null then
+                $src = "-"
+                $count_by_src_with_vendor = 0
+                $count_by_src_without_vendor = 0
+            else
+                $src = lower(src.host)
+                $count_by_src_with_vendor = $correlated_count + exec_query("GetCountBySrcWithVendor", [$src, $event_src_vendor, $event_src_title])["$count_by_src_with_vendor"]
+                $count_by_src_without_vendor = $correlated_count + exec_query("GetCountBySrcWithoutVendor", [$src])["$count_by_src_without_vendor"]
+            endif
+
+            if dst.host == null then
+                $dst = "-"
+                $count_by_dst = 0
+            else
+                $dst = lower(dst.host)
+                $count_by_dst = $correlated_count + exec_query("GetCountByDst", [$dst, $event_src_vendor, $event_src_title])["$count_by_dst"]
+            endif
+
+            $result = exec_query("GetCount", [$user_name, $user_domain, $user_id, $src, $dst, $event_src_vendor, $event_src_title])
+            $count_total = $correlated_count + $result["$count"]
+            $start_time = epoch_to_datetime($result["$first_event_time"])
+            if $start_time == null then
+                $start_time = time
+            endif
+
+            datafield10 = "[statistics] same events (by user with vendor): " + string($count_by_user)
+            datafield11 = "[statistics] same events (by src with vendor): " + string($count_by_src_with_vendor)
+            datafield12 = "[statistics] same events (by src without vendor): " + string($count_by_src_without_vendor)
+            datafield13 = "[statistics] same events (by dst with vendor): " + string($count_by_dst)
+            datafield14 = "[statistics] total same events (by vendor): " + string($count_total)
+        }
+
+    insert_into Bruteforce_Hosts_And_Entities {
+        column::first_event_time = datetime_to_epoch($start_time)
+        column::user_name = $user_name
+        column::user_domain = $user_domain
+        column::user_id = $user_id
+        column::src_host = $src
+        column::dst_host = $dst
+        column::event_src_vendor = $event_src_vendor
+        column::event_src_title = $event_src_title
+        column::count = $count_total
+    }

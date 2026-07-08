@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?} 
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?} {$tmp_subsys=WORD}/{NUMBER}/{msgid="COMMUNITY_ERR"}{"(l)"?}{"["NUMBER"]"?}:
+        Failed to login through {protocol.layer7="SNMP"}, because {reason="the community was incorrect"}.
+        (Ip={src.ip=IPV4|src.ip=IPV6}, Times={NUMBER})'
+
+action = "login"
+object = "system"
+status = "failure"
+
+dst.hostname = event_src.hostname
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Incorrect_community"

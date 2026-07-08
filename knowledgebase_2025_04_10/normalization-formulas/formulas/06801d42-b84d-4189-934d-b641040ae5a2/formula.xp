@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-session"?}-{NUMBER}-{msgid="419002"}:
+        Duplicate TCP SYN from {interface=UNTIL(":")} {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}/{src.port=NUMBER}
+        to {datafield1=UNTIL(":")} {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}/{dst.port=NUMBER}
+        with different initial sequence number'
+
+action = "detect"
+object = "alert"
+status = "success"
+
+# datafield1 - интерфейс на стороне dst
+
+reason = "Duplicate TCP SYN with different initial sequence number"
+
+importance = "medium"
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Network Attack"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_419002_Received_duplicate_TCP_SYN"

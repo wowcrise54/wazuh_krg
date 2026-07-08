@@ -1,0 +1,58 @@
+!TABULAR = '_1,
+            _2,
+            _3,
+            {reason = _5},
+            {$path_raw = _6},
+            _8,
+            {$process_raw = _10},
+            _11,
+            _14'
+
+!COND = $_11 == 10 and $_1 == 8
+
+subject = "account"
+action = "rename"
+object = "file_object"
+status = "success"
+
+$csv = csv($_8, "\\", "'")
+subject.account.domain = $csv[0]
+subject.account.name = $csv[1]
+
+$csv_path = csv($process_raw, "\\", "'")
+subject.process.name = $csv_path[length($csv_path) - 1]
+subject.process.path = strip($process_raw, "", subject.process.name)
+subject.process.fullpath = $process_raw
+
+$csv_path = csv($path_raw, "\\","'")
+object.name = $csv_path[length($csv_path) - 1]
+object.path = strip($path_raw, "", object.name)
+object.fullpath = $path_raw
+
+object.property = "fullpath"
+object.new_value = $_7
+
+time = win_ticks_to_datetime($_3)
+msgid = $_11
+importance = "low"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "smart_line"
+event_src.title = "devicelock"
+if maybe_ipv4($_2) != null or maybe_ipv6($_2) != null then
+    event_src.ip = $_2
+else
+    $dot_pos = find_substr($_2, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($_2)
+        event_src.hostname = lower(substr($_2, 0, $dot_pos))
+    else
+        event_src.hostname = lower($_2)
+    endif
+endif
+event_src.category = "Host security"
+
+id = "PT_Smart_Line_DeviceLock_odbc_Rename_file"

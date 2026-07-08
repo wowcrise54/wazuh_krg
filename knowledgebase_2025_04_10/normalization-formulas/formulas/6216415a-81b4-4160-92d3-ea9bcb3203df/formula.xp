@@ -1,0 +1,37 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1120"
+       and $event_category == "Контроль конфигурации"
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+       )
+
+action = "check"
+object = "resource"
+status = "success"
+
+object.type = "hardware configuration"
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Контроль конфигурации" then
+    event_src.subsys = "configuration control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1120_hardware_control_finished"

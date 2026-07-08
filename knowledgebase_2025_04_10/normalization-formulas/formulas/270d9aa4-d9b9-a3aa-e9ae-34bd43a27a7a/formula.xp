@@ -1,0 +1,57 @@
+# { "atype" : "revokeRolesFromUser", "ts" : { "$date" : "2023-10-13T13:13:36.031+03:00" }, "uuid" : { "$binary" : "qMwt1cxWTzKVElkEhYfZ9g==", "$type" : "04" }, "local" : { "ip" : "10.125.138.17", "port" : 27017 }, "remote" : { "ip" : "10.125.138.16", "port" : 57956 }, "users" : [ { "user" : "testroot999", "db" : "admin" } ], "roles" : [ { "role" : "root", "db" : "admin" } ], "param" : { "user" : "mongo-admin3", "db" : "test", "roles" : [ { "role" : "userAdminAnyDatabase", "db" : "admin" } ] }, "result" : 0 }
+# { "atype" : "authCheck", "ts" : { "$date" : "2023-10-17T14:02:09.636+03:00" }, "uuid" : { "$binary" : "yDzvG/MKT9Cu79907Wg4GQ==", "$type" : "04" }, "local" : { "ip" : "10.125.138.21", "port" : 27017 }, "remote" : { "ip" : "10.125.138.21", "port" : 38366 }, "users" : [ { "user" : "mongo-admin55", "db" : "admin" } ], "roles" : [ { "role" : "readWriteAnyDatabase", "db" : "admin" } ], "param" : { "command" : "revokeRolesFromUser", "ns" : "admin.mongo-admin3", "args" : { "revokeRolesFromUser" : "mongo-admin3", "roles" : [ { "role" : "userAdminAnyDatabase", "db" : "admin" } ], "lsid" : { "id" : { "$binary" : "iQVDboVXRX665iP6O54+Ig==", "$type" : "04" } }, "$db" : "admin" } }, "result" : 13 }
+
+JSON = ''
+COND = $ts["$date"] != null and ( ($atype == "revokeRolesFromUser" and $param["user"] != null) or ($atype == "authCheck" and $param["command"] == "revokeRolesFromUser") )
+
+subject.account.id = $users[0]["user"]
+subject.account.name = $users[0]["user"]
+subject.account.privileges = join(remove([$roles[0]["db"] + ":" + $roles[0]["role"], $roles[1]["db"] + ":" + $roles[1]["role"], $roles[2]["db"] + ":" + $roles[2]["role"], $roles[3]["db"] + ":" + $roles[3]["role"], $roles[4]["db"] + ":" + $roles[4]["role"], $roles[5]["db"] + ":" + $roles[5]["role"], $roles[6]["db"] + ":" + $roles[6]["role"], $roles[7]["db"] + ":" + $roles[7]["role"], $roles[8]["db"] + ":" + $roles[8]["role"], $roles[9]["db"] + ":" + $roles[9]["role"]], ":"), "|")
+
+if $atype == "revokeRolesFromUser" then
+    status = "success"
+    object.account.id = $param["user"]
+    object.account.privileges = join(remove([$param['roles'][0]['role'], $param['roles'][1]['role'], $param['roles'][2]['role'], $param['roles'][3]['role'], $param['roles'][4]['role'], $param['roles'][5]['role'], $param['roles'][6]['role'], $param['roles'][7]['role'], $param['roles'][8]['role'], $param['roles'][9]['role']], null), "|")
+    datafield1 = $users[0]["db"]
+    object.storage.name = join(remove([$param['roles'][0]['db'], $param['roles'][1]['db'], $param['roles'][2]['db'], $param['roles'][3]['db'], $param['roles'][4]['db'], $param['roles'][5]['db'], $param['roles'][6]['db'], $param['roles'][7]['db'], $param['roles'][8]['db'], $param['roles'][9]['db']], null), "|")
+    msgid = $atype
+else
+    status = "failure"
+    object.account.id = $param["ns"]
+    object.account.privileges = join(remove([$param['args']['roles'][0]['role'], $param['args']['roles'][1]['role'], $param['args']['roles'][2]['role'], $param['args']['roles'][3]['role'], $param['args']['roles'][4]['role'], $param['args']['roles'][5]['role'], $param['args']['roles'][6]['role'], $param['args']['roles'][7]['role'], $param['args']['roles'][8]['role'], $param['args']['roles'][9]['role']], null), "|")
+    datafield1 = $users[0]["db"]
+    object.storage.name = join(remove([$param['args']['roles'][0]['db'], $param['args']['roles'][1]['db'], $param['args']['roles'][2]['db'], $param['args']['roles'][3]['db'], $param['args']['roles'][4]['db'], $param['args']['roles'][5]['db'], $param['args']['roles'][6]['db'], $param['args']['roles'][7]['db'], $param['args']['roles'][8]['db'], $param['args']['roles'][9]['db']], null), "|")
+    reason = $result
+    msgid = $param["command"]
+endif
+
+src.ip = $remote["ip"]
+src.port = $remote["port"]
+dst.ip = $local["ip"]
+dst.port = $local["port"]
+
+# datafield1 - БД пользователя субъекта
+
+if find_substr(object.account.privileges, "root") != null or find_substr(object.account.privileges, "dbOwner") != null or find_substr(object.account.privileges, "userAdmin") != null or find_substr(object.account.privileges, "userAdminAnyDatabase") != null or find_substr(object.account.privileges, "readWriteAnyDatabase") != null or find_substr(object.account.privileges, "dbAdminAnyDatabase") != null or find_substr(object.account.privileges, "userAdminAnyDatabase") != null or find_substr(object.account.privileges, "clusterAdmin") != null or find_substr(object.account.privileges, "hostManager") != null then
+    importance = "medium"
+else
+    importance = "low"
+endif
+
+time = $ts["$date"]
+
+event_src.ip = $local["ip"]
+
+subject = "account"
+action = "revoke"
+object = "account"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+event_src.title = "mongodb"
+event_src.category = "Database server"
+
+id = "PT_Opensource_MongoDB_filemonitor_Revoke_roles_from_user"

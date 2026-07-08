@@ -1,0 +1,23 @@
+EVENTLOG = 'EventID="4893"'
+!COND = $Channel=="Security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "system"
+action = "backup"
+object = "service"
+object.type = "certificate_services"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+datafield1 = $Data["RequestId"]
+subject.name = $Data["Requester"]
+datafield2 = $Data["KRAHashes"]
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+event_src.category = "Certification authority"
+
+id = "PT_Microsoft_Certification_Authority_eventlog_4893_Certificate_Services_archived_key"
+importance = "info"

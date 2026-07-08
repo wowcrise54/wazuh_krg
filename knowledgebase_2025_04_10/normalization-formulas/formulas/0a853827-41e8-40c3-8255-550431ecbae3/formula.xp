@@ -1,0 +1,91 @@
+JSON = ''
+
+COND = find_substr($event_type, "yandex.cloud.audit.mdb.") == 0
+       and in_list(["CreateMlModel", "UpdateMlModel", "DeleteMlModel"],
+                   substr($event_type, length($event_type) - 13, 13))
+
+subject = "account"
+
+$operation = csv($event_type, ".", "")[5]
+
+action = switch $operation
+    case "CreateMlModel" "create"
+    case "UpdateMlModel" "modify"
+    case "DeleteMlModel" "remove"
+endswitch
+
+object = "resource"
+
+status = switch $event_status
+    case "DONE" "success"
+    case "STARTED" "ongoing"
+    case "ERROR" "failure"
+    case "CANCELLED" "failure"
+endswitch
+
+subject.account.id = $authentication["subject_id"]
+
+$at_sign = find_substr($authentication["subject_name"], "@")
+if $at_sign != null then
+    $account = substr($authentication["subject_name"], 0, $at_sign)
+    subject.account.name = $account
+    subject.account.domain = strip($authentication["subject_name"], $account + "@", "")
+else
+    subject.account.name = $authentication["subject_name"]
+endif
+
+subject.account.group = $authentication["federation_name"]
+
+subject.process.meta = $request_metadata["user_agent"]
+
+subject.type = $authentication["subject_type"]
+
+$authenticate = switch $authentication["authenticated"]
+    case true "authenticated"
+    case false "not authenticated"
+endswitch
+
+$authorize = switch $authorization["authorized"]
+    case true "authorized"
+    case false "not authorized"
+endswitch
+
+subject.state = join(remove([$authenticate, $authorize], null), "|")
+
+$organization = $resource_metadata["path"][0]["resource_name"]
+$cloud = $resource_metadata["path"][1]["resource_name"] 
+$folder = $resource_metadata["path"][2]["resource_name"]
+object.storage.fullpath = join([$organization, $cloud, $folder], "|")
+
+object.name = $details["ml_model_name"]
+object.property = "cluster id"
+object.value = $details["cluster_id"]
+object.type = "machine learning model"
+
+$remote_address = coalesce(ipv4($request_metadata["remote_address"]), ipv6($request_metadata["remote_address"]))
+if $remote_address != null then
+    src.ip = $remote_address
+else
+    logon_service = $request_metadata["remote_address"]
+endif
+
+datafield1 = $organization  # Наименование организации
+datafield2 = $cloud         # Наименование облака
+datafield3 = $folder        # Наименование каталога
+
+chain_id = $request_metadata["request_id"]
+
+if in_list(["ERROR", "CANCELLED"], $event_status) then
+    reason = strip($error["message"], "", ".")
+endif
+
+time = $event_time
+msgid = $operation
+importance = "info"
+
+event_src.vendor = "yandex"
+event_src.title = "yandex_cloud"
+event_src.subsys = strip($event_source, "mdb.", "")
+event_src.category = "Application server"
+
+id = "PT_Yandex_Yandex_Cloud_customeventcollector_MDB_MlModel_Manage"

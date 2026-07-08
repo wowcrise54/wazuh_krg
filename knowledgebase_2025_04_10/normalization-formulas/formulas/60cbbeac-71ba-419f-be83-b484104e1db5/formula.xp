@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {datafield1="KLMS"|datafield1="KSMG"} : license error: {reason=REST}'
+
+action = "check"
+object = "resource"
+status = "failure"
+
+object.type = "license"
+
+# datafield1 - имя продукта kaspersky
+
+importance = "medium"
+
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = switch datafield1
+    case "KLMS" "kaspersky_security_for_linux_mail_server"
+    case "KSMG" "kaspersky_secure_mail_gateway"
+endswitch
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KLMS_KSMG_syslog_license_error"

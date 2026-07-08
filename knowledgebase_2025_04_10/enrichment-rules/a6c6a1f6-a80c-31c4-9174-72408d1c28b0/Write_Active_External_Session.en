@@ -1,0 +1,169 @@
+query Check_If_Session_Is_Duplicated($type, $user) from Active_External_Sessions {
+    type == $type
+    and username == $user
+}
+
+event VPN_Connection:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::AuthVPN()
+    }
+
+event VPN_Disconnection:
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                (
+                    (event_src.vendor == "cisco" and msgid == "722050")
+                    or
+                    (event_src.vendor == "fortinet" and msgid == "0101039948")
+                    or 
+                    (event_src.vendor == "citrix" and lower(msgid) == "sslvpn logout")
+                    or
+                    (event_src.vendor == "cryptopro" and id == "PT_CryptoPro_NGate_syslog_session_stop")
+                )
+                and filter::External_Address(src.ip)
+            )
+            or 
+            (event_src.vendor == "palo_alto_networks" and msgid == "globalprotectgateway-logout-succ")
+            or
+            (event_src.vendor == "openvpn" and id == "PT_OpenVPN_OpenVPN_syslog_session_duplicated")
+        )              
+    }
+
+event RDG_Connection_and_Disconnection:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and (
+                (
+                    msgid == "300" # connect
+                    and src.ip != null 
+                    and filter::External_Address(src.ip)
+                )
+                or msgid == "303" # disconnect
+        )
+        and subject.account.name != null
+    }
+
+event VPN_Windows_Connection_and_Disconnection:
+    filter {
+        event_src.title == "windows"
+        and in_list(["20274", "20272"], msgid)
+    }
+
+enrichment Write_Active_External_Session
+    enrich VPN_Windows_Connection_and_Disconnection:
+        enrich_fields {
+            if match(subject.account.name, "*@*.*") and subject.account.domain == null then
+                # full UPN like "user@domail.com"
+                $upn_regex = "(.*?)@(.*)\..*"
+                $domain = string(regex(subject.account.name, $upn_regex, 2))
+                $user = $domain + "\\" + string(regex(subject.account.name, $upn_regex, 1))
+            elif match(subject.account.name, "*@*") then
+                # malformed UPN like "user@domain"
+                $upn_regex = "(.*?)@(.*)"
+                $domain = string(regex(subject.account.name, $upn_regex, 2))
+                $user = $domain + "\\" + string(regex(subject.account.name, $upn_regex, 1))
+            else
+                # regular user name
+                if match(subject.account.domain, "*.*") then
+                    # possible domain.com
+                    $domain_regex = "(.*)\..*"
+                    $user = string(regex(subject.account.domain, $domain_regex, 1)) + "\\" + subject.account.name
+                else
+                    $user = subject.account.domain + "\\" + subject.account.name
+                endif
+            endif
+            if $user == null then
+                $user = "-"
+            else
+                $user = lower($user)
+            endif
+
+            $type = "windows_vpn"
+            $dst_host = event_src.host
+            $session_ip = assigned_src_ip
+
+            $reason = select_query_first("Check_If_Session_Is_Duplicated", [$type, $user], "username")
+            if msgid == "20272" and $reason != null then
+                $user_for_close = $user
+            elif msgid == "20274" and $reason != null then
+                object.type = "Duplicated"
+            elif msgid == "20274" and $reason == null then
+                $state = "Open"
+            endif
+        }
+
+        insert_into Active_External_Sessions if $state == "Open" {
+            username = $user
+            type = $type
+            external_host = $dst_host
+            assigned_ip = $session_ip
+        }
+
+        remove_from Active_External_Sessions {
+            column::username == $user_for_close
+            and column::type == $type
+        } 
+
+    enrich VPN_Disconnection:
+        remove_from Active_External_Sessions {
+            column::username == lower(coalesce(subject.account.name, object.account.name))
+            and column::type == lower(event_src.vendor)
+        }
+
+    enrich VPN_Connection:
+        enrich_fields {
+            $type = lower(event_src.vendor)
+            $user = lower(coalesce(subject.account.name, object.account.name))
+            $reason = select_query_first("Check_If_Session_Is_Duplicated", [$type, $user], "username")
+            if $reason != null then
+                object.type = "Duplicated"
+            else
+                $state = "Open"
+            endif
+        }
+
+        insert_into Active_External_Sessions if $state == "Open" {
+            username = lower(coalesce(subject.account.name, object.account.name))
+            user_domain = lower(coalesce(subject.account.domain, object.account.domain))
+            user_id = lower(coalesce(subject.account.id, object.account.id))
+            external_ip = lower(src.ip)
+            external_host = lower(src.host)
+            type = lower(event_src.vendor)  
+            assigned_ip = lower(assigned_src_ip)
+            provider = lower(src.geo.org)
+            country = lower(src.geo.country)
+        }
+
+    enrich RDG_Connection_and_Disconnection:
+        enrich_fields {
+            $user = lower(subject.account.name)
+            $reason = select_query_first("Check_If_Session_Is_Duplicated", ["rdg", $user], "username")
+            if msgid == "303" and $reason != null then
+                $user_for_close = lower(subject.account.name)
+            elif msgid == "300" and $reason != null then
+                object.type = "Duplicated"
+            elif msgid == "300" and $reason == null then
+                $state = "Open"
+            endif
+        }
+
+        insert_into Active_External_Sessions if $state == "Open" {
+            username = lower(subject.account.name)
+            user_domain = lower(subject.account.domain)
+            user_id = lower(subject.account.id)
+            external_ip = lower(src.ip)
+            external_host = lower(src.host)
+            type = "rdg"
+            assigned_ip = lower(dst.host)  # хост на который подключились через RDG
+            provider = lower(src.geo.org)
+            country = lower(src.geo.country)
+        }
+
+        remove_from Active_External_Sessions {
+            column::username == $user_for_close
+            and column::type == "rdg"
+        }

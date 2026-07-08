@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {$time_raw=DATETIME?} {"Message forwarded from"?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?} {subject.process.name="rsyslogd"}{"["?}{subject.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+{event_src.subsys=STRING} from <{$app_name=LITERAL*}>: begin to drop messages due to rate-limiting'
+
+subject = "process"
+action = "info"
+object = "module"
+status = "success"
+
+object.state = "Begin to drop messages due to rate-limiting"
+
+datafield3 = $app_name  # App Name
+
+time = coalesce($time_raw, recv_time)
+importance = "info"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_rsyslog_syslog_ratelimit_begin_drop"

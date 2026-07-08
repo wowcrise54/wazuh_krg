@@ -1,0 +1,141 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "HOST_CERTIFICATION_HAS_EXPIRED",  # 877
+           "HOST_CERTIFICATION_IS_ABOUT_TO_EXPIRE",  # 845
+           "HOST_CERTIFICATION_IS_ABOUT_TO_EXPIRE_ALERT", # 879
+           "HOST_CERTIFICATE_HAS_INVALID_SAN",  # 889
+           "HOST_CERTIFICATION_ENROLLMENT_STARTED",  # 880
+           "HOST_CERTIFICATION_ENROLLMENT_FINISHED",  # 881
+           "HOST_CERTIFICATION_ENROLLMENT_FAILED",  # 882
+           "ENGINE_CERTIFICATION_HAS_EXPIRED",  # 846
+           "ENGINE_CERTIFICATION_IS_ABOUT_TO_EXPIRE",  # 847
+           "ENGINE_CERTIFICATION_IS_ABOUT_TO_EXPIRE_ALERT",  # 878
+           "ENGINE_CA_CERTIFICATION_HAS_EXPIRED",  # 848
+           "ENGINE_CA_CERTIFICATION_IS_ABOUT_TO_EXPIRE",  # 849
+           "ENGINE_CA_CERTIFICATION_IS_ABOUT_TO_EXPIRE_ALERT"  # 883
+       ], $event_class)
+
+if substr($event_class, 0, 29) == "HOST_CERTIFICATION_ENROLLMENT" then
+    subject = "account"
+    action = "install"
+else
+    action = "info"
+endif
+
+object = "certificate"
+
+if $event_class == "HOST_CERTIFICATION_ENROLLMENT_FAILED" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subformula "parse_body"
+    # HOST_CERTIFICATION_HAS_EXPIRED
+    TEXT = "Host {$vds_name=STRING+} certification has expired at {$expiration_date=STRING+} Please renew the host's certification."
+endsubformula
+
+subformula "parse_body"
+    # HOST_CERTIFICATION_IS_ABOUT_TO_EXPIRE
+    # HOST_CERTIFICATION_IS_ABOUT_TO_EXPIRE_ALERT
+    TEXT = "Host {$vds_name=STRING+} certification is about to expire at {$expiration_date=STRING+} Please renew the host's certification."
+endsubformula
+
+subformula "parse_body"
+    # HOST_CERTIFICATE_HAS_INVALID_SAN
+    TEXT = "Certificate of host {$vds_name=STRING+} is {object.state='invalid'}. The certificate doesn't contain valid subject alternative name, please enroll new certificate for the host."
+endsubformula
+
+subformula "parse_body"
+    # HOST_CERTIFICATION_ENROLLMENT_STARTED
+    TEXT = "Enrolling certificate for host {$vds_name=STRING+} was started (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # HOST_CERTIFICATION_ENROLLMENT_FINISHED
+    TEXT = "Enrolling certificate for host {$vds_name=STRING+} was completed successfully (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # HOST_CERTIFICATION_ENROLLMENT_FAILED
+    TEXT = "Failed to enroll certificate for host {$vds_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # ENGINE_CERTIFICATION_HAS_EXPIRED
+    TEXT = "Engine's certification has expired at {$expiration_date=STRING+} Please renew the engine's certification."
+endsubformula
+
+subformula "parse_body"
+    # ENGINE_CERTIFICATION_IS_ABOUT_TO_EXPIRE
+    # ENGINE_CERTIFICATION_IS_ABOUT_TO_EXPIRE_ALERT
+    TEXT = "Engine's certification is about to expire at {$expiration_date=STRING+} Please renew the engine's certification."
+endsubformula
+
+subformula "parse_body"
+    # ENGINE_CA_CERTIFICATION_HAS_EXPIRED
+    TEXT = "Engine's CA certification has expired at {$expiration_date=REST}"
+endsubformula
+
+subformula "parse_body"
+    # ENGINE_CA_CERTIFICATION_IS_ABOUT_TO_EXPIRE
+    # ENGINE_CA_CERTIFICATION_IS_ABOUT_TO_EXPIRE_ALERT
+    TEXT = "Engine's CA certification is about to expire at {$expiration_date=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+$user = strip($user, "", ").")
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+if substr($event_class, 0, 15) == "HOST_CERTIFICAT" then
+    object.type = "host_certificate"
+elif substr($event_class, 0, 20) == "ENGINE_CERTIFICATION" then
+    object.type = "engine_certificate"
+else
+    object.type = "engine_ca_certificate"
+endif
+
+if find_substr($event_class, "EXPIRE") != null then
+    $expiration_date = strip($expiration_date, "", ".")
+    object.property = "expiration_date"
+    object.value = $expiration_date
+endif
+
+logon_service = $authz_provider
+
+datafield6 = $vds_name  # VDS (Host) Name
+
+msgid = $event_class
+if substr($event_class, 0, 29) == "HOST_CERTIFICATION_ENROLLMENT" then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_Certificate_Management"

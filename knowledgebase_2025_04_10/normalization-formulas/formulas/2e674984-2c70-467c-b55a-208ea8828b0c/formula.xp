@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        %{"%"?}10{$tmp_subsys="VRRP4"}/{NUMBER}/{msgid="VRRP_AUTH_FAILED"}{"("WORD")"?}:
+        Authentication failed in {datafield1=WORD} virtual router {subject.group=WORD}
+        (configured on {$interface=STRING} {$reason=REST}'
+
+subject = "system"
+action = "validate"
+object = "message"
+status = "failure"
+
+subject.type = "Redundancy protocol"
+
+object.type = "FHRP"
+
+interface = strip($interface, "", "):")
+
+protocol = "vrrp"
+
+$pos = find_substr($reason, ".")
+if $pos != null then
+    reason = substr($reason, 0, $pos)
+else
+    reason = $reason
+endif
+
+# datafield1 # Версия IP
+
+importance = "info"
+
+event_src.title = "vsr"
+event_src.subsys = lower($tmp_subsys)
+event_src.vendor = "hewlett_packard_enterprise"
+event_src.category = "Network device"
+
+id = "PT_Hewlett_Packard_Enterprise_VSR_syslog_VRRP_wrong_auth"

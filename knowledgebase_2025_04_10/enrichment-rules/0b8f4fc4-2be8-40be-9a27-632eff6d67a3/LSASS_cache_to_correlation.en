@@ -1,0 +1,19 @@
+query GetCachedAccounts($host) from LSASS_Cached_Accounts {
+    column::host == $host
+}
+
+event Corr_event:
+    filter {
+        filter::FromCorrelator()
+        and match(labels, "*lsass_cache_to_correlation*")
+    }
+
+enrichment LSASS_cache_to_correlation
+    enrich Corr_event:
+        enrich_fields {
+            # Закешированные в LSASS учетные данные
+            $lsass_cached_accounts = select_query_first("GetCachedAccounts", [lower(event_src.host)], "accounts")
+            if $lsass_cached_accounts != null then
+                datafield17 = $lsass_cached_accounts
+            endif             
+        }

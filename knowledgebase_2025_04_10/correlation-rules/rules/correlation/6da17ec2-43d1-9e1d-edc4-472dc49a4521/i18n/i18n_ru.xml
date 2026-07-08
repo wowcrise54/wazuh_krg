@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Закрепление на узле с помощью файлов таймера подсистемы systemd. Атакующие могут использовать таймер для выполнения вредоносного кода при запуске системы или по расписанию для закрепления и повышения привилегий</Description>
+  <EventDescriptions>
+    <EventDescription id="366924b5-d2f9-0cc6-83e1-3bfbe3959371">Обнаружено закрепление пользователем {subject.account.name} с помощью файлов таймера подсистемы systemd на узле {event_src.host}</EventDescription>
+    <EventDescription id="726660ff-c9ec-b1a4-faf1-c8ead76af310">Обнаружена попытка закрепления пользователем {subject.account.name} с помощью временного таймера подсистемы systemd на узле {event_src.host}</EventDescription>
+    <EventDescription id="d1a8080a-15c2-59da-2da2-8e991af9a1f0">Обнаружено закрепление пользователем {subject.account.name} с помощью файла таймера подсистемы systemd {object.name} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

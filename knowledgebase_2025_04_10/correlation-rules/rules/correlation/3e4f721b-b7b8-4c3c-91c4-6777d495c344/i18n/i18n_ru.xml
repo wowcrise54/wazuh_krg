@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Обнаружен запуск подозрительной команды с помощью запланированной задачи. Некоторые инструменты могут удаленно выполнять команды на узле через запланированные задачи, например atexec (impacket)</Description>
+  <EventDescriptions>
+    <EventDescription id="30e3d422-f2aa-4a61-aea1-6fbb206feaff">Пользователь {subject.account.name} выполнил подозрительную команду через планировщик заданий на узле {event_src.host}</EventDescription>
+    <EventDescription id="bb7d11f9-b487-477b-b602-e1c910e5af9b">Пользователь {object.account.name} выполнил подозрительную команду через планировщик заданий на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,31 @@
+TEXT = '<{NUMBER}>{time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME|} grafana[{NUMBER}]: {$json=REST}'
+
+COND = find_substr($json, "Creating instance") != null
+
+action = "connect"
+object = "database"
+status = "success"
+
+subformula 'json_in_syslog_datasource_connected'
+    JSON = ''
+    
+    object.name = csv($logger, ".", "")[1]
+    object.type = 'datasource'
+endsubformula
+
+submessage("JSON","json_in_syslog_datasource_connected", $json)
+    
+importance = "low"
+
+event_src.vendor = "grafanalabs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "grafana"
+event_src.category = "Application security"
+
+id = "PT_GrafanaLabs_Grafana_syslog_datasource_connected"

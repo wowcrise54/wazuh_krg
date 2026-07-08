@@ -1,0 +1,54 @@
+.. Copyright (C) 2015, Wazuh, Inc.
+
+.. meta::
+   :description: This section provides instructions for monitoring your organization's Microsoft Graph API resources and relationships using the Wazuh module for Microsoft Graph.
+
+Monitoring Microsoft Graph services with Wazuh
+==============================================
+
+The Microsoft Graph API is a comprehensive system that provides access to data across the full suite of Microsoft cloud services, including Microsoft 365, Azure, Dynamics 365, and other Microsoft cloud services. It is an endpoint for accessing structured data, insights, and rich relationships from the Microsoft Cloud ecosystem.
+
+This section provides instructions for monitoring your organization's Microsoft Graph API resources and relationships using the Wazuh module for Microsoft Graph.
+
+The Wazuh module for Microsoft Graph allows you to monitor the following:
+
+-  Microsoft Entra ID Protection
+-  Microsoft 365 Defender
+-  Microsoft Defender for Cloud Apps
+-  Microsoft Defender for Endpoint
+-  Microsoft Defender for Identity
+-  Microsoft Defender for Office 365
+-  Microsoft Purview eDiscovery
+-  Microsoft Purview Data Loss Prevention (DLP)
+
+The data from these services is visualised using the Wazuh Microsoft API Dashboard
+
+.. thumbnail:: /images/cloud-security/ms-graph/ms-graph-dashboard.png
+   :align: center
+   :width: 80%
+
+While these are fundamental to the security resource, you can monitor many additional resources using the Microsoft Graph API. See the `Overview of Microsoft Graph <https://learn.microsoft.com/en-us/graph/overview?view=graph-rest-1.0>`__ documentation to learn more.
+
+.. note::
+
+   The security resource can be considered mature, as it has been tested with pre-made rules. However, your organization can ingest logs from other resources into your Wazuh deployment.
+
+.. _retrieving_content:
+
+Retrieving content
+__________________
+
+To retrieve a set of logs from Microsoft Graph, make a ``GET`` request using the URL below:
+
+.. code-block:: none
+
+   GET https://graph.microsoft.com/{version}/{resource}/{relationship}?{query-parameters}
+
+A description of the current production version of the Microsoft Graph API can be found in the `Overview of Microsoft Graph <https://learn.microsoft.com/en-us/graph/overview?view=graph-rest-1.0>`__.
+
+Alternatively, the API can be tested directly in the `Microsoft Graph Explorer <https://developer.microsoft.com/graph/graph-explorer>`__.
+
+.. toctree::
+   :maxdepth: 2
+
+   ms-graph-api-setup

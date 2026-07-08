@@ -1,0 +1,43 @@
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Security_console_Assign_policy"
+
+TABULAR = ' Operation,
+            product,
+            orig,
+            Machine,
+            Administrator,
+            time,
+            Audit_Status,
+            Additional_Info,
+            ObjectName,
+            ObjectType,
+            SecurityPolicy,
+            Subject,
+            action'
+
+COND = ($product == "Endpoint Security Console" and $Operation == "Assign Policy")
+
+msgid = $Operation
+time = $time
+
+subject = "account"
+action = "bind"
+object = "policy"
+status = "success"
+
+subject.name = $Administrator
+
+object.name = $SecurityPolicy
+object.type = $policy_type
+object.group = $ObjectName
+
+reason = $Additional_Info
+
+importance = "high"
+
+src.hostname = $Machine
+
+event_src.subsys = lower($product)
+event_src.ip = $orig
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.category = "Host security"

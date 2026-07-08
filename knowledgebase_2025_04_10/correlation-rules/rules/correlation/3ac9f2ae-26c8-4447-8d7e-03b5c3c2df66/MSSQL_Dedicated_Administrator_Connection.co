@@ -1,0 +1,82 @@
+event Open_Dedicated_Connection:
+    key:
+        event_src.host
+    filter {
+        (
+            filter::MSSQL_Query("LGIS", "LX")
+            or filter::MSSQL_Query("LGIF", "LX")
+        )
+        and (
+            match(lower(datafield9), "*<is_dac>1</is_dac>*")
+            or match(lower(reason), "*dedicated administrator connections already exists*")
+        )
+        and filter::CheckWL_Database_Actions("MSSQL_Dedicated_Administrator_Connection", lower(object.query))
+    }
+
+rule MSSQL_Dedicated_Administrator_Connection: Open_Dedicated_Connection
+    
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Open_Dedicated_Connection {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        $datafield8 = datafield8     # название приложения клиента
+        
+        $reason = reason
+        
+        $alert.key = lower(object.query)
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "connect"
+    $object = "database"
+
+    $object.state = "dedicated administrator connection"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Fallback Channels"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

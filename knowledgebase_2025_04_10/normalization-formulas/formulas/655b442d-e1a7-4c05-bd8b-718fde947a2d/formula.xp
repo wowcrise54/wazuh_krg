@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {$tmp_subsys=STRING} - - [meta language="ru-RU"][origin enterpriseId="{STRING} software="vGate"
+        swVersion="{datafield1=UNTIL("\\"]")}[event@{STRING} id="{msgid="17301508"|msgid="67633180"}"
+        category="Политики"] Была успешно применена политика "{object.name=UNTIL("\\"")}
+        {". Найдены неразрешенные для запуска процессы:"?} {$result=REST}'
+
+action = "apply"
+object = "policy"
+status = "success"
+
+# datafield1 - Версия ПО vGate
+
+if $result != "" then                       # Проверка обязательна, чтобы не отображать datafield4 = null
+    datafield4 = $result                    # Найденные неразрешенные для запуска процессы
+endif
+
+importance = "info"
+
+event_src.title = "vgate"
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Host security"
+event_src.subsys = switch $tmp_subsys
+    case "Служба_удаленного_управления" "remote_management_services"
+    case "Служба_аутентификации" "authentication_service"
+    case "Компонент_защиты_VMware_vCenter" "vmware_vcenter_protection_component"
+    case "Компонент_защиты_VMware_ESXi" "vmware_esxi_protection_component"
+    case "Служба_контроля_доступа_к_vCenter" "vcenter_access_control_service"
+endswitch
+
+id = "PT_Security_code_vGate_syslog_17301508_67633180_apply_policy"

@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME}
+        wms[{NUMBER}]: <{msgid=NUMBER}> <ERRS> < {WORDDASH}
+        {event_src.ip=IPV4|event_src.ip=IPV6} > |ids| Rogue AP: The system
+        classified an access point(BSSID {datafield2=MACADDR} and SSID
+        {datafield3=STRING+} on CHANNEL {NUMBER}) as rogue. Additional Info:
+        Detector-AP-Name: {subject.name=HOSTNAME}; Detector-AP-MAC:
+        {datafield1=MACADDR}; Detector-AP-Radio: {NUMBER}.'
+
+subject = "system"
+action = "detect"
+object = "alert"
+status = "success"
+
+subject.type = "access point"
+
+# datafield1 - detector AP MAC
+# datafield2 - rogue AP BSSID
+# datafield3 - rogue AP SSID
+
+importance = "medium"
+
+event_src.title = "arubaos"
+event_src.vendor = "aruba_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Wireless"
+
+id = "PT_Aruba_Networks_ArubaOS_syslog_detecting_rogue_ap"

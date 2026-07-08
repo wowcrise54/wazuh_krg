@@ -1,0 +1,37 @@
+EVENTLOG = ''
+COND = $Channel=="Microsoft-Windows-DNSServer/Audit" and $Provider["Name"]=="Microsoft-Windows-DNSServer"
+       and ($EventID["text"]=="514" or $EventID=="514")
+
+subject = "service"
+action = "update"
+object = "resource"
+status = "success"
+
+object.type = "DNS Zone"
+object.name = $Data['Zone']
+object.property = $Data['PropertyKey']
+object.new_value = $Data['NewValue']
+
+datafield3 = $Data['VirtualizationID']
+
+reason = "Zone updated"
+
+time = $TimeCreated["SystemTime"]
+msgid = "514"
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_514_DNS_Zone_updated"

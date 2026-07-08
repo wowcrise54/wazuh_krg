@@ -1,0 +1,58 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {STRING?}
+{time=DATETIME}{$version_dependent_header=UNTIL(" -")} {$act="copying"|$act="moving"} {$source=UNTIL(" to")}  {$target=UNTIL(" completed")} successfully, {NUMBER} artifacts and {NUMBER} folders were {"copied"|"moved"}'
+
+action = switch $act
+    case "copying" "copy"
+    case "moving" "move"
+endswitch
+object = "file_object"
+status = "success"
+
+subformula "parse_v"
+    TEXT = ',{NUMBER} [{WORDDASH}] {REST}'
+endsubformula
+
+subformula "parse_v"
+    TEXT = '[jfrt ] [{UNTIL("]")} [{chain_id=UNTIL("]")} [{UNTIL("]")} [{WORDDASH}]'
+endsubformula
+
+submessage("TEXT", "parse_v", $version_dependent_header)
+
+$source_list = csv($source, ":", "'")
+if length($source_list) > 1 then
+    $source_repo = $source_list[0]  # Repo
+    $source_file_fullpath = strip($source, $source_repo + ":", "")
+    object.property = "repo:fullpath"
+else
+    $source_file_fullpath = $source
+    object.property = "fullpath"
+endif
+$source_file_list = csv($source_file_fullpath, "/", "'")
+$source_file_name = $source_file_list[length($source_file_list)-1]
+$source_file_path = strip($source_file_fullpath, "", $source_file_name)
+
+object.group = $source_repo
+object.name = $source_file_name
+
+if $source_file_path != "" then
+    object.path = $source_file_path
+endif
+
+object.fullpath = $source_file_fullpath
+object.value = $source
+object.new_value = $target
+
+importance = "medium"
+
+event_src.vendor = "jfrog"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "artifactory"
+event_src.category = "Other"
+
+id = "PT_JFrog_Artifactory_syslog_AF_Service_CopyMove_File_Success"

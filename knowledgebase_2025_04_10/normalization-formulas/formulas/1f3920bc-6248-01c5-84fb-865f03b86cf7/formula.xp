@@ -1,0 +1,62 @@
+TABULAR = "hostname,
+            {msgid=event_type},
+            {time=event_time},
+            description,
+            severity,
+            {datafield1=group_name}"
+            
+COND = $event_type == "000000db"
+
+subject = "application"
+action = "enable"
+object = "policy"
+status = "success"
+
+$kv = keyvalue($description, "\r\n", ":")
+
+$csv_path = csv(subject.process.fullpath, "\\", "'")
+subject.name = $csv_path[length($csv_path) - 1]
+subject.process.id = $kv["ID процесса"]
+subject.process.fullpath = lower($kv["Путь к приложению"])
+subject.process.name = lower($kv["Название"])
+subject.process.path = strip(subject.process.fullpath, "", subject.name)
+
+subject.type = lower($kv["Компонент"])
+
+object.type = "group"
+
+# datafield1 - имя группы, в которую входит узел-источник
+datafield3 = lower(substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' (')))     # имя пользователя
+
+importance = switch $severity
+    case 1 "info"
+    case 2 "low"
+    case 3 "medium"
+    case 4 "high"
+endswitch
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $ip_address != "127.0.0.1" then
+    event_src.ip = $ip_address
+endif
+if ipv4($fqdn) == null and find_substr($fqdn, ".") != null then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Network security"
+
+id = "PT_Kaspersky_Security_Center_odbc_group_policy_applied"

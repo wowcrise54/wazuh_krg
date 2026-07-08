@@ -1,0 +1,54 @@
+JSON = ''
+COND = $SLGTYPE.SUBID == "Y" and find_substr($SLGREPNA, "/1BCDWB/DB")!=0 and $SLGTYPE.AREA == "AU"
+
+action = "download"
+object = "report"
+status = "success"
+
+if $SLGUSER != "" then
+    subject = "account"
+    subject.account.name = $SLGUSER
+endif
+
+submessage("TEXT", "parameters_formula", $SLGDATA)
+
+subformula "parameters_formula"
+    TEXT = "{$csv=REST}"
+    if find_substr($csv, '&') != null then
+        $csv = csv($csv, "&", "'")
+        object.property = "size"
+        object.value = replace($csv[0], "", "[ .,]")
+        $path_raw = $csv[2]
+    else
+        $path_raw = $csv
+    endif
+endsubformula
+$csv_path = csv($path_raw, "\\", "'")
+object.name = $csv_path[length($csv_path) - 1]
+object.path = strip($path_raw, "", object.name)
+
+if maybe_ipv4($SLGLTRM2) == null && $SLGLTRM2 != "" then
+    src.hostname = $SLGLTRM2
+elif maybe_ipv4($SLGLTRM2) != null then
+    src.ip = $SLGLTRM2
+endif
+
+if $SLGMAND != "" then
+    datafield1 = $SLGMAND                                                               # Client or mandant
+endif
+datafield2 = $SLGPROC.UNIXPID + $SLGPROC.TASKTNO + $SLGPROC.SLGTTYP + $SLGPROC.SLGMODE  # Other information
+if $SLGTC != "" then
+    datafield3 = $SLGTC                                                                 # Transaction code
+endif
+datafield4 = $SLGREPNA                                                                  # Report name
+
+time = $SLGDATTIM.DATE + $SLGDATTIM.TIME
+msgid = $SLGTYPE.AREA + $SLGTYPE.SUBID
+importance = "low"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_ABAP_filemonitor_Download_report"

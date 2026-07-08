@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$event_src_host=HOSTNAME}
+        {event_src.subsys="conntrack"} {datafield8=NUMBER} - - {protocol=WORD} {NUMBER} {NUMBER} {object.state="ESTABLISHED"}
+        src={src.ip=IPV4|src.ip=IPV6} dst={dst.ip=IPV4|dst.ip=IPV6} sport={src.port=NUMBER} dport={dst.port=NUMBER}
+        src={IPV4|IPV6} dst={IPV4|IPV6} sport={NUMBER} dport={NUMBER} [ASSURED] mark={NUMBER} use={NUMBER}'
+
+action = "create"
+object = "conntrack"
+status = "success"
+
+object.type = "stateful"
+
+# datafield8 - process id
+
+importance = "info"
+
+category.generic = "Connection Tracking Record"
+category.high = "Network Interaction Management"
+category.low = "Manipulation"
+
+$dot_pos = find_substr($event_src_host, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($event_src_host)
+    event_src.hostname = lower(substr($event_src_host, 0, $dot_pos))
+else
+    event_src.hostname = lower($event_src_host)
+endif
+event_src.vendor = "ideco"
+event_src.title = "utm"
+event_src.category = "Network security"
+
+id = "PT_Ideco_IdecoUTM_syslog_conntrack_established"

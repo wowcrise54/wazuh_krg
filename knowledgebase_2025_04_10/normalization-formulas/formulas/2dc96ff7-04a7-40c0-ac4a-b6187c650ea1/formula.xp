@@ -1,0 +1,21 @@
+EVENTLOG = 'EventID.text="281"'
+!COND = $Channel=="TrustAccess"
+
+action = "update"
+object = "configuration"
+status = "success"
+
+datafield1 = $Data[1]  # name of event server
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+event_src.hostname = $Computer
+
+event_src.vendor = "security_code"
+event_src.title = "trustaccess"
+event_src.category = "Host security"
+
+id = "PT_SecurityCode_TrustAccess_configuration_of_event_server_updated"

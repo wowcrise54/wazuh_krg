@@ -1,0 +1,85 @@
+JSON = ''
+COND = $common_data["EventName"] == "SessionTerminated"
+
+subject = "account"
+action = "close"
+object = "session"
+status = "success"
+
+$temp_user = csv(lower($logon_data["UserName"]), "\\", "")
+subject.account.name = $temp_user[1]
+subject.account.domain = $temp_user[0]
+subject.account.id = lower($logon_data["UserId"])
+subject.account.session_id = $process_data["SessionId"]
+
+subject.process.id = $process_data["ProcessId"]
+subject.process.name = $process_data["ProcessName"]
+subject.process.guid = $process_data["ProcessGuid"]
+subject.process.cmdline = strip($process_data["CommandLine"], "\"", "\"")
+
+subject.process.parent.id = $process_data["ParentProcessId"]
+
+datafield1 = $logon_data["Subject_logon_id"]                    # Subject logon ID
+datafield2 = lower($logon_data["LogonGuid"])                    # Logon GIUD
+datafield3 = $common_data["EventRecordID"]                      # Event record ID
+datafield4 = $process_data["Signer"]                            # Signer
+
+datafield5 = switch $process_data["Integrity"]                  # Integrity
+   case "0x0000" "Untrusted level"
+   case "0x1000" "Low  integrity level"
+   case "0x2000" "Medium integrity level"
+   case "0x3000" "High integrity level"
+   case "0x4000" "System integrity level"
+endswitch
+
+datafield6 = $process_data["Verified"]                 # Verified
+
+datafield7 = switch $process_data["ProtectionSigner"]  # Protection signer
+   case 0 "No protection"
+   case 1 "Protected Signer Authenticode"
+   case 2 "PsProtectedSignerCodeGen"
+   case 3 "PsProtectedSignerAntimalware"
+   case 4 "PsProtectedSignerLsa"
+   case 5 "PsProtectedSignerWindows"
+   case 6 "PsProtectedSignerWinTcb"
+endswitch
+
+datafield8 = switch $process_data["ProtectionType"]  # Protection type
+   case 0 "No protection"
+   case 1 "PPL"
+   case 2 "System protected"
+endswitch
+
+datafield9 = string($process_data["FileSize"])         # File size
+
+$event_reason = csv($common_data["Status"], " : ", "")
+datafield10 = strip($event_reason[0], "error = ", "")  # error code value
+
+numfield1 = $common_data["Aggregation_count"]          # Aggregation_count ID
+numfield2 = $process_data["ThreadId"]                  # Thread ID
+numfield3 = $process_data["IsElevated"]                # Is elevated
+numfield4 = $common_data["SequenceNumber"]             # Sequence number of events since driver started
+
+reason = strip($event_reason[1], "", ".")
+
+msgid = $common_data["EventName"]
+time = $common_data["Time"]
+importance = "info"
+
+category.generic = "Session"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+$dot_pos = find_substr($logon_data["Computer"], '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($logon_data["Computer"])
+    event_src.hostname = lower(substr($logon_data["Computer"], 0, $dot_pos))
+else
+    event_src.hostname = lower($logon_data["Computer"])
+endif
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_xdrmon_Session_terminated"

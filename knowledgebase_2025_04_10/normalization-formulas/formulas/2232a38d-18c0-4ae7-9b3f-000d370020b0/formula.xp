@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        ssh-auditor{"["NUMBER"]"}: {$msgid_raw_1="4205"}{$msgid_raw_2="Connection_rejected"}, Src: {src.ip = IPV4 | src.ip = IPV6 | src.hostname = HOSTNAME},
+        Src Port: {src.port = NUMBER}, Dst: {dst.ip = IPV4 | dst.ip = IPV6 | dst.hostname = HOSTNAME}, Dst Port: {dst.port = NUMBER},
+        Username: {subject.name = WORDDASH}, Session-Id: {object.id = NUMBER}, Channel Id: {NUMBER},
+        \"{UNTIL(",")} Rule: {datafield2 = WORDDASH}, \"{$reas = UNTIL(",")} Syslog server: {REST}'
+
+subject = "account"
+action = "initiate"
+object = "session"
+status = "failure"
+
+# datafield1 - имя пользователя на удалённым ресурсе(может дублироваться с subject.name)
+# datafield2 - имя правила
+
+reason = strip($reas,'','.\"')  # обрезаем лишние символы в конце
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+importance = "medium"
+
+event_src.title = "safeinspect"
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_1_syslog_4205_Connection_rejected_rdp"

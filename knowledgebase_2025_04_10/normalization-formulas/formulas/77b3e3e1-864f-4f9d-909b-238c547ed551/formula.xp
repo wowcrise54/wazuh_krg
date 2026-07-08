@@ -1,0 +1,68 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["product"] == "SmartDefense"
+       and $kv["attack_info"] != null
+
+subject = "rule"
+
+if $kv["action"] == "Monitor" then 
+    action = "detect"
+elif $kv["action"] == "Reject" then
+    action = "deny"
+elif $kv["action"] == "Drop" then
+    action = "deny"
+else
+    action = "detect"
+endif
+
+object = "attack"
+status = "success"
+
+subject.id = strip($kv["rule_uid"], "{", "}")
+subject.name = $kv["rule_name"]
+subject.type = $kv["smartdefense_profile"]
+
+object.name = $kv["attack"]
+object.state = $kv["action"]
+
+src.ip = $kv["src"]
+src.port = $kv["s_port"]
+dst.ip = $kv["dst"]
+dst.port = $kv["service"]
+protocol = $kv["proto"]
+interface = $kv["ifname"]
+
+datafield4 = $kv["originsicname"]    # Distinguished name
+datafield5 = $kv["protection_id"]    # Protection ID
+datafield6 = $kv["protection_name"]  # Protection Name
+datafield7 = $kv["protection_type"]  # Protection Type
+datafield8 = $kv["sub_policy_name"]  # Sub policy name
+datafield9 = $hostname               # имя устройства с LogExporter
+
+reason = strip($kv["attack_info"], "", ".")
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+
+if $kv["severity"] != null then
+    importance = switch number($kv["severity"])
+        case 0 "info"
+        case 1 "info"
+        case 2 "low"
+        case 3 "medium"
+        case 4 "high"
+        case 5 "high"
+    endswitch
+else
+    importance = "medium"
+endif
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+$sic_names = keyvalue($kv["originsicname"], ",", "=")
+event_src.hostname = $sic_names["CN"]
+event_src.ip = $kv["origin"]
+event_src.category = "IDS/IPS"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Smart_defense_attack"

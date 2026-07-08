@@ -1,0 +1,67 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {NUMBER+},{DATETIME},
+        {event_src.id=WORD?},TRAFFIC,{$csv=CSV}'
+
+subject = "rule"
+action = switch $csv[0]
+     case "start" "open"
+     case "drop" "deny"
+     case "deny" "deny"
+     case "end" "close"
+endswitch
+object = "connection"
+status = "success"
+
+if $csv[5] != "0.0.0.0" then
+    assigned_src_ip = $csv[5]
+endif
+if $csv[6] != "0.0.0.0" then
+    assigned_dst_ip = $csv[6]
+endif
+
+subject.name = $csv[7]  # rule_name
+
+src.ip = $csv[3]
+dst.ip = $csv[4]
+src.port = $csv[20]
+dst.port = $csv[21]
+protocol = $csv[25]
+
+datafield1 = $csv[10]  # type of application
+
+if length($csv[8]) != 0 then
+    if find_substr($csv[8], "\\") != null then
+        $name_domain = csv($csv[8], "\\", "`")
+        object.account.name = $name_domain[1]
+        object.account.domain = $name_domain[0]
+    else
+        object.account.name = $csv[8]
+    endif
+endif
+
+if $csv[42] != null and $csv[42] != 'n/a' then
+    reason = $csv[42]
+endif
+
+time = $csv[2]
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+if action == "deny" then
+    category.low = "Control"
+else
+    category.low = "Communication"
+endif
+
+event_src.category = "Network security"
+event_src.vendor = "palo_alto_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "pan_os"
+
+id = "PT_Palo_Alto_Networks_Pan_OS_syslog_BSD_Events_Traffic"

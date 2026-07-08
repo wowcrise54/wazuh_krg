@@ -1,0 +1,35 @@
+EVENTLOG = 'EventID="147"'
+COND = $Channel=="Microsoft-Windows-Dhcp-Server/Operational" and $Provider["Name"]=="Microsoft-Windows-DHCP-Server"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+$csv_name_domain = csv($Data["ClientName"], "\\", "`")
+subject.name = lower($csv_name_domain[1])
+subject.domain = lower($csv_name_domain[0])
+
+datafield1 = strip($Data["IP_Name"],"[","]")
+datafield2 = strip($Data["ReservationName"],"[","]")
+
+reason = "Reservation for IPv6 is deleted"
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "DHCP server"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_147_Reservation_ipv6_deleted"

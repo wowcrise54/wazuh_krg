@@ -1,0 +1,22 @@
+query Get_component_description($code) from DrWeb_Component_Codes {
+    column::code == $code
+}
+
+event DrWeb_component_event:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "drweb"
+        and event_src.title == "security_suite"
+        and in_list(["20040", "20041", "30040", "30041", "60040", "70010", "70011"], msgid)
+        and object.id != null
+    }
+
+enrichment DrWeb_component_code_map
+
+    enrich DrWeb_component_event:
+        enrich_fields {
+            $description = select_query_first("Get_component_description", [object.id], "description")
+            if $description != null then
+                object.name = $description
+            endif
+        }

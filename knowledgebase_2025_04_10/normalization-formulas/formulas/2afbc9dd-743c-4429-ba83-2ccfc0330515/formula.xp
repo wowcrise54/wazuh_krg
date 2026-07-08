@@ -1,0 +1,100 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} {WORD} hostd[{WORD}] [Originator@{NUMBER} {$kv=UNTIL("]")} Event {NUMBER} :
+{$prefix="New MAC address"|$prefix="Changed MAC address from"|$prefix="The MAC address"|$prefix="The static MAC address"}{$rest=REST}'
+
+subject = "account"
+
+if in_list(["New MAC address", "Changed MAC address from"], $prefix) then
+    action = "modify"
+else
+    action = "info"
+endif
+
+object = "interface"
+status = "success"
+
+subformula "assign_mac"
+    TEXT = '({$mac=MACADDR}) assigned to adapter {$adapter=STRING+} for {$vm_name=REST}'
+    
+    object.property = "mac_addr"
+    object.new_value = $mac
+endsubformula
+
+subformula "change_mac"
+    TEXT = '{$old_mac=MACADDR?} to {$new_mac=MACADDR?} for adapter {$adapter=STRING+} for {$vm_name=REST}'
+    
+    object.property = "mac_addr"
+    object.value = $old_mac
+    object.new_value = $new_mac
+endsubformula
+
+subformula "mac_conflict"
+    TEXT = '({$mac=MACADDR}) of {$vm_name=STRING+} conflicts with MAC assigned to {$conflicted_vm_name=REST}'
+    
+    action = "info"
+    object.property = "conflicted_vm|mac_addr"
+    object.value = $conflicted_vm_name + " | " + $mac
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+if ($prefix == "New MAC address") then
+    submessage("TEXT", "assign_mac", $rest)
+elif ($prefix == "Changed MAC address from") then
+    submessage("TEXT", "change_mac", $rest)
+else
+    submessage("TEXT", "mac_conflict", $rest)
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $adapter
+
+datafield5 = $vm_name  # Virtual Machine Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+msgid = switch $prefix
+    case "New MAC address" "VmMacAssignedEvent"
+    case "Changed MAC address from" "VmMacChangedEvent"
+    case "The MAC address" "VmMacConflictEvent"
+    case "The static MAC address" "VmStaticMacConflictEvent"
+endswitch
+
+importance = "info"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_7_0_syslog_VM_MAC"

@@ -1,0 +1,129 @@
+query GetLSASSCachedAccounts($host) from LSASS_Cached_Accounts {
+    column::host == $host
+}
+
+query GetAccountStorage($user_id) from Known_Windows_Accounts {
+    column::id == $user_id
+    and column::storage != "unknown"
+}
+
+query GetDomainFullName($id) from Known_Windows_Domains {
+    column::id == $id
+}
+    qhandler {
+        $fullname = fullname
+        $netbios = netbios
+        $_last_changed = _last_changed
+    }
+
+query Get_Login_count($src_ip, $host_name, $user_id) from LSASS_Cached_Accounts_timeline {
+    column::src_ip == $src_ip
+    and column::host_name == $host_name
+    and column::user_id == $user_id
+}
+
+event Windows_Login_with_LSASS_caching:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4624"
+        and match(subject.account.id, "S-1-5-*")
+        and subject.account.name != null
+        and subject.account.domain != null
+        and lower(subject.account.domain) != "nt virtual machine"
+        and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and (
+            in_list([2, 4, 5, 7, 9, 10, 11, 12], logon_type)
+            or (
+                logon_type == 8
+                and (
+                    (
+                        in_list(["w3wp.exe", "microsoft.exchange.pop3.exe", "microsoft.exchange.imap4.exe"], lower(subject.process.name))
+                        and lower(logon_service) == "advapi"
+                        and lower(datafield9) == "negotiate"
+                    ) 
+                    or lower(logon_service) == "wsman"
+                )
+            )
+        )
+    }
+
+enrichment Windows_Cache_account_in_LSASS
+    enrich Windows_Login_with_LSASS_caching:
+        enrich_fields {
+
+            $dst_host = lower(dst.host)
+            $dst_asset = string(dst.asset)
+            $logon_time = time
+
+            # detect source of the account: domain or local storage
+            if event_src.hostname == subject.account.domain then
+                $account_storage = "local"
+            elif find_substr(subject.account.id, "S-1-5-21-") != 0 then
+                $account_storage = "local"
+            elif subject.account.domain == "microsoftaccount" then
+                $account_storage = "local"
+            elif lower(datafield9) == "kerberos" then  # AuthenticationPackageName
+                $account_storage = "domain"
+            elif in_list([11, 12], logon_type) then  # needs to be below 'microsoftaccount' checking because it does '11' too
+                $account_storage = "domain"
+            else
+                $account_storage = select_query_first("GetAccountStorage", [lower(subject.account.id)], "storage")
+            endif
+            if $account_storage == null then
+                $account_storage = "unknown"
+            endif
+            # end of 'detect source of the account' logic
+
+            # Try to replace NETBIOS domain with the full domain name
+            # Attention! Only 'storage == domain' account data are stored in Known_Windows_Domains
+            if $account_storage == "domain" or find_substr(subject.account.id, "S-1-5-21-") == 0 then
+                $domain_id = lower(regex(subject.account.id, "S-1-5-21-(.*?)-\d+$", 1))
+                $domain_info = exec_query("GetDomainFullName", [$domain_id])
+                if $domain_info["$_last_changed"] != null then
+                    subject.account.domain = coalesce($domain_info["$fullname"], $domain_info["$netbios"])
+                    $account_storage = "domain"  # account is guaranteed to be 'domain' at this point
+                endif
+            endif
+
+            # realization for O2
+            $asset_data = "acc_name:" + subject.account.name + "|" + "acc_domain:" + subject.account.domain  # + "|" + "account_id:" + subject.account.id # disabled for performance reasons
+            $new_account_logged_in_to_host = false
+            $cached_accounts_on_host = select_query_first("GetLSASSCachedAccounts", [lower(event_src.host)], "accounts")
+            if $cached_accounts_on_host != null then
+                $count_of_logins = select_query_first("Get_Login_count", [src.ip, $dst_host, subject.account.id], "login_count")
+                $count_of_logins = $count_of_logins + 1
+            else
+                $count_of_logins = 1
+            endif
+            if find_substr($cached_accounts_on_host, $asset_data) == null then
+                $asset_data = $asset_data + "|acc_in_domain:"
+                if $account_storage == "domain" then $asset_data = $asset_data + "true" elif $account_storage == "local" then $asset_data = $asset_data + "false" endif
+                $new_cached_accounts_string = $cached_accounts_on_host + $asset_data + "||"
+                if length($new_cached_accounts_string) < 1024 then  # unicode string can be 4k maximum for optimal FPTA performance
+                    $cached_accounts_on_host = $new_cached_accounts_string
+                    $new_account_logged_in_to_host = true
+                endif
+            endif
+            
+        }
+        
+    # realization for TME
+    insert_into LSASS_Cached_Accounts_timeline {
+        column::src_ip = string(src.ip)
+        column::src_host_asset = src.asset
+        column::host_name = $dst_host
+        column::host_asset = $dst_asset
+        column::user_id = subject.account.id
+        column::user_name = subject.account.name
+        column::user_domain = subject.account.domain
+        column::logon_time = $logon_time
+        column::account_storage = $account_storage
+        column::login_count = $count_of_logins
+    }
+
+    # realization for O2
+    insert_into LSASS_Cached_Accounts if $new_account_logged_in_to_host == true {
+        column::host = $dst_host
+        column::accounts = $cached_accounts_on_host
+    }

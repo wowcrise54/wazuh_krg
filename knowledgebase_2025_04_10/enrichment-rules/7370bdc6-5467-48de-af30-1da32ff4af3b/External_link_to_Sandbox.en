@@ -1,0 +1,13 @@
+event Sandbox_event:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "positive_technologies"
+        and event_src.title == "multiscanner"
+        and chain_id != null
+    }
+
+enrichment External_link_to_Sandbox
+    enrich Sandbox_event:
+        enrich_fields {
+            external_link = "https://" + event_src.host + "/tasks/" + chain_id
+        }

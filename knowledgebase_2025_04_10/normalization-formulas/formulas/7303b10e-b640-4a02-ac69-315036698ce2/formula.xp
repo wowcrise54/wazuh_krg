@@ -1,0 +1,172 @@
+ # <134>Aug 10 07:56:23 ovirt-engine-srv comp-ovirt-engine: 2021-10-11 17:49:53,695+03 INFO  [org.ovirt.engine.core.dal.dbbroker.auditloghandling.AuditLogDirector] (EE-ManagedThreadFactory-engine-Thread-102) [] EVENT_ID: USER_TRY_BACK_TO_SNAPSHOT_FINISH_SUCCESS(71), Snapshot-Preview TestSnapshot for VM alpine has been completed.
+
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_TRY_BACK_TO_SNAPSHOT",  # 46
+           "USER_FAILED_TRY_BACK_TO_SNAPSHOT",  # 115
+           "USER_TRY_BACK_TO_SNAPSHOT_FINISH_SUCCESS",  # 71
+           "USER_TRY_BACK_TO_SNAPSHOT_FINISH_FAILURE",  # 99
+           "USER_COMMIT_RESTORE_FROM_SNAPSHOT_START",  # 94
+           "USER_COMMIT_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS",  # 95
+           "USER_COMMIT_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE",  # 96
+           "USER_RESTORE_FROM_SNAPSHOT",  # 47
+           "USER_RESTORE_FROM_SNAPSHOT_START",  # 1,190
+           "USER_FAILED_RESTORE_FROM_SNAPSHOT",  # 116
+           "USER_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS",  # 100
+           "USER_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE",  # 101
+           "USER_UNDO_RESTORE_FROM_SNAPSHOT_START",  # 650
+           "USER_UNDO_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS",  # 651
+           "USER_UNDO_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE"  # 652
+       ], $event_class)
+
+
+subject = "account"
+action = "restore"
+object = "virtual_machine"
+if in_list([
+    "USER_TRY_BACK_TO_SNAPSHOT", "USER_TRY_BACK_TO_SNAPSHOT_FINISH_SUCCESS",
+    "USER_COMMIT_RESTORE_FROM_SNAPSHOT_START", "USER_RESTORE_FROM_SNAPSHOT_START"
+    ], $event_class) then
+    status = "ongoing"
+elif in_list([
+    "USER_RESTORE_FROM_SNAPSHOT", "USER_COMMIT_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS",
+    "USER_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS", "USER_UNDO_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS"
+    ], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # USER_RESTORE_FROM_SNAPSHOT
+    # USER_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS
+    TEXT = "VM {$vm_name=STRING+} {'restored'|'restoring'} from Snapshot {'by'|'has been completed.'} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_TRY_BACK_TO_SNAPSHOT
+    # USER_TRY_BACK_TO_SNAPSHOT_FINISH_SUCCESS
+    TEXT = "Snapshot-Preview {$snapshot_name=STRING+} for VM {$vm_name=STRING+} {'was initiated by'|'has been completed.'} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_COMMIT_RESTORE_FROM_SNAPSHOT_START
+    # USER_COMMIT_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS
+    TEXT = "Committing a Snapshot-Preview for VM {$vm_name=STRING+} {'was initialized by'|'has been completed.'} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_UNDO_RESTORE_FROM_SNAPSHOT_START
+    # USER_UNDO_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS
+    TEXT = "Undoing a Snapshot-Preview for VM {$vm_name=STRING+} {'was initialized by'|'has been completed.'} {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_COMMIT_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE
+    # USER_TRY_BACK_TO_SNAPSHOT_FINISH_FAILURE
+    # USER_UNDO_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE
+    TEXT = "Failed to {'commit'|'undo'|'complete'} Snapshot-Preview {$snapshot_name=STRING*} for VM {$vm_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE
+    TEXT = "Failed to complete restoring from Snapshot of VM {$vm_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_TRY_BACK_TO_SNAPSHOT
+    TEXT = "Failed to preview Snapshot {$snapshot_name=STRING+} for VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_RESTORE_FROM_SNAPSHOT
+    TEXT = "Failed to restore VM {$vm_name=STRING+} from Snapshot (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_RESTORE_FROM_SNAPSHOT_START
+    TEXT = "Restoring VM {$vm_name=STRING+} from snapshot started by user {$user=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+if in_list([
+    "USER_RESTORE_FROM_SNAPSHOT", "USER_TRY_BACK_TO_SNAPSHOT", 
+    "USER_COMMIT_RESTORE_FROM_SNAPSHOT_START", "USER_UNDO_RESTORE_FROM_SNAPSHOT_START", 
+    "USER_RESTORE_FROM_SNAPSHOT_START"
+    ], $event_class) then
+    $user = strip($user, "", ".")
+elif in_list(["USER_TRY_BACK_TO_SNAPSHOT", "USER_FAILED_RESTORE_FROM_SNAPSHOT"], $event_class) then
+    $user = strip($user, "", ").")
+endif
+
+if in_list([
+    "USER_COMMIT_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE", "USER_TRY_BACK_TO_SNAPSHOT_FINISH_FAILURE", 
+    "USER_UNDO_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE", "USER_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE"
+    ], $event_class) then
+    $vm_name = strip($vm_name, "", ".")
+endif
+
+if $user == "" then
+    $user = null
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+if $snapshot_name != null then
+    object.property = "snapshot_name"
+    object.value = $snapshot_name
+endif
+if in_list([
+    "USER_TRY_BACK_TO_SNAPSHOT", "USER_TRY_BACK_TO_SNAPSHOT_FINISH_SUCCESS",
+    "USER_TRY_BACK_TO_SNAPSHOT_FINISH_FAILURE", "USER_TRY_BACK_TO_SNAPSHOT"
+    ], $event_class) then
+    object.state = "preview"
+elif in_list([
+    "USER_COMMIT_RESTORE_FROM_SNAPSHOT_START",
+    "USER_COMMIT_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS",
+    "USER_COMMIT_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE"
+    ], $event_class) then
+    object.state = "commit"
+elif in_list([
+    "USER_UNDO_RESTORE_FROM_SNAPSHOT_START",
+    "USER_UNDO_RESTORE_FROM_SNAPSHOT_FINISH_SUCCESS",
+    "USER_UNDO_RESTORE_FROM_SNAPSHOT_FINISH_FAILURE"
+    ], $event_class) then
+    object.state = "undo"
+endif
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_VM_Snapshot_Restore"

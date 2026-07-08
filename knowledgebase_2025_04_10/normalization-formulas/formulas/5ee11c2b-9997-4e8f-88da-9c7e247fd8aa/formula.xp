@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = ($tmp_subsys == "Threat Emulation" 
+        and find_substr($kv["msg"], "installed") != null
+        and find_substr($kv["msg"], "updated") == null)
+        or 
+        ($tmp_subsys == "System Monitor"
+        and ($kv["sys_message:"] == "installed defaultfilter" 
+        or find_substr($kv["sys_message:"], "Installed") != null))
+        or
+        ($tmp_subsys == "Log Update" 
+        and find_substr($kv["msg"], "installation for blade") != null
+        and find_substr($kv["msg"], "successfully") != null)
+
+action = "update"
+object = "policy"
+status = "success"
+
+object.name = $kv["sys_message:"]
+
+datafield4 =  $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+importance = "info"
+reason = $kv["msg"]
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Policy_installed"

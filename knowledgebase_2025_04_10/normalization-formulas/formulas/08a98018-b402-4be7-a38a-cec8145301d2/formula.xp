@@ -1,0 +1,68 @@
+TEXT = '{$day_or_mon=WORD}{$locale="."|$locale="/"}{$mon_or_day=WORD}{$locale="."|$locale="/"}{$year=WORD} {$h=WORD}{":"|"."}{$m=WORD}{":"|"."}{$s=WORD}
+        file {$object_path_raw = STRING} downloaded by user {$uname = STRING+} was infected, file {datafield2 = REST}'
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+if find_substr($uname, "\\") != null then
+    $csv_object_domain_name = csv($uname, "\\", "'")
+    subject.account.domain = $csv_object_domain_name[0]
+    subject.account.name = $csv_object_domain_name[1]
+else
+    subject.account.name = strip ($uname, "'", "'")
+endif
+
+object.storage.fullpath = strip($object_path_raw, "'", "'")
+$proc_name_path = csv(object.storage.fullpath, "/", "`")
+object.storage.name = $proc_name_path[length($proc_name_path) - 1]
+object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+
+# datafield2 - путь до файла в карантине
+
+if $locale == "." then  # определяем в каком формате дата
+    $mon = $mon_or_day
+    $day = $day_or_mon
+else
+    $mon = $day_or_mon
+    $day = $mon_or_day
+endif
+
+$ds = string($day)   # день
+$ms = string($mon)   # месяц
+$ys = string($year)  # год
+$hs = string($h)     # час
+$mis = string($m)    # минута
+$ss = string($s)     # секунда
+
+if length($ms) == 1 then  # проверка на длину месяца в символах. Если символ один, то перед ним дописываем 0 иначе, оставляем все как есть.
+    $mms = "0"+ $ms else
+    $mms = $ms
+endif
+if length($ds) == 1 then
+    $dds = "0"+ $ds else
+    $dds = $ds
+endif
+if length($mis) == 1 then
+    $mmis = "0"+ $mis else
+    $mmis = $mis
+endif
+if length($hs) == 1 then
+    $hhs = "0"+ $hs else
+    $hhs = $hs
+endif
+if length($ss) == 1 then
+    $sss = "0"+ $ss else
+    $sss = $ss
+endif
+
+time = $mms+"/"+$dds+"/"+$ys+" "+$hhs+":"+$mmis+":"+$sss
+
+importance = "high"
+
+event_src.vendor = "entensys"
+event_src.title = "usergate_proxy_and_firewall"
+event_src.category = "Proxy server"
+
+id = "PT_Entensys_UserGate_Proxy_and_Firewall_filemonitor_antivirus_quarantine"

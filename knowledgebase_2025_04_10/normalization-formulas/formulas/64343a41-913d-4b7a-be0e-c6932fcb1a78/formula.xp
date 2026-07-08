@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {WORD?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{msgid="AUTHPRIV-6-SYSTEM_MSG"}: pam_unix({"sshd"|"dcos_sshd"}:session): session {$act=WORD}
+        for user {subject.name=WORD} {"by (uid="NUMBER")"?} - {"sshd"|"dcos_sshd"}[{NUMBER}]'
+
+subject = "account"
+
+action = switch $act
+    case "opened" "start"
+    case "closed" "stop"
+endswitch
+
+object = "session"
+status = "success"
+
+object.type = "terminal"
+
+importance = "info"
+
+event_src.category = "Network device"
+event_src.title = "nexus"
+event_src.vendor = "cisco"
+
+id = "PT_Cisco_Nexus_syslog_AUTHPRIV_6_SYSTEM_MSG_Session_action"

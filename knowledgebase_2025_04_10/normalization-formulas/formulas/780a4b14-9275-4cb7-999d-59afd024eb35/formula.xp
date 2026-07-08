@@ -1,0 +1,39 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?} ({WORD+},{WORD+}) {DATETIME} {"{"}{WORDDASH}{"}"}[FWNAT]:
+    ASP_SFW_NO_RULE_DROP: proto {NUMBER} ({protocol=WORD}), {$part1=WORDDASH}{$part2="/"?}{$part2num=NUMBER?}{$part3="/"?}{$part3num=NUMBER?}
+    {$part4="."?}{$part4num=NUMBER?}:{src.ip=IPV4|src.hostname=HOSTNAME}:{src.port=NUMBER} ->  {dst.ip=IPV4|dst.hostname=HOSTNAME}:{dst.port=NUMBER}, {reason=REST}'
+
+# If the message without PREFIX, hostname or ip-address will be in $host_pref var
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+# Build interface name from parts
+$iname = $part1
+if $part2 != null then
+    $iname = $iname + $part2 + string($part2num)
+endif
+
+if $part3 != null then
+    $iname = $iname + $part3 + string($part3num)
+endif
+
+if $part4 != null then
+    $iname = $iname + $part4 + string($part4num)
+endif
+
+datafield2 = $iname  # ingress interface
+
+action = "deny"
+object = "connection"
+status = "success"
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Firewall"
+
+id = "PT_Juniper_Junos_syslog_fwnat_sfw_no_rule_drop"

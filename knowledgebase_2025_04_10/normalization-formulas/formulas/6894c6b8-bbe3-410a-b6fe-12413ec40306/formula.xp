@@ -1,0 +1,45 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {$Computer=HOSTNAME} notice mcpd[{NUMBER}]: {NUMBER}:{NUMBER}: AUDIT -
+        client {datafield1=WORD}, {"tmsh-pid-"NUMBER","?} user {subject.name=STRING} - transaction #{NUMBER}-{NUMBER} - object
+        {NUMBER} - create {"{"} node_address {"{"} node_address_name {LITERAL}/{WORDDASH}/{$name=STRING}
+        node_address_description {UNTIL("node_")}{$rest=REST}'
+
+subject = "account"
+action = "create"
+object = "node"
+status = "success"
+
+object.name = strip($name,"","\"")
+
+if find_substr($rest, "address_addr") != null then
+    submessage("TEXT", "SPLIT1", $rest)
+elif find_substr($rest, "address_fqdn") != null then
+    submessage("TEXT", "SPLIT2", $rest)
+endif
+
+subformula "SPLIT1"
+    # Извлечение src.ip из $rest
+    TEXT = 'address_addr {src.ip=IPV4|src.ip=IPV6} {REST}'
+endsubformula
+
+subformula "SPLIT2"
+    # Извлечение src.hostname из $rest
+    TEXT = 'address_fqdn {$hostname=STRING} {REST}'
+    src.hostname = strip($hostname,"\"","\"")
+endsubformula
+
+# datafield1 - interface of creation
+
+importance = "info"
+
+event_src.title = "big_ip_virtual_edition"
+event_src.vendor = "f5_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Network device"
+
+id = "PT_F5_Networks_BIG_IP_Virtual_Edition_syslog_create_new_host"

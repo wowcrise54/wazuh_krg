@@ -1,0 +1,168 @@
+event Export_Via_Cli:
+    key:
+        event_src.host, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and (
+                (
+                    filter::ProcessStart_Windows("csptest.exe")
+                    and regex(replace(lower(object.process.cmdline), "", "\""), "\s+--?keyc(?:opy)?\\b", 0) != null
+                    and regex(replace(lower(object.process.cmdline), "", "\""), "\s+--?(?:cont)?src\\b", 0) != null
+                    and regex(replace(lower(object.process.cmdline), "", "\""), "\s+--?(?:cont)?dest\\b", 0) != null
+                )
+                or (
+                    filter::ProcessStart_Windows("reg.exe")
+                    and regex(lower(object.process.cmdline), "\\bexport\\b", 0) != null
+                    # (x64): HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Crypto Pro\Settings\Keys - ключи компьютера
+                    # (x32): HKEY_LOCAL_MACHINE\SOFTWARE\Crypto Pro\Settings\Keys - ключи компьютера
+                    # (x64): HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Crypto Pro\Settings\Users\*SID-пользователя*\Keys\*Название контейнера* - ключи пользователя ОС
+                    # (x32): HKEY_LOCAL_MACHINE\SOFTWARE\Crypto Pro\Settings\Users\*SID-пользователя*\Keys\*Название контейнера* - ключи пользователя ОС
+                    and regex(lower(object.process.cmdline), "\\\\crypto pro\\\\settings\\\\(?:keys|users)\\b", 0) != null
+                )
+                or (
+                    filter::ProcessStart_Windows("certmgr.exe")
+                    and regex(replace(lower(object.process.cmdline), "", "\""), "\s+--?ex(?:port)?\\b", 0) != null
+                    and regex(replace(lower(object.process.cmdline) ,"", "\""), "\s+--?dest\\b", 0) != null
+                )
+        )
+        and filter::CheckWL_Process_Creation("Export_Certs", lower(object.process.cmdline))
+    }
+
+event Export_Via_Rtcontrol_Panel:
+    key:
+        event_src.host, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "11"
+        and regex(lower(object.name), "\.(?:p7b|cer)", 0) != null
+        and lower(subject.process.name) == "rtcontrol_panel.exe"
+        and filter::CheckWL_File_Creation("Export_Certs", lower(join([object.fullpath, subject.process.fullpath], "|")))
+    }
+
+rule Export_Certs: Export_Via_Cli or Export_Via_Rtcontrol_Panel
+
+    init {
+        $labels = "w_auto"
+        }
+
+    on Export_Via_Cli {
+        $subject = subject  # account
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $event_src.fqdn = event_src.fqdn
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $reason = "export via cmdline"
+        
+        $alert.key = lower(object.process.cmdline)
+        $alert.context = "process_name: " + $object.process.name
+        switch $object.process.name
+            case "csptest.exe"
+                $alert.regex_match = regex(replace(lower(object.process.cmdline),"","\""), "\s+--?keyc(opy)?\\b", 0) + regex(replace(lower(object.process.cmdline),"","\""), "\s+--?(cont)?src\\b", 0) + regex(replace(lower(object.process.cmdline),"","\""), "\s+--?(cont)?dest\\b", 0)
+            case "reg.exe"
+                $alert.regex_match = regex(lower(object.process.cmdline), "\\\\crypto pro\\\\settings\\\\(keys|users)\\b.*", 0)
+            case "certmgr.exe"
+                $alert.regex_match = regex(replace(lower(object.process.cmdline),"","\""), "\s+--?ex(port)?\\b", 0) + regex(replace(lower(object.process.cmdline),"","\""), "\s+--?dest\\b", 0)
+        endswitch
+
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+    
+    on Export_Via_Rtcontrol_Panel {
+        $subject = subject  # process
+        $action = action  # create
+        $object = object  # file_object
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.guid = subject.process.guid
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+
+        $event_src.fqdn = event_src.fqdn
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $reason = "export via rutoken control panel"
+        
+        $alert.key = lower(join([object.fullpath, subject.process.fullpath], "|"))
+        $alert.regex_match = regex(lower(object.name), "\.(p7b|cer)", 0)
+        $alert.context = "process_name: " + $subject.process.name + " | regex_match: " + $alert.regex_match + " | cert_name: " + object.name
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $status = "success"
+    
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Data from Removable Media"
+
+    $importance = "low"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, coalesce($subject.account.name, $subject.process.name)], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}    
+    

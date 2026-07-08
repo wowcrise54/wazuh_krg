@@ -1,0 +1,51 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1366"
+       and $event_category == "Самозащита"
+       and $event_type == "Аудит отказов"
+
+subject = "process"
+action = "modify"
+object = "module"
+status = "ongoing"
+
+subformula "message"
+    TEXT = 'Попытка модификации или удаления параметров системы защиты.\n Имя объекта: {object.fullpath=STRING+}\n
+    {object.property="Запрошенная операция доступа"}: {object.value=WORD}\n Идентификатор инициирующего процесса: 
+    {subject.process.id=NUMBER}\n Имя инициирующего процесса: {subject.process.fullpath=STRING+}'
+    
+    $csv_fullpath = csv(subject.process.fullpath, "\\", "~")
+    subject.process.name = $csv_fullpath[length($csv_fullpath) - 1]
+    subject.process.path = strip(subject.process.fullpath, '', subject.process.name)
+
+    $csv_fullpath = csv(object.fullpath, "\\", "~")
+    object.name = $csv_fullpath[length($csv_fullpath) - 1]
+    object.path = strip(object.fullpath, '', object.name)
+endsubformula
+
+object.type = "security subsystem"
+
+submessage("TEXT", "message", $event_message)
+
+msgid = $event_id
+importance = "medium"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Самозащита" then
+    event_src.subsys = "self-protection"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1366_attempt_to_modify_or_delete_security_system_params"

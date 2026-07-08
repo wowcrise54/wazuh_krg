@@ -1,0 +1,71 @@
+query GetThreshold($rule_name) from Common_whitelist_auto_thresholds {
+    column::rule == $rule_name
+}
+
+query GetEmitsCount($rule_name, $alert_key) from Common_whitelist_auto_swap {
+    column::rule == $rule_name
+    and column::specific_value == $alert_key
+}
+
+event Event_to_whitelist:
+    filter {
+        filter::FromCorrelator()
+        and find_substr(labels, "w_auto") != null
+        and alert.key != null
+        and not (
+                 # check if specific value is manually elevated
+                 filter::CheckWL_BlackListValue(
+                     correlation_name,
+                     lower(event_src.host),
+                     lower(subject.account.id),
+                     lower(alert.key)
+                 )
+                 or filter::CheckWL_BlackListRegex(
+                     correlation_name,
+                     lower(event_src.host),
+                     lower(subject.account.id),
+                     lower(alert.key)
+                 )
+        )
+    }
+
+enrichment Correlation_auto_whitelisting
+    enrich Event_to_whitelist:
+
+        enrich_fields {
+            $rule_name = correlation_name
+            $alert_key = lower(alert.key)
+            $default_threshold = 5
+
+            # Common_whitelist_auto_thresholds
+            $tl_threshold = select_query_first("GetThreshold", [$rule_name], "threshold")
+            if $tl_threshold != -1 then
+                $threshold = if $tl_threshold > $default_threshold then $tl_threshold else $default_threshold endif
+
+                # Common_whitelist_auto_swap
+                $emits_count = select_query_first("GetEmitsCount", [$rule_name, $alert_key], "count")
+
+                $emits_count = $emits_count + 1
+
+                if $emits_count > $threshold then
+                    $insert_into_whitelist = true
+
+                    labels = replace(labels, "whitelisted", "w_auto")
+                else
+                    $insert_into_whitelist_swap = true
+
+                    labels = replace(labels, join(["pre_whitelisted", string($emits_count)], "_"), "w_auto")
+                endif
+            endif
+        }
+
+    insert_into Common_whitelist_auto if $insert_into_whitelist {
+        column::rule = $rule_name
+        column::specific_value = $alert_key
+    }
+
+    insert_into Common_whitelist_auto_swap if $insert_into_whitelist_swap {
+        column::rule = $rule_name
+        column::specific_value = $alert_key
+        column::count = $emits_count
+    }

@@ -1,0 +1,68 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{"Hostd:"?} {WORD} hostd[{WORD}] [Originator@{NUMBER} {$kv=UNTIL("]")} Event {NUMBER} :
+Renamed {$vm_name=STRING+} from {$old_name=STRING+} to {$new_name=STRING+} in {$datacenter_name=REST}'
+COND = ($vm_name == $old_name)
+
+subject = "account"
+action = "rename"
+object = "virtual_machine"
+status = "success"
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.name = $vm_name
+object.property = "name"
+object.value = $vm_name
+
+if (substr($new_name, 0, 14) == "/vmfs/volumes/") and (substr($new_name, -4, 4) == ".vmx") then
+    $new_name_list = csv($new_name, "/", "")
+    $new_name = strip($new_name_list[length($new_name_list)-1], "", ".vmx")
+endif
+
+object.new_value = $new_name
+
+datafield1 = $datacenter_name  # Datacenter Name
+datafield5 = $vm_name  # Virtual Machine Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+msgid = "VmRenamedEvent"
+importance = "low"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = "hostd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_6_0_syslog_VM_Rename"

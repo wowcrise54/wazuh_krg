@@ -1,0 +1,35 @@
+filter Vendors_Without_SID() {
+    in_list(["openvpn","gitlab","jfrog"], lower(event_src.vendor))
+    or (
+        lower(event_src.vendor) == "opensource"
+        and in_list(["teampass","openssh","keycloak","passwork"], lower(event_src.title))
+    )
+    or (
+        lower(event_src.vendor) == "vmware"
+        and in_list(["vsphere","esxi"], lower(event_src.title))
+    )
+    or (
+        lower(event_src.vendor) == "cisco"
+        and in_list(["ios", "asa", "pix", "fwsm", "ftd"], lower(event_src.title))
+    )
+    or (
+        lower(event_src.vendor) == "fortinet"
+        and lower(event_src.title) == "fortigate"
+    )
+    or (
+        lower(event_src.vendor) == "checkpoint"
+        and lower(event_src.title) == "gaia"
+    )
+    or (
+        lower(event_src.vendor) == "jetbrains"
+        and lower(event_src.title) == "teamcity"
+    )
+    or (
+        lower(event_src.vendor) == "atlassian"
+        and lower(event_src.title) == "confluence"
+    )
+    or (
+        lower(event_src.vendor) == "1c"
+        and lower(event_src.title) == "1c_enterprise"
+    )
+}

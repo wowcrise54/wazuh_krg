@@ -1,0 +1,37 @@
+EVENTLOG = 'EventID="5138"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "restore"
+object = "ds_object"
+status = "success"
+
+datafield1 = maybe_number16($Data["SubjectLogonId"])    # ID сессии
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.vendor = "microsoft"
+event_src.title = "active_directory"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+subject.name = lower($Data["SubjectUserName"])
+subject.domain = lower($Data["SubjectDomainName"])
+subject.id = $Data["SubjectUserSid"]
+
+object.name = $Data["NewObjectDN"]
+object.type = $Data["ObjectClass"]
+
+datafield2 = $Data["OpCorrelationID"]
+
+id = "PT_Microsoft_Windows_eventlog_5138_A_directory_service_object_was_undeleted"
+importance = "medium"

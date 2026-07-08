@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {$Computer=HOSTNAME} notice mcpd[{NUMBER}]:
+        {NUMBER}:{NUMBER}: AUDIT - client {datafield1=WORD}, {STRING?} user {subject.name=STRING} -
+        transaction {STRING} - object {NUMBER} - obj_delete {"{"} route_static_entry {"{"}
+        route_static_entry_name "/{WORDDASH}/{$tmp_object.value=STRING} {"}"} {"}"}
+        [Status=Command OK]'
+
+subject = "account"
+action = "modify"
+object = "table"
+status = "success"
+
+object.property = "entry"
+object.value = strip($tmp_object.value, '', '"')
+object.type = "routing"
+object.state = "delete"
+
+# datafield1 - creation interface
+
+importance = "info"
+
+event_src.vendor = "f5_networks"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "big_ip_virtual_edition"
+event_src.category = "Network device"
+
+id = "PT_F5_Networks_BIG_IP_Virtual_Edition_syslog_static_route_del"

@@ -1,0 +1,49 @@
+JSON = ''
+COND = $TaskName=="KERNEL_THREATINT_TASK_SETTHREADCONTEXT" and $EventID==5
+
+subject = "process"
+action = "access"
+object = "process"
+status = "success"
+
+subject.process.id = $EventData["CallingProcessId"]
+
+object.process.id = $EventData["TargetProcessId"]
+object.fullpath = $EventData["PcVadMmfName"]
+
+datafield1 = $EventData["ContextFlags"]            # Context flag
+datafield2 = $EventData["ContextMask"]             # Context mask
+datafield3 = $EventData["Fp"]                      # Frame pointer
+datafield4 = $EventData["Lr"]                      # Link register
+datafield5 = $EventData["Pc"]                      # Program Counter
+datafield6 = $EventData["PcVadAllocationBase"]     # Allocation base
+datafield7 = $EventData["PcVadAllocationProtect"]  # Allocation protection
+numfield1 = number($EventData["PcVadCommitSize"])  # Commit size
+datafield8 = $EventData["PcVadQueryResult"]        # Query result
+numfield2 = number($EventData["PcVadRegionSize"])  # "AllocationBase" size
+datafield9 = $EventData["PcVadRegionType"]         # Region type
+datafield10 = $EventData["Reg0"]                   # Processor register №0
+datafield11 = $EventData["Reg1"]                   # Processor register №1
+datafield12 = $EventData["Reg2"]                   # Processor register №2
+datafield13 = $EventData["Reg3"]                   # Processor register №3
+datafield14 = $EventData["Reg4"]                   # Processor register №4
+datafield15 = $EventData["Reg5"]                   # Processor register №5
+datafield16 = $EventData["Reg6"]                   # Processor register №6
+datafield17 = $EventData["Reg7"]                   # Processor register №7
+datafield18 = $EventData["Sp"]                     # Stack pointer
+datafield19 = lower($TaskName)                     # Task name
+
+time = $EventData["TargetProcessCreateTime"]
+msgid = $EventID
+importance = "info"
+
+category.generic = "Process"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "threat_intelligence"
+event_src.category = "Other"
+
+id = "PT_Positive_Technologies_XDR_ETW_set_thread_context"

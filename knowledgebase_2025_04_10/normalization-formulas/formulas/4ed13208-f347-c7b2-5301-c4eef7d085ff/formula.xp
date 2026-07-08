@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{"%"|"#"}{msgid="SYSLOG-I-INFO"}:
+        {object.property=UNTIL(" is")|object.property=UNTIL(" was")|object.property=UNTIL(" were")}
+        {$action="enabled"|$action="disabled"}'
+        
+action = "modify"
+object = "configuration"
+status = "success"
+
+object.name = "logging settings"
+
+if $action == "enabled" then
+    object.state = "enable"
+elif $action == "disabled" then
+    object.state = "disable"
+endif
+
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_change_logging_settings"

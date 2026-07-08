@@ -1,0 +1,44 @@
+TEXT = 'header,{NUMBER},{NUMBER},{msgid="accept(2)"},{WORDDASH?},
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|},
+        {$time_y=WORD"-"$time_mo=WORD"-"$time_d=WORD}
+        {$time_h=WORD":"$time_m=WORD":"$time_s=WORD"."NUMBER} {LITERAL}{NUMBER}:
+        {NUMBER}, argument,{NUMBER},{WORD},so, socket,{WORD},{NUMBER}x
+        0200,{WORD},{IPV4|IPV6},{WORD},{IPV4|IPV6}, subject,
+        {subject.name=WORDDASH},{subject.account.name=WORDDASH},{subject.account.group=WORDDASH},
+        {WORDDASH},{WORDDASH}, {NUMBER},{subject.account.session_id=NUMBER},{NUMBER+}
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME},return,{$stat=WORD},
+        {NUMBER}'
+
+subject = "account"
+action = "open"
+object = "connection"
+if $stat == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+protocol = "tcp"
+direction = "ingress"
+
+time = $time_y + $time_mo + $time_d + $time_h + $time_m + $time_s
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Communication"
+
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_tcp_accept_csv"

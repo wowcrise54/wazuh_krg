@@ -1,0 +1,13 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{event_src.hostname=HOSTNAME|STRING}  :Bay Secure intruder MAC {src.mac = MACADDR} port {interface = REST}'
+
+object = "device"
+action = "alert"
+status = "success"	
+
+event_src.title = "ers_5500"
+event_src.vendor = "avaya"
+event_src.category = "Network device"
+
+importance = "medium"
+
+id = "PT_Avaya_ERS_5500_syslog_mac_security_violation"

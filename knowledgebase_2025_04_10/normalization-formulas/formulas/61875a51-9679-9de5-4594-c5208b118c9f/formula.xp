@@ -1,0 +1,35 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {msgid='USER_UPDATE'}{STRING} User '{STRING} information was successfully updated. First name: '{$fname=WORD}'. Last name: '{$lname=WORD}'. Roles [{object.account.privileges=UNTIL(']')}. Email: '{$user=REST}"
+
+action = "modify"
+object = "account"
+status = "success"
+
+object.account.contact = strip($user, "", "'")
+object.account.fullname = $user
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    object.account.name = $user_list[0]
+    object.account.domain = $user_list[1]
+elif length($user_list) == 3 then
+    object.account.name = $user_list[0]
+    object.account.domain = $user_list[1]
+    logon_service = $user_list[2]
+else
+    object.account.name = $user
+    endif
+
+importance = "info"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_User_Update"

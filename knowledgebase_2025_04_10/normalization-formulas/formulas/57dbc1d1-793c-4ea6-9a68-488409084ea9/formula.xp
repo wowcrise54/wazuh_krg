@@ -1,0 +1,39 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id"
+
+COND = string($event_id) == "1161"
+       and $event_category == "Integrity control"
+       and $event_type == "Audit success"
+
+submessage("TEXT", "message", $event_message)
+
+action = "remove"
+object = "resource"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Удалена группа ресурсов"|"Resource group removal"}. {"Имя"|"Name"}: {object.name=REST}'
+endsubformula
+
+msgid = $event_id
+importance = "medium"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Контроль целостности" then
+    event_src.subsys = "integrity control"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1161_resource_group_removal_ldb"
+

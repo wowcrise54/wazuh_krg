@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>AXFR-запрос от недоверенного DNS-сервера. С помощью этого запроса злоумышленники могут раскрыть внутреннюю структуру сети и получить доступ к конфиденциальной информации</Description>
+  <EventDescriptions>
+    <EventDescription id="082d9fe8-7a8f-45c7-ae68-8c9ea7b50556">Зона {object.value} передана на недоверенный узел {dst.host} по TCP-запросу AXFR с доменного DNS-сервера {event_src.host}</EventDescription>
+    <EventDescription id="d55c4e01-a29a-4470-8a8e-4b4069ba4234">Запрещена передача зоны {object.value} на недоверенный узел {dst.host} по TCP-запросу AXFR с доменного DNS-сервера {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

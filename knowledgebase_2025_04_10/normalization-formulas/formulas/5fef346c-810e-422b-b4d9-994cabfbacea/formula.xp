@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {WORDDASH}: {NUMBER}: info: {msgid="storagePoolCreate"|msgid="storagePoolDestroy"}:
+        {NUMBER}: {"Starting up"|"Destroying"} {object.type="storage pool"} {$name=REST}'
+
+
+if msgid == "storagePoolCreate" then
+    action = "start"
+    importance = "info"
+elif msgid == "storagePoolDestroy" then
+    action = "stop"
+    importance = "low"
+endif
+object = "resource"
+status = "success"
+
+object.name = strip($name,"'","'")
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "qemu_kvm_libvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_QEMU_KVM_libvirt_syslog_Pool_create_destroy"

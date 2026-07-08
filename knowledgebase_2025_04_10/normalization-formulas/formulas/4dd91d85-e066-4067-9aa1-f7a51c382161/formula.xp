@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER":"?} {DATETIME} {$Computer=HOSTNAME} {object.name="waf-gowaf"}:
+        {time=DATETIME} [info] Starting {"with global config:"?} {$conf=REST}'
+
+action = "start"
+object = "service"
+status = "ongoing"
+
+if $conf != "" then
+    datafield1 = $conf  # starting parameters
+endif
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = "waf-gowaf"
+event_src.title = "application_firewall"
+event_src.category = "Application security"
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_WAF_GOWAF_starting"

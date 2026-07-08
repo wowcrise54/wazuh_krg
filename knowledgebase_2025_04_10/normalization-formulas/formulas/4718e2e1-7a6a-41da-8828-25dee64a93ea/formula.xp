@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?}{time=DATETIME}:{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {"#"|"%"}{msgid="CLIENT_EXCLUSION_SERVER-5-ADD_TO_BLACKLIST_REASON_DYNAMIC"|
+        msgid="CLIENT_ORCH_LOG-5-ADD_TO_BLACKLIST_MAC_THEFT_REASON"|
+        msgid="CLIENT_ORCH_LOG-5-ADD_TO_BLACKLIST_REASON"|}: Chassis
+        {NUMBER}R{NUMBER"/"NUMBER}: {"wncmgrd"|"wncd"}: Client MAC:{src.mac=MACADDR}
+        {"with IP:"?}{src.ip=IPV4|src.ip=IPV6|}was added to exclusion list {"associated with AP Name:"?}
+        {$ap_name=UNTIL(",")?}{"BSSID:MAC:"?}{dst.mac=MACADDR?},{UNTIL("reason:")}{$reason=REST}'
+
+action = "lock"
+object = "host"
+status = "success"
+
+if $user != "" then
+    subject.account.name = $user
+endif    
+
+datafield1 = $ap_name  # AP name
+
+reason = strip($reason, " ", "")
+
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_syslog_CLIENT_EXCLUSION_SERVER_5_ADD_TO_BLACKLIST_REASON_DYNAMIC"

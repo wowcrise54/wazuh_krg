@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?}
+        {UNTIL("Site:")} {"Site"?} {datafield1=UNTIL(",Server")} {"Name"?}: {datafield2=UNTIL(",")}{"\\""?}
+        Event Description: Network Audit {$temp=STRING+} {$ong="Started"|"Finished Normally"|$fail="Finished Abnormally"} {$raw_reason=STRING*}'
+
+object = "service"
+if $ong != null then
+    action = "start"
+    status = "ongoing"
+elif $fail != null then
+    action = "stop"
+    status = "failure"
+else
+    action = "terminate"
+    status = "success"
+endif
+
+object.name = "Network Audit " + $temp
+
+# datafield1 - Site Name
+# datafield2 - Server name
+
+reason = lower($raw_reason)
+
+importance = "info"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip2, $ip1)
+event_src.hostname = coalesce($host2, $host1)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_Network_audit_status"

@@ -1,0 +1,41 @@
+TEXT = '<{NUMBER}>{time=DATETIME} 
+{$Computer=STRING|event_src.ip=IPV4|event_src.ip=IPV6} 
+{STRING?} {$initial_time=DATETIME?} {msgid="dnsmasq"}[{NUMBER}]: 
+{object.process.id=NUMBER?} {IPV4|IPV6|}{"/"?}{object.process.chain=NUMBER?} query[{$type=WORD}] 
+{object.value=IPV4|object.value=IPV6|object.value=STRING} 
+from {src.ip=IPV4|src.ip=IPV6}'
+
+subject = "host"
+action = "send"
+object = "request"
+status = "success"
+
+object.property = "request object address"
+
+object.type = switch $type
+    case "A" "IPv4"
+    case "AAAA" "IPv6"
+endswitch
+
+if object.type == null then
+    object.type = $type
+endif
+
+if $initial_time != null then
+    time = $initial_time
+endif
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dnsmasq"
+event_src.category = "DNS server"
+
+id = "PT_Dnsmasq_syslog_dns_query"

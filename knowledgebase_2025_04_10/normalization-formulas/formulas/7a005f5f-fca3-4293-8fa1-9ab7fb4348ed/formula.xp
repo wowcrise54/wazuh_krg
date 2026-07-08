@@ -1,0 +1,28 @@
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Firewall_Policy_update"
+
+TABULAR= 'client_name, client_version, description, event_type, orig, os_name, os_version, policy_date, policy_name, product, product_family, src, src_machine_name, src_user_name, time'
+
+COND = ($product_family == "Endpoint" and $product == "Firewall" and $event_type == "Policy Update")
+
+object = "policy"
+object.name = $policy_name
+object.version = $policy_date
+
+action = "update"
+status = "success"
+
+subject = "account"
+subject.name = $src_user_name
+
+time = $time
+
+msgid = $event_type
+
+importance = "high"
+
+event_src.ip = $src
+event_src.hostname = $src_machine_name
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.subsys = lower($product)
+event_src.category = "Host security"

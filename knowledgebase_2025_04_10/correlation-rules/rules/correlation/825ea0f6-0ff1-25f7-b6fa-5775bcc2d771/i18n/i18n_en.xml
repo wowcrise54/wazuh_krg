@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Privilege escalation using the GodPotato technique allows an attacker with the ImpersonatePrivilege privilege to escalate their privileges to the System user. After this, the attacker can extract from the compromised node credentials for various services of local users, and in some cases, other users who accessed this node. Using this data will allow the attacker to move horizontally (Lateral Movement) to other infrastructure nodes.</Description>
+  <EventDescriptions>
+    <EventDescription id="af785c3e-6f54-930c-f5f6-3929e5f96308">Possible usage of the GodPotato technique to escalate privileges to system privileges on host {event_src.host}</EventDescription>
+    <EventDescription id="c29919be-e148-61f7-b1f5-5960b512c4e7">User {subject.account.name} used the GodPotato technique (executable {object.process.parent.name}) to run process {object.process.name} with system privileges on host {event_src.host}</EventDescription>
+    <EventDescription id="e167768b-d76c-9d56-c399-2a01fa96d4dc">User {subject.account.name} unsuccessfully used the GodPotato technique (executable {subject.process.name}) to escalate privileges to system privileges on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

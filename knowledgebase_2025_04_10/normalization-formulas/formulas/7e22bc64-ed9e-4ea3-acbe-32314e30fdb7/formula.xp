@@ -1,0 +1,27 @@
+id = "PT_Accord_SUCU_filemonitor_Open_file_to_write"
+
+!TEXT = "{time = DATETIME},{subject.name=WORDDASH},{HOSTNAME},Execute command,{msgid='OpenFileW'},{$csv=CSV}"
+
+submessage("TEXT","Command_param",$csv[9])
+subformula "Command_param"
+    !TEXT = "{object.name=STRING+} со статусом {REST}"
+endsubformula
+
+subject = "account"
+action = "open"
+
+object = "file"
+object.property = "access mode"
+object.value = "write"
+
+if $csv[0] == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+importance = "low"
+
+event_src.vendor = "accord"
+event_src.title = "sucu"
+event_src.category = "Host security"

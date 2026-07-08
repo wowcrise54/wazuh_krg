@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>The use of a script from a modified Impacket toolkit is detected. This allows to remotely dump the lsass process memory.</Description>
+  <EventDescriptions>
+    <EventDescription id="77e10f83-5bdb-6556-b725-c5ad04800cd3">User {subject.account.name} started a process with a base64 encoded command, which triggered a process with known Impacket tool patterns in the command line: "{datafield1}" on host {event_src.host}</EventDescription>
+    <EventDescription id="9553a075-e644-b3e5-de96-ddee0d663988">Process {subject.process.name} added registry key values {reason} on host {event_src.host}. These key values are known Impacket tool patterns.</EventDescription>
+    <EventDescription id="ec9db3bd-a6f2-f7bf-888e-fb2627b1bc30">User {subject.account.name} from host {src.host} remotely used files {reason} on host {event_src.host}. These files are probably a malicious SSP library and an lsass dump. This indicates possible use of a modified Impacket tool.</EventDescription>
+  </EventDescriptions>
+</Localization>

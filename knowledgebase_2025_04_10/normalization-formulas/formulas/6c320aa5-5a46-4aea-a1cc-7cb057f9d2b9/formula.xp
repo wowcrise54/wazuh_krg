@@ -1,0 +1,49 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        Vaultize - - [origin software={object.name=STRING} version={object.version=STRING} src= {src.ip=IPV4|src.ip=IPV6}]
+        [userid user= {$suser=UNTIL("][")} client url=https:// {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}
+        device= {src.hostname=UNTIL(" userAgent=")} {datafield1=UNTIL("]")} DEVICE {$act="Loggedin"| $act="Loggedout"}'
+
+subject = "account"
+action = switch $act
+    case "Loggedin" "login"
+    case "Loggedout" "logout"
+endswitch
+object = "application"
+status = "success"
+
+if find_substr($suser, "@") != null then
+    $csv = csv($suser, '@', '')
+    subject.account.name = $csv[0]
+    subject.account.domain = $csv[1]
+elif find_substr($suser, "CN=") != null then
+    $u_csv = csv($suser, ",CN=", "")
+    $d_csv = csv($u_csv[1], ",DC=", "")
+    subject.account.dn = $suser
+    subject.account.name = strip($u_csv[0], "CN=", "")
+    subject.account.domain = $d_csv[1] + '.' + $d_csv[2]
+endif
+
+logon_auth_method = 'remote'
+
+# datafield1 - user agent
+
+reason = "via agent"
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "vaultize_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vdr"
+event_src.category = "Application server"
+
+id = "PT_Vaultize_Technologies_VDR_syslog_login_logout_via_agent"

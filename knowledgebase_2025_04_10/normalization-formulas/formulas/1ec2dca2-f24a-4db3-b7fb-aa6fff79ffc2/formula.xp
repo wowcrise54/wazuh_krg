@@ -1,0 +1,40 @@
+!TABULAR = 'GLOBAL_ID,
+            MESSAGE_TEXT,
+           {time=EVENT_TIME},
+           DRIVER_NAME,
+           MESSAGE_ID'
+
+COND = in_list([6, 7, 15, 16, 52, 77, 133, 134, 143], $MESSAGE_ID) == true and
+       $DRIVER_NAME == "Пользователь" and
+       $MESSAGE_TEXT != ""
+
+if $WORKSTATION_USER_NAME != "No User" then
+   subject = "account"
+   subject.name = $WORKSTATION_USER_NAME
+endif
+
+action = "modify"
+object = "configuration"
+status = "success"
+
+reason = $MESSAGE_TEXT
+
+if $USER_COMMENT != "" then
+    datafield1 = $USER_COMMENT  # Комментарий
+endif
+
+msgid = $MESSAGE_ID
+importance = "info"
+
+event_src.vendor = "es_prom"
+event_src.title = "bastion"
+event_src.category = "Physical security"
+event_src.subsys = "user"
+
+if $WORKSTATION_NAME == "Локальный компьютер" then
+    event_src.hostname = "localhost"
+else
+    event_src.hostname = $WORKSTATION_NAME
+endif
+
+id = "PT_es_prom_bastion_odbc_user_configuration_modify"

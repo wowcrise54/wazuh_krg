@@ -1,0 +1,57 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$host=HOSTNAME} CEF:0|Trend Micro|Apex Central|
+        {NUMBER}|{msgid=NUMBER}|Engine Update Status|3|{$kv=KEYVALUE(" ", "=", "")}'
+
+action = "validate"
+object = "update"
+
+status = switch $kv["cn1"]
+    case "0" "failure"
+    case "1" "success"
+    case "2" "failure"
+    case "100" "success"
+    case "101" "failure"
+    case "102" "failure"
+endswitch
+
+object.id = $kv["cn2"]
+object.version = $kv["cs5"]
+object.type = $kv["msg"]
+
+src.hostname = $kv["shost"]
+src.ip = $kv["cs2"]
+
+datafield1 = switch $kv["cn1"]  # Статус подключения
+    case "0" "Unable to connect"
+    case "1" "Active"
+    case "2" "Inactive"
+    case "100" "Product active"
+    case "101" "Product inactive but agent is active"
+    case "102" "Roaming"
+endswitch
+
+datafield2 = switch $kv["cn3"]  # Статус движка
+    case "0" "Unused"
+    case "1" "In use"
+endswitch
+
+if $kv["cs6"] == "1" then
+    datafield3 = "Engine"  # Тип компонента ActiveUpdate
+endif
+
+time = substr($kv["rt"], 0, 23)
+importance = "info"
+
+event_src.vendor = "trend_micro"
+event_src.title = "apex_one"
+
+$dot_pos = find_substr($host, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($host)
+    event_src.hostname = lower(substr($host, 0, $dot_pos))
+else
+    event_src.hostname = lower($host)
+endif
+ 
+event_src.category = "Host security"
+
+id = "PT_Trend_Micro_Apex_One_syslog_Engine_Update_Status"

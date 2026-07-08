@@ -1,0 +1,236 @@
+TABULAR = "user_name,
+           subsystem,
+           action,
+           status"
+
+COND = in_list([20030, 20031, 30100, 60030, 60031, 70020, 80030, 80031, 80032, 80033,
+                80034, 80035, 80036, 80037, 80038, 80039, 80040, 80041, 80042, 80043], $action)
+
+$kv = keyvalue($data, ' ', '=', '"')
+
+if $user_name != "" then
+    subject = "account"
+    subject.account.name = $user_name
+endif
+
+switch $action
+    case 20030
+        action = "bind"
+        object = "resource"
+
+        object.type = "station"
+        object.state = "added to group"
+        object.id = $kv['"SID"']
+        object.property = "group"
+        object.value = $kv['"GID"']
+    case 20031
+        action = "unbind"
+        object = "resource"
+
+        object.type = "station"
+        object.state = "removed from group"
+        object.id = $kv['"SID"']
+        object.property = "group"
+        object.value = $kv['"GID"']
+    case 30100
+        action = "bind"
+        object = "resource"
+
+        object.type = "station"
+        object.state = "primary group set"
+        object.id = $kv['"SID"']
+        object.property = "group"
+        object.value = $kv['"GID"']
+    case 60030
+        action = "bind"
+        object = "resource"
+
+        object.type = "station"
+        object.state = "added to policy"
+        object.id = $kv['"SID"']
+        object.property = "policy"
+        object.value = $kv['"PID"']
+    case 60031
+        action = "unbind"
+        object = "resource"
+
+        object.type = "station"
+        object.state = "removed from policy"
+        object.id = $kv['"SID"']
+        object.property = "policy"
+        object.value = $kv['"PID"']
+    case 70020
+        action = "bind"
+        object = "resource"
+
+        object.type = "proxy server"
+        object.state = "primary group set"
+        object.id = $kv['"PID"']
+        object.property = "group"
+        object.value = $kv['"GID"']
+    case 80030
+        action = "bind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "assigned to station"
+        object.id = $kv['"ProfileId"']
+        object.property = "station"
+        object.value = $kv['"SID"']
+    case 80031
+        action = "bind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "assigned to station group"
+        object.id = $kv['"ProfileId"']
+        object.property = "group"
+        object.value = $kv['"GID"']
+    case 80032
+        action = "bind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "assigned to policy"
+        object.id = $kv['"ProfileId"']
+        object.property = "policy"
+        object.value = $kv['"PID"']
+    case 80033
+        action = "bind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "assigned to user on a station"
+        object.id = $kv['"ProfileId"']
+        object.property = "user"
+        object.value = $kv['"UID"']
+        datafield1 = $kv['"SID"']     # идентификатор целевой станции
+    case 80034
+        action = "bind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "assigned to user group on a station"
+        object.id = $kv['"ProfileId"']
+        object.property = "user group"
+        object.value = $kv['"GID"']
+        datafield1 = $kv['"SID"']     # идентификатор целевой станции
+    case 80035
+        action = "bind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "assigned to AD user"
+        object.id = $kv['"ProfileId"']
+        object.property = "AD user"
+        object.value = $kv['"UID"']
+    case 80036
+        action = "bind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "assigned to AD user group"
+        object.id = $kv['"ProfileId"']
+        object.property = "AD user group"
+        object.value = $kv['"GID"']
+    case 80037
+        action = "unbind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "unassigned from station"
+        object.id = $kv['"ProfileId"']
+        object.property = "station"
+        object.value = $kv['"SID"']
+    case 80038
+        action = "unbind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "unassigned from station group"
+        object.id = $kv['"ProfileId"']
+        object.property = "group"
+        object.value = $kv['"GID"']
+    case 80039
+        action = "unbind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "unassigned from policy"
+        object.id = $kv['"ProfileId"']
+        object.property = "policy"
+        object.value = $kv['"PID"']
+    case 80040
+        action = "unbind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "unassigned from user on a station"
+        object.id = $kv['"ProfileId"']
+        object.property = "user"
+        object.value = $kv['"UID"']
+        datafield1 = $kv['"SID"']     # идентификатор целевой станции
+    case 80041
+        action = "unbind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "unassigned from user group on a station"
+        object.id = $kv['"ProfileId"']
+        object.property = "user group"
+        object.value = $kv['"GID"']
+        datafield1 = $kv['"SID"']     # идентификатор целевой станции
+    case 80042
+        action = "unbind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "unassigned from AD user"
+        object.id = $kv['"ProfileId"']
+        object.property = "AD user"
+        object.value = $kv['"UID"']
+    case 80043
+        action = "unbind"
+        object = "profile"
+
+        object.type = "application control settings"
+        object.state = "unassigned from AD user group"
+        object.id = $kv['"ProfileId"']
+        object.property = "AD user group"
+        object.value = $kv['"GID"']
+endswitch
+
+if $status == "success" then
+    status = "success"
+elif $status == "failure" then
+    status = "failure"
+else
+    drop
+endif
+
+if $src_host != "" then
+    submessage("TEXT", "get_address_port", $src_host)
+endif
+
+subformula "get_address_port"
+    TEXT = '{UNTIL("//")} {"["?} {event_src.ip=IPV4|event_src.ip=IPV6|
+             $Computer=HOSTNAME} {"] :"?}  {REST}'
+endsubformula
+
+time = string($createtime)
+msgid = $action
+importance = "low"
+
+event_src.vendor = "drweb"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "security_suite"
+event_src.subsys = lower($subsystem)
+event_src.category = "Anti-virus"
+
+id = "PT_DrWeb_Security_Suite_odbc_event_assign_entity"

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Возможное использование утилит KrbRelay или DavRelayUp, позволяющих использовать отсутствие подписи запросов LDAP для ретрансляции процесса аутентификации и получения TGS-билета для SPN учетной записи от имени администратора. После этого злоумышленник может повысить свои привилегии до локального администратора и выполнить вредоносный код на скомпрометированном узле</Description>
+  <EventDescriptions>
+    <EventDescription id="43ee018d-c10b-4b4a-8d06-b3d62053ab41">Возможное использование утилит KrbRelay или DavRelayUp с локальной аутентификацией пользователя {subject.account.name} с помощью ретранслируемого билета Kerberos на узле {event_src.host}</EventDescription>
+    <EventDescription id="ed9d8efa-0a1c-4763-bdb9-0e2e92b12a68">Возможное использование утилит KrbRelay или DavRelayUp с созданием интерфейса {datafield2} процессом {subject.process.name} с последующим соединением на узел {dst.host}:{dst.port} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

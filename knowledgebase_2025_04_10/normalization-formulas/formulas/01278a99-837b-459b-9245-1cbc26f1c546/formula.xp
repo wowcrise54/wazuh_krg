@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?} date={$date=WORDDASH} time={$time=STRING} device_id={event_src.id=WORDDASH} log_id={msgid=WORD}
+        type=kevent subtype=update pri=information  msg="Loaded {object.name=WORD} {object.version=UNTIL(" using")} {REST}'
+
+action = "update"
+object = "resource"
+status = "success"
+
+time = $date + " " + $time
+importance = "info"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortimail"
+event_src.category = "Application security"
+
+id = "PT_Fortinet_Fortimail_syslog_Kevent_update"

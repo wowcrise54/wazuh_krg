@@ -1,0 +1,153 @@
+# Запуск утилиты с созданием директории config.msi
+event StartProcess_And_Create_ConfigMsi:
+    key:
+        event_src.host
+    filter {
+        correlation_name == "Subrule_StartProcess_And_Create_ConfigMsi"
+        and filter::CheckWL_Specific_Only("PrintSpooler_PrivEsc_CVE_2022_30206", alert.key)
+    }
+
+# Процесс "spoolsv.exe" создал объект "PWN" в реестре на узле
+event CreatePrinter:
+    key:
+        event_src.host
+    filter { 
+        filter::NotFromCorrelator()
+        and msgid == "12"
+        and action == "create"  
+        and status == "success"
+        and match(lower(subject.process.fullpath), "?:\\windows\\system32\\spoolsv.exe")
+        and lower(object.path) == "\\registry\\machine\\software\\microsoft\\windows nt\\currentversion\\print\\printers\\"
+    }
+
+# Задание параметра SpoolDirectory, которое уникально
+event ModifySpoolDirectory:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and action == "modify"
+        and status == "success"
+        and lower(object.name) == "spooldirectory"
+        and match(lower(object.path), "\\registry\\machine\\software\\microsoft\\windows nt\\currentversion\\print\\printers\\*\\")
+        and match(lower(subject.process.fullpath), "?:\\windows\\system32\\spoolsv.exe")
+    }   
+
+# Задание дополнительных параметров.
+event CreateCopyfilesAndPayload:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "12"
+        and action == "create"
+        and status == "success"
+        and lower(object.name) == "payload"
+        and match(lower(object.fullpath), "*\\copyfiles\\payload")
+        and match(lower(subject.process.fullpath), "?:\\windows\\system32\\spoolsv.exe")
+    }  
+
+rule PrintSpooler_PrivEsc_CVE_2022_30206: (StartProcess_And_Create_ConfigMsi
+                                           and CreatePrinter
+                                           and ModifySpoolDirectory
+                                           and CreateCopyfilesAndPayload) within 3m
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on StartProcess_And_Create_ConfigMsi {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $alert.key = alert.key
+
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+
+    on CreatePrinter {
+        # Имя принтера
+        $object.name = object.name
+
+        $datafield2 = subject.process.id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on ModifySpoolDirectory {
+        # Путь spooldirectory
+        $object.new_value = object.new_value
+
+        # \\registry\\machine\\software\\microsoft\\windows nt\\currentversion\\print\\printers\\pwn\\spooldirectory
+        $object.fullpath = object.fullpath
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $alert.context = "printer_name: " + $object.name + "|spooldirectory: " + $object.new_value
+    if lower($object.name) == "pwn" or match(lower($object.new_value), "?:\\users\\public\\tmp\\1") then
+        $alert.context = $alert.context + "|known_tool"
+    endif
+    
+    $importance = "medium"
+
+    $subject = "account"
+    $action = "escalate"
+    $object = "session"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.id], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

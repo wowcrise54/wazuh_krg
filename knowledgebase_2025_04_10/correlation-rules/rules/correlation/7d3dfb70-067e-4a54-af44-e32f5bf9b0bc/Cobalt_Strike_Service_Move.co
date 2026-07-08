@@ -1,0 +1,118 @@
+event File_Write_Share:
+    key:
+        event_src.host, object.storage.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "5145"
+        and event_src.title == "windows"
+        and match(lower(object.storage.fullpath), "?:\\windows\\system32\\perceptionsimulation\\hid.dll")
+        and find_substr(lower(datafield9), "writedata") != null
+        and filter::CheckWL_Windows_Shares("Cobalt_Strike_Service_Move", lower(join([src.host, event_src.host], "|")))
+    }
+
+event Image_Load:
+    key:
+        event_src.host, object.process.fullpath
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "7"
+        and match(lower(subject.process.fullpath), "?:\\windows\\system32\\perceptionsimulation\\perceptionsimulationservice.exe")
+        and match(lower(object.process.fullpath), "?:\\windows\\system32\\perceptionsimulation\\hid.dll")
+    }
+
+rule Cobalt_Strike_Service_Move: File_Write_Share and Image_Load within 20s
+
+    init {
+        $labels = "w_auto|CheckWL_Windows_Shares"
+    }
+
+    on File_Write_Share {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $object.storage.id = object.storage.id
+        $object.storage.name = object.storage.name
+        $object.storage.path = object.storage.path
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $datafield6 = datafield6  # Полученные права (коды)
+        $datafield9 = datafield9  # Полученные права (письменный вариант)
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([src.host, event_src.host], "|"))
+        $alert.context = lower(join([subject.account.name, object.storage.fullpath], "|"))
+    }
+
+    on Image_Load {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.version = object.version
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+
+    $importance = "high"  
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services: SMB/Windows Admin Shares"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($src.ip), lower($subject.account.id)], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

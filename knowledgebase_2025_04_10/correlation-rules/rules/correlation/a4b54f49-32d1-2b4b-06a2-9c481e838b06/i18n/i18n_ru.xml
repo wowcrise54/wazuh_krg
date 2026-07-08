@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля в системе Vault. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="7cd373f1-35b2-adcb-f142-b5d2ecf9df37">Успешное распыление пароля (password spraying) с узла {src.ip} в системе Vault на узле {event_src.host}. Подобран пароль для следующих пользователей: {datafield2}. Количество неудачных попыток входа: {count.subevents}</EventDescription>
+    <EventDescription id="8615c279-860c-764e-bba2-2ee1568bafce">Попытки распыления пароля (password spraying) с узла {src.ip} в системе Vault на узле {event_src.host}. Количество попыток входа: {count.subevents}</EventDescription>
+    <EventDescription id="f063b3da-c7e5-6f41-1f07-ab5d525dd847">Успешное распыление пароля (password spraying) с узла {src.ip} в системе Vault на узле {event_src.host}. Подобран пароль для пользователя {subject.account.name}. Количество неудачных попыток входа: {count.subevents}</EventDescription>
+  </EventDescriptions>
+</Localization>

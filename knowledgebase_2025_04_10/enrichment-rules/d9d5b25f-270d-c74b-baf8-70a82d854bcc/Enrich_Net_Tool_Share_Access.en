@@ -1,0 +1,122 @@
+event Net_Start:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and in_list(["net.exe", "net1.exe"], lower(object.process.name))
+        and regex(lower(object.process.cmdline), "net(1)?(\.exe)?.*?\\buse\\b.*?", 0) != null    
+        }
+
+enrichment Enrich_Net_Tool_Share_Access
+    enrich Net_Start:
+        enrich_fields {
+            $lower_cmdline = lower(object.process.cmdline)
+            datafield12 = regex($lower_cmdline, "\\\\\\\\(.+?)\\\\((.+?)((\$)|\\b))", 2)
+            datafield11 = null
+
+            # Хост или IP из UNC-пути
+            $host_or_ip = regex($lower_cmdline, "\\\\\\\\(.+?)(\\\\(.+?))+?", 1)
+            if regex($host_or_ip, "([\d\.]+?)\:(\d+)", 2) != null then
+                dst.port = regex($host_or_ip, "([\d\.]+?)\:(\d+)", 2)
+                $host_or_ip = regex($host_or_ip, "([\d\.]+?)\:(\d+)", 1)
+            endif
+            if ipv4($host_or_ip) != null or ipv6($host_or_ip) != null then
+                dst.ip = $host_or_ip 
+            else
+                dst.hostname = $host_or_ip
+            endif
+            # Имя ресурса из UNC-пути
+            # Проверка на использование флага /user
+            if regex($lower_cmdline, "(\/u[ser]{0,3}):.*?(\\b([a-z0-9\._-]{1,20}\\b\\\\\\b)?(\S+)\\b)", 4) != null then
+                $domain_and_username = regex($lower_cmdline, "(\/u.*?):.*?(\\b([a-z0-9\._-]{1,20}\\b\\\\\\b)?(\S+)\\b)", 0)
+                # Имя пользователя в формате: domain\username или username
+                if regex($domain_and_username, "(\/u[ser]{0,3}):.*?(\\b(\S+)\\b@([a-z0-9\._-]{1,20}))", 3) != null then
+                    datafield13 = regex($lower_cmdline, "(\/u[ser]{0,3}):.*?(\\b(\S+)\\b@([a-z0-9\._-]{1,20}))", 4) # Домен пользователя
+                    datafield14 = regex($lower_cmdline, "(\/u[ser]{0,3}):.*?(\\b(\S+)\\b@([a-z0-9\._-]{1,20}))", 3) # Имя пользователя
+                # Имя пользователя в формате: username@domain
+                else
+                    datafield13 = strip(regex($lower_cmdline, "(\/u[ser]{0,3}):.*?(\\b([a-z0-9\._-]{1,20}\\b\\\\\\b)?(\S+)\\b)", 3), "\\", "\\") # Домен пользователя
+                    datafield14 = regex($lower_cmdline, "(\/u[ser]{0,3}):.*?(\\b([a-z0-9\._-]{1,20}\\b\\\\\\b)?(\S+)\\b)", 4)                    # Имя пользователя
+                endif
+            endif
+
+            # Если идёт подключение к объекту сетевого каталога
+            if regex($lower_cmdline, "(\/u[ser]{0,3}):(.*?\\b([a-z0-9\._-]{1,20}\\b\\\\\\b)?(\S+)\\b|.*?\\b(\S+)\\b@([a-z0-9\._-]{1,20}))", 0) != null and regex($lower_cmdline, "\/sa.*?\\b", 0) == null then
+                datafield11 = "connect"
+                # UNC-путь
+                datafield15 = strip(regex($lower_cmdline, "(\\\\\\\\([a-z|0-9|\-|\_|\s|\.])+?(\\\\[^\\|\/|\:|\*|\?|\"|\<|\>|\||\'|]+?)+)(\"|\'|\s)", 1), "", " ")
+                if regex($lower_cmdline, "\/sm[artcard]{0,7}\\b", 0) == null then 
+                    # Парсинг пароля
+                    datafield16 = regex($lower_cmdline, "\\buse\\b\s+([d-z]:|\*)?.*?(\\\\\\\\(.+?)(\\\\(.+?))+?)\s+(\*|\S+)?\s*(\/u.*?):(.*?\\b([a-z0-9\._-]{1,20}\\b\\\\\\b)?(\S+)|.*?\\b(\S+)\\b@([a-z0-9\._-]{1,20}))(\s+(\*|\S+))?", 6)
+                    if datafield16 == null then
+                        datafield16 = regex($lower_cmdline, "\\buse\\b\s+([d-z]:|\*)?.*?(\\\\\\\\(.+?)(\\\\(.+?))+?)\s+(\*|\S+)?\s*(\/u.*?):(.*?\\b([a-z0-9\._-]{1,20}\\b\\\\\\b)?(\S+)|.*?\\b(\S+)\\b@([a-z0-9\._-]{1,20}))(\s+(\*|\S+))?", 14)
+                    endif
+                    datafield16 = strip(datafield16, "\"", "\"")
+                    if datafield16 == null and regex(datafield16, "(\/p[ersistent]{0,9})\:(y|n)", 0) == null then
+                        datafield16 = "Password isn\'t specified"
+                    else
+                        datafield16 = "Password: " + datafield16
+                    endif
+                else
+                    datafield16 = "Password from Smart Card"
+                endif
+            endif
+            
+            # Если пользователь удаляет соединение
+            if regex($lower_cmdline, "\\buse\\b.*?/delete", 0) != null and not(match(datafield16, "*Password*")) and regex($lower_cmdline, "\/sa.*?\\b", 0) == null then
+                datafield11 = "delete"
+                # Имя ресурса из UNC-пути
+                datafield12 = regex($lower_cmdline, "\\\\\\\\(.+?)\\\\(.+?)(\\\\|\s|\")", 2)
+                # Ресурс, который удалили, один или все
+                $1 = regex($lower_cmdline, "\\buse\\b.*?([d-z]:|\*|(\\\\\\\\([a-z|0-9|\-|\_|\s|\.])+?(\\\\[^\\|\/|\:|\*|\?|\"|\<|\>|\|]+)+)).*?(\s+\/delete)", 1)
+                $2 = regex($lower_cmdline, "\\buse\\b.*?\/\\bdelete\\b.*?([d-z]:|\*|(\\\\\\\\([a-z|0-9|\-|\_|\s|\.])+?(\\\\[^\\|\/|\:|\*|\?|\"|\<|\>|\|]+)+))", 1)
+                datafield13 = coalesce($1, $2)
+                if datafield13 == "*" then
+                    datafield14 = "all"
+                else
+                    datafield14 = "one"
+                endif
+                # UNC-путь
+                datafield15 = strip(regex($lower_cmdline, "(\\\\\\\\([a-z|0-9|\-|\_|\s|\.])+?(\\\\[^\\|\/|\:|\*|\?|\"|\<|\>|\||\']+)+)", 1), "", " ")
+            endif
+
+            # Проверка на использование /savecred - сохранять ли учётные данные
+            if regex($lower_cmdline, "\/sa[vecred]{0,6}\\b", 0) != null then
+                datafield11 = "savecred"
+                # Имя ресурса из UNC-пути
+                datafield12 = regex($lower_cmdline, "\\\\\\\\(.+?)\\\\(.+?)(\\\\|\s|\"|\')", 2)
+                # UNC-путь
+                datafield15 = strip(regex($lower_cmdline, "(\\\\\\\\([a-z|0-9|\-|\_|\s|\.])+?(\\\\[^\\|\/|\:|\*|\?|\"|\<|\>|\||\']+)+)", 1), "", " ")
+            endif
+
+            # Проверка на использование /persistent - запоминать ли сетевые подключения
+            $remember = regex($lower_cmdline, "(\/p[ersistent]{0,9})\:(y([es]{0,2})\\b|no?\\b)", 2)
+            if $remember != null then
+                datafield11 = join([datafield11, "remember"], "|")
+            endif
+            
+            # Проверка на использование /home - запоминать ли сетевые подключения
+            $home = regex($lower_cmdline, "\/h[ome]{0,3}\\b", 0)
+            if $home != null then
+                datafield11 = "home"
+            endif
+            
+            if regex($lower_cmdline, "\\buse\\b\s+([d-z]\:|\*)?.*?(((\\\\\\\\(.+?)(\\\\(.+?))+?)\\b)|\\b\S+\\b|(\\\\\\\\(.+)))", 0) != null and datafield11 == null then
+                datafield11 = "discovery"
+                # UNC - путь
+                datafield15 = regex($lower_cmdline, "\\buse\\b\s+([d-z]\:|\*)?.*?(((\\\\\\\\(.+?)(\\\\(.+?))+?)\\b)|\\b\S+\\b|(\\\\\\\\(.+)))", 2)
+                # Хост или IP из UNC-пути
+                $1 = regex($lower_cmdline, "\\\\\\\\(.*?)\\\\", 1)
+                $2 = regex($lower_cmdline, "\\\\\\\\(S+)", 1)
+                $3 = regex($lower_cmdline, "\\buse\\b.*?([d-z]\:|\*)?.*?(\S+)", 2)
+                $host_or_ip = coalesce($1, $2, $3)
+                if regex($host_or_ip, "([\d\.]+?)\:(\d+)", 2) != null then
+                    dst.port = regex($host_or_ip, "([\d\.]+?)\:(\d+)", 2)
+                    $host_or_ip = regex($host_or_ip, "([\d\.]+?)\:(\d+)", 1)
+                endif
+                if ipv4($host_or_ip) != null or ipv6($host_or_ip) != null then
+                    dst.ip = $host_or_ip 
+                else
+                    dst.hostname = $host_or_ip
+                endif
+            endif
+        }

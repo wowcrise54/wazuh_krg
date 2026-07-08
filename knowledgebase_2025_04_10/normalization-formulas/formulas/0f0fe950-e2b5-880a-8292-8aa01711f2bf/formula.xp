@@ -1,0 +1,64 @@
+JSON = ''
+
+COND = $event["get_task_inspect"] != null
+
+subject = "process"
+action = "extract"
+object = "resource"
+status = "success"
+
+subject.account.id = $process["audit_token"]["ruid"]
+subject.account.session_id = $process["session_id"]
+
+subject.process.id = $process["audit_token"]["pid"]
+subject.process.parent.id = $process["ppid"] 
+subject.process.fullpath = $process["executable"]["path"]
+$temp_name = csv(subject.process.fullpath, "/", "'")
+subject.process.name = $temp_name[length($temp_name) - 1]
+subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+
+object.name = $event["get_task_inspect"]["target"]["signing_id"]
+subject.process.hash = "UNKNOWN:" + $process["cdhash"]
+object.type = "inspect port of task"
+
+object.process.fullpath = $event["get_task_inspect"]["target"]["executable"]["path"]
+$temp_name = csv(object.process.fullpath, "/", "'")
+object.process.name = $temp_name[length($temp_name) - 1]
+object.process.path = strip(object.process.fullpath, "", object.process.name)
+
+datafield1 = $process["audit_token"]["euid"]  # effective user ID
+datafield2 = $process["audit_token"]["rgid"]  # real group ID
+datafield3 = $process["audit_token"]["auid"]  # audit user ID
+datafield4 = $process["audit_token"]["egid"]  # effective group ID
+datafield5 = $process["is_platform_binary"]          # является ли исполняемый файл предустановленным Apple в ОС
+datafield6 = $process["is_es_client"]                # имеет ли данный процесс разрешение на работу с EndpointSecurity API
+datafield7 = $process["signing_id"]                  # идентификатор подписи кода исполняемого файла
+datafield8 = $process["codesigning_flags"]           # флаги подписи кода исполняемого файла
+datafield9 = $process["tty"]                         # tty ассоциированный с процессом
+datafield10 = "UNKNOWN:" + $event["get_task_inspect"]["target"]["cdhash"]  # target hash
+datafield11 = $process["team_id"]                    # идентификатор разработчика исполняемого файла
+datafield12 = $event["get_task_inspect"]["target"]["codesigning_flags"]    # флаги подписи кода целевого файла
+datafield13 = $event["get_task_inspect"]["target"]["is_platform_binary"]   # является ли целевой файл предустановленным Apple в ОС
+datafield14 = $event["get_task_inspect"]["target"]["is_es_client"]         # имеет ли целевой процесс разрешение на работу с EndpointSecurity API
+datafield15 = $event["get_task_inspect"]["target"]["group_id"]             # group id
+datafield16 = $event["get_task_inspect"]["target"]["session_id"]           # session id
+datafield17 = $event["get_task_inspect"]["target"]["audit_token"]["asid"]  # asid
+datafield18 = $event["get_task_inspect"]["target"]["audit_token"]["ruid"]  # real user ID
+datafield19 = $event["get_task_inspect"]["target"]["audit_token"]["euid"]  # effective user ID
+datafield20 = $event["get_task_inspect"]["target"]["audit_token"]["rgid"]  # real group ID
+
+numfield1 = $event["get_task_inspect"]["target"]["audit_token"]["auid"]    # audit user ID
+numfield2 = $event["get_task_inspect"]["target"]["audit_token"]["egid"]    # effective group ID
+numfield3 = $event["get_task_inspect"]["target"]["audit_token"]["pid"]     # target process identifier
+numfield4 = $event["get_task_inspect"]["target"]["original_ppid"]          # original parent target process identifier
+numfield5 = $event["get_task_inspect"]["target"]["ppid"]                   # parent target process identifier
+
+msgid = $event_type
+time = $time
+importance = "info"
+
+event_src.category = "Host security"
+event_src.vendor = "positive_technologies"
+event_src.title = "edr"
+
+id = "PT_Positive_Technologies_XDR_es_logger_task_inspect_port_retrieval"

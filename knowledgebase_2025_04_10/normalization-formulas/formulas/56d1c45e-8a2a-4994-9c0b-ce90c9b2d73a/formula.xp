@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        login{"["NUMBER"]"?}: {"%AUTH-5-LOGIN_FAILED"|"LOGIN_FAILED"|"%-LOGIN_FAILED"}: Login failed for user
+        {subject.account.name=WORDDASH} from host {$srcip = REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+if (maybe_ipv4($srcip)!= null || maybe_ipv6($srcip)!= null) then
+    src.ip = $srcip
+    logon_auth_method = "remote"
+    protocol.layer7 = "telnet"
+else
+    logon_auth_method = "local"
+    logon_service = $srcip
+endif
+dst.hostname = coalesce($host, $host_pref)
+dst.ip = coalesce($ip, $ip_pref)
+
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+id = "PT_Juniper_Junos_syslog_telnet_login_failed"

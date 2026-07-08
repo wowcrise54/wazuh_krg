@@ -1,0 +1,16 @@
+TEXT = '[{time=DATETIME}] INFO Scheduler: Received request to cancel schedule. Schedule id:
+        {object.id=STRING}'
+
+action = "terminate"
+object = "task"
+status = "ongoing"
+
+object.type = "schedule"
+
+importance = "low"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_schedule_cancel_request"

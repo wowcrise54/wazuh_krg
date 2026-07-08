@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+    {$tmp="DCID"|$tmp="ICID"} {datafield1=NUMBER} TLS success protocol {datafield4=STRING}
+        cipher {datafield3=STRING}'
+
+action = "modify"
+object = "session"
+status = "success"
+
+protocol = "SMTP"
+
+# datafield1 - smtp connection id
+datafield2 = switch $tmp                # type of smtp connection
+    case "DCID" "delivery smtp"
+    case "ICID" "injection smtp"
+endswitch
+
+# datafield3 - cipher
+# datafield4 - version of TLS
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_tls_connection_in_smtp"

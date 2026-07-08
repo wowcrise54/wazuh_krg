@@ -1,0 +1,62 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id
+           "
+
+COND = string($event_id) == "1201"
+       and (
+        $event_category == "Вход/выход"
+        or $event_category == "Logon/logoff"
+       )
+       and (
+        $event_type == "Failure Audit"
+        or $event_type == "Аудит отказов"
+        or $event_type == "Audit failure"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+subformula "message"
+    TEXT = '{"Запрет входа пользователя в систему"|"Prohibition of user logon"}. {"Имя пользователя"|"User name"}:
+            {$username=STRING} {"Причина"|"Reason"}: {reason=REST}'
+
+    if find_substr($username, "\\") != null then
+        $domain_name = csv($username, "\\", "`")
+        subject.account.name = $domain_name[1]
+        subject.account.domain = $domain_name[0]
+    else
+        subject.account.name = $username
+    endif
+endsubformula
+
+dst.hostname = event_src.hostname
+
+msgid = $event_id
+importance = "high"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Вход/выход" then
+    event_src.subsys = "logon/logoff"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1201_user_logon_denied"

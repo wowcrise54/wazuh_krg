@@ -1,0 +1,30 @@
+!JSON = "EventCode=403"
+!COND = $Logfile=="DNS Server" and $SourceName=="Microsoft-Windows-DNS-Server-Service"
+
+action = "create"
+object = "socket"
+status = "failure"
+
+protocol = "tcp"
+
+time = $TimeGenerated
+msgid = $EventCode
+importance = "info"
+
+category.generic = "Socket"
+category.high = "Network Management"
+category.low = "Manipulation"
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.title = "windows"
+event_src.vendor = "microsoft"
+event_src.category = "DNS server"
+
+id = "PT_Microsoft_Windows_wmi_403_dns_server_could_not_create_tcp_socket"

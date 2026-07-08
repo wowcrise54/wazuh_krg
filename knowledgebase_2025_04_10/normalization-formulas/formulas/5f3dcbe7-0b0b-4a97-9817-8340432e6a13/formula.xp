@@ -1,0 +1,130 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {"{"}\"kind\":\"Event\",\"apiVersion\":{$rest=REST}'
+
+COND = find_substr($rest, "\"resource\":\"serviceaccounts\"") != null
+        and not (
+            find_substr($rest, "\"resource\":\"localsubjectaccessreviews\"") != null
+            or find_substr($rest, "\"resource\":\"selfsubjectaccessreviews\"") != null
+            or find_substr($rest, "\"resource\":\"selfsubjectrulesreviews\"") != null
+            or find_substr($rest, "\"resource\":\"subjectaccessreviews\"") != null
+        )
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_useragent"
+    TEXT = '{subject.process.name=UNTIL("/")}{$version=STRING}{REST}'
+    
+    subject.process.version = replace($version, "", "v")
+endsubformula
+
+submessage("JSON", "parse_json", '{"kind":"Event","apiVersion":' + $rest)
+
+subject = "account"
+
+action = switch $verb
+    case "create" "create"
+    case "get" "view"
+    case "list" "view"
+    case "watch" "view"
+    case "update" "modify"
+    case "patch" "modify"
+    case "delete" "remove"
+    case "deletecollection" "remove"
+endswitch
+
+object = "account"
+
+$status = $responseStatus["code"]
+if (in_list(["ResponseStarted", "RequestReceived"], $stage)) then 
+    status = "ongoing"
+elif ($stage == "ResponseComplete") then
+    if (number($status) == 101) or ((number($status) >= 200) and (number($status) < 300)) then
+        status = "success"
+    else
+        status = "failure"
+    endif
+else
+    status = "failure"
+endif
+
+# Реальный инициатор (со стороны ОС) никогда не известен
+subject.account.name = $user["username"]
+subject.account.group = join($user["groups"], " | ")
+subject.account.id = $user["uid"]
+subject.state = $stage
+submessage("TEXT", "parse_useragent", $userAgent)
+
+if ($impersonatedUser != null) then
+    subject.id = $impersonatedUser["uid"]
+    subject.name = $impersonatedUser["username"]
+    subject.group = join($impersonatedUser["groups"], " | ")
+else
+    subject.id = subject.account.id
+    subject.name = subject.account.name
+    subject.group = subject.account.group
+endif
+
+object.account.id = coalesce($responseObject["metadata"]["uid"], $responseObject["details"]["uid"], $objectRef["uid"])
+object.account.name = $objectRef["name"]
+
+if ($responseObject["secrets"] != null) or ($requestObject["secrets"] != null) then
+    object.property = "number_of_secrets"
+    object.value = length(coalesce($responseObject["secrets"], $requestObject["secrets"]))
+endif
+
+src.ip = $sourceIPs[0]
+
+datafield2 = $responseObject["metadata"]["ownerReferences"][0]["kind"]  # тип ресурса-владельца
+datafield3 = $responseObject["metadata"]["ownerReferences"][0]["name"]  # имя ресурса-владельца
+datafield4 = $responseObject["metadata"]["ownerReferences"][0]["uid"]   # ID ресурса-владельца
+if not (in_list([null, ""], $annotations["authorization.k8s.io/reason"])) then
+    datafield5 = replace($annotations["authorization.k8s.io/reason"], "'", "\"")  # сообщение от authorization.k8s.io (RBAC Subsystem)
+endif
+
+if not (in_list([null, ""], $responseObject["message"])) then
+    reason = replace($responseObject["message"], "'", "\"")
+elif not (in_list([null, ""], $responseStatus["reason"])) then
+    reason = replace($responseStatus["reason"], "'", "\"")
+else
+    reason = switch $responseStatus["code"]
+        case 307 "TemporaryRedirect"
+        case 400 "BadRequest"
+        case 401 "Unauthorized"
+        case 403 "Forbidden"
+        case 404 "NotFound"
+        case 405 "MethodNotAllowed"
+        case 409 "Conflict"
+        case 410 "Gone"
+        case 422 "UnprocessableEntity"
+        case 429 "TooManyRequests"
+        case 500 "InternalServerError"
+        case 503 "ServiceUnavailable"
+        case 504 "ServerTimeout"
+    endswitch
+endif
+time = datetime($stageTimestamp)
+msgid = "K8S_ServiceAccount_Management"
+if (in_list(["create", "modify", "remove"], action)) then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation" 
+
+event_src.vendor = "cncf"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "kubernetes"
+event_src.subsys = "kube-apiserver"
+event_src.category = "Virtualization"
+
+id = "PT_CNCF_Kubernetes_syslog_ServiceAccount_Management"

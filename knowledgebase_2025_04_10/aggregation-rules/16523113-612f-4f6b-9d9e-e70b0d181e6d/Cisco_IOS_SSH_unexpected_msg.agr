@@ -1,0 +1,8 @@
+event SSH_unexpected_msg:
+    key:
+        event_src.host, subject, action, object, status, importance,
+        event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Cisco_IOS_syslog_SSH_4_SSH2_UNEXPECTED_MSG"
+
+aggregate Cisco_IOS_SSH_unexpected_msg: SSH_unexpected_msg[3,100] within 5m

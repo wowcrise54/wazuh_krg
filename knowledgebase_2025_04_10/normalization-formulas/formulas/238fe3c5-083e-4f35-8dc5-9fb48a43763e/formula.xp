@@ -1,0 +1,39 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "Microsoft-Windows-FailoverClustering" and $number == 1592
+
+submessage("XML","Event_data",$eventdata)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    src.hostname = lower($DataItem / eventdata / Data [0])  # локальная сторона
+    dst.hostname = lower($DataItem / eventdata / Data [1])  # удалённая сторона
+endsubformula
+
+msgid = $number
+
+object = "session"
+action = "open"
+status = "success"
+subject = "host"
+
+importance = "info"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_1592_cluster_network_connection_restored"

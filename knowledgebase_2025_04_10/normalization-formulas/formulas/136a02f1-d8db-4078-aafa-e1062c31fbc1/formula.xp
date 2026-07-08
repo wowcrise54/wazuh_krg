@@ -1,0 +1,71 @@
+# {"class":"vim.event.VmAcquiredTicketEvent","key":8391,"chainId":8391,"createdTime":"2022-02-11 07:16:17.643000+00:00","userName":"VSPHERE.LOCAL\\Administrator","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"Datacenter","datacenter":"vim.Datacenter:datacenter-3"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"10.125.4.3","computeResource":"vim.ComputeResource:domain-s8"},"host":{"class":"vim.event.HostEventArgument","name":"10.125.4.3","host":"vim.HostSystem:host-10"},"vm":{"class":"vim.event.VmEventArgument","name":"sharepoint","vm":"vim.VirtualMachine:vm-1006"},"fullFormattedMessage":"A ticket for sharepoint of type MKS on 10.125.4.3 in Datacenter has been acquired","template":false,"ticketType":"mks"}
+
+JSON = ''
+COND = in_list([
+           "VmRemoteConsoleConnectedEvent",
+           "VmAcquiredTicketEvent",
+           "VmAcquiredMksTicketEvent"
+       ], strip($class, "vim.event.", ""))
+ 
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+action = "connect"
+object = "virtual_machine"
+status = "success" 
+ 
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+ 
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+     
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+ 
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.name = $vm["name"]
+object.id = strip($vm["vm"], "vim.VirtualMachine:", "")
+
+if $class == "vim.event.VmAcquiredTicketEvent" then
+    object.property = "ticket_type"
+    object.value = $ticketType
+endif
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+ 
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = object.name  # Entity Name
+datafield5 = $vm["name"]  # Virtual Machine Name
+datafield6 = $host["name"]  # Host Name
+datafield10 = object.id  # Internal Entity ID
+ 
+chain_id = $chainId
+ 
+time = $createdTime
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "low"
+ 
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+ 
+id = "PT_VMware_vSphere_vsphereeventlog_Remote_Console"

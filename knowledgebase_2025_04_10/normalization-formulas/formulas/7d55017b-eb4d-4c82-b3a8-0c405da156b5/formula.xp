@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"}{NUMBER}{time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}
+        {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        {$tmp_subsys=WORDDASH} - RT_FLOW_SESSION_DENY {"["}junos@2636.{STRING}
+        {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+action = "deny"
+object = "connection"
+status = "success"
+
+if $kv["username"] !=  "N/A" then
+    object.account.name = $kv["username"]
+endif
+
+src.ip = $kv["source-address"]
+src.port = $kv["source-port"]
+dst.ip = $kv["destination-address"]
+dst.port = $kv["destination-port"]
+
+protocol = $kv["protocol-id"]
+
+datafield1 = $kv["source-zone-name"]
+datafield2 = $kv["packet-incoming-interface"]  # ingress interface
+datafield3 = $kv["destination-zone-name"]
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Firewall"
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+id = "PT_Juniper_Junos_syslog_data_plane_flow_denied_structured"

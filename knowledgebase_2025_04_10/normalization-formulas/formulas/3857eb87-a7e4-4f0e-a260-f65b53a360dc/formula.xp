@@ -1,0 +1,35 @@
+id = "PT_Checkpoint_Endpoint_Security_Client_opseclog_Core_Operation_is_failed"
+
+TABULAR = 'client_name, client_version, description, event_type, op_owner, op_receivedTime, op_scheduledTime, op_status, op_statusDescription, op_type, orig, os_name, os_version, product, product_family, src, src_machine_name, src_user_name, time'
+
+COND = ($product_family == "Endpoint" and $product == "Core" and $event_type == "Push Operation" and $op_status == "Failed")
+
+object = "task"
+object.type = $op_type
+object.group = $op_owner
+if $op_statusDescription != "" then
+    object.state = $op_statusDescription
+endif
+
+action = "initiate"
+status = "failure"
+
+subject = "account"
+subject.name = $src_user_name
+
+if $op_output != "" then
+    datafield1 = $op_output
+endif
+
+time = $time
+
+msgid = $event_type
+
+importance = "medium"
+
+event_src.vendor = "checkpoint"
+event_src.title = "endpoint_security_client"
+event_src.ip = $src
+event_src.hostname = $src_machine_name
+event_src.subsys = lower($product)
+event_src.category = "Host security"

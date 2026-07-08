@@ -1,0 +1,183 @@
+# Проверяем режим сбора профиля и работы правила
+query AutoProfile($rule) from Auto_Profile {
+    rule == $rule
+}
+
+# Проверяем, есть ли вообще в профиле такой пользователь
+query CheckUsername($title, $username) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+}
+
+# Проверяем, использовал ли пользователь раньше этот адрес
+query CheckHost($title, $username, $src_host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_host == $src_host
+}
+
+# Проверяем, входил ли пользователь раньше в эту БД
+query CheckDB($title, $username, $database) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and dst_path == $database
+}
+
+# Проверяем, пользовался ли пользователь раньше этим методом входа
+query CheckLogonType($title, $username, $logon_method) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and additional_data == $logon_method
+}
+
+# Проверяем время последнего изменения профиля в таблице
+query CheckProfile($title, $username, $src_ip, $src_host, $dst_host, $dst_path, $logon)
+from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_ip == $src_ip
+    and src_host == $src_host
+    and dst_host == $dst_host
+    and dst_path == $dst_path
+    and additional_data == $logon
+}
+
+event Anomaly_Logon_PostgreSQL:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and lower(event_src.title) == "postgresql"
+        and subject.application.account.id != null
+        and subject == "account"
+        and action == "login"
+        and object == "application"
+        and status == "success"
+        # Сверка с профилем
+        and not filter::Check_Profile(
+            lower(event_src.title),
+            lower(subject.application.account.id),
+            string(src.ip),
+            lower(src.host),
+            lower(event_src.host),
+            lower(object.path),
+            lower(logon_service)
+        )
+        and filter::CheckWL_Profiling("PostgreSQL_Abnormal_Access", lower(join([src.host, subject.application.account.id, event_src.host, event_src.title], "|")))
+        
+    }
+
+rule PostgreSQL_Abnormal_Access: Anomaly_Logon_PostgreSQL
+
+    init {
+        # Табличный список для включения и отключения механизма автоматического сбора профилей:
+        # 0 - Профиль собран, обогащение отключено, правило обращается напрямую в профиль;
+        # 1 - Правило работает по собранному профилю, но профиль продолжает собираться;
+        # 2 - Профиль на стадии сбора, корреляция не срабатывает
+        
+        # Если в табличке нет правила, то считаем, что правило работает в режиме автопрофилирования
+        $auto_profile = coalesce(select_query_first("AutoProfile", ["PostgreSQL_Abnormal_Access"], "auto_profiling"), 1)
+        $insert_into_cond = false
+        $ttl_tl = 7862400 
+        $labels = "CheckWL_Profiling"
+    }
+
+    on Anomaly_Logon_PostgreSQL {
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.id = subject.application.account.id
+        
+        $object.path = object.path
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+        
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        if not exec_query("CheckProfile", [lower($event_src.title), lower($subject.application.account.id),
+        string($src.ip), lower($src.host), lower($event_src.host), lower($object.path), lower($logon_service)]) then 
+            if not exec_query("CheckUsername", [lower(event_src.title), lower(subject.application.account.id)]) then
+                $reason = "no_user"
+                $alert.context = $reason
+                $importance = "low"
+                $insert_into_cond = true
+            elif not exec_query("CheckHost", [lower(event_src.title), lower(subject.application.account.id), lower(src.host)]) then 
+                $reason = "new_address"
+                $alert.context = $reason
+                $importance = "medium"
+                $insert_into_cond = true
+            elif not exec_query("CheckDB", [lower(event_src.title), lower(subject.application.account.id), object.path]) then 
+                $reason = "new_DB"
+                $alert.context = $reason + " | " + lower(object.path)
+                $importance = "medium"
+                $insert_into_cond = true
+            elif (not exec_query("CheckLogonType", [lower(event_src.title), lower(subject.application.account.id), logon_service])) and logon_service != null then 
+                $reason = "new_auth_method" 
+                $alert.context = $reason + " | " + lower(logon_service)
+                $importance = "high"
+                $insert_into_cond = true
+            else
+                $importance = "info"
+                $detect = "drop" 
+            endif 
+        else
+            $last_changed = select_query_first("CheckProfile", [lower($event_src.title), lower($subject.application.account.id),
+            string($src.ip), lower($src.host), lower($event_src.host), lower($object.path), lower($logon_service)],
+            "_last_changed")
+            if bool($last_changed) then         
+                if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then          
+                    $insert_into_cond = true
+                endif
+            endif
+            $importance = "info"
+            $detect = "drop"
+        endif 
+
+        if $auto_profile == 2 then
+            $importance = "info"
+            $detect = "drop"
+        endif 
+        
+        $alert.key = lower(join([src.host, subject.application.account.id, event_src.host, event_src.title], "|"))
+    }
+    
+    insert_into Risk_User_Logon_Correlation_Profile if ($auto_profile !=0 and $insert_into_cond == true) {
+        access_type = lower($event_src.title)
+        login = lower($subject.application.account.id)
+        src_ip = string($src.ip)
+        src_host = lower($src.host)
+        dst_host = lower($event_src.host)
+        dst_path = lower($object.path)
+        additional_data = lower($logon_service)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "application"
+    $status = "success"
+
+    $category.generic = "Anomaly"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host, $subject.application.account.name], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "Undefined"
+    $incident.aggregation.timeout = 2h
+}

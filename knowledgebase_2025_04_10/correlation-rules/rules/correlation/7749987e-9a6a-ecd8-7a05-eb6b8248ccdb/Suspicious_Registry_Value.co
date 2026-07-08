@@ -1,0 +1,187 @@
+query Check_Registry_Regex($object_fullpath) from Suspicious_Registry_Keys {
+    regex_match($object_fullpath, column::registry_regex)
+}
+
+query Check_Registry_Regex_Qhandler($object_fullpath) from Suspicious_Registry_Keys {
+    regex_match($object_fullpath, column::registry_regex)
+}
+
+qhandler {
+    $registry_regex = registry_regex
+    $attack_name_for_localization = attack_name_for_localization
+    $event_type = event_type
+    $event_importance = event_importance
+    $event_description = event_description
+}
+
+event Base64_Encoded_Or_Long_Value:
+    key:
+        event_src.host, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "13"
+        and lower(object) == "reg_object"
+        and action == "modify"
+        and (
+            regex(object.new_value, "^[A-Za-z0-9\+\/]{100,}=?$", 0) != null
+            or
+            length(object.new_value) > 1000
+        )
+        and filter::CheckWL_Registry_Actions("Suspicious_Registry_Value", lower(join([object.fullpath, substr(object.new_value, 0, 120)], "|")))
+    }
+
+event Suspicious_Key:
+    key:
+        event_src.host, subject.process.name, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and in_list(["12", "13"], msgid)
+        and lower(object) == "reg_object"
+        and exec_query("Check_Registry_Regex", [lower(object.fullpath)])
+        and filter::CheckWL_Registry_Actions("Suspicious_Registry_Value", lower(join([object.fullpath, substr(object.new_value, 0, 120)], "|")))
+    }
+
+rule Suspicious_Registry_Value: (Base64_Encoded_Or_Long_Value+ or Suspicious_Key+) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+        $first_event = true
+    }
+
+    on Base64_Encoded_Or_Long_Value {
+        if $first_event == true then
+            $action = action  # modify
+
+            $subject.account.id = coalesce($subject.account.id, subject.account.id)
+            $subject.account.name = coalesce($subject.account.name, subject.account.name)
+            $subject.account.domain = coalesce($subject.account.domain, subject.account.domain)
+
+            $subject.process.id = subject.process.id
+            $subject.process.guid = subject.process.guid
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.new_value = object.new_value
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = lower(join([object.fullpath, substr(object.new_value, 0, 120)], "|"))
+
+            if regex(object.value, "(\s|'|\"|^|\\b)(([a-zA-Z0-9+\/]{4}){8,}(|([a-zA-Z0-9+\/]{3}=)|([a-zA-Z0-9+\/]{2}==)|([a-zA-Z0-9+\/]{1}===)))(\s|'|\"|$|\\b)", 0) != null then
+                $reason = "Base64 Encoded Value"
+                $object.value = decode(buffer_from_base64(object.value), "UTF-8")
+                if find_substr($object.value, "\u0000") != null and find_substr($object.value, "�") == null then
+                    $object.value = decode(buffer_from_base64(object.value), "UCS2-LE")
+                endif
+                if find_substr($object.value, "\u0000") != null or find_substr($object.value, "�") != null then
+                    $reason = "Invalid base64 value"
+                    $object.value = null
+                endif
+                $detect = $object.value
+                $alert.context = $reason + " | regex_match: " + substr(object.new_value, 0, 13) + "..."
+            else
+                $reason = "Very Long Value"
+                $alert.context = $reason + " | length of new value: " + length(object.new_value)
+            endif
+            
+            $correlation_type = "incident"
+            $importance = "medium"
+            $incident.category = "ProtectionBypassing"
+
+            # для правила Remote_SSP_Dump
+            $datafield2 = $object.name
+            $first_event = false
+        else
+            $datafield2 = $object.name + "|" + object.name
+        endif
+    }
+
+    on Suspicious_Key {
+        if $first_event == true then
+            $action = action  # modify, create, remove
+
+            $subject.account.id = coalesce($subject.account.id, subject.account.id)
+            $subject.account.name = coalesce($subject.account.name, subject.account.name)
+            $subject.account.domain = coalesce($subject.account.domain, subject.account.domain)
+
+            $subject.process.id = subject.process.id
+            $subject.process.guid = subject.process.guid
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.new_value = object.new_value
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $result = exec_query("Check_Registry_Regex_Qhandler",[lower(object.fullpath)])
+
+            $reason = "Registry regex match"
+            $datafield1 = $result["$attack_name_for_localization"] #для локализации
+
+            if in_list(["low", "medium", "high"], lower($result["$event_importance"])) then
+                $importance = $result["$event_importance"]
+            else
+                $importance = "medium"
+            endif
+
+            if in_list(["event", "incident"], lower($result["$event_type"])) then
+                $correlation_type = $result["$event_type"]
+            else
+                $correlation_type = "event"
+            endif
+
+            $alert.key = lower(join([object.fullpath, substr(object.new_value, 0, 120)], "|"))
+            $alert.regex_match = regex(lower(object.fullpath), $result["$registry_regex"], 0)
+            $alert.context = $result["$event_description"] + " | regex_match: " + $alert.regex_match
+
+            $incident.category = "HostOrSoftCompromising"
+
+            # для правила Remote_SSP_Dump
+            $datafield2 = $object.name
+            $first_event = false
+        else
+            $datafield2 = $object.name + "|" + object.name
+        endif
+    }
+
+emit {
+    $subject = "account"
+    $object = "reg_object"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Modify Registry"
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.process.id)], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

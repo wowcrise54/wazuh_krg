@@ -1,0 +1,66 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0954024576"
+
+subject = "rule"
+action = "deny"
+object = "file_object"
+status = "success"
+
+subject.id = $kv["policyid"]
+
+object.account.name = $kv["user"]
+object.account.group = $kv["group"]
+object.account.session_id = $kv["sessionid"]
+
+object.process.meta = $kv["agent"]
+
+object.type = "file"
+object.property = "filetype"
+object.value = $kv["filetype"]
+
+$hostname = strip($kv["hostname"], '*.', '')
+if find_substr ($hostname, ".") != null then
+    dst.fqdn = $hostname
+    dst.hostname = substr($hostname, 0, find_substr($hostname, "."))
+else
+    dst.hostname = $hostname
+endif
+
+src.ip = $kv["srcip"]
+src.port = $kv["srcport"]
+dst.ip = $kv["dstip"]
+dst.port = $kv["dstport"]
+protocol = $kv["proto"]
+protocol.layer7 = $kv["service"]
+
+if $kv["direction"] == "outgoing" then direction = "egress" endif
+
+if $kv["srcintf"] != null then datafield2 = $kv["srcintf"] endif  # Ingress interface
+
+# datafield3 - URI
+if ($hostname != null) then
+    datafield3 = $kv["service"] + "://" + $hostname + $kv["url"]
+elif $kv["url"] != null then
+    datafield3 = $kv["service"] + "://" + $kv["dstip"] + $kv["url"]
+endif
+
+if $kv["dstintf"] != null then datafield4 = $kv["dstintf"] endif  # Egress interface
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")             # Event type
+datafield10 = $kv["vd"]                                           # Virtual domain name
+datafield11 = $kv["action"]                                       # Action
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "info"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = $kv["devname"]
+event_src.id = $kv["devid"]
+event_src.category = "Firewall"
+event_src.rule = $kv["policyid"]
+
+id = "PT_Fortinet_Fortigate_syslog_24576_LOG_ID_DLP_WARN"

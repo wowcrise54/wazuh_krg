@@ -1,0 +1,112 @@
+TABULAR = "{chain_id=audit_id}, action_int, resource_type_int, unix_time"
+COND = in_list([0, 1, 2], $action_int)
+       and $resource_type_int == 0
+
+subject = "account"
+
+action = switch $action_int
+    case 0 "create"
+    case 1 "modify"
+    case 2 "remove"
+endswitch
+
+object = "account"
+status = "success"
+
+subformula "parse_csv"
+    TEXT = "Unblocked user {'alias'|'username'} [{object.account.name=UNTIL('] name [')} {$name=UNTIL('] surname [')} {$surname=REST}"
+    
+    object.account.fullname = $name + " " + strip($surname, "", "]")
+endsubformula
+
+subformula "parse_csv"
+    TEXT = "{REST}"
+endsubformula
+
+subformula "parse_json"
+    JSON = ''
+    
+    $property = ""
+    $value = ""
+    $n_value = ""
+    
+    if $['user.name'] != null then
+        $property = $property + "|name"
+        $value = $value + " | " + $['user.name'][2]
+        $n_value = $n_value + " | " + $['user.name'][1]
+    endif
+    
+    if $['user.username'] != null then
+        $property = $property + "|username"
+        $value = $value + " | " + $['user.username'][2]
+        $n_value = $n_value + " | " + $['user.username'][1]
+    endif
+    
+    if $['user.roleid'] != null then
+        $property = $property + "|roleid"
+        $value = $value + " | " + $['user.roleid'][2]
+        $n_value = $n_value + " | " + $['user.roleid'][1]
+    endif
+    
+    if $['user.passwd'] != null then
+        $property = $property + "|passwd"
+        $value = $value + " | " + $['user.passwd'][2]
+        $n_value = $n_value + " | " + $['user.passwd'][1]
+    endif
+    
+    $property = strip($property, "|", "")
+    $value = strip($value, " | ", "")
+    $n_value = strip($n_value, " | ", "")
+    
+    if replace($property, "", " | ") == "" then $property = null endif
+    if replace($value, "", " | ") == "" then $value = null endif
+    if replace($n_value, "", " | ") == "" then $n_value = null endif
+endsubformula
+
+subject.account.name = $user_alias
+subject.account.id = $user_id
+subject.account.privileges = switch $user_role_type
+    case 1 "User"
+    case 2 "Admin"
+    case 3 "Super admin"
+endswitch
+
+object.account.id = $resource_id
+object.account.name = if $resource_name != "" then $resource_name else null endif
+
+if not in_list(["", "0"], $details) then
+    if (substr($details, 0, 2) == '{"') and (substr($details, -1, 1) == '}') and (find_substr($details, '"user.') != null) then
+        submessage("JSON", "parse_json", $details)
+        object.property = if $property != "" then $property else null endif
+        object.value = if $value != "" then $value else null endif
+        object.new_value = if $n_value != "" then $n_value else null endif
+    else
+        submessage("TEXT", "parse_csv", $details)
+        object.property = $field_name
+        object.value = $old_value
+        object.new_value = $new_value
+    endif
+    datafield1 = replace($details, "'", '"')  # additional info about action
+endif
+
+src.ip = $ip
+
+time = epoch_to_datetime($unix_time)
+
+msgid = switch $action_int
+    case 0 "ACTION_ADD"
+    case 1 "ACTION_UPDATE"
+    case 2 "ACTION_DELETE"
+endswitch
+
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "zabbix"
+event_src.title = "zabbix"
+event_src.category = "Network monitoring system"
+
+id = "PT_Zabbix_Zabbix_odbc_User_management"

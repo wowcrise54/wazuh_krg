@@ -1,0 +1,60 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type,
+           user_id,
+           {subject.domain=user_domain},
+           {subject.name=user_name}
+           "
+
+COND = string($event_id) == "1141"
+       and (
+        $event_category == "Управление"
+        or $event_category == "Management"
+       )
+       and (
+        $event_type == "Success Audit"
+        or $event_type == "Аудит успехов"
+        or $event_type == "Audit success"
+       )
+
+submessage("TEXT", "message", $event_message)
+
+subject = "account"
+action = "remove"
+object = "account"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Пользователь удален из локальной базы данных"|"User removed from database"}. {"Пользователь"|"User"}: 
+            {$username=STRING}'
+
+    if find_substr($username, "\\") != null then
+        $domain_name = csv($username, "\\", "`")
+        object.name = $domain_name[1]
+        object.domain = $domain_name[0]
+    elif find_substr($username, "S-1-") != null then
+        object.id = $username
+    else
+        object.name = $username
+    endif
+endsubformula
+
+msgid = $event_id
+importance = "info"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Управление" then
+    event_src.subsys = "management"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_1141_user_removed_from_local_database"

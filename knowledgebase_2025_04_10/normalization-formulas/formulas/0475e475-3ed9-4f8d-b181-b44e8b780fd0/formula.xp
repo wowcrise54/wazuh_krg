@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {"tacplus"|"tac_plus"}{"["NUMBER"]:"?} {nas_ip=IPV4|nas_ip=IPV6|nas_fqdn=HOSTNAME|}
+        {subject.account.name=STRING} {STRING} {src.ip=IPV4|src.ip=IPV6|"Unknown host - non-tty"}
+        {$act="stop"|$act="start"} {$re=UNTIL("cmd=")}{$obvalue=REST}'
+
+subject = "account"
+action = "execute"
+object = "command"
+if $act == "stop" then
+    status = "success"
+elif $act == "start" then
+    status = "ongoing"
+endif
+
+$kv = keyvalue(replace($re, " ", "\t"), " ", "=", "\"")
+
+subject.account.privileges = $kv['priv-lvl']
+
+object.account.name = subject.account.name
+object.account.privileges = subject.account.privileges
+object.process.cmdline = strip($obvalue, '', ' <cr>')
+object.id = $kv["task_id"]
+
+logon_service = $kv["service"]
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "tac_plus"
+event_src.category = "AAA"
+
+id = "PT_Opensource_tac_plus_syslog_command_execute"

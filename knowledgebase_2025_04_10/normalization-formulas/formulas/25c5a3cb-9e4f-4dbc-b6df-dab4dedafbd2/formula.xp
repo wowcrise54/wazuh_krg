@@ -1,0 +1,62 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {IPV4|IPV6|HOSTNAME|}
+        SymantecServer:{IPV4|IPV6|HOSTNAME|}{","?}{msgid="Potential risk found"|
+        msgid="Security risk found"|msgid="Virus found"|msgid="Найден вирус"},{"IP Address:"|"IP-адрес:"|}
+        {$ip1=IPV4|$ip1=IPV6|}{","?}{"Computer name:"|"Имя компьютера:"|}{$Computer=HOSTNAME},
+        {"IP Address:"|"IP-адрес:"|} {$ip2=IPV4|$ip2=IPV6|}{","?}
+        {$csv_string=REST}'
+
+subject = "application"
+action = "detect"
+object = "malware"
+status = "success"
+
+$kv = keyvalue($csv_string, ",", ":", "`")
+
+subject.type = coalesce($kv['Source'], $kv['Источник'])
+
+if $kv["File path"] == null then
+    if $kv["Occurrences"] != null then
+        $occur_temp = find_substr($csv_string, "Occurrences: " + $kv["Occurrences"])
+        $path_and_rest = substr($csv_string, number($occur_temp) + length("Occurrences: " + $kv["Occurrences"]) + 1, length($csv_string))
+        object.path = substr($path_and_rest, 0, find_substr($path_and_rest, ","))
+    else
+        $occur_temp = find_substr($csv_string, "Экземпляры: " + $kv["Экземпляры"])
+        $path_and_rest = substr($csv_string, number($occur_temp) + length("Экземпляры: " + $kv["Экземпляры"]) + 1, length($csv_string))
+        object.path = substr($path_and_rest, 0, find_substr($path_and_rest, ","))
+    endif
+else
+    object.path = $kv["File path"]
+endif
+
+object.name =  coalesce($kv['Risk name'], $kv['Имя угрозы'])
+object.type =  coalesce($kv['Risk type'], $kv['Category type'], $kv['Тип категории'])
+if $kv['Category set'] != null then
+    object.property = "category set"
+    object.value = coalesce($kv['Category set'], $kv['Набор категорий'])
+endif
+object.state = coalesce($kv['Actual action'], $kv['Фактическое действие'])
+object.hash = $kv['Hash type'] + ": " + $kv['Application hash']
+
+count.bytes = coalesce($kv['File size (bytes)'], $kv['Размер файла (байты)'])
+
+datafield2 = coalesce($kv['Server Name'], $kv['Server'], $kv['Сервер'])
+datafield3 = coalesce($kv['Domain Name'], $kv['Domain'], $kv['Домен'])
+datafield4 = coalesce($kv['User Name'], $kv['User'], $kv['Пользователь'])
+
+time = coalesce($kv['Event time'], $kv['Время события'])
+
+importance = if msgid == "Potential risk found" then "low" else "high" endif
+
+event_src.vendor = "symantec"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip1, $ip2)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_Risk_found"

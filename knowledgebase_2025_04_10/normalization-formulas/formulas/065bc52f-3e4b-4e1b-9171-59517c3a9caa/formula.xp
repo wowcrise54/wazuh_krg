@@ -1,0 +1,68 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["devid"] != null
+       and $kv["devname"] != null
+       and $kv["logid"] == "0318012801"
+
+subject = "rule"
+
+action = switch $kv["action"]
+    case "passthrough" "allow"
+    case "blocked" "deny"
+endswitch
+
+object = "resource"
+status = "success"
+
+subject.id = $kv["policyid"]
+subject.type = $kv["policytype"] 
+
+object.account.session_id = $kv["sessionid"]
+
+object.path = $kv["url"]
+object.type = "web resource"
+
+$dot_pos = find_substr($kv["hostname"], '.')
+
+if $dot_pos != null then
+    dst.fqdn = $kv["hostname"]
+    dst.hostname = substr($kv["hostname"], 0, $dot_pos)
+else
+    dst.hostname = $kv["hostname"]
+endif
+
+src.ip = $kv["srcip"]
+src.port = $kv["srcport"]
+if $kv["srccountry"] != "Reserved" then src.geo.country = $kv["srccountry"] endif
+dst.ip = $kv["dstip"]
+dst.port = $kv["dstport"]
+if $kv["dstcountry"] != "Reserved" then dst.geo.country = $kv["dstcountry"] endif
+protocol = $kv["proto"]
+protocol.layer7 = $kv["service"]
+count.bytes_out = $kv["sentbyte"]
+count.bytes_in = $kv["rcvdbyte"]
+
+if $kv["direction"] == "outgoing" then direction = "egress" endif
+
+if $kv["srcintf"] != null then datafield2 = $kv["srcintf"] endif         # Ingress interface
+datafield3 = $kv["reqtype"]                                              # Request type
+if $kv["dstintf"] != null then datafield4 = $kv["dstintf"] endif         # Egress interface
+datafield5 = $kv["referralurl"]                                          # Referrer URI
+datafield6 = $kv["vd"]                                                   # Virtual domain name
+datafield9 = join([$kv["type"], $kv["subtype"], $kv["eventtype"]], "|")  # Event type
+datafield11 = $kv["action"]                                              # Action
+
+reason = $kv["error"]
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["logid"]
+importance = "low"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = lower($kv["devname"])
+event_src.id = $kv["devid"]
+event_src.category = "Firewall"
+event_src.rule = $kv["policyid"]
+
+id = "PT_Fortinet_Fortigate_syslog_12801_log_id_web_ftgd_warning"

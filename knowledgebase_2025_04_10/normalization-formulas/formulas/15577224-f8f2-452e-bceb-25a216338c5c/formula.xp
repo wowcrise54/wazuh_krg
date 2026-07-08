@@ -1,0 +1,57 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and in_list(["Add New User", "Update User", "Delete User"], $msgid) == true
+
+subformula "get_data"
+    TEXT = "{UNTIL('User : ')}{$user_info=UNTIL('|')}
+            {REST}"
+endsubformula
+
+subject = "account"
+
+if $msgid == "Add New User" then
+    action = "create"
+elif $msgid == "Update User" then
+    action = "modify"
+else
+    action = "remove"
+endif
+
+object = "account"
+status = "success"
+
+submessage("TEXT", "get_data", $data)
+
+$user_info = strip($user_info, '', '\"; newValue=\"\"; oldValue=\"\" ')
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+$csv = csv($user_info, "\\", '`')
+if length($csv) == 2 then
+    object.domain = $csv[0]
+    object.name = $csv[1]
+else
+    object.name = $csv[0]
+endif
+
+datafield1 = $display_user_name  # отображаемое имя пользователя
+# datafield2 - имя пользователя-объекта в том виде, как отображается в интерфейсе
+# datafield3 - почта пользователя-объекта
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "medium"
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_user_operation"
+

@@ -1,0 +1,43 @@
+JSON = 'category=35'
+
+COND = $data["ID"] == "CREATE_AUTHUSER"
+       or $data["ID"] == "DELETE_AUTHUSER"
+
+subject = "account"
+
+if $data["ID"] == "CREATE_AUTHUSER" then
+    action = "create"
+else
+    action = "remove"
+endif
+
+object = "account"
+
+if $data["Status"] == "SUCCESS" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subject.account.name = $data["AdminName"]
+
+object.account.name = $data["IsNameEntry"]["Name"]
+object.account.id = $data["IsNameEntry"]["ID"]
+
+datafield1 = $cg_name   # узел безопасности
+datafield2 = $cg_cssid  # идентификатор узла безопасности
+
+time = $time
+msgid = $data["ID"]
+importance = "info"
+ 
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_odbc_user_operation"

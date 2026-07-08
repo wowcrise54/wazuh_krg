@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}{"%%"NUMBER?}
+        {$tmp_subsys=WORD?}/{NUMBER}/{msgid=UNTIL("_")}{WORD}{"(l)"?}:
+        {"CID="UNTIL("-")?}{UNTIL(";")?}The interface status changes. ({$tmp=UNTIL(")")}'
+
+$kv = keyvalue($tmp,",","=","~")
+$tmp_action = ($kv["AdminStatus"] == $kv["OperStatus"]) == ( $kv["AdminStatus"] =="UP")
+
+action = if $tmp_action then "up" else "down" endif
+object = "interface"
+status = "success"
+
+object.property = "Main interface"
+object.value = $kv["mainIfname"]
+
+object.name= $kv["ifName"]
+
+reason = $kv["Reason"]
+importance = "info"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Link_state_changed"

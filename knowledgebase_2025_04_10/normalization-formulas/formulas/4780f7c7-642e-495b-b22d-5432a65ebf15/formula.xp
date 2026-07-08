@@ -1,0 +1,22 @@
+!TEXT = '{time=DATETIME} - OK,{msgid="CALL_PLAY"},{subject.name=WORDDASH+},
+        id_call:{object.value=NUMBER} couple_id:{NUMBER} callingNr:{datafield1=STRING} calledNr:{datafield2=STRING}
+        date:{STRING?}{STRING?} Added file {$file=REST}'
+
+subject = "account"
+action = "open"
+object = "file"
+status = "success"
+
+object.name = strip($file, "", ".")
+object.property = "Call ID"
+
+# datafield1 - Caller Number
+# datafield2 - Called Number
+
+importance = "info"
+
+event_src.vendor = "zoom_international"
+event_src.title = "call_recording"
+event_src.category = "Telecom"
+
+id = "PT_ZOOM_International_Call_Recording_filemonitor_Call_play"

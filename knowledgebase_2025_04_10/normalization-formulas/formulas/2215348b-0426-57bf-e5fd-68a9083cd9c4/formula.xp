@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"multiscanner"|"sandbox"} - {object.type="files_monitor"}.{$id="start"} - {$json_data=REST}'
+
+action = "start"
+object = "scan"
+status = "success"
+
+# Parsing JSON submessage from PT Multiscanner
+submessage('JSON', 'multiscanner', $json_data)
+subformula 'multiscanner'
+    JSON = 'scan_id'
+
+    object.name = $entry_point_id
+    object.hash = 'SHA256:' + $file['sha256'] + ' MD5:' + $file['md5'] + ' SHA1:' + $file['sha1']
+    object.hash.sha256 = $file['sha256']
+    object.hash.md5 = $file['md5']
+    object.hash.sha1 = $file['sha1']
+
+    object.storage.fullpath = $src_file_info['url']              # путь до исходного файла
+    if $file['mime_type'] != '' then
+        datafield4 = $file['mime_type']             # mime type file
+    endif
+    datafield5 = $file['size']                     # size file
+    object.storage.name = $file['name']                      # имя файла
+    object.storage.path = strip(object.storage.fullpath, '', object.storage.name)  # путь до папки
+
+    chain_id = $scan_id
+
+    time = epoch_to_datetime(number($created))
+    msgid = object.type + '.' + $id
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multiscanner"
+event_src.category = "Anti-virus"
+
+id = "PT_Positive_Technologies_Multiscanner_syslog_files_monitor_start"

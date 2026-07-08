@@ -1,0 +1,49 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "IPS_TRAFFIC"
+
+action = "detect"
+object = "attack"
+status = "success"
+
+object.name = $signature_info
+object.type = $comment
+
+if $address_type == 1 then
+    src.mac = $src_address
+    dst.mac = $dst_address
+elif in_list([2, 23], $address_type) then
+    src.ip = $src_address
+    dst.ip = $dst_address
+else
+    src.hostname = $src_address
+    dst.hostname = $dst_address
+endif
+
+protocol = $protocol
+
+# Name of the user who started the process
+if $user_name != "" then
+    datafield1 = $user_name
+endif
+# Process involved in network exchange
+if $process_name != "" then
+    datafield2 = $process_name
+endif
+
+importance = "high"
+
+event_src.vendor = "confident"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_ips_traffic_traffic_attack_detected"

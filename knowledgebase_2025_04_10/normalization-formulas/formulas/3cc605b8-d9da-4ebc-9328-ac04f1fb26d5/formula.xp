@@ -1,0 +1,64 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} confluence_audit: {$json=REST}"
+COND = (
+    find_substr($json, '"actionI18nKey":"audit.logging.summary.page.pdf.export"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.page.exported.word"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.blog.pdf.export"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.blog.exported.word"') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = switch $author["type"]
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = "download"
+object = "resource"
+status = "success"
+
+if $author["type"] == "user" then
+    subject.account.fullname = $author["name"]
+    subject.account.id = $author["id"]
+endif
+
+object.name = $affectedObjects[1]["name"]
+object.id = $affectedObjects[1]["id"]
+object.group = $affectedObjects[0]["name"]
+
+datafield1 = $affectedObjects[0]["name"]  # Space Name
+
+if in_list(["page.pdf.export", "page.exported.word"], strip($auditType["actionI18nKey"], "audit.logging.summary.", "")) then
+    object.type = "page"
+    datafield2 = $affectedObjects[1]["name"]  # Page Name
+    numfield2 = $affectedObjects[1]["id"]  # Page ID
+else
+    object.type = "blog_post"
+    datafield3 = $affectedObjects[1]["name"]  # Blog Name
+    numfield3 = $affectedObjects[1]["id"]  # Blog ID
+endif
+
+numfield1 = $affectedObjects[0]["id"]  # Space ID
+
+src.ip = $source
+
+msgid = $auditType["actionI18nKey"]
+time = epoch_to_datetime($timestamp["epochSecond"])
+importance = "low"
+
+event_src.vendor = "atlassian"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_syslog_Audit_Export_Page_Blogpost"

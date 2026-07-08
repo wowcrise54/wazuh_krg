@@ -1,0 +1,317 @@
+JSON = ''
+COND = (
+    $eventid != null
+    and $node != null
+    and $timestamp != null
+    and (
+        (
+            find_substr($items["SYSCALL"][0], "arch=c000003e") != null
+            and (
+                find_substr($items["SYSCALL"][0], "syscall=188") != null     # setxattr
+                or find_substr($items["SYSCALL"][0], "syscall=189") != null  # lsetxattr
+                or find_substr($items["SYSCALL"][0], "syscall=190") != null  # fsetxattr
+                or find_substr($items["SYSCALL"][0], "syscall=197") != null  # removexattr
+                or find_substr($items["SYSCALL"][0], "syscall=198") != null  # lremovexattr
+                or find_substr($items["SYSCALL"][0], "syscall=199") != null  # fremovexattr
+            )
+        )
+        or (
+            find_substr($items["SYSCALL"][0], "arch=40000003") != null
+            and (
+                find_substr($items["SYSCALL"][0], "syscall=226") != null     # setxattr
+                or find_substr($items["SYSCALL"][0], "syscall=227") != null  # lsetxattr
+                or find_substr($items["SYSCALL"][0], "syscall=228") != null  # fsetxattr
+                or find_substr($items["SYSCALL"][0], "syscall=235") != null  # removexattr
+                or find_substr($items["SYSCALL"][0], "syscall=236") != null  # lremovexattr
+                or find_substr($items["SYSCALL"][0], "syscall=237") != null  # fremovexattr
+            )
+        )
+    )
+)
+
+$kv_syscall = keyvalue($items['SYSCALL'][0], ' ', '=')
+
+if $kv_syscall["auid"] != "4294967295" then
+    subject = "account"
+endif
+
+action = "modify"
+object = "file_object"
+
+if $kv_syscall["success"] == "yes" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+# Декодируем HEX, если требуется
+$auid_en = strip($kv_syscall["AUID"], '"', '"')
+if $auid_en == $kv_syscall["AUID"] then
+    $auid_en = hex_to_string($kv_syscall["AUID"])
+endif
+
+$auid_list = csv($auid_en, "@", "")
+
+# Декодируем HEX, если требуется
+$euid_en = strip($kv_syscall["EUID"], '"', '"')
+if $euid_en == $kv_syscall["EUID"] then
+    $euid_en = hex_to_string($kv_syscall["EUID"])
+endif
+
+$euid_list = csv($euid_en, "@", "")
+
+if $kv_syscall["auid"] != "4294967295" then
+    subject.account.name = $auid_list[0]
+    subject.account.domain = $auid_list[1]
+
+    subject.account.id = $kv_syscall["auid"]
+else
+    subject.account.name = $euid_list[0]
+    subject.account.domain = $euid_list[1]
+
+    subject.account.id = $kv_syscall["euid"]
+endif
+
+subject.account.privileges = $kv_syscall["euid"]
+subject.account.session_id = $kv_syscall["ses"]
+
+subject.process.id = $kv_syscall["pid"]
+subject.process.parent.id = $kv_syscall["ppid"]
+
+# SYSCALL::exe
+if not in_list(["<no_memory>", "<too_long>", "(null)"], $kv_syscall["exe"]) then
+    # Декодируем HEX, если требуется
+    $exe = strip($kv_syscall["exe"], '"', '"')
+    if $exe == $kv_syscall["exe"] then
+        $exe = hex_to_string($kv_syscall["exe"])
+    endif
+endif
+
+$process_path_and_name = csv($exe, "/", "")
+$process_fullpath = $exe
+$process_name = $process_path_and_name[length($process_path_and_name) - 1]
+$process_path = strip($exe, "", $process_name)
+
+subject.process.fullpath = $process_fullpath
+subject.process.name = $process_name
+subject.process.path = $process_path
+
+# CWD
+if $items["CWD"] != null then
+    $kv_cwd = keyvalue($items['CWD'][0], ' ', '=', '"')
+    
+    if not in_list(["<no_memory>", "<too_long>", "(null)"], $kv_cwd["cwd"]) then
+        # Декодируем HEX, если требуется
+        $cwd_raw = strip($kv_cwd["cwd"], '"', '"')
+        if $cwd_raw == $kv_cwd["cwd"] then
+            $cwd_raw = hex_to_string($kv_cwd["cwd"])
+        endif
+        
+        if substr($cwd_raw, -1, 1) != "/" then
+            $cwd = $cwd_raw + "/"
+        else
+            $cwd = $cwd_raw
+        endif
+    endif
+endif
+
+subject.process.cwd = $cwd_raw
+
+# PROCTITLE
+if $items["PROCTITLE"] != null then
+    $kv_proctitle = keyvalue($items["PROCTITLE"][0], ' ', '=')
+ 
+    $process_proctitle = strip($kv_proctitle["proctitle"], '"', '"')
+    if $process_proctitle == "(null)" then
+        $process_proctitle = null
+    elif $process_proctitle == $kv_proctitle["proctitle"] then
+        $cmdline_raw = hex_to_string($kv_proctitle["proctitle"])
+ 
+        # stripping corrupted char
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 254))
+        endif
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 253))
+        endif
+        if $cmdline_raw == $kv_proctitle["proctitle"] then
+            $cmdline_raw = hex_to_string(substr($kv_proctitle["proctitle"], 0, 252))
+        endif
+ 
+        $process_proctitle = replace($cmdline_raw, " ", "\u0000")
+    endif
+endif
+
+subject.process.meta = $process_proctitle  # PROCTITLE
+
+# Декодируем HEX, если требуется
+$egid_en = strip($kv_syscall["EGID"], '"', '"')
+if $egid_en == $kv_syscall["EGID"] then
+    $egid_en = hex_to_string($kv_syscall["EGID"])
+endif
+
+object.account.group = coalesce($egid_en, $kv_syscall["egid"])
+
+object.account.name = $euid_list[0]
+object.account.domain = $euid_list[1]
+
+object.account.id = $kv_syscall["euid"]
+
+# PATH
+$path_list = if $items["PATH"] != null then $items["PATH"] else [] endif
+ 
+if (number($kv_syscall["items"]) != length($path_list)) and not in_list(["0", null], $kv_syscall["items"]) then
+    drop
+endif
+
+$normal = keyvalue($path_list[0], ' ', '=')
+
+# PATH::NORMAL
+if not in_list(["<no_memory>", "<too_long>", "(null)", null], $normal["name"]) then
+    # Декодируем HEX, если требуется
+    $normal_name = strip($normal["name"], '"', '"')
+    if $normal_name == $normal["name"] then
+        $normal_name = hex_to_string($normal["name"])
+    endif
+    
+    # Обрабатываем относительные пути
+    if (substr($normal_name, 0, 2) == "./") or (substr($normal_name, 0, 1) != "/") then
+        $normal_name = $cwd + strip($normal_name, "./", "")
+    elif ($normal_name == ".") and (substr($normal["mode"], 0, 2) == "04") then
+        $normal_name = $cwd_raw
+    endif
+    
+    $file_list = csv($normal_name, "/", "")
+    $file_fullpath = $normal_name
+    $file_name = $file_list[length($file_list)-1]
+    $file_path = strip($file_fullpath, "", $file_name)
+endif
+
+object.fullpath = $file_fullpath
+object.path = $file_path
+object.name = $file_name
+object.id = $normal["inode"]
+
+object.property = "extended_attributes"
+
+# PATH::mode
+$file_type = switch substr($normal["mode"], 0, length($normal["mode"]) - 4)
+    case "01"  "FIFO"
+    case "02"  "character_device"
+    case "04"  "directory"
+    case "06"  "block_device"
+    case "010" "regular_file"
+    case "012" "symlink"
+    case "014" "socket"
+endswitch
+
+$u_triplet = number(substr($normal["mode"], -3, 1))
+$g_triplet = number(substr($normal["mode"], -2, 1))
+$o_triplet = number(substr($normal["mode"], -1, 1))
+
+if ($file_type == "regular_file") and ((mod($u_triplet, 2) == 1) or (mod($g_triplet, 2) == 1) or (mod($o_triplet, 2) == 1)) then
+    $file_type = "executable_file"
+endif
+
+object.type = $file_type
+
+if $kv_syscall["tty"] != "(none)" then
+    $tty = $kv_syscall["tty"]
+
+    if (substr($tty, 0, 3) == "pts") and (substr($tty, 3, 1) != "/") then
+        logon_service = "pts/" + substr($tty, 3, length($tty) - 3)
+    else
+        logon_service = $tty
+    endif
+endif
+
+# Декодируем HEX, если требуется
+$comm = strip($kv_syscall["comm"], '"', '"')
+if $comm == $kv_syscall["comm"] then
+    $comm = hex_to_string($kv_syscall["comm"])
+endif
+
+datafield1 = $comm  # Executable Name
+
+# Декодируем HEX, если требуется
+$ouid_en = strip($normal["OUID"], '"', '"')
+if $ouid_en == $normal["OUID"] then
+    $ouid_en = hex_to_string($normal["OUID"])
+endif
+
+datafield2 = $ouid_en  # Owner User Name
+datafield3 = substr($normal["mode"], -4, 4)  # File Access Mode
+
+numfield2 = $normal["ouid"]  # Owner User ID
+
+chain_id = $eventid  # AuditD Event ID
+
+reason = switch $kv_syscall["exit"]
+    case "-1"   "Operation not permitted"
+    case "-17"  "File exists"
+    case "-28"  "No space left on device"
+    case "-34"  "Numerical result out of range"
+    case "-61"  "No data available"
+    case "-95"  "Operation not supported"
+    case "-122" "Disk quota exceeded"
+endswitch
+
+time = epoch_ms_to_datetime(number($timestamp + $timestampfractional))
+
+msgid = switch $kv_syscall["syscall"]
+    case "188" "setxattr"
+    case "226" "setxattr"
+    case "189" "lsetxattr"
+    case "227" "lsetxattr"
+    case "190" "fsetxattr"
+    case "228" "fsetxattr"
+    case "197" "removexattr"
+    case "235" "removexattr"
+    case "198" "lremovexattr"
+    case "236" "lremovexattr"
+    case "199" "fremovexattr"
+    case "237" "fremovexattr"
+endswitch
+
+importance = "low"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.subsys = "auditd"
+
+# Декодируем HEX, если требуется
+$key_raw = strip($kv_syscall["key"], '"', '"')
+if $key_raw == $kv_syscall["key"] then
+    $key_raw = hex_to_string($kv_syscall["key"])
+endif
+
+event_src.rule = if $key_raw != "(null)" then $key_raw else null endif
+
+if $node != "" then
+    if maybe_ipv4($node) != null or maybe_ipv6($node) != null then
+        if (in_subnet($node, "127.0.0.0/8") == False and $node != "::1") then
+            event_src.ip = $node
+            labels = "node_contains_ext_ip"
+        else
+            event_src.ip = recv_ipv4
+        endif
+    else
+        $first_dot = find_substr($node, ".")
+        if $first_dot != null then
+            event_src.fqdn = $node
+            event_src.hostname = substr($node, 0, $first_dot)
+        else
+            event_src.hostname = $node
+        endif
+    endif
+else
+    event_src.ip = recv_ipv4
+endif
+
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_auditd_syslog_structured_syscall_xattr_change"

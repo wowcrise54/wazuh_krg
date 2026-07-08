@@ -1,0 +1,49 @@
+TEXT = "{'<'NUMBER'>'?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        Connection: User [{$userdata=STRING} from [{src.ip=IPV4|src.ip=IPV6}] 
+        {$action='failed to sign'|$action='signed'} in to [{object.name=WORD}] {'via [password] due to authorization failure.'|'successfully via [password].'}"
+        
+subject = "account"
+action = "login"
+object = "application"
+
+if $action == 'failed to sign' then
+    status = "failure"
+else
+    status = "success"
+endif 
+
+$userdata = strip($userdata, '', ']')
+if find_substr($userdata, "\\\\") != null then
+    $temp_user = csv($userdata, '\\\\', '')
+    subject.account.domain = $temp_user[0]
+    subject.account.name = $temp_user[1]
+elif find_substr($userdata, "@") != null then
+    $temp_user = csv($userdata, '@', '')
+    subject.account.domain = $temp_user[1]
+    subject.account.name = $temp_user[0]
+elif find_substr($userdata, "\\") != null then
+    $temp_user = csv($userdata, '\\', '')
+    subject.account.domain = $temp_user[0]
+    subject.account.name = $temp_user[1]
+else
+    subject.account.name = $userdata
+endif 
+
+importance = "info"
+
+category.high = "Access Management"
+category.generic = "Application"
+category.low = "Communication"
+
+event_src.vendor = "synology"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "diskstation_manager"
+event_src.category = "Storage device"
+
+id = "PT_Synology_Diskstation_Manager_syslog_Login_state"

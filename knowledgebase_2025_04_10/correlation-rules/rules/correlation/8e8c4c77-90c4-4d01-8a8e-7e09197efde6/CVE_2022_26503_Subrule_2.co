@@ -1,0 +1,115 @@
+event Veeam_Service_Create_Dll:
+    key:
+        event_src.hostname, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and lower(subject.process.name) == "veeam.endpoint.service.exe"
+        and msgid == "11"
+        and event_src.title == "sysmon"
+        and lower(object.name) == "veeam.endpoint.remote.dll"
+    }
+
+event Dll_Load_Into_Veeam_Service:
+    key:
+        event_src.hostname, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and lower(subject.process.name) == "veeam.endpoint.service.exe"
+        and msgid == "7"
+        and event_src.title == "sysmon"
+        and lower(object.process.name) == "veeam.endpoint.remote.dll"
+        and object.value == "not signed"
+    }
+    
+event Malicious_Process_Start_By_System:
+    key:
+        event_src.hostname, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and lower(object.process.parent.name) == "veeam.endpoint.service.exe"
+        and object.process.name != null
+        and msgid == "1"
+        and event_src.title == "sysmon"
+        and (
+            subject.account.fullname == "nt authority\\system"
+            or (
+                lower(subject.account.name) == "system"
+                and lower(subject.account.domain) == "nt authority"
+            )
+            or subject.account.id == "S-1-5-18"
+        )        
+    }
+
+rule CVE_2022_26503_Subrule_2: (Veeam_Service_Create_Dll? and Dll_Load_Into_Veeam_Service and Malicious_Process_Start_By_System) timer 5m
+
+    on Malicious_Process_Start_By_System {
+        $subject = subject
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+       
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+    on Dll_Load_Into_Veeam_Service {
+        $datafield3 = object.process.path  # путь до неподписанной библиотеки
+        $datafield4 = object.process.name  # название неподписанной библиотеки
+    }
+
+emit {
+    $correlation_type = "subrule"
+    
+    $importance = "info"
+    
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Exploitation for Privilege Escalation"
+}

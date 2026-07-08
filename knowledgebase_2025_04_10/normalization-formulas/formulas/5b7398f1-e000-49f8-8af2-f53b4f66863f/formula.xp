@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?} {$time_raw=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        klish[{NUMBER}]: {subject.account.id=NUMBER}({subject.account.name=LITERAL+})
+        {object.process.cmdline=STRING+} : {reason=NUMBER}'
+
+subject = "account"
+object = "command"
+action = "execute"
+
+if reason == "0" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.account.id = subject.account.id
+object.account.name = subject.account.name
+
+if ($time_raw == null) then
+    time = recv_time
+else
+    time = $time_raw
+endif
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_syslog_cmd_execute"

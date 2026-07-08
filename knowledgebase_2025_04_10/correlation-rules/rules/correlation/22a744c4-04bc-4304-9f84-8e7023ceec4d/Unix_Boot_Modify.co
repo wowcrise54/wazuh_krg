@@ -1,0 +1,234 @@
+event Syscall_Boot_Modify:
+    key:
+        event_src.host, subject.process.id, object.path
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            filter::FileModify_Linux("^/boot/|^/etc/grub\.d")
+            or filter::FileModify_Linux("^/(etc|run|usr/lib)/(modules-load|sysctl)\.d/.*\.conf")
+            or filter::FileModify_Linux("^/etc/(lilo\.conf|modules(\.conf)?$)")
+            or filter::FileModify_Linux("^/((usr/)?lib/modules|proc/sys/kernel)/")
+        )
+        and status == "success"
+        and action != "remove"
+        and object.type != "directory"
+        and filter::CheckWL_Linux_File_Operations("Unix_Boot_Modify",
+            lower(join([subject.process.fullpath, subject.process.meta, object.fullpath, subject.process.cwd], "|")))
+    }
+
+event Modules_Modify_Commands:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.subsys == "auditd"
+        and filter::ProcessStart_Linux()
+        and (
+            regex(object.process.fullpath, "(modprobe|insmod|/sysctl|lsmod)$", 0) != null
+            or (
+                match(object.process.name, "*mount")
+                and regex(object.process.cmdline, "/proc/cmdline\\b", 0) != null
+            )
+        )   
+        and filter::CheckWL_Linux_Process_Creation("Unix_Boot_Modify",
+            lower(join([subject.account.name, object.process.cmdline, object.process.cwd], "|")))
+    }
+
+rule Unix_Boot_Modify: Modules_Modify_Commands or Syscall_Boot_Modify+ timer 10s
+
+    init {
+        $count.subevents = 0
+        $labels = "w_auto"
+    }
+
+    on Syscall_Boot_Modify {
+        if $count.subevents == 0 then  # блок выполняется только при первом событии инстанса
+            $action = action  # modify, access, create
+            $object = object  # file_object
+
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+            $subject.type = subject.type
+            
+            if subject != null then
+                $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+            else
+                $prefix = "[sys] "
+            endif
+
+            $subject.process.id = subject.process.id
+            $subject.process.cwd = subject.process.cwd
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.meta = subject.process.meta
+            $subject.process.parent.id = subject.process.parent.id
+            
+            $context = $context + "[" + string(subject.process.id) + "] " + subject.process.name + " → "
+
+            $object.account.id = object.account.id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.group = object.account.group
+
+            $object.name = object.name
+            $object.type = object.type
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.state = object.state            # open mode
+            $object.property = object.property
+            $object.value = object.value
+            $object.new_value = object.new_value
+            $object.storage.name = object.storage.name
+            $object.storage.path = object.storage.path
+            $object.storage.fullpath = object.storage.fullpath
+            
+            $files = object.fullpath
+            
+            $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → " 
+
+            $logon_service = logon_service
+            
+            $datafield1 = datafield1  # Executable Name
+            $datafield2 = datafield2  # Owner User Name
+            $datafield3 = datafield3  # File Access Mode
+
+            $numfield2 = numfield2  # Owner User ID
+            
+            $subject.process.chain = subject.process.chain
+            $object.process.chain = object.process.chain
+            $datafield18 = datafield18  # chain with PID for subject
+            $datafield19 = datafield19  # chain with PID for object
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+            
+            $alert.key = lower(join([subject.process.fullpath, subject.process.meta, object.fullpath, subject.process.cwd], "|"))
+
+            $labels = $labels + "|CheckWL_Linux_File_Operations"
+        elif $count.subevents == 1 then
+            if $action != action then
+                $action = null
+            endif
+            
+            $object.name = null
+            $object.type = null
+            $object.path = null
+            $object.fullpath = null
+            $object.state = null
+            $object.property = null
+            $object.value = null
+            $object.new_value = null
+            $object.storage.name = null
+            $object.storage.path = null
+            $object.storage.fullpath = null
+            
+            $datafield1 = null  # Executable Name
+            $datafield2 = null  # Owner User Name
+            $datafield3 = null  # File Access Mode
+
+            $numfield2 = null  # Owner User ID
+        endif
+        
+        $count.subevents = $count.subevents + 1
+    }
+
+    on Modules_Modify_Commands {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.type = subject.type
+            
+        if subject != null then
+            $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+        else
+            $prefix = "[sys] "
+        endif
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+            
+        $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "
+
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.cwd = object.process.cwd
+        $object.process.parent.id = object.process.parent.id
+            
+        $context = $context + "[" + string(object.process.id) + "] " + object.process.name + " (" + datafield4 + ")"
+
+        $logon_service = logon_service
+
+        $datafield1 = datafield1
+        $datafield2 = datafield2
+        $datafield3 = datafield3
+        $datafield4 = datafield4
+        $datafield5 = datafield5
+
+        $numfield2 = numfield2
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+               
+        $alert.key = lower(join([subject.account.name, object.process.cmdline, object.process.cwd], "|"))
+        
+        $labels = $labels + "|CheckWL_Linux_Process_Creation"
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    if $object != "process" then
+        $files = string($count.subevents) + " files in " + $object.path
+    endif    
+    $alert.context = $prefix + $context + $files
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Boot or Logon Autostart Execution: Kernel Modules and Extensions"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance 
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

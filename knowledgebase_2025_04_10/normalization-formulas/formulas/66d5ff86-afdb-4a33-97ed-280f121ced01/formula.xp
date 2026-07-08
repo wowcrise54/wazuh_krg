@@ -1,0 +1,46 @@
+!TABULAR = "audit_log_id_kf,
+            {time=change_date},
+            {subject.account.name=user_login},
+            {subject.account.fullname=user_fullname}"
+
+!COND = ($entity_type == "User" and $operation == "login")
+
+subject = "account"
+action = "login"
+object = "application"
+# status differs
+
+
+submessage("JSON", "additional_info", $property_changes)
+subformula "additional_info"
+    !JSON = "request"
+    !COND = $request["result"] != null
+
+    if $request["result"] == "login" then
+        status = "success"
+        importance = "low"
+    else
+        status = "failure"
+        importance = "medium"
+    endif
+
+    src.ip = $request["ip"]
+    if $request["hostname"] != $request["ip"] then
+        src.hostname = $request["hostname"]
+    endif
+endsubformula
+
+logon_auth_method = "remote"
+
+subject.account.contact = $user_email
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_6_odbc_Audit_User_login"

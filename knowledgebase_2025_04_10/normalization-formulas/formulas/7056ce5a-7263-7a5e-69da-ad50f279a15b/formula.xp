@@ -1,0 +1,77 @@
+TABULAR = 'EVENT_ID,
+           {time=EVENT_TIME},
+           SEVERITY,
+           {msgid=AUDIT_TYPE_ID},
+           {event_src.subsys=MODULE_ID}'
+
+COND = in_list(["USER_REGISTER", "USER_REGISTER_FAIL"], $AUDIT_TYPE_ID)
+
+if $AUDIT_TYPE_ID == "USER_REGISTER" then
+    subject = "account"
+    status = "success"
+
+    object.application.account.id = $OBJECT_ID
+    object.application.account.name = lower($OBJECT_NAME)
+
+    submessage("TEXT", "fullname", $DESCRIPTION)
+
+elif $AUDIT_TYPE_ID == "USER_REGISTER_FAIL" then
+    status = "failure"
+
+    $reason_text = strip($DESCRIPTION, "", ".<br>")
+
+    if find_substr($reason_text, "Пользователь с логином") == 0 then
+        submessage("TEXT", "login", $reason_text)
+
+    elif find_substr($reason_text, "Пользователь с таким email") == 0 then
+        submessage("TEXT", "email", $reason_text)
+    endif
+
+    reason = $reason_text
+endif
+
+action = "create"
+object = "account"
+
+subformula "fullname"
+    TEXT = '{UNTIL("\\"user\\"")};{UNTIL(":\\"")}{object.account.fullname=UNTIL("\\"")}{REST}'
+endsubformula
+
+subformula "login"
+    TEXT = 'Пользователь с логином \"{$exist_login=UNTIL("\\"")} уже существует'
+
+    object.application.account.name = lower($exist_login)
+endsubformula
+
+subformula "email"
+    TEXT = 'Пользователь с таким email ({object.account.contact=UNTIL(")")} уже существует'
+endsubformula
+
+subject.application.account.id = $USER_ID
+subject.application.account.name = lower($USER_LOGIN)
+
+$fullname = join([$USER_NAME, $USER_LAST_NAME], " ")
+if $fullname != " " then
+    subject.account.fullname = $fullname  # Application account fullname
+endif
+
+subject.process.meta = $USER_AGENT
+
+src.ip = $REMOTE_ADDR
+
+datafield1 = $REQUEST_URI  # Запрос 
+datafield2 = $SITE_ID      # Идентификатор сайта 
+
+numfield1 = $GUEST_ID      # Идентификатор посетителя
+
+importance = "info"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "1c_bitrix"
+event_src.title = "bitrix24"
+event_src.category = "Application server"
+
+id = "PT_1C_Bitrix_Bitrix24_odbclog_account_create"

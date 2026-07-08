@@ -1,0 +1,35 @@
+TEXT = '{$tmp_user_name=WORDDASH} {logon_service=STRING}
+        {"0.0.0.0"|$esip1=IPV4|} {WORD} {$MM=WORD}{$DD=NUMBER}{$HH=NUMBER}:{$minutes=NUMBER} {"-"?}
+        {NUMBER?}{":"?}{NUMBER?} {"("?}{$duration_hours=NUMBER?}{":"?}{$duration_minutes=NUMBER?}{")"?} {"still logged in"?}
+        {"0.0.0.0"|$esip2=IPV4|}'
+
+subject = "account"
+action = "login"
+object = "system"
+
+if $duration_hours == 0 and $duration_minutes == 0 then
+   status = "failure"
+else
+   status = "success"
+endif
+
+if lower($tmp_user_name) != "unknown" then
+    subject.account.name = $tmp_user_name
+endif
+
+time = $MM+" "+string($DD)+" "+string($HH)+":"+string($minutes)+":"+"00"
+if $duration_hours != null and $duration_minutes != null then
+    duration = $duration_hours*3600 + $duration_minutes*60
+endif
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.category = "Operating system"
+event_src.ip = coalesce ($esip1,$esip2)
+
+id = "PT_UNIX_like_ssh_filemonitor_user_login"

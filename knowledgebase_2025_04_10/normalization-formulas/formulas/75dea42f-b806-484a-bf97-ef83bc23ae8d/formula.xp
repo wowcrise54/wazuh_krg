@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        % {$msgid1="LLDP-FEX2"}{$msgid2="-5-SERVER_REMOVED"}: Server with Chassis ID {datafield2=STRING} Port ID {datafield3=STRING}
+        on local port {interface=STRING} has been removed'
+
+action = "modify"
+object = "configuration"
+status = "success"
+
+# datafield2 - Chassis ID
+# datafield3 - Port ID
+
+reason = "LLDP server removed"
+
+msgid = $msgid1 + $msgid2
+
+importance = "info"
+
+event_src.title = "ucs_manager"
+event_src.vendor = "cisco"
+event_src.category = "Network device"
+
+id = "PT_Cisco_UCS_Manager_syslog_LLDP_server_removed"

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Распыление пароля в системе Citrix NetScaler ADC. Распыление пароля (password spraying) — это тип атаки методом перебора, в ходе которой злоумышленник перебирает наиболее популярные пароли последовательно для каждого пользователя, что позволяет избежать блокировки учетных записей атакуемых пользователей</Description>
+  <EventDescriptions>
+    <EventDescription id="0ee809d6-6491-4526-8e9b-f43ba37f278b">Успешное распыление пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Подобран пароль пользователей {datafield2}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="63c8e19b-6f71-4e78-b906-f9858e6626ca">Попытки распыления пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Количество попыток входа: {datafield1}</EventDescription>
+    <EventDescription id="ecbc3ad9-a431-4455-a834-86dbfec075d9">Успешное распыление пароля (password spraying) с узла {src.host} в приложении {event_src.title} на узле {event_src.host}. Подобран пароль пользователя {subject.account.name}. Количество неудачных попыток входа: {datafield1}</EventDescription>
+  </EventDescriptions>
+</Localization>

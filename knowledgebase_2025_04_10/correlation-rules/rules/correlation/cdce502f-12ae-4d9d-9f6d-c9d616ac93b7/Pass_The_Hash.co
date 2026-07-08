@@ -1,0 +1,128 @@
+event PTH_Event:
+    key:
+        event_src.host, subject.account.name, object.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::Elevate_Windows_Endpoint()
+        and msgid == "4624"
+        and src.host == "::1"
+        and logon_type == 9
+        and lower(logon_service) == "seclogo"
+        and (
+                (
+                    src.host != "-" 
+                    and src.host != null
+                ) or (
+                    src.ip != "-" 
+                    and src.ip != null
+                )
+        )
+        and filter::CheckWL_Windows_Login("Pass_The_Hash", lower(join([subject.account.name, object.account.name], "|")))
+    }
+
+event Logon_On_Another_Host:
+    key:
+        event_src.host, subject.account.name, subject.account.session_id
+    filter {
+        correlation_name == "Subrule_Windows_Remote_Logon_With_Explicit_Credentials"
+    }
+
+rule Pass_The_Hash: (PTH_Event -> Logon_On_Another_Host?) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Windows_Login"
+    }
+
+    on PTH_Event {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+
+        # For Elevate
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $logon_type = logon_type
+        $logon_service = logon_service
+        $logon_auth_method = logon_auth_method
+        
+        $chain_id = chain_id
+        
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $reason = "local"
+
+        $alert.key = lower(join([subject.account.name, object.account.name], "|"))
+        $alert.context = subject.account.name  + " escalated to " + object.account.name
+    }
+
+    on Logon_On_Another_Host {
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        
+        $datafield2 = dst.host
+
+        $reason = "remote"
+
+        $alert.context = $alert.context + " and login on " + dst.host
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "elevate"
+    $object = "account"
+    $status = "success"
+
+    if $reason == "remote" then
+        $importance = "high"
+    else
+        $importance = "medium"
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Lateral Movement"
+    $category.low = "Use Alternate Authentication Material: Pass the Hash"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 2h
+}

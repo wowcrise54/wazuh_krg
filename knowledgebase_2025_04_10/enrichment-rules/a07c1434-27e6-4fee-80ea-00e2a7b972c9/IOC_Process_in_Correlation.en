@@ -1,0 +1,145 @@
+query Get_process_info($value_1, $value_2, $value_3, $value_4) from IOCs_Value {
+    (
+        value == $value_1
+        or value == $value_2
+        or value == $value_3
+        or value == $value_4
+    ) and (
+        category == "meta" 
+        or category == "hash"
+        or category == "binary"
+    )
+}
+qhandler {
+    $value = value
+    $category = category
+}  
+
+event enrich_by_process_meta:
+    filter {
+        correlation_name != null
+        and object.process.meta != null
+        and find_substr(alert.context, "ioc:meta") == null
+    }
+    
+event enrich_by_process_hash:
+    filter {
+        correlation_name != null
+        and coalesce(object.process.hash, object.hash) != null
+        and find_substr(alert.context, "ioc:hash") == null
+    }
+    
+event enrich_by_process_binary:
+    filter {
+        correlation_name != null
+        and (
+            object.process.name != null
+            or subject.process.name != null
+            or object.process.original_name != null
+        )
+        and find_substr(alert.context, "ioc:binary") == null
+    }
+    
+enrichment IOC_Process_in_Correlation
+ 
+enrich enrich_by_process_meta:
+    enrich_fields {
+        $ioc_info = exec_query("Get_process_info", [lower(object.process.meta), regex(lower(object.process.meta), "description:(.*?)\s\|", 1), regex(lower(object.process.meta), "product:(.*?)\s\|", 1), regex(lower(object.process.meta), "company:(.*?)$", 1)])
+        
+        if $ioc_info["$value"] != null then
+            alert.ioc_provider = "local TL IOCs_Value"
+            alert.ioc_value = $ioc_info["$value"]
+            alert.context = alert.context + " | ioc:meta:" + alert.ioc_value
+            
+            # Escalate
+            
+            if correlation_type == "event" then
+                correlation_type = "incident"
+                
+                if incident.aggregation.key == null then
+                    incident.aggregation.key = join([correlation_name, event_src.host, subject.account.id], "|")
+                endif
+                
+                if importance == "info" then
+                    importance = "low"
+                endif
+                incident.severity = importance
+                
+                if incident.category == null then
+                    incident.category = "Undefined"
+                endif
+                
+                if incident.aggregation.timeout == null then
+                    incident.aggregation.timeout = 2h
+                endif
+            endif
+        endif
+    }
+    
+enrich enrich_by_process_hash:
+    enrich_fields {
+        $ioc_info = exec_query("Get_process_info", [lower(coalesce(object.process.hash, object.hash)), lower(object.process.hash.sha256), lower(object.process.hash.sha1), lower(object.process.hash.md5)])
+        
+        if $ioc_info["$value"] != null then
+            alert.ioc_provider = "local TL IOCs_Value"
+            alert.ioc_value = $ioc_info["$value"]
+            alert.context = alert.context + " | ioc:hash:" + alert.ioc_value
+            
+            # Escalate
+            
+            if correlation_type == "event" then
+                correlation_type = "incident"
+                
+                if incident.aggregation.key == null then
+                    incident.aggregation.key = join([correlation_name, event_src.host, subject.account.id], "|")
+                endif
+                
+                if importance == "info" then
+                    importance = "low"
+                endif
+                incident.severity = importance
+                
+                if incident.category == null then
+                    incident.category = "Undefined"
+                endif
+                
+                if incident.aggregation.timeout == null then
+                    incident.aggregation.timeout = 2h
+                endif
+            endif
+        endif
+    }
+    
+enrich enrich_by_process_binary:
+    enrich_fields {
+        $ioc_info = exec_query("Get_process_info", [object.process.name, subject.process.name, object.process.original_name, ""])
+        
+        if $ioc_info["$value"] != null then
+            alert.ioc_provider = "local TL IOCs_Value"
+            alert.ioc_value = $ioc_info["$value"]
+            alert.context = alert.context + " | ioc:binary:" + alert.ioc_value
+            
+            # Escalate
+            
+            if correlation_type == "event" then
+                correlation_type = "incident"
+                
+                if incident.aggregation.key == null then
+                    incident.aggregation.key = join([correlation_name, event_src.host, subject.account.id], "|")
+                endif
+                
+                if importance == "info" then
+                    importance = "low"
+                endif
+                incident.severity = importance
+                
+                if incident.category == null then
+                    incident.category = "Undefined"
+                endif
+                
+                if incident.aggregation.timeout == null then
+                    incident.aggregation.timeout = 2h
+                endif
+            endif
+        endif
+    }

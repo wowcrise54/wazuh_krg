@@ -1,0 +1,39 @@
+query IsCriticalHost($ip, $fqdn) from Critical_Hosts {
+    (
+        (ip != null and ip == $ip)
+        or (fqdn != null and fqdn == $fqdn)
+    )
+}
+
+query IsCriticalHost_Manual($ip, $fqdn) from Critical_Hosts_Manual {
+    (
+        (ip != null and ip == $ip)
+        or (fqdn != null and fqdn == $fqdn)
+    )
+}
+
+event Correlation:
+    filter {
+        correlation_name != null
+        and not (
+            correlation_type == "subrule"
+            or in_list(["info", "high"], importance)
+            or match(lower(correlation_name), "*abnormal_access")
+        )
+        and (
+            exec_query("IsCriticalHost", [event_src.ip, event_src.host])
+            or exec_query("IsCriticalHost_Manual", [event_src.ip, event_src.host])
+        )
+    }
+
+enrichment Critical_Hosts_Importance_Enrichment
+    
+    enrich Correlation:
+        enrich_fields {
+            switch importance
+                case "low" importance = "medium"
+                case "medium" importance = "high"
+            endswitch
+            incident.severity = importance
+            labels = labels + "|critical_host_importance_enriched"
+        }

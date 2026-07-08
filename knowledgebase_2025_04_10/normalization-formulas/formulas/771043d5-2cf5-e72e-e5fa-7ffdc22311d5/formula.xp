@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} redis{"["NUMBER"]"}: Failed opening the temp RDB file 
+        {object.name=STRING}(in server root dir {object.path=UNTIL(")")} for saving: 
+        {reason=REST}'
+
+action = "open"
+object = "file_object"
+status = "failure"
+
+reason = lower(reason)
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "redis"
+event_src.category = "Database server"
+
+id = "PT_Opensource_redis_syslog_failed_opening_temp_rdb_file"

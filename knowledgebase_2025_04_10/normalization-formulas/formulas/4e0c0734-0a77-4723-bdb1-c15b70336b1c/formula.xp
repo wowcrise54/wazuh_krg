@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {$time_raw=DATETIME?} {"Message forwarded from"?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?} {subject.process.name="rsyslogd"}{"["?}{subject.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+file \'{$file_fullpath=LITERAL+}\'[{NUMBER}] write error - see https://www.rsyslog.com/solving-rsyslog-write-errors/ for help OS error: {reason=STRING*} [v{UNTIL(" try ")}{external_link=LITERAL+}]'
+
+subject = "process"
+action = "modify"
+object = "file_object"
+status = "failure"
+
+$file_list = csv($file_fullpath, "/", "")
+
+object.fullpath = $file_fullpath
+object.name = $file_list[length($file_list)-1]
+object.path = strip(object.fullpath, "", object.name)
+
+time = coalesce($time_raw, recv_time)
+importance = "low"
+
+category.high = "System Management"
+category.generic = "File System Object"
+category.low = "Manipulation"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_rsyslog_syslog_file_write_error"

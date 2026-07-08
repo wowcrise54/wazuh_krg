@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+    {datafield1="postgres"}{"["object.process.id=NUMBER"]"}:{"["WORDDASH"]"}{"#"NUMBER}
+    {msgid="system usage"}: CPU {datafield2=STRING} sec elapsed {datafield3=STRING} sec'
+
+action = "info"
+object = "database"
+status = "success"
+
+# datafield1 - Название процесса в InfoWatch
+# datafield2 - Потребление ресурсов процессора
+# datafield3 - Время анализа
+
+importance = "info"
+
+event_src.vendor = "infowatch"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "traffic_monitor"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_syslog_System_usage"

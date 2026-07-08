@@ -1,0 +1,31 @@
+#<14>Dec 11 14:44:20 leaf01 netd:    INFO:  RXed: user cumulus, command "/usr/bin/net show interface all"
+
+TEXT = '{"<"NUMBER">"}{time=DATETIME}{$Computer=HOSTNAME}netd:
+        INFO: RXed: user {subject.account.name=UNTIL(",")}
+        command "/usr/bin/{$cmd=REST}'
+        
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+object.process.cmdline = strip($cmd,"","\"") 
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_syslog_netd_command_execute"

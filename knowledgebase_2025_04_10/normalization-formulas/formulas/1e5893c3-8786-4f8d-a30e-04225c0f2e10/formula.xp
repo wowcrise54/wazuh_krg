@@ -1,0 +1,56 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {'('?}nginx{')'?}{'['NUMBER']'?}:
+        {time=DATETIME}
+        [{WORD}]
+        {NUMBER'#'NUMBER?}: {STRING?}
+        directory index of {$resource=STRING+} is forbidden,
+        client: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME},
+        {$kv=KEYVALUE(',',':', '\"')}"
+
+action = "view"
+object = "file_object"
+status = "failure"
+
+submessage("TEXT", "dst_address", $kv['server'])
+
+object.type = "directory"
+object.fullpath = strip(strip($resource, '"', '"'), '', '/')
+$tmp_csv = csv(object.fullpath, "/", "")
+object.name = $tmp_csv[length($tmp_csv) - 1]
+if length($tmp_csv) > 1 then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+
+if $kv['request'] != null then
+    object.property = "request"
+    object.value = $kv['request']
+endif
+
+# parse dst address
+subformula "dst_address"
+    TEXT = '{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME|"_"}{":"dst.port=NUMBER?}'
+endsubformula
+
+if dst.hostname == null then 
+    dst.hostname = $Computer
+elif dst.ip == null then
+    dst.ip = event_src.ip
+endif
+
+# referer
+datafield1 = $kv['referrer']
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nginx"
+event_src.category = "Web server"
+
+id = "PT_Opensource_Nginx_syslog_directory_index_is_forbidden"

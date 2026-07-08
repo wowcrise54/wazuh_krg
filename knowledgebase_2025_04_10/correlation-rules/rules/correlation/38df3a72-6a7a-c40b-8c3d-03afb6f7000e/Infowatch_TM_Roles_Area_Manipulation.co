@@ -1,0 +1,66 @@
+event Add_Remove_Role_Or_Area:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "traffic_monitor"
+        and event_src.vendor == "infowatch" 
+        and subject == "account"
+        and object == "resource"
+        and (object.type == "Role"
+        or object.type == "visibility area")
+        and filter::CheckWL_Specific_Only("Infowatch_TM_Roles_Area_Manipulation", 
+        lower(join([event_src.host, subject.account.name], "|")))
+    }
+
+rule Infowatch_TM_Roles_Area_Manipulation: Add_Remove_Role_Or_Area
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Add_Remove_Role_Or_Area {
+        $action = action
+        
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.contact = subject.account.contact
+        
+        $object.type = object.type
+        $object.name = object.name
+        $object.id = object.id
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(join([event_src.host, subject.account.name], '|'))
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $object = "resource"
+    $status = "success"
+    
+    $importance = "low"
+    
+    $category.generic = "Attack"
+    $category.high = "Privilege Escalation"
+    $category.low = "Account Manipulation"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

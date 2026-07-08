@@ -1,0 +1,35 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {dst.hostname=zntf_computer},
+           {src.ip=remote_computer}'
+
+!COND = string($zntf_status) == "664076575" or string($zntf_status) == "664076572" or string($zntf_status) == "664076573"
+
+msgid = string($zntf_status)
+
+subject = "account"
+if msgid == "664076575" then
+    action = "create"
+elif msgid == "664076572" then
+    action = "update"
+elif msgid == "664076573" then
+    action = "modify"
+endif
+object = "db_object"
+status = "success"
+
+submessage("TEXT", "SPLIT", $zntf_user)
+subformula "SPLIT"
+    # Извлечение subject.domain и subject.name из $zntf_user
+    TEXT = '{$csv = CSV("\\\\", "\'")}'
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+endsubformula
+
+importance = "info"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_categories_in_db_of_digital_fingerprints"

@@ -1,0 +1,18 @@
+TABULAR = "name,
+           {time=start_time},
+           {datafield1=guid},
+           {msgid=event_type}"
+
+           COND = $event_type == "XDR Internal_event"
+
+action = "info"
+object = "resource"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id="PT_Positive_Technologies_XDR_Internal_event" 

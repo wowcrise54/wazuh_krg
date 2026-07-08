@@ -1,0 +1,80 @@
+EVENTLOG = 'EventID="4820"'
+COND = $Channel == "Security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "login"
+object = "service"
+status = "failure"
+
+#Account Information:
+subject.account.name = $Data["TargetUserName"]  #  Account Name
+subject.account.domain = $Data["TargetDomainName"]  #Supplied Realm Name
+subject.account.id = $Data["TargetSid"] # User ID
+
+#Network Information:
+src.ip = strip($Data["IpAddress"], "::ffff:", "")   # Client Address
+src.port = $Data["IpPort"]  # Client Port
+
+#Device Information:
+src.hostname = $Data["DeviceName"]    # Device Information
+
+#Service Information:
+datafield2 = $Data["ServiceName"]   # Service Information
+datafield3 = $Data["ServiceSid"]    # Service ID
+
+#Additional Information:
+datafield4 = $Data["TicketOptions"] # Ticket Options
+datafield5 = $Data["Status"]    # Result Code
+#datafield6 = $Data["TicketEncryptionType"]  # Ticket Encryption Type
+
+datafield6 = switch $Data["TicketEncryptionType"] # Ticket Encryption Type
+    case "0x1" "DES-CBC-CRC"
+    case "0x3" "DES-CBC-MD5"
+    case "0x11" "AES128-CTS-HMAC-SHA1-96"
+    case "0x12" "AES256-CTS-HMAC-SHA1-96"
+    case "0x17" "RC4-HMAC"
+    case "0x18" "RC4-HMAC-EXP"
+    case "0xFFFFFFFF" "-"
+endswitch
+
+datafield7 = switch $Data["PreAuthType"]   # Pre-Authentication Type
+    case "0" "Logon without Pre-Authentication"
+    case "2" "Standard password authentication"
+    case "11" "The ETYPE-INFO pre-authentication"
+    case "15" "Smart Card logon authentication"
+    case "16" "Request sent to KDC in Smart Card authentication scenarios"
+    case "17" "Smart Card logon authentication"
+    case "19" "The ETYPE-INFO2 pre-authentication"
+    case "20" "KDC Referrals tickets"
+    case "138" "Logon using Kerberos Armoring (FAST)"
+endswitch
+
+#Certificate Information:
+datafield8 = $Data["CertIssuerName"]    # Certificate Issuer Name
+datafield9 = $Data["CertSerialNumber"]  # Certificate Serial Number
+datafield10 = $Data["CertThumbprint"]   # Certificate Thumbprint
+
+#Authentication Policy Information:
+datafield11 = $Data["SiloName"] # Silo Name
+datafield12 = $Data["PolicyName"]   # Policy Name
+datafield13 = $Data["TGT Lifetime"] # TGT Lifetime
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_4820_Kerberos_TGT_Failed_Access_Control_Restrictions"

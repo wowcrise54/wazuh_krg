@@ -1,0 +1,46 @@
+JSON = ''
+COND = $SLGTYPE.SUBID == "W" and $SLGTYPE.AREA == "AU" and not (find_substr($SLGREPNA, '/1BCDWB/DB') == 0 or find_substr($SLGDATA, '/1BCDWB/DB') == 0)
+
+if $SLGREPNA == "RSDELCUA" then
+    action = "remove"
+    object = "system"
+else
+    action = "start"
+    object = "report"
+endif
+status = "success"
+
+if $SLGUSER != "" then
+    subject = "account"
+    subject.account.name = $SLGUSER
+endif
+
+object.name = $SLGREPNA
+
+if maybe_ipv4($SLGLTRM2) == null && $SLGLTRM2 != "" then
+    src.hostname = $SLGLTRM2
+elif maybe_ipv4($SLGLTRM2) != null then
+    src.ip = $SLGLTRM2
+endif
+
+if $SLGMAND != "" then
+    datafield1 = $SLGMAND                                                               # Client or mandant
+endif
+datafield2 = $SLGPROC.UNIXPID + $SLGPROC.TASKTNO + $SLGPROC.SLGTTYP + $SLGPROC.SLGMODE  # Other information
+if $SLGTC != "" then
+    datafield3 = $SLGTC                                                                 # Transaction code
+endif
+if $SLGREPNA != "" then
+    datafield4 = $SLGREPNA                                                              # Report name
+endif
+
+time = $SLGDATTIM.DATE + $SLGDATTIM.TIME
+msgid = $SLGTYPE.AREA + $SLGTYPE.SUBID
+importance = "low"
+
+event_src.vendor =  "sap"
+event_src.title = "sap_as_abap"
+event_src.subsys = "security audit"
+event_src.category = "Application server"
+
+id = "PT_SAP_SAP_AS_ABAP_filemonitor_Report_started"

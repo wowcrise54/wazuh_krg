@@ -1,0 +1,29 @@
+EVENTLOG = 'Provider.Name="PT-XDR"'
+
+COND = $Channel == "syslog"
+
+action = if $EventID == "syslog_module_started" then "start" else "stop" endif
+object = "module"
+status= "success"
+
+importance = "info"
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.id = $Data["agent_id"]
+event_src.ip = $Data["agent_ip"]
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.subsys = $Channel
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_eventlog_syslog"

@@ -1,0 +1,79 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+vpxd{"["?}{NUMBER}{"]"?}{"-"*} Event [{NUMBER}] [{NUMBER}-{NUMBER}] [{time=DATETIME}] 
+[vim.event.EventEx] [{WORD}] [{$user=UNTIL("]")} [{$def_dc_name=UNTIL("]")} [{chain_id=NUMBER}]
+[NFC operation \'{$operation=WORD}\' for path \'{$target_path=UNTIL("\' was initiated from \'")}{$source_of_operation=UNTIL("\' and completed with status \'")} {$status_raw=WORD}\']'
+
+if not in_list([null, ""], $user) then
+    subject = "account"
+endif
+
+action = switch $operation
+    case "Download" "download"
+    case "Upload" "upload"
+endswitch
+
+object = "file_object"
+
+status = switch $status_raw
+    case "Success" "success"
+    case "Failure" "failure"
+    case "Unknown" "ongoing"
+endswitch
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+submessage("TEXT", "parse_user", $user)
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+$obj_list = csv($target_path, "/", "'")
+
+if length($obj_list) > 1 then
+    object.name = $obj_list[length($obj_list)-1]
+    object.path = strip($target_path, "", object.name)
+else
+    object.name = $target_path
+endif
+
+object.fullpath = $target_path
+
+$src = strip($source_of_operation, "", "']")
+src.ip = coalesce(ipv4($src), ipv6($src))
+if src.ip == null then
+    src.hostname = $src
+endif
+
+datafield1 = $def_dc_name  # Datacenter Name
+datafield2 = $ds_name  # Datastore Name
+
+msgid = "DatastoreFileNfcModificationEvent"
+importance = "low"
+
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vsphere"
+event_src.subsys = "vpxd"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vspheresyslog_Datastore_File_NFC"

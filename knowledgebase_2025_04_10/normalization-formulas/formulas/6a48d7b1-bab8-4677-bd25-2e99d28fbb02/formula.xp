@@ -1,0 +1,47 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {'('?}nginx{')'?}{'['NUMBER']'?}:
+        {time=DATETIME}
+        [{WORD}]
+        {NUMBER'#'NUMBER?}: {STRING?}
+        connect() {'to'?} {STRING?} failed {$reason_raw=STRING+} while connecting to upstream,
+        client: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME},
+        {$kv=KEYVALUE(',', ':', '\"')}"
+
+action = "open"
+object = "session"
+status = "failure"
+
+submessage("TEXT", "dst_address", $kv['server'])
+
+# parse dst address
+subformula "dst_address"
+    TEXT = '{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME|"_"}{":"dst.port=NUMBER?}'
+endsubformula
+
+if $kv['request'] != null then
+    object.property = "request"
+    object.value = $kv['request']
+endif
+
+# referer
+datafield1 = $kv['referrer']
+
+# upstream server
+datafield2 = $kv['upstream']
+
+reason = strip($reason_raw, "(", ")")
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nginx"
+event_src.category = "Web server"
+
+id = "PT_Opensource_Nginx_syslog_connect_to_upstream_failed"

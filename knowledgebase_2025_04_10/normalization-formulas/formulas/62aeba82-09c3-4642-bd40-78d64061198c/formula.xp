@@ -1,0 +1,119 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"multiscanner"|"sandbox"} - {object.type="email"}.{$id="start"} - {$json_data=REST}'
+
+action = "start"
+object = "scan"
+status = "success"
+subject = "application"
+
+# Parsing JSON submessage from PT Multiscanner
+submessage('JSON', 'multiscanner', $json_data)
+subformula 'multiscanner'
+    JSON = 'scan_id'
+
+    object.property = "message id"  # the same in Exchange events
+    object.value = lower($email['id'])
+    
+    subject.account.contact = $email['from_address']['address']      # sender address
+    $temp_sender = csv(subject.account.contact, "@", "`")
+    subject.account.name = $temp_sender[0]
+    subject.account.domain = $temp_sender[1]
+    
+    $recipients = coalesce($envelope['recepients'], $envelope['recipients'])
+    
+    numfield1 = length($email['to_list']) + length($email['cc_list']) + length($email['bcc_list'])           # число получателей письма + получатели в копии
+    
+    if join([$recipients], "|") != "" then
+        object.account.contact = join([$recipients], "|")   # Получатель письма, но из поля 'recipients'
+    endif
+    
+    if $email['to_list'][0]['address'] != null then
+        submessage("TEXT", "raw_to_list", $json_data)
+    endif
+        
+    if $email['cc_list'][0]['address'] != null then
+        submessage("TEXT", "raw_cc_list", $json_data)
+    endif
+    
+    if $email['bcc_list'][0]['address'] != null then
+        submessage("TEXT", "raw_bcc_list", $json_data)
+    endif
+    
+    if length($recipients) == 1 then
+        $temp_recipient = csv(object.account.contact, "@", "`")
+        object.account.name = $temp_recipient[0]
+        object.account.domain = $temp_recipient[1]
+    endif
+    
+    if $email['subject'] != "" then
+        datafield5 = $email['subject']                  # subject
+    endif
+    
+    # mail_from_to
+    if $envelope['from_address'] != "<>" then
+        datafield6 = $envelope['from_address']
+        subject.account.id = $envelope['from_address']
+    endif
+    
+    if $email['file']['name'] != "" then
+        datafield8 = $email['file']['name']     # имя вложения, при его наличии. актуально для версий < 4
+    endif
+    
+    if $email['reply_to'] != "" then
+        datafield9 = lower($email['reply_to'])  # идентификатор получателя
+    endif
+
+    chain_id = $scan_id
+
+    time = epoch_to_datetime(number($created))
+    msgid = "email.start"
+    subject.type = $entry_point_id
+endsubformula
+
+subformula "raw_to_list"
+    TEXT = '{UNTIL("to_list\\": [{")}{$raw_to_list=UNTIL("]")}{REST}'
+    $raw_to_list = replace($raw_to_list, "", "\"")
+    $raw_to_list = replace($raw_to_list, "", "{")
+    $raw_to_list = replace($raw_to_list, "", "address: ")
+    $raw_to_list = replace($raw_to_list, "", ", name:*}")
+    $raw_to_list = replace($raw_to_list, "", "}")
+    $raw_to_list = replace($raw_to_list, "|", ", ")
+    datafield3 = lower($raw_to_list)    # to_list
+endsubformula
+
+subformula "raw_cc_list"
+    TEXT = '{UNTIL("cc_list\\": [{")}{$raw_cc_list=UNTIL("]")}{REST}'
+    $raw_cc_list = replace($raw_cc_list, "", "\"")
+    $raw_cc_list = replace($raw_cc_list, "", "{")
+    $raw_cc_list = replace($raw_cc_list, "", "address: ")
+    $raw_cc_list = replace($raw_cc_list, "", ", name:*}")
+    $raw_cc_list = replace($raw_cc_list, "", "}")
+    $raw_cc_list = replace($raw_cc_list, "|", ", ")
+    datafield4 = lower($raw_cc_list)    # cc_list
+endsubformula
+
+subformula "raw_bcc_list"
+    TEXT = '{UNTIL("bcc_list\\": [{")}{$raw_bcc_list=UNTIL("]")}{REST}'
+    $raw_bcc_list = replace($raw_bcc_list, "", "\"")
+    $raw_bcc_list = replace($raw_bcc_list, "", "{")
+    $raw_bcc_list = replace($raw_bcc_list, "", "address: ")
+    $raw_bcc_list = replace($raw_bcc_list, "", ", name:*}")
+    $raw_bcc_list = replace($raw_bcc_list, "", "}")
+    $raw_bcc_list = replace($raw_bcc_list, "|", ", ")
+    datafield10 = lower($raw_bcc_list)    # bcc_list
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multiscanner"
+event_src.category = "Anti-virus"
+
+id = "PT_Positive_Technologies_Multiscanner_syslog_email_start"

@@ -1,0 +1,7 @@
+filter MSSQL_Query(string $action_id, string $entity_id) {
+    filter::NotFromCorrelator()
+    and msgid == "33205"
+    and event_src.title == "sql_server"
+    and datafield4 == $action_id
+    and datafield5 == $entity_id
+}

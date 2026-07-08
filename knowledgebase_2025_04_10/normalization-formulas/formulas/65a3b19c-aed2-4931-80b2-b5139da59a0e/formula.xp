@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} pfsp: {protocol="BGP"} Instability for
+        {object.type="router"} {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME|} ended'
+
+action = "info"
+object = "device"
+status = "success"
+
+reason = "Instability of the BGP protocol is ended"
+importance = "info"
+
+event_src.title = "peakflow_sp"
+event_src.vendor = "arbor_networks"
+event_src.category = "Network security"
+
+id = "PT_Arbor_Networks_Peakflow_SP_syslog_bgp_instability_end"

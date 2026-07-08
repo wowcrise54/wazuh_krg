@@ -1,0 +1,27 @@
+EVENTLOG = 'EventID="4944"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+action = "info"
+object = "policy"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+object.type = $Data["Profile"]
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+	event_src.fqdn = lower($Computer)
+	if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+	event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Firewall"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_4944_Following_policy_was_active_when_Windows_Firewall_started"
+importance = "info"

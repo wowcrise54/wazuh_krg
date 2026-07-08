@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Detection of attempts to stop an important service. The list of services is in the table list Significant_Services.</Description>
+  <EventDescriptions>
+    <EventDescription id="4f73d3c8-dc54-49d7-98e1-cb3845402010">An attempt to stop the important service {object.name} is detected on host {event_src.host}. At the service {object.name} changed the startup option to SERVICE_DISABLED (а service that cannot be started)</EventDescription>
+    <EventDescription id="b0fa3943-d243-4dc7-afae-a28e5a7939b4">An attempt to stop the important service {object.name} is detected on host {event_src.host}. At the service {object.name} the registry key responsible for autorun has been deleted</EventDescription>
+    <EventDescription id="b12da9c0-5e29-40f4-bc8a-1bc5cfe49101">An attempt to stop the important service {object.name} is detected on host {event_src.host}. At the service {object.name} changed the startup option to SERVICE_DEMAND_START (will be loaded at the request of the user or program)</EventDescription>
+  </EventDescriptions>
+</Localization>

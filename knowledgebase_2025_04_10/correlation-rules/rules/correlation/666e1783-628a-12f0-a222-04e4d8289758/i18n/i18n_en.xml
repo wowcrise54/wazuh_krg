@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Redis attack protection system was triggered. This may be caused by cross-site scripting or a suspicious change to the "maxmemory" configuration parameter.</Description>
+  <EventDescriptions>
+    <EventDescription id="3b1b5bc4-0da3-457e-b6d3-069b01afb966">The "maxmemory" parameter value is less than 1 MB on host {event_src.host}</EventDescription>
+    <EventDescription id="571613d8-ab3a-4fa4-8ab3-08dcb879af8e">The "maxmemory" parameter value was reduced on host {event_src.host}. Reason: {reason}.</EventDescription>
+    <EventDescription id="c7b2e279-4f65-487c-aaae-946625f8e3db">Possible attack using POST or Host: commands on host {event_src.host}, connection aborted. Event context: {reason}.</EventDescription>
+  </EventDescriptions>
+</Localization>

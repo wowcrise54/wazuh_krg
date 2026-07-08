@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Persistence on a host was gained by changing a system service file. Attackers can create or modify systemd services to repeatedly execute malicious payloads.</Description>
+  <EventDescriptions>
+    <EventDescription id="53686d5a-93a7-40c3-dfee-fdae9ebaa493">Persistence was possible gained by changing system service file "{object.name}" on host {event_src.host}.</EventDescription>
+    <EventDescription id="61539bfb-9b71-0363-20ee-7805d947729a">Persistence was possible gained by creating system service file {object.fullpath} and starting service {datafield7} on host {event_src.host}.</EventDescription>
+    <EventDescription id="648bdc25-7fa4-9359-bc7a-1bd8a20dd45f">User {subject.account.name} possible gained persistence by changing system service file "{object.name}" on host {event_src.host}.</EventDescription>
+    <EventDescription id="d75385fd-6392-0b6d-13dc-d9bcb0417f10">User {subject.account.name} possible gained persistence by creating system service file {object.fullpath} and starting service {datafield7} on host {event_src.host}.</EventDescription>
+  </EventDescriptions>
+</Localization>

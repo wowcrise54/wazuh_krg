@@ -1,0 +1,48 @@
+JSON = 'Provider = "Microsoft-Windows-WMI-Activity"'
+COND = $EventData["ClassName"] != null
+        and $EventData["MethodName"] != null
+        and $EventData["ImplementationClass"] != null
+        and $EventID == 22
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+$tempcsv = csv($EventData["User"], "\\", "")
+subject.account.name = $tempcsv[1]
+subject.account.domain = $tempcsv[0]
+
+object.process.id = $EventData["ClientProcessId"]
+
+object.path = lower(strip($EventData["NamespaceName"], "\\\\.\\", ""))
+object.type = "WMI method"
+
+datafield1 = $ThreadID                        # Thread ID
+datafield2 = $EventData["ClientMachine"]      # Client machine name
+datafield3 = $EventData["CorrelationId"]      # Correlation ID
+datafield4 = $EventData["GroupOperationId"]   # Group operation ID
+datafield5 = $EventData["OperationId"]        # Operation ID
+datafield6 = $EventData["IsLocal"]            # local or remote
+datafield7 = $EventData["MethodName"]         # Method name
+if $Name != "" then datafield8 = $Name endif  # process name if not empty
+datafield9 = $EventData["ClassName"]
+datafield10 = $EventData["ImplementationClass"]
+
+time = $Timestamp
+msgid = $EventID
+importance = "info"
+
+$dot_pos = find_substr($EventData["ClientMachineFQDN"], '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($EventData["ClientMachineFQDN"])
+    event_src.hostname = lower(substr($EventData["ClientMachineFQDN"], 0, $dot_pos))
+else
+    event_src.hostname = lower($EventData["ClientMachineFQDN"])
+endif
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_ETW_WMI_Execution_method"

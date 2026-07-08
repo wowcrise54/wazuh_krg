@@ -1,0 +1,265 @@
+query GetAccountData($user_id) from Known_Windows_Accounts {
+    column::id == $user_id
+}
+    qhandler {
+        $domain_full = domain_full
+        $domain_netbios = domain_netbios
+        $storage = storage
+        $_last_changed = _last_changed
+    }
+
+query GetDomainFullName($id) from Known_Windows_Domains {
+    column::id == $id
+}
+    qhandler {
+        $fullname = fullname
+        $netbios = netbios
+        $_last_changed = _last_changed
+    }
+
+query Check_if_Host_is_DC_by_EventSrc($host, $ip) from List_Servers {
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        ) 
+        or (
+            asset_ip == $ip
+            and asset_ip != null
+        )
+        or (
+            (
+                host == $ip
+                or host == $host
+            )
+            and host != null
+        )
+    )
+    and roles == "Domain Controller"
+}
+
+query Check_if_host_is_DC_AssetGrid($fqdn, $ip, $asset) from AssetGrid_Servers {
+    (
+        asset_id == $asset
+        and asset_id != null
+    )
+    or (
+            asset_fqdn == $fqdn
+            and asset_fqdn != null
+       )
+    or (
+            asset_ip == $ip
+            and asset_ip != null
+       )
+}
+
+event Account_Login_Success:
+    filter {
+        filter::NotFromCorrelator()
+        and filter::LoginAttempt_Windows_Endpoint()
+        and status == "success"
+        and match(subject.account.id, "S-1-5-*")
+        and subject.account.name != null
+        and subject.account.domain != null
+    }
+
+event Account_Created_Success:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and filter::UserAccount_Windows(object.account.name, object.account.id)
+        and msgid == "4720"
+        and status == "success"
+        and match(subject.account.id, "S-1-5-*")
+        and object.account.name != null
+        and object.account.domain != null
+    }
+
+enrichment Windows_account_logged_in
+    enrich Account_Login_Success:
+        enrich_fields {
+            # table Known_Windows_Accounts requires real data from event
+            $user_id = lower(subject.account.id)
+            $account_data = exec_query("GetAccountData", [$user_id])
+            $last_changed = if $account_data["$_last_changed"] != null then datetime_to_epoch(datetime($account_data["$_last_changed"])) else 0 endif
+            if $account_data["$_last_changed"] == null or datetime_to_epoch(time) - $last_changed > 300 then
+                $ttl_tl = 2592000  # Default value is 30 days
+                $user_name = lower(subject.account.name)
+                $temp_user_domain = lower(subject.account.domain)
+                if find_substr($temp_user_domain, '.') != null then
+                    $user_domain_full = $temp_user_domain
+                else
+                    $user_domain_netbios = $temp_user_domain
+                endif
+                $domain_id = lower(regex(subject.account.id, "S-1-5-21-(.*?)-\d+$", 1))
+                
+                $new_account_info = true
+                if $account_data["$_last_changed"] == null then
+                    $account_storage = "unknown"
+                else
+                    $account_storage = $account_data["$storage"]
+                    if $user_domain_netbios != null and $account_data["$domain_netbios"] != $user_domain_netbios then
+                        $user_domain_full = $account_data["$domain_full"]
+                    elif $user_domain_full != null and $account_data["$domain_full"] != $user_domain_full then
+                        $user_domain_netbios = $account_data["$domain_netbios"]
+                    elif datetime_to_epoch(time) - $last_changed > div($ttl_tl, 2) then
+                        # если запись не обновлялась более чем половину срока жизни, то необходимо перезаписать, чтобы не потерять данные
+                        $user_domain_full = $account_data["$domain_full"]
+                        $user_domain_netbios = $account_data["$domain_netbios"]
+                    else
+                        $new_account_info = false
+                        $user_domain_full = $account_data["$domain_full"]
+                        $user_domain_netbios = $account_data["$domain_netbios"]
+                    endif
+                endif
+                
+
+                # detect source of the account: domain or local storage
+                if $account_storage == "unknown" then
+                    if event_src.hostname == subject.account.domain then
+                        $guessed_account_storage = "local"
+                    elif find_substr(subject.account.id, "S-1-5-21-") != 0 then
+                        $guessed_account_storage = "local"
+                    elif subject.account.domain == "microsoftaccount" then
+                        $guessed_account_storage = "local"
+                    elif lower(datafield9) == "kerberos" then  # AuthenticationPackageName
+                        $guessed_account_storage = "domain"
+                    elif in_list([11, 12, 13], logon_type) then  # needs to be below 'microsoftaccount' checking because it does '11' too
+                        $guessed_account_storage = "domain"
+                    else
+                        $domain_info = exec_query("GetDomainFullName", [$domain_id])
+                        if $domain_info["$_last_changed"] != null then
+                            $guessed_account_storage = "domain"
+                        else
+                            $guessed_account_storage = "unknown"
+                        endif
+                    endif
+                    if $guessed_account_storage != $account_storage then
+                        $account_storage = $guessed_account_storage
+                        $new_account_info = true  # update account_storage if it is detected for account
+                    endif
+                endif
+
+                $new_domain_info = false
+                # try to store or update domain fullname
+                if $account_storage == "domain" then
+                    if $domain_info["$_last_changed"] == null then  # this is required because previous operation may no be executed at all
+                        $domain_info = exec_query("GetDomainFullName", [$domain_id])
+                    endif
+
+                    # check if required to update domain in Known_Windows_Domains
+                    if $domain_info["$_last_changed"] == null then
+                        $new_domain_info = true
+                    else
+                        if $user_domain_full != null and $user_domain_full != $domain_info["$fullname"] then
+                            # найдено более длинное полное имя домена
+                            $new_domain_info = true
+                            $user_domain_netbios = if $domain_info["$netbios"] != null then $domain_info["$netbios"] else $user_domain_netbios endif
+                        elif $user_domain_netbios != null and $domain_info["$netbios"] != $user_domain_netbios then
+                            # в ТС не хранится NetBIOS имя домена (или устаревшее)
+                            $new_domain_info = true
+                            $user_domain_full = if $domain_info["$fullname"] != null then $domain_info["$fullname"] else $user_domain_full endif
+                        elif datetime_to_epoch(time) - datetime_to_epoch(datetime($domain_info["$_last_changed"])) > div($ttl_tl, 2) then
+                            $new_domain_info = true
+                            $user_domain_full = if $domain_info["$fullname"] != null then $domain_info["$fullname"] else $user_domain_full endif
+                            $user_domain_netbios = if $domain_info["$netbios"] != null then $domain_info["$netbios"] else $user_domain_netbios endif
+                        else
+                            subject.account.domain = coalesce($domain_info["$fullname"], $domain_info["$netbios"])
+                        endif
+                    endif
+                endif
+                
+                if $user_domain_full != null and $user_domain_netbios == null then
+                    # если в ТСах нет данных о NetBIOS имени, то заполняем первым словом
+                    # в теории так делать не совсем правильно, т.к. NetBIOS имя может быть любым, но сами microsoft говорят что так делать не стоит
+                    $user_domain_netbios = lower(substr($user_domain_full, 0, find_substr($user_domain_full, '.')))
+                endif
+            else
+                $new_account_info = false
+                $new_domain_info = false
+            endif
+        }
+
+    insert_into Known_Windows_Accounts if $new_account_info == true {
+        column::id = $user_id
+        column::name = $user_name
+        column::domain_netbios = $user_domain_netbios
+        column::domain_full = $user_domain_full
+        column::storage = $account_storage
+    }
+
+    insert_into Known_Windows_Domains if $new_domain_info == true {
+        column::id = $domain_id
+        column::netbios = $user_domain_netbios
+        column::fullname = $user_domain_full
+    }
+
+    enrich Account_Created_Success:
+        enrich_fields {
+            # table Known_Windows_Accounts requires real data from event
+            $user_id = lower(object.account.id)
+            $user_name = lower(object.account.name)
+
+            if exec_query("Check_if_Host_is_DC_by_EventSrc", [lower(event_src.host), event_src.ip])
+            or match(select_query_first("Check_if_host_is_DC_AssetGrid", [lower(event_src.host), event_src.ip, lower(event_src.asset)], "roles"), "*\"Domain Controller\"*")
+            then # если УЗ создана на домен-контроллере, то она доменная, иначе - локальная
+                $account_storage = "domain"
+                if find_substr(object.account.domain, '.') != null then
+                    $user_domain_full = lower(object.account.domain)
+                else
+                    $user_domain_netbios = lower(object.account.domain)
+                endif
+            else
+                $account_storage = "local"
+                $user_domain_netbios = lower(object.account.domain)
+            endif
+
+            $domain_id = lower(regex(object.account.id, "S-1-5-21-(.*?)-\d+$", 1))
+            $domain_info = exec_query("GetDomainFullName", [$domain_id])
+
+            $new_domain_info = false
+            # try to store or update domain fullname
+            $ttl_tl = 2592000  # Default value is 30 days
+            if $account_storage == "domain" then
+                # check if required to update domain in Known_Windows_Domains
+                if $domain_info["$_last_changed"] == null then
+                    $new_domain_info = true
+                else
+                    if $user_domain_full != null and $user_domain_full != $domain_info["$fullname"] then
+                        # найдено более длинное полное имя домена
+                        $new_domain_info = true
+                        $user_domain_netbios = if $domain_info["$netbios"] != null then $domain_info["$netbios"] else $user_domain_netbios endif
+                    elif $user_domain_netbios != null and $domain_info["$netbios"] != $user_domain_netbios then
+                        # в ТС не хранится NetBIOS имя домена (или устаревшее)
+                        $new_domain_info = true
+                        $user_domain_full = if $domain_info["$fullname"] != null then $domain_info["$fullname"] else $user_domain_full endif
+                    elif datetime_to_epoch(time) - datetime_to_epoch(datetime($domain_info["$_last_changed"])) > div($ttl_tl, 2) then
+                        $new_domain_info = true
+                        $user_domain_full = if $domain_info["$fullname"] != null then $domain_info["$fullname"] else $user_domain_full endif
+                        $user_domain_netbios = if $domain_info["$netbios"] != null then $domain_info["$netbios"] else $user_domain_netbios endif
+                    else
+                        object.account.domain = coalesce($domain_info["$fullname"], $domain_info["$netbios"])
+                    endif
+                endif
+            endif
+            
+            if $user_domain_full != null and $user_domain_netbios == null then
+                # если в ТСах нет данных о NetBIOS имени, то заполняем первым словом
+                # в теории так делать не совсем правильно, т.к. NetBIOS имя может быть любым, но сами microsoft говорят что так делать не стоит
+                $user_domain_netbios = lower(substr($user_domain_full, 0, find_substr($user_domain_full, '.')))
+            endif
+        }
+
+    insert_into Known_Windows_Accounts {
+        column::id = $user_id
+        column::name = $user_name
+        column::domain_netbios = $user_domain_netbios
+        column::domain_full = $user_domain_full
+        column::storage = $account_storage
+    }
+
+    insert_into Known_Windows_Domains if $new_domain_info == true {
+        column::id = $domain_id
+        column::netbios = $user_domain_netbios
+        column::fullname = $user_domain_full
+    }

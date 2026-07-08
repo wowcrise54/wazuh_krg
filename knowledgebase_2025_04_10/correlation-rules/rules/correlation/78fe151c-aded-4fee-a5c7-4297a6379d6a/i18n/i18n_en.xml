@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in Citrix NetScaler ADC. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="0ee809d6-6491-4526-8e9b-f43ba37f278b">Successful password spraying from host {src.host} in application "{event_src.title}" on host {event_src.host}. The passwords of users {datafield2} are bruteforced. Number of failed login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="63c8e19b-6f71-4e78-b906-f9858e6626ca">Password spraying attempts from host {src.host} in application "{event_src.title}" on host {event_src.host}. Number of login attempts: {datafield1}.</EventDescription>
+    <EventDescription id="ecbc3ad9-a431-4455-a834-86dbfec075d9">Successful password spraying from host {src.host} in application "{event_src.title}" on host {event_src.host}. The password of user {subject.account.name} is bruteforced. Number of failed login attempts: {datafield1}.</EventDescription>
+  </EventDescriptions>
+</Localization>

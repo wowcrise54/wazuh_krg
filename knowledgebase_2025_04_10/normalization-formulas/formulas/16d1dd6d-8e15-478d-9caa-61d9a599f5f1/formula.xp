@@ -1,0 +1,34 @@
+TABULAR = ""
+
+COND = $event_source == "Infowatch_Person_Monitor"
+       and $action == 17
+
+subject = "account"
+action = "create"
+object = "report"
+status = "success"
+
+subject.account.name = $user_name
+
+object.property = "report statistics"
+object.value = strip($details, ", ", "")
+
+time = epoch_to_datetime($event_time)
+msgid = $action
+
+importance = "low"
+
+if (
+    ipv4($src_info) != null
+    or ipv6($src_info) != null
+   ) then
+    event_src.ip = $src_info
+else
+    event_src.hostname = $src_info
+endif
+
+event_src.vendor = "infowatch"
+event_src.title = "personal_monitor"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Person_Monitor_8_33_odbc_report_generation"

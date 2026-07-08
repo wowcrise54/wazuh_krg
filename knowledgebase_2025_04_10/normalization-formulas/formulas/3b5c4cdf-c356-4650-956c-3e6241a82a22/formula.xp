@@ -1,0 +1,45 @@
+!JSON = "EventCode=5141"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "remove"
+object = "ds_object"
+status = "success"
+
+subject.account.name = if $InsertionStrings[3] != "-" then lower($InsertionStrings[3]) else null endif
+subject.account.domain = if $InsertionStrings[4] != "-" then lower($InsertionStrings[4]) else null endif
+subject.account.id = if $InsertionStrings[2] != "S-1-0-0" then$InsertionStrings[2] else null endif
+if subject.account.id == null and subject.account.name != null then
+    subject.account.id = "synthetic:" + subject.account.name
+    if subject.account.domain != null then
+        subject.account.id = subject.account.id + "@" + subject.account.domain
+    endif
+endif
+subject.account.session_id = maybe_number16($InsertionStrings[5])
+
+object.name = $InsertionStrings[8]
+object.type = $InsertionStrings[10]
+
+chain_id = $InsertionStrings[0]
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+importance = "medium"
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+
+event_src.category = "Directory service"
+event_src.title = "active_directory"
+event_src.vendor = "microsoft"
+
+id = "PT_Microsoft_Windows_wmi_5141_A_directory_service_object_was_deleted"

@@ -1,0 +1,93 @@
+TEXT = '{"<"NUMBER">"?}{$time_syslog=DATETIME} {$syslog_or_file=UNTIL("Expected")} Remote Options String (VER={$ver=LITERAL+}): \'{$options=LITERAL*}\''
+
+action = "info"
+object = "application"
+status = "success"
+
+subformula "parse_syslog_or_file"
+    # File
+    TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {$service_name=STRING*} {$time_file=DATETIME} {"us="NUMBER?} {$prefix=STRING*}'
+
+    $possible_day_of_week = substr($service_name, -3, 3)
+
+    if in_list(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], $possible_day_of_week) then
+        $service_name = strip($service_name, "", $possible_day_of_week)
+    endif
+
+    $service_name = if $service_name == "" then null else $service_name endif
+endsubformula
+
+subformula "parse_syslog_or_file"
+    # Syslog
+    TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {$service_name=WORDDASH}{"["?}{NUMBER?}{"]"?}{":"?} {$prefix=STRING*}'
+endsubformula
+
+subformula "parse_multi_instance_string"
+    TEXT = '{$cn=UNTIL("/")?}[NULL]'
+endsubformula
+
+subformula "parse_multi_instance_string"
+    TEXT = '{$cn=UNTIL("/")?}UNKNOWN'
+endsubformula
+
+subformula "parse_multi_instance_string"
+    # MR_ADDR_ETHER
+    TEXT = '{$cn=UNTIL("/")?}{$mac=MACADDR}@{$vlan_id=REST}'
+endsubformula
+
+subformula "parse_multi_instance_string"
+    # MR_ADDR_IPV4
+    TEXT = '{$cn=UNTIL("/")?}{$ipv4_addr=IPV4}{"/"$netbits=NUMBER?}{":"$port=NUMBER?}'
+endsubformula
+
+subformula "parse_multi_instance_string"
+    # MR_ADDR_IPV6 (V4 MAPPED)
+    # OpenVPN: we only print port numbers for v4mapped v6 as of
+    #          today, because "v6addr:port" is too ambiguous
+    TEXT = '{$cn=UNTIL("/")?}{$ipv4_addr=IPV4}{":"$port=NUMBER?}{"/"$netbits=NUMBER?}'
+endsubformula
+
+subformula "parse_multi_instance_string"
+    # MR_ADDR_IPV6
+    TEXT = '{$cn=UNTIL("/")?}{$ipv6_addr=IPV6}{"/"$netbits=NUMBER?}'
+endsubformula
+
+submessage("TEXT", "parse_syslog_or_file", $syslog_or_file)
+submessage("TEXT", "parse_multi_instance_string", $prefix)
+
+object.property = "expected_options_string"
+object.value = replace(strip($options, $ver + ",", ""), " | ", ",")
+
+$ipv4_addr_list = csv($ipv4_addr, ".", "")
+if (substr($ipv4_addr_list[0], 0, 1) == "0") and (length($ipv4_addr_list[0]) > 1) then
+    $ipv4_addr = null
+endif
+
+src.ip = coalesce($ipv4_addr, $ipv6_addr)
+src.port = $port
+
+datafield1 = $cn  # Multi Instance TLS Common Name
+datafield2 = $service_name  # OpenVPN Daemon Name
+
+time = coalesce($time_file, $time_syslog)
+importance = "info"
+
+event_src.vendor = "openvpn"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "openvpn"
+
+if $prefix != null then
+    event_src.subsys = "vpn-gateway"
+else
+    event_src.subsys = "vpn-client"
+endif
+
+event_src.category = "VPN"
+
+id = "PT_OpenVPN_OpenVPN_syslog_expected_option_string"

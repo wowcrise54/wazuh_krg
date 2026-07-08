@@ -1,0 +1,98 @@
+event Registry_Changed:
+    key:
+        event_src.host, subject.process.fullpath, subject.process.id
+    filter {
+        filter::NotFromCorrelator() 
+        and in_list(["12", "13", "14"], msgid)
+        and event_src.title == "sysmon"
+        and (
+                (
+                    regex(lower(object.path), ".*classes\\\\.*\\\\(inprocserver|localserver)(32)?|scriptleturl\\\\", 0) != null
+                    and regex(lower(object.new_value), ".*\\.(dll|sct|exe|ocx)", 0) != null
+                )
+                or regex(lower(object.path), ".*classes\\\\.*\\\\treatas\\\\", 0) != null
+            )
+        and filter::CheckWL_Registry_Actions("COM_Object_Persistence", lower(join([subject.process.fullpath, object.new_value], "|")))
+    }
+
+rule COM_Object_Persistence: Registry_Changed+ timer 2s
+
+    init {
+        $labels = "w_auto"
+        $count.subevents = 0
+    }
+
+    on Registry_Changed {
+        if $count.subevents == 0 then
+            $action = action  # modify, create, remove, rename
+
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.guid = subject.process.guid
+
+            $object.account.id = object.account.id
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.session_id = object.account.session_id
+            $object.account.privileges = object.account.privileges
+
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.property = object.property
+            $object.new_value = object.new_value
+            
+            $alert.key = lower(join([subject.process.fullpath, object.new_value], "|"))
+            $alert.context = join([object.name, "payload_binary: " + object.new_value], " | ")
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            $labels = $labels + "|CheckWL_Registry_Actions"
+        elif $count.subevents == 1 then
+            $object.new_value = null
+        endif
+
+        $count.subevents = $count.subevents + 1
+    }
+
+emit {
+    $correlation_type = "event"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $object = "reg_object"
+    $status = "success"
+
+    if regex(lower($object.path), ".*classes\\\\.*\\\\(treatas|scriptleturl)\\\\", 0) != null then
+        $importance = "medium"
+    else
+        $importance = "info"
+    endif
+    
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Event Triggered Execution: Component Object Model Hijacking"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

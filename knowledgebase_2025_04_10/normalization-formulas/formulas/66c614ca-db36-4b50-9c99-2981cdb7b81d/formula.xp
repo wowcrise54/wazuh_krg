@@ -1,0 +1,46 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "3885367375" or string($zntf_status) == "3885367406" or string($zntf_status) == "3885367407"
+
+action = "check"
+object = "file"
+status = "failure"
+
+msgid = string($zntf_status)
+
+if msgid == "3885367375" then
+    submessage("TEXT", "SPLIT1", $zntf_srcmsg)
+elif msgid == "3885367406" then
+    submessage("TEXT", "SPLIT2", $zntf_srcmsg)
+elif msgid == "3885367407" then
+    submessage("TEXT", "SPLIT3", $zntf_srcmsg)
+endif
+
+subformula "SPLIT1"
+    # Извлечение object.path из $zntf_srcmsg и добавление reason
+    TEXT = 'Не удалось определить тип файла {$tmp_path=REST}'
+    object.path = strip($tmp_path,"",".")
+    reason = 'Не удалось определить тип файла'
+endsubformula
+subformula "SPLIT2"
+    # Извлечение object.path из $zntf_srcmsg и добавление reason
+    TEXT = 'Не удалось проверить файл {$tmp_path = STRING+} Размер текстовой составляющей превышает максимально допустимый.'
+    object.path = strip($tmp_path,"",".")
+    reason = 'Размер текстовой составляющей превышает максимально допустимый'
+endsubformula
+subformula "SPLIT3"
+    # Извлечение object.path из $zntf_srcmsg и добавление reason
+    TEXT = 'Не удалось проверить содержимое файла {$tmp_path = STRING+} Размер файла превышает максимально допустимый.'
+    object.path = strip($tmp_path,"",".")
+    reason = 'Размер файла превышает максимально допустимый'
+endsubformula
+
+importance = "info"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_atempt_check_file"

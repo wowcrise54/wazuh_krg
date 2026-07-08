@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+Message done DCID {datafield1=NUMBER} MID {object.id=NUMBER}
+        to RID [{$tmp=STRING*} {$last=NUMBER}] {REST}'
+
+action = "send"
+object = "message"
+status = "success"
+
+object.type = "email"
+
+# datafield1 - DCID
+if length($tmp) != null then
+    datafield2 = $tmp + ' ' + string($last)  # Recipients ID
+else
+    datafield2 = string($last)
+endif
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_message_is_sent"

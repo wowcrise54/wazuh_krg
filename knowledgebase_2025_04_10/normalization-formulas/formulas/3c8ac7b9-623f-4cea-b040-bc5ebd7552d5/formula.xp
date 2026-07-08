@@ -1,0 +1,65 @@
+# {"class":"vim.event.EventEx","eventTypeId":"esx.clear.net.vmnic.linkstate.up","createdTime":"2021-06-08 19:59:46.262999+00:00","key":"7101","userName":"","message":"","chainId":"7101","datacenter":{"class":"vim.event.DatacenterEventArgument","name":"Datacenter Test"},"computeResource":{"class":"vim.event.ComputeResourceEventArgument","name":"192.168.206.149"},"host":{"class":"vim.event.HostEventArgument","name":"192.168.206.149"},"severity":"","objectId":"host-1008","objectName":"192.168.206.149","arguments":{"1":"vmnic0"}}
+
+JSON = ''
+COND = in_list([
+           "esx.clear.net.vmnic.linkstate.up",
+           "esx.problem.net.vmnic.linkstate.down"
+       ], $eventTypeId)
+
+action = switch $eventTypeId
+    case "esx.clear.net.vmnic.linkstate.up" "up"
+    case "esx.problem.net.vmnic.linkstate.down" "down"
+endswitch
+
+object = "interface"
+status = "success"
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+object.name = $arguments["1"]
+object.group = $objectName  # ESXi которому принадлежит интерфейс
+
+if coalesce(ipv4($host["name"]), ipv6($host["name"])) != null then
+    dst.ip = coalesce(ipv4($host["name"]), ipv6($host["name"]))
+else
+    dst.hostname = $host["name"]
+endif
+
+datafield1 = $datacenter["name"]  # Datacenter Name
+datafield3 = $computeResource["name"]  # Cluster Name
+datafield4 = coalesce(if $objectName == "" then null else $objectName endif, $entity["name"])  # Entity Name
+datafield6 = coalesce($host["name"], $arguments["_sourcehost_"])  # Host Name
+datafield8 = $dvs["name"]  # vCenter Distributed Switch Name
+datafield10 = if $objectId == "" then null else $objectId endif  # Internal Entity ID
+
+chain_id = $chainId
+
+time = $createdTime
+msgid = $eventTypeId
+importance = "low"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_Physical_NIC"

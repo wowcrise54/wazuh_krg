@@ -1,0 +1,35 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {"."NUMBER?}{event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="RECEIVE_MSTITC"}{"(l)"?}{"["NUMBER"]"?}:{"CID="UNTIL(";")?}
+        MSTP received BPDU with TC, MSTP process{datafield7=NUMBER}
+        instance{numfield5=NUMBER}, port name is{interface=UNTIL(",")|interface=UNTIL(".")}
+        {"pwName is"?}{datafield5=UNTIL(".")?}{"("?}{$tmp=UNTIL(")")?}'
+
+$kv = keyvalue($tmp,",","=","~")
+
+action = "info"
+object = "configuration"
+status = "success"
+
+src.mac = replace($kv["SrcMac"],'.','-')
+protocol = "mstp"
+
+#datafield7 - Указывает идентификатор экземпляра MSTP(MSTP-процесс)
+#numfield5  - InstanceID Указывает идентификатор экземпляра
+#datafield5 - Указывает имя порта PW
+#datafield6 - идентификатор VLAN
+datafield6 = $kv["VlanId"]
+
+importance = "low"
+
+category.generic = "Packet"
+category.high ="Network Interaction Management"
+category.low = "Communication"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_STP_topology_changed"

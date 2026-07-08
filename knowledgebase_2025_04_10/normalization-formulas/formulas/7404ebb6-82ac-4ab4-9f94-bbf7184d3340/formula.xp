@@ -1,0 +1,30 @@
+id = "PT_Cisco_IOS_XR_syslog_ROUTING_OSPF_ADJCHG"
+
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {STRING?} {WORD}/{WORD}/{WORD}/{WORD}: {time=DATETIME}{":"?}
+        {WORDDASH?}{"[" NUMBER "]" ?}{":"?} %{msgid="ROUTING-OSPF-5-ADJCHG"}: Process {WORD},
+        Nbr {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME} on {interface=STRING} in area {WORD}
+        from {WORD} to {object.state=WORD}, {$reason_tmp=STRING+} vrf {STRING} vrfid {WORD}'
+
+if object.state == "DOWN" then
+    action = "stop"
+else
+    action = "start"
+endif
+
+object = "session"
+
+if object.state == "FULL" or object.state == "DOWN" then
+    status = "success"
+else
+    status = "ongoing"
+endif
+
+protocol = "OSPF"
+
+reason = strip($reason_tmp, "", ",")
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "ios_xr"
+event_src.category = "Network device"

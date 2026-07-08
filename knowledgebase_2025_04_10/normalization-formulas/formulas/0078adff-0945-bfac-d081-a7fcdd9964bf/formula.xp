@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}localhost
+        {subject.process.name="systemd"}{NUMBER} - - {datafield2=REST}'
+
+subject = "service"        
+object = "message"
+action = "send"
+status = "success"
+
+# datafield2 - Содержимое сообщения
+
+importance = "info"
+
+event_src.vendor = "ideco"
+event_src.title = "ngfw"
+event_src.category = "Network device"
+
+id = "PT_Ideco_IdecoNGFW_syslog_systemd_msg"

@@ -1,0 +1,44 @@
+!JSON = 'EventIdentifier=566'
+!COND = $Logfile=="Security" and $Category==8
+
+subject = "account"
+action = "access"
+object = "ds_object"
+status = "success"
+
+subject.account.domain = lower($InsertionStrings[9])
+subject.account.name = lower($InsertionStrings[8])
+subject.account.session_id = $InsertionStrings[10]
+subject.account.privileges = $InsertionStrings[11]
+
+object.account.name = lower($InsertionStrings[5])
+object.account.domain = lower($InsertionStrings[6])
+object.account.session_id = $InsertionStrings[7]
+
+object.name = $InsertionStrings[3]
+object.type = $InsertionStrings[2]
+object.property = "handle id"
+object.value = maybe_number16(strip(csv($InsertionStrings[10], ",", "`")[1], "", ")"))  # id дескриптора
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+importance = "medium"
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_566_A_generic_AD_object_operation_took_place"

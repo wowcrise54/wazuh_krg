@@ -1,0 +1,66 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} MATD-LOG[{NUMBER}]:
+        {$json=REST}'
+
+subject = "account"
+object = "system"
+status = "success"
+
+subformula 'message'
+    JSON = ''
+    COND = $Action == 'Successful user login'
+
+    action = "login"
+
+    subject.account.id = $UserID
+    subject.account.name = $User
+
+    src.ip = $Client
+    dst.ip = event_src.ip
+    dst.hostname = $Computer
+
+    if $HTTPAgent != "" then
+        datafield1 = $HTTPAgent  # HTTP Agent
+    endif
+
+    id = "PT_McAfee_ATD_syslog_MATD_LOG_login"
+endsubformula
+
+subformula 'message'
+    JSON = ''
+    COND = $Action == 'Successful user logout'
+
+    action = "logout"
+
+    subject.account.id = $UserID
+    subject.account.name = $User
+
+    src.ip = $Client
+    dst.ip = event_src.ip
+    dst.hostname = $Computer
+
+    if $HTTPAgent != "" then
+        datafield1 = $HTTPAgent  # HTTP Agent
+    endif
+
+    id = "PT_McAfee_ATD_syslog_MATD_LOG_logout"
+endsubformula
+
+submessage('JSON', 'message', $json)
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "atd"
+event_src.category = "Network security"

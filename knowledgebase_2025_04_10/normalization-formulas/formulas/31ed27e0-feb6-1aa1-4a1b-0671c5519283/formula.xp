@@ -1,0 +1,78 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "NOTIFICATION_RULES_CREATE - Creating notification rule succeeded") != null
+       or find_substr($kv["Category"], "NOTIFICATION_RULES_UPDATE - Updating notification rules succeeded") != null
+       or find_substr($kv["Category"], "NOTIFICATION_RULES_DELETE - Deleting notification rules succeeded") != null
+       
+subject = "account"
+object = "rule"
+status = "success"
+
+subformula "parse_category"
+    TEXT = 'NOTIFICATION_RULES_{$act="CREATE"|$act="UPDATE"|$act="DELETE"} - {"Creating"|"Updating"|"Deleting"} 
+            notification rule{"s"?} succeeded. ID{"(s)"?}: {$notif_ids=REST}' 
+    
+    action = switch $act
+        case "CREATE" "create"
+        case "UPDATE" "modify"
+        case "DELETE" "remove"
+    endswitch
+
+    if substr($notif_ids, -1, 1) == '.' then
+        $notif_ids = strip(strip($notif_ids, '"','".'), '[', '].')
+    else
+        $notif_ids = strip(strip($notif_ids, '"','"'), '[', ']')
+    endif
+    
+    if not in_list($bad_values, $notif_ids) then
+        datafield1 = $notif_ids # Notification ids
+    endif
+endsubformula
+
+subformula "parse_names"
+    TEXT = "{$names=UNTIL('\".')|$names=UNTIL('].')} {'Due to the following error: \"'?}{reason=UNTIL('\".')?}"
+    
+    $names = strip(strip($names, '"', ''), '[', '')
+    if not in_list($bad_values, $names) then
+        datafield2 = $names     # Notification names
+    endif
+endsubformula
+
+$bad_values = [null, 'n/a', 'null', '']
+
+submessage("TEXT", "parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+if $kv["Name"] != null then
+    submessage("TEXT", "parse_names", $kv["Name"])
+else
+    submessage("TEXT", "parse_names", $kv["Name(s)"])
+endif
+
+object.type = "notification"
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "NOTIFICATION_RULES_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_notification_manipulation"

@@ -1,0 +1,58 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = in_list(["Accept", "Drop", "Reject","Redirect"], $kv["action"])
+       and $kv["product"] == "VPN-1 & FireWall-1"
+       and $kv["icap_server_name"] != null
+        
+subject = "rule"
+
+if $kv["action"] == "Accept" then
+    action = "allow"
+else
+    action = "deny"
+endif
+
+object = "connection"
+status = "success"
+
+if ($kv["icap_service_id"] != null) then
+    object.process.id = $kv["icap_service_id"]
+endif
+
+if ($kv["icap_server_service"] != null) then
+    object.process.name = $kv["icap_server_service"]
+endif
+
+src.ip = $kv["src"]
+src.port = $kv["s_port"]
+
+dst.ip = $kv["dst"]
+dst.port = $kv["service"]
+
+protocol = $kv["proto"]
+
+if ($kv["icap_server_name"] != null) then
+    datafield10 = $kv["icap_server_name"]
+endif
+
+datafield1 = $kv["inzone"]             # Ingress zone
+datafield3 = $kv["outzone"]            # Egress zone
+datafield8 = $kv["originsicname"]      # Name and SIC domain of the security gateway that generated the log
+datafield11 = $hostname                # Device name from LogExporter
+datafield12 = $kv["reply_status"]      # Response status
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_Log_Exporter_VPN_and_Firewall_ICAP_notification_single"

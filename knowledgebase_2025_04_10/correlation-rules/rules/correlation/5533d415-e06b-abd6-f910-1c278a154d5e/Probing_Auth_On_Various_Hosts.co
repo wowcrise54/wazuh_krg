@@ -1,0 +1,159 @@
+query Check_If_Host_Is_DC_By_Source($ip, $host) from List_Servers {
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            asset_ip == $ip
+            and asset_ip != null
+        )
+        or (
+            (
+                host == $ip
+                or host == $host
+            )
+            and host != null
+        )
+    )
+}
+
+query Check_AssetGrid_Servers($fqdn, $ip, $asset) from AssetGrid_Servers {
+    (
+        asset_id == $asset
+        and asset_id != null
+    )
+    or (
+            asset_fqdn == $fqdn
+            and asset_fqdn != null
+    )
+    or (
+            asset_ip == $ip
+            and asset_ip != null
+    )
+}
+
+event Login_Attempt:
+    key:
+        event_src.title, subject.account.name, src.host, logon_type
+    filter {
+        filter::Bruteforce_Supported_Vendors()
+        and not filter::ComputerAccount_Windows(subject.account.name)
+        and not in_list(["s-1-5-17", "s-1-5-18", "s-1-5-19", "s-1-5-20"], lower(subject.account.id))
+        and action == "login"
+        and logon_auth_method == "remote"
+        and not filter::Loopback_Address(src.ip)
+        and subject.process.name != "w3wp.exe"
+        and category.high == "Access Management"
+        and category.low == "Communication"
+        # src не должен быть контроллером домена
+        and not match(lower(select_query_first("Check_If_Host_Is_DC_By_Source", [src.ip, lower(src.fqdn)], "roles")), "*domain controller*")
+        and not match(select_query_first("Check_AssetGrid_Servers", [src.fqdn, src.ip, src.asset], "roles"), "*\"Domain Controller\"*")
+        # dst не должен быть почтовым сервером, роль "Mail Server"
+        and not match(select_query_first("Check_AssetGrid_Servers", [dst.host, dst.ip, dst.asset], "roles"), "*\"Mail Server\"*")
+        # Исключение событий подключения к контроллерам домена
+        and not match(lower(select_query_first("Check_If_Host_Is_DC_By_Source", [event_src.ip, lower(event_src.fqdn)], "roles")), "*domain controller*")
+        and not match(select_query_first("Check_AssetGrid_Servers", [event_src.fqdn, event_src.ip, event_src.asset], "roles"), "*\"Domain Controller\"*")
+        and filter::CheckWL_Password_Guessing("Probing_Auth_On_Various_Hosts",
+                lower(join([event_src.title, src.host, coalesce(subject.account.name, subject.account.id)],"|")))
+    }
+
+rule Probing_Auth_On_Various_Hosts: (Login_Attempt[9,] with different event_src.host) timer 2m
+
+    init {
+        $labels = "CheckWL_Password_Guessing"
+        $count_total = 0
+        $success_hosts = []
+        $success_assets = []
+        $success_ips = []
+        $success_fqdns = []
+    }
+
+    on Login_Attempt {
+        if $count_total == 0 then  # блок выполняется только при первом событии инстанса
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+            $subject.process.meta = subject.process.meta
+
+            $object = object
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+
+            $logon_type = logon_type
+            $logon_service = logon_service
+            $logon_auth_method = logon_auth_method
+
+            $protocol.layer7 = protocol.layer7
+            
+            $src.asset = src.asset
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.port = src.port
+
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+        endif
+        
+        if status == "success" then
+            $success_hosts = append($success_hosts, event_src.host)
+            $success_ips = append($success_ips, event_src.ip)
+            $success_fqdns = append($success_fqdns, event_src.fqdn)
+            $success_assets = append($success_assets, event_src.asset)
+        endif
+
+        $count_total = $count_total + 1
+    }    
+
+emit {
+    $importance = "medium"
+
+    $subject = "account"
+    $action = "login"
+
+    $alert.context = join(["Attempts:", string($count_total)], " ")
+
+    $successful_attempts = length($success_hosts)
+    if $successful_attempts > 0 then
+        $status = "success"
+        $correlation_type = "incident"
+        $alert.context = join([$alert.context, "| Successful attempts:", string($successful_attempts)], " ")
+    else
+        $status = "failure"
+        $correlation_type = "event"
+    endif
+
+    $alert.key = lower(join([$event_src.title, $src.host, coalesce($subject.account.name, $subject.account.id)],"|"))
+
+    $datafield1 = string($count_total)
+    $count.subevents = $count_total
+
+    $datafield2 = join($success_hosts, "|")
+    $datafield3 = string($successful_attempts)
+    $datafield4 = join($success_ips, "|")
+    $datafield5 = join($success_fqdns, "|")
+    $datafield6 = join($success_assets, "|")
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Valid Accounts: Domain Accounts"
+
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "UserCompromising"
+    $incident.aggregation.timeout = 1h
+}

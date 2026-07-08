@@ -1,0 +1,28 @@
+TEXT = '{time=DATETIME} {STRING} ({WORD}) {WORD+} {msgid="ah90a"} {WORD}
+        Added user \'{$temp_user=UNTIL("\' to")} role \'{object.value=WORDDASH+}\'
+        in database \'{$path_tmp=STRING}'
+
+action = "modify"
+object = "account"
+status = "success"
+
+$sep = csv($temp_user, "\\", "")
+object.account.domain = lower($sep[0])
+object.account.name = lower($sep[1])
+
+object.property = "role"
+
+datafield2 = strip($path_tmp,"","'.")  # sharepoint server
+
+reason = "User was assigned to the role in the database"
+importance = "info"
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "sharepoint"
+event_src.category = "Application server"
+
+id = "PT_Microsoft_Sharepoint_filemonitor_Role_assigned_to_the_user"

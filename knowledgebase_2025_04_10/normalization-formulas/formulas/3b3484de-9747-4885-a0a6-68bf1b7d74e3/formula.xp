@@ -1,0 +1,16 @@
+TEXT = '[{time=DATETIME}] INFO TaskManager: {reason="Task is aborted"}. Task: [Task:
+        {object.id=NUMBER} {$tmp_object.name=STRING+} Scan: {NUMBER} {REST}'
+
+action = "terminate"
+object = "task"
+status = "success"
+
+object.name = strip($tmp_object.name, "(", "),")
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "maxpatrol"
+event_src.category = "Network security"
+
+id = "PT_Positive_Technologies_MaxPatrol_filemonitor_task_abort"

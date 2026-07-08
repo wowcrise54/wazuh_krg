@@ -1,0 +1,24 @@
+TABULAR = "ID,
+           {time=ORIGIN},
+           MESSAGE_OWNER,
+           {msgid=MESSAGE_CODE},
+           {subject.account.name=STRPARAM1},
+           {$host_name=STRPARAM3}"
+           
+COND = $MESSAGE_CODE == 501
+
+subject = "account"
+action = "send"
+object = "rule"
+status = "success"
+
+datafield1 = $host_name  # Имя узла, на которое отправлено правило
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_policy_manager"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_ViPNet_Policy_Manager_customeventcollector_rule_sent"

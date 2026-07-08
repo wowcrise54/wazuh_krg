@@ -1,0 +1,88 @@
+query Check_if_Host_is_Critical_by_Source($host,$ip) from UTMN_TL_Critical_hosts_and_users {
+		(
+			column::host == $host and 
+			column::host != null
+        )
+        or
+        (
+			column::ip == $ip and 
+			column::ip != null
+        )
+}
+
+query Check_is_critical_user($user,$host) from UTMN_TL_Critical_hosts_and_users {
+       	(column::user == $user) and (column::host == $host)
+}
+
+event User_successfully_logon_to_Windows_Critical_Host:
+	key:
+        event_src.hostname, subject.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows" 
+        and msgid == "4624"
+        #and in_list([7, 11, 2, 3], logon_type)
+        and not filter::Loopback_Address(src.ip)
+        and subject.account.privileges != null
+        and exec_query("Check_if_Host_is_Critical_by_Source", [event_src.hostname,event_src.ip])
+        and exec_query("Check_is_critical_user", [subject.name,event_src.hostname])
+#		and table::UTMN_TL_Working_hours {
+#			column::hours != hour(time)
+#        }
+		and in_list([0,15,16,17,18,19,20,21,22,23], hour(time))
+    }
+    
+rule UTMN_CR_Critical_Host_Logon_in_Irregular_Time: User_successfully_logon_to_Windows_Critical_Host
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on User_successfully_logon_to_Windows_Critical_Host {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = datafield1
+
+        $object.name = object.name
+        
+        $dst.host = event_src.host
+        $dst.fqdn = event_src.fqdn
+        $dst.hostname = event_src.hostname
+        $dst.asset = event_src.asset
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    
+        $alert.key = lower(src.host)
+
+        $labels = $labels + "|CheckWL_Networking"
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    $status = "success"
+
+    $category.generic = "Access"
+    $category.high = "Authentication"
+    $category.low = "Default Credentials"
+
+    $importance = "high"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $object.name], "|")
+    $incident.severity = "high"
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 10m
+}

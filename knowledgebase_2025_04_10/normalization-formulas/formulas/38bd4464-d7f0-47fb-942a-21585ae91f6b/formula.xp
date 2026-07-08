@@ -1,0 +1,31 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {event_src.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "661061663"
+
+subject = "account"
+action = "stop"
+object = "service"
+status = "success"
+
+$name_domain = csv($zntf_user, "\\", "`")
+subject.account.domain = $name_domain[0]
+subject.account.name = $name_domain[1]
+
+object.process.name = strip($zntf_srcmsg, "Служба ", " остановлена.")
+
+object.name = "Zservice"
+
+msgid = string($zntf_status)
+importance = "low"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "zecurion"
+event_src.title = "zgate"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_service_is_stopped"

@@ -1,0 +1,18 @@
+TEXT = ":T={$timestamp=NUMBER};:M={NUMBER} {NUMBER};[INFO] {'[SECURITY]'?} {':C='NUMBER';'?}
+        {':A='src.ip=IPV4';'?} Уровень записи в журнал изменен на '{object.value=UNTIL(\"'\")}"
+
+action = "modify"
+object = "logging"
+status = "success"
+
+object.property = "level"
+
+time = epoch_to_datetime($timestamp)
+importance = "low"
+
+event_src.vendor = "elvis_plus"
+event_src.title = "zastava"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Elvis_plus_Zastava_filemonitor_Logging_level_changed"

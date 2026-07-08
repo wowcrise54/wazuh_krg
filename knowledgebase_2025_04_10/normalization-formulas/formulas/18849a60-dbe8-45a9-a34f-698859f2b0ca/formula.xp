@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} {":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}-{NUMBER}-{msgid="105008"|msgid="105009"}:
+        ({WORD}) Testing {"Interface"|"on interface"} {object.value = WORDDASH} {$re = WORDDASH*}'
+
+object = "check"
+
+if $re == null then
+    action = "start"
+    status = "success"
+    importance = "info"
+elif $re == "Passed" then
+    action = "execute"
+    status = "success"
+    importance = "info"
+elif $re == "Failed" then
+    action = "execute"
+    status = "failure"
+    importance = "medium"
+else
+    action = "execute"
+    status = "failure"
+    reason = $re
+    importance = "medium"
+endif
+
+object.property = "interface"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_105008_and_105009_Interface_checked"

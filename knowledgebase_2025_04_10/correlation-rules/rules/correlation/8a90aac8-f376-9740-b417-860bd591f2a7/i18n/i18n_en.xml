@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Password spraying in Zabbix. Password spraying is a type of brute-force attack in which an attacker tries the most popular passwords sequentially for each user, which helps avoid blocking the accounts of the attacked users.</Description>
+  <EventDescriptions>
+    <EventDescription id="35ba2c43-bf04-25cb-ce04-4c9b6ffa97db">Successful password spraying in Zabbix from host {src.ip} on host {event_src.host}. Attackers obtained the passwords of the following users: {datafield2}. Number of failed login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="53f57de1-6968-07af-9e8a-f9b5cceed4ac">Password spraying attempts in Zabbix from host {src.ip} on host {event_src.host}. Number of login attempts: {count.subevents}.</EventDescription>
+    <EventDescription id="d71bded9-b54c-a18e-51fc-09dbcaa4fd16">Successful password spraying in Zabbix from host {src.ip} on host {event_src.host}. Attackers obtained the password of user {subject.account.name}. Number of failed login attempts: {count.subevents}.</EventDescription>
+  </EventDescriptions>
+</Localization>

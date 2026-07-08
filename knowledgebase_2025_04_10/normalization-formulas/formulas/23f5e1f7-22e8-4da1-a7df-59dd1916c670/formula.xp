@@ -1,0 +1,75 @@
+TABULAR = '{time=datetime},
+           event_id,
+           hostname,
+           user_name,
+           antivirus_version,
+           traffic_direction,
+           local_ip,
+           remote_ip,
+           event_ip'
+
+COND = $event_id == 207
+
+action = "deny"
+object = "connection"
+status = "success"
+
+reason = "block all traffic from source IP"
+
+src.ip = $remote_ip
+if $remote_port != 0 then
+    src.port = $remote_port
+endif
+dst.ip = $local_ip
+if $local_port != 0 then
+    dst.port = $remote_port
+endif
+
+if $traffic_direction != 0 then
+    direction =
+        switch $traffic_direction
+            case 1 "ingress"
+            case 2 "egress"
+        endswitch
+endif
+
+submessage("TEXT", "obj_param", $event_desc)
+subformula "obj_param"
+    # получение длительности блокировки
+    TEXT = 'Клиент заблокирует трафик с IP-адреса {IPV4|IPV6|HOSTNAME} на следующие {duration=NUMBER} {REST}'
+endsubformula
+
+subformula "obj_param"
+    # получение длительности блокировки
+    TEXT = 'The client will block traffic from IP address {IPV4|IPV6|HOSTNAME} for the next {duration=NUMBER} {REST}'
+endsubformula
+
+if $user_name !="none" then
+    datafield6 = $user_name
+endif
+
+if $domain_name !="none" then
+    datafield7 = $domain_name
+endif
+
+msgid = $event_id
+
+importance = "high"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.ip = $event_ip
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($hostname)
+    event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+else
+    event_src.hostname = lower($hostname)
+endif
+event_src.vendor = "symantec"
+event_src.title = "endpoint_protection_manager"
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_odbc_traf_blocking"

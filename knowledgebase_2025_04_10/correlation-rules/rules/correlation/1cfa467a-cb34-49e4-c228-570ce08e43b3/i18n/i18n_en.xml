@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to a developer's computer. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="02b1efbc-65f3-30d6-621b-f761c73a4ce8">User {subject.account.name} from host {src.host} logged in to a developer's computer and accessed new shared network resource "{object.storage.path}" on host {event_src.host}. The network resource is missing from the collected profile.</EventDescription>
+    <EventDescription id="046c32a3-67c2-47b3-ec1b-1d9d72d6c53c">User {subject.account.name} from host {src.host} used new logon type {logon_type} ({datafield6}) to log in to a developer's computer on host {event_src.host}. The logon type is missing from the collected profile.</EventDescription>
+    <EventDescription id="9b70ce50-710c-927a-3683-218c54bcca78">New user {subject.account.name} from host {src.host} logged in to a developer's computer on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="a361f4f6-8814-ce5f-9a0a-7dacaacf931f">User {subject.account.name} from host {src.host} logged in to a developer's computer and accessed a new object in shared network resource "{object.storage.name}" on host {event_src.host}. The object is missing from the collected profile.</EventDescription>
+    <EventDescription id="a52dabf1-578b-adc8-38d4-f6a868c9d55d">User {subject.account.name} from new host {src.host} logged in to a developer's computer on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

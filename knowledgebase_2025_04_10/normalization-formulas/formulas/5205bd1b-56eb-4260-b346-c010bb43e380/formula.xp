@@ -1,0 +1,73 @@
+JSON = 'Event.Event="_$User$_.New"'
+
+COND = in_list(["Designer", "1CV8C", "1CV8", "COMConnection", "WebClient", "BackgroundJob"], $Event['ApplicationName'])
+
+subject = "account"
+action = "create"
+object = "account"
+status = "success"
+
+subject.application.account.session_id = $Event['Session']
+subject.application.account.id = lower($Event['User'])
+
+if $Event["UserName"] != "" then
+    subject.application.account.name = lower($Event['UserName'])
+endif
+
+$roles = coalesce($Event["Data"]["Role"]["Item"], $Event["Data"]["Роли"])
+
+if is_list($roles) and length($roles) != 0 then
+    object.application.account.privileges = lower(join($roles, "|"))
+else
+    object.application.account.privileges = lower($roles)
+endif
+
+object.application.account.name = lower(coalesce($Event["Data"]["Name"], $Event["Data"]["Имя"]))
+
+if object.application.account.privileges == null then
+    $state = append($state, "roles disabled")
+endif
+
+if (
+    coalesce($Event["Data"]["OSAuthentication"], $Event["Data"]["АутентификацияОС"]) == false
+    and coalesce($Event["Data"]["StandardAuthentication"], $Event["Data"]["АутентификацияСтандартная"]) == false
+    and coalesce($Event["Data"]["OpenIDAuthentication"], $Event["Data"]["АутентификацияOpenID"]) == false
+    and coalesce($Event["Data"]["OpenIDConnectAuthentication"], $Event["Data"]["АутентификацияOpenIDConnect"]) == false
+) then
+    $state = append($state, "authentication disabled")
+endif
+
+object.state = join($state, "|")
+
+if $Event['Computer'] != "" then
+    src.hostname = lower($Event['Computer'])
+endif
+
+datafield4 = coalesce($Event["Data"]["PasswordChanged"], $Event["Data"]["ПарольИзменен"])   # flag for changed password, need for correlations
+datafield5 = coalesce($Event["Data"]["PasswordIsSet"], $Event["Data"]["ПарольУстановлен"])  # flag for set password, need for correlations
+
+time = $Event['Date']
+msgid = $Event['Event']
+importance = "high"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.id = $Event['v8ibase']
+
+if $Event['ServerName'] != "" then
+    $dot_pos = find_substr($Event['ServerName'], '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($Event['ServerName'])
+        event_src.hostname = lower(substr($Event['ServerName'], 0, $dot_pos))
+    else
+        event_src.hostname = lower($Event['ServerName'])
+    endif
+endif
+
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_filemonitor_registration_log_user_new"

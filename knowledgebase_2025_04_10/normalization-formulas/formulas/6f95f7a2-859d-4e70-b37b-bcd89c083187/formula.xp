@@ -1,0 +1,32 @@
+EVENTLOG = 'EventID.text="40008"'
+
+COND = $Channel == "Application" and $Provider["Name"] == "MSExchangeIS"
+
+action = "create"
+object = "database"
+status = "success"
+
+object.property = 'GUID of database'
+object.value = $Data[0]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "low"
+
+category.generic = "Database Object"
+category.high = "Database Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "exchange"
+event_src.subsys = lower($Channel)
+$first_dot = find_substr($Computer, '.')
+if $first_dot != null then
+    event_src.fqdn = lower($Computer)
+    event_src.hostname = lower(substr($Computer, 0, $first_dot))
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Mail server"
+
+id = "PT_Microsoft_Exchange_2013_eventlog_40008_an_exchange_database_has_been_successfully_created_and_mounted"

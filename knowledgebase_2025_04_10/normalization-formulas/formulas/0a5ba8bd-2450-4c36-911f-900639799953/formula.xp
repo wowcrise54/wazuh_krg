@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}{":"?} %{msgid="ARP-4-INVAL_IP"}: arp [{NUMBER}] Received packet with invalid destination IP address
+        ({src.ip=IPV4}) from {src.mac=MACADDR} on {interface=REST}'
+
+action = "alert"
+object = "arp_table"
+status = "success"
+
+reason = "Received ARP packet with invalid destination IP address"
+
+importance = "info"
+
+event_src.category = "Network device"
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+
+id = "PT_Cisco_Nexus_syslog_ARP_4_INVAL_IP"

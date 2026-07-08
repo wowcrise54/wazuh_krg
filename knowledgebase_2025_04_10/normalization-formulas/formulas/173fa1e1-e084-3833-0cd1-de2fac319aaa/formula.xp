@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{$time_syslog=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {STRING?} {$time_file=DATETIME} {"us="NUMBER?} /sbin/{$command=REST}'
+
+COND = find_substr($command, ": No change") == null
+       and substr($command, 0, 6) != "audisp"
+
+action = "execute"
+object = "command"
+status = "success"
+
+object.property = "pipeline"
+object.value = "/sbin/" + $command
+
+object.process.cmdline = object.value
+object.process.name = substr($command, 0, find_substr($command, " "))
+object.process.path = "/sbin/"
+object.process.fullpath = object.process.path + object.process.name
+
+time = coalesce($time_file, $time_syslog)
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "openvpn"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "openvpn"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_OpenVPN_OpenVPN_syslog_command_executed_file"

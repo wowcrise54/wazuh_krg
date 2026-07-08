@@ -1,0 +1,40 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "3882287171"
+
+subject = "account"
+action = "copy"
+object = "file"
+status = "failure"
+
+submessage("TEXT", "SPLIT1", $zntf_user)
+submessage("TEXT", "SPLIT2", $zntf_srcmsg)
+
+msgid = string($zntf_status)
+
+subformula "SPLIT1"
+    # Извлечение subject.domain и subject.name из $zntf_user
+    TEXT = '{$csv = CSV("\\\\", "\'")}'
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+endsubformula
+
+subformula "SPLIT2"
+    # Извлечение object.path и reason из $zntf_srcmsg
+    TEXT = 'Не удалось скопировать файл {object.path = STRING+} в {STRING+} Недостаточно места на диске.'
+    reason = "Недостаточно места на диске"
+endsubformula
+
+datafield1 = $device   # name of device
+datafield2 = $process  # name of process
+datafield3 = $zpolicy  # name of policy
+
+importance = "info"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_failure_copy_file"

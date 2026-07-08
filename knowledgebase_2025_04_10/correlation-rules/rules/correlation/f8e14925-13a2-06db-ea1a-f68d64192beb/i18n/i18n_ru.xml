@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Отключение параметров безопасности базы данных PostgreSQL снижает уровень защищенности данных, хранящихся в ней</Description>
+  <EventDescriptions>
+    <EventDescription id="0b927103-fd0e-dc85-b980-3b2887426e58">Пользователь базы данных {subject.application.account.name} отключил журналирование событий базы данных на узле {event_src.host}</EventDescription>
+    <EventDescription id="30d2f9b4-8f5c-0ad1-1e3d-f69f1c980745">Пользователь базы данных {subject.application.account.name} отключил журналирование событий базы данных {object.value} на узле {event_src.host}</EventDescription>
+    <EventDescription id="97c44fc1-ad2d-9b7c-65b1-62b7efcc02fa">Пользователь базы данных {subject.application.account.name} отключил шифрование трафика между клиентом и сервером базы данных на узле {event_src.host}</EventDescription>
+    <EventDescription id="b4141f27-5faf-3aeb-2a7f-532a1eca9679">Пользователь базы данных {subject.application.account.name} ослабил политику шифрования паролей на узле {event_src.host}</EventDescription>
+    <EventDescription id="cf915eb0-d5fc-3d49-2996-a6198df94c04">Пользователь базы данных {subject.application.account.name} отключил одну из настроек безопасности на узле {event_src.host}</EventDescription>
+    <EventDescription id="f81b5892-6ded-8a7c-154b-6de6727bd74d">Пользователь базы данных {subject.application.account.name} отключил политики безопасности строк (Row Security Policies) для таблицы {object.name} на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,21 @@
+TEXT = '{"<"NUMBER">"?} PINsafe[{STRING} INFO
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} {subject.account.name=STRING} - PINsafe user
+        attempted to login to PINsafe administration.'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+time = recv_time
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "swivel_secure"
+event_src.title = "pinsafe"
+event_src.category = "AAA"
+
+id = "PT_Swivel_Secure_PINsafe_syslog_attempt_access_to_admin"

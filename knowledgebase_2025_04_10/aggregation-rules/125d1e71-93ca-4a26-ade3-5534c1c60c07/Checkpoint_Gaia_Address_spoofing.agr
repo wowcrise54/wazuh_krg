@@ -1,0 +1,10 @@
+event Address_spoofing:
+    key:
+        event_src.host, event_src.ip, src.host, src.ip, src.port, dst.host, dst.ip, dst.port, protocol,
+        action, object, status, importance, event_src.category, event_src.vendor, event_src.title
+
+    id = "PT_Checkpoint_Gaia_opseclog_VPN_and_Firewall_FW_drop_connection"
+
+    reason = "Local interface address spoofing"
+
+aggregate Checkpoint_Gaia_Address_spoofing: Address_spoofing[3,100] within 5m

@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {"."NUMBER?}{event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="hwVtyExceed_active"}({WORD}){"["NUMBER"]"?}:
+        {"VS=Admin-VS-"?}{"CID="UNTIL(";")?}
+        The number of available VTY channels is lower than the threshold.
+        ({$kv=UNTIL(")")}'
+
+$kv = keyvalue($kv, ',', '=', '"')
+
+action = "info"
+object = "connection"
+status = "success"
+
+object.property = 'number of VTY'
+object.num_value = $kv['currentLoginVTYs']
+
+#numfield3 - пороговое значение количества открытых соединений
+numfield3 = $kv["totalVTYs"]
+
+importance = "info"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_VTY_hwVtyExceed_active"

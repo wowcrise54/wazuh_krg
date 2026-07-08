@@ -1,0 +1,47 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}{$message=REST}"
+
+COND = find_substr($message,"unsigned_binary_file") != null
+
+subject = "account"
+action = "deny"
+object = "file_object"
+status = "success"
+
+subformula 'MSG'
+    JSON = ''
+endsubformula
+
+submessage("JSON", "MSG", $message)
+
+subject.account.id = $MSG["astra-digsig"]["uid"]
+subject.account.name = $MSG["astra-digsig"]["user"]
+subject.account.group = $MSG["astra-digsig"]["group"]
+
+object.process.fullpath = $MSG["astra-digsig"]["path"]
+$name_path = csv(object.process.fullpath, "/", "'")
+object.process.name = $name_path[length($name_path) - 1]
+if $name_path[length($name_path) - 2] != null then
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+endif
+
+datafield2 = $MSG["astra-digsig"]["gid"]  # идентификатор группы
+
+time = epoch_to_datetime(number($MSG["astra-digsig"]["unixtime"]))
+msgid = $MSG["astra-digsig"]["message_id"]
+
+importance = "high"
+
+event_src.vendor = "npo_rusbiteh"
+$Computer = $HOST
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "astra_linux"
+event_src.subsys = $FACILITY
+event_src.category = "Other"
+
+id = "PT_NPO_Rusbiteh_Astra_Linux_parsec_syslog_unsigned_binary_file"

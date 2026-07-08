@@ -1,0 +1,17 @@
+TEXT = '{WORD} {time=DATETIME} READ ROUTTAB {object.value=STRING+} o.k.'
+
+action = "start"
+object = "service"
+status = "success"
+
+object.name = "SAP Router"
+object.property = "routtab file"
+
+msgid = "READ ROUTTAB"
+importance = "info"
+
+event_src.vendor = "sap"
+event_src.title = "sap_router"
+event_src.category = "Firewall"
+
+id = "PT_SAP_SAP_ROUTER_filemonitor_Start_SAP_router"

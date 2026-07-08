@@ -1,0 +1,80 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "NETWORK_ATTACH_NETWORK_TO_CLUSTER",  # 946
+           "NETWORK_ATTACH_NETWORK_TO_CLUSTER_FAILED",  # 947
+           "NETWORK_DETACH_NETWORK_TO_CLUSTER",  # 948
+           "NETWORK_DETACH_NETWORK_TO_CLUSTER_FAILED",  # 949
+           "NETWORK_UPDTAE_NETWORK_ON_CLUSTER",  # 1,112
+           "NETWORK_UPDTAE_NETWORK_ON_CLUSTER_FAILED"  # 1,113
+       ], $event_class)
+
+action = "modify"
+object = "resource"
+
+if substr($event_class, -6, 6) == "FAILED" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+subformula "parse_body"
+    # NETWORK_ATTACH_NETWORK_TO_CLUSTER, NETWORK_DETACH_NETWORK_TO_CLUSTER
+    TEXT = "Network {$network_name=STRING+} {'attached to'|'detached from'} Cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_ATTACH_NETWORK_TO_CLUSTER_FAILED
+    TEXT = "Failed to attach Network {$network_name=STRING+} to Cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_DETACH_NETWORK_TO_CLUSTER_FAILED
+    TEXT = "Failed to detach Network {$network_name=STRING+} from Cluster {$cluster_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_UPDTAE_NETWORK_ON_CLUSTER
+    TEXT = "Network {$network_name=STRING+} on Cluster {$cluster_name=STRING+} updated."
+endsubformula
+
+subformula "parse_body"
+    # NETWORK_UPDTAE_NETWORK_ON_CLUSTER_FAILED
+    TEXT = "Failed to update Network {$network_name=STRING+} on Cluster {$cluster_name=REST}"
+    
+    $cluster_name = strip($cluster_name, "", ".")
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+object.type = "cluster"
+object.name = $cluster_name
+
+if substr($event_class, 0, 14) == "NETWORK_ATTACH" then
+    $prefix = "attached_"
+elif substr($event_class, 0, 14) == "NETWORK_DETACH" then
+    $prefix = "detached_"
+else
+    $prefix = "updated_"
+endif
+object.property = $prefix + "network"
+object.value = $network_name
+
+datafield3 = $cluster_name  # Cluster Name
+datafield8 = $network_name  # Network Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_Cluster_Network_Management"

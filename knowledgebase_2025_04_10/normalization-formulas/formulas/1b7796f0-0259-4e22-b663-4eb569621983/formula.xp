@@ -1,0 +1,15 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+        PID {msgid=NUMBER} : User {subject.name=STRING} commit changes: {object.property=STRING*}'
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+importance = "medium"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_user_commit_changes"

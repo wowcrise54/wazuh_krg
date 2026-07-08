@@ -1,0 +1,144 @@
+!TABULAR = "hostname,
+            {msgid=event_type},
+            {time=event_time},
+            severity,
+            {datafield1=group_name}"
+
+!COND = $event_type == "GNRL_EV_VIRUS_FOUND_AND_BLOCKED"
+
+$description = replace($description, " ", "\t")
+if find_substr($description, "\r\n") != null then
+    submessage("TEXT", "description_kv", $description)
+else
+    submessage("TEXT", "description_space", $description)
+endif
+
+subject = "application" 
+action = "detect"
+object = "malware"
+status = "success"
+
+subformula "description_kv"
+    TEXT = '{$kv=KEYVALUE("\r\n", ":", "")}'
+    
+    subject.process.name = coalesce($kv['Программа\\Название'], $kv['Название'])
+    subject.process.path = coalesce($kv['Путь к программе'], $kv['Программа\\Путь'])
+    if find_substr((substr(subject.process.path, -2, 2)), "\\") != null then
+        subject.process.fullpath = subject.process.path + subject.process.name
+    else
+        subject.process.fullpath = subject.process.path + '\\' + subject.process.name
+    endif
+    
+    $user = substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' ('))
+    $domain_user = csv($user, "\\", "")
+    if length($domain_user) == 2 then
+        subject.account.name = lower($domain_user[1])
+        subject.account.domain = lower($domain_user[0])
+    else
+        subject.account.name = lower($domain_user[0])
+    endif
+    
+    if $product_name == "KES" then
+        object.storage.fullpath = lower(coalesce($kv['Объект\\Путь'], $kv['Результат\\Название'], $kv['Название объекта'], $par2))
+        $csv_p = replace($par2, "/", "\\\\")
+        $csv_path = csv($csv_p, '/', '')
+        if length($csv_path) > 1 then
+            object.storage.name = $csv_path[length($csv_path) - 1]
+            object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+        else
+            object.storage.name = $csv_p
+        endif
+    else
+        object.storage.fullpath = lower($par2)
+        $csv_p = replace($par2, "/", "\\\\")
+        $csv_path = csv($csv_p, '/', '')
+        if length($csv_path) > 1 then
+            object.storage.name = $csv_path[length($csv_path) - 1]
+            object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+        else
+            object.storage.name = $csv_p
+        endif
+    endif
+
+    if $par1 != null then
+        object.hash = "SHA256:" + lower($par1)
+    endif
+
+    object.type = coalesce($kv["Результат\\Тип"], $kv['Тип'])
+
+    if $kv["Результат\\Точность"] != null or $kv["Точность"] != null then
+        object.property = "accuracy"
+        object.value = coalesce($kv["Результат\\Точность"], csv($kv["Точность"], " ", "")[0])
+    endif
+
+    # datafield1 - имя группы, в которую входит узел-источник
+    reason = $kv["Причина"]
+endsubformula
+
+subformula "description_space"
+    TEXT = "Тип события: {STRING+?} {'Программа\\Название:'|'Название:'} {subject.process.name=STRING+} {'Путь к программе:'|'Программа\\Путь:'} {subject.process.path=STRING+} {'ID процесса:'|'Программа\\ID процесса:'} {subject.process.id=NUMBER} Пользователь: {$tempuser=STRING+} ({'Активный'|'Системный'} пользователь) Компонент: {STRING+?} {'Описание результата:'|'Результат\\Описание:'} {STRING} {'Тип:'|'Результат\\Тип:'} {object.type=STRING+} {'Название:'|'Результат\\Название:'} {STRING} {'Степень угрозы:'|'Результат\\Степень угрозы:'|} {STRING?} {'Точность:'|'Результат\\Точность:'|} {object.value=STRING?} {'Объект:'?} {STRING?} {'Тип объекта:'|'Объект\\Тип:'|} {STRING?} {'Объект\\Путь:'?} {STRING?} {'Название объекта:'|'Объект\\Название:'|} {STRING?} {'Причина:'?} {reason=UNTIL(' Дата')?} {'Дата выпуска баз:'?} {REST}"
+    
+    if find_substr($tempuser, '\\') != null then
+        $temp_csv2 = csv(lower($tempuser), "\\", "`")
+        subject.account.name = $temp_csv2[1]
+        subject.account.domain = $temp_csv2[0]
+    endif
+  
+    object.property = "accuracy"
+    
+    if find_substr((substr(subject.process.path, -2, 2)), "\\") != null then
+        subject.process.fullpath = subject.process.path + subject.process.name
+    else
+        subject.process.fullpath = subject.process.path + '\\' + subject.process.name
+    endif
+
+    object.storage.fullpath = lower($par2)
+    $csv_p = replace($par2, "/", "\\\\")
+    $csv_path = csv($csv_p, '/', '')
+    if length($csv_path) > 1 then
+        object.storage.name = $csv_path[length($csv_path) - 1]
+        object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+    else
+        object.storage.name = $csv_p
+    endif
+endsubformula
+
+subject.name = $product_name
+subject.version = $product_version
+
+importance = switch $severity
+    case 1 "info"
+    case 2 "low"
+    case 3 "medium"
+    case 4 "high"
+endswitch
+
+category.high = "Information Security"
+category.generic = "Malware"
+category.low = "Detection"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $ip_address != "127.0.0.1" then
+    event_src.ip = $ip_address
+endif
+if ipv4($fqdn) == null and find_substr($fqdn, ".") != null then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_odbc_GNRL_EV_VIRUS_FOUND_AND_BLOCKED"

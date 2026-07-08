@@ -1,0 +1,48 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?} {$mh=UNTIL(",")}{$ms=STRING}
+ {"-"?} {WORD} {"-"?} [{HOSTNAME}] {"-"?} {"("?}{HOSTNAME}{")"?} {"-"?} {$data=REST}'
+
+COND = find_substr($data, "type=CODE_TO_TOKEN") != null
+
+$kv = keyvalue(strip($data, "", " -"), ", ", "=", "")
+
+subject = "account"
+action = "send"
+object = "request"
+status = "success"
+
+if $kv["userId"] != "null" then
+    subject.account.id = $kv["userId"]
+endif
+subject.account.session_id = $kv["code_id"]
+subject.application.name = $kv["clientId"]
+
+datafield1 = $kv["realmId"]                   # Идентификатор реалма
+datafield2 = $kv["token_id"]                  # Идентефикатор token'a
+datafield3 = $kv["refresh_token_id"]          # Идентификатор refresh token'a
+datafield4 = strip($kv["scope"],"\\'","\\'")  # Права, выдающиеся клиенту
+
+if in_list(["127.0.0.1", "::1"], $kv["ipAddress"]) then
+    logon_auth_method = "local"
+    src.ip = event_src.ip
+    src.hostname = $Computer
+else
+    logon_auth_method = "remote"
+    src.ip = $kv["ipAddress"]
+endif
+
+time = string($mh) + '.' + string($ms)
+msgid = $kv["type"]
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "keycloak"
+event_src.category = "AAA"
+
+id = "PT_Opensource_Keycloak_syslog_CODE_TO_TOKEN"

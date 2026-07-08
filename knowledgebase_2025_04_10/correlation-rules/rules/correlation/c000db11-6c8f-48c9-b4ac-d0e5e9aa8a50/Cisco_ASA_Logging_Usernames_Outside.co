@@ -1,0 +1,76 @@
+event Do_Not_Hide_Usernames_In_Logs:
+    key:
+        event_src.host
+    filter {
+        correlation_name == "Cisco_ASA_Disable_Username_Hiding"
+    }
+
+event Logging_Outside:
+    key:
+        event_src.host
+    filter {
+        correlation_name == "Cisco_ASA_Logging_To_Untrusted_Host"
+    }
+
+rule Cisco_ASA_Logging_Usernames_Outside: (Do_Not_Hide_Usernames_In_Logs and Logging_Outside) within 24h
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Do_Not_Hide_Usernames_In_Logs {
+        $datafield5 = object.process.cmdline
+    }
+
+    on Logging_Outside {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+      
+        $object.account.name = object.account.name
+        
+        $object.process.cmdline = object.process.cmdline
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+        
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Network Device CLI"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 3h
+}

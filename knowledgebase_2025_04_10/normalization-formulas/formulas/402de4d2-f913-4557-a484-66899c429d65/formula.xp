@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|}
+        {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        mgd[{NUMBER}]: %INTERACT-6-{msgid="UI_CHILD_STATUS"}: Cleanup child {$oname=STRING}
+        PID {object.process.id=NUMBER}, status 0'
+
+action = "stop"
+object = "process"
+status = "success"
+
+object.process.name = strip($oname, "'", "',")
+
+importance = "info"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "juniper"
+event_src.title = "junos"
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+event_src.category = "Network device"
+
+id = "PT_Juniper_Junos_syslog_cleanup_process"

@@ -1,0 +1,32 @@
+!JSON = 'EventIdentifier=629'
+!COND = $Logfile=="Security" and $Category==7
+
+subject = "account"
+action = "disable"
+object = "account"
+status = "success"
+
+msgid = $EventIdentifier
+time = $TimeGenerated
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+object.name = lower($InsertionStrings[0])
+object.domain = lower($InsertionStrings[1])
+object.id = strip($InsertionStrings[2], "%{","}")
+
+subject.name = lower($InsertionStrings[3])
+subject.domain = lower($InsertionStrings[4])
+
+id = "PT_Microsoft_Windows_wmi_629_An_account_was_disabled"
+importance = "medium"

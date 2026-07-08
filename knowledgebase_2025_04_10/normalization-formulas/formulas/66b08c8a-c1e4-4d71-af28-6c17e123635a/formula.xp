@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} {event_src.subsys="vsftpd"}
+        [{NUMBER}]: [{subject.account.name=UNTIL("]")} {$status="OK"|$status="FAIL"} LOGIN: Client "{src.ip=IPV4}"'
+
+subject = "account"
+action = "login"
+object = "application"
+
+status = switch $status
+    case "OK" "success"
+    case "FAIL" "failure"
+endswitch
+
+logon_auth_method = "remote"
+
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "File service"
+
+id = "PT_UNIX_like_vsftpd_syslog_login_success_failure"

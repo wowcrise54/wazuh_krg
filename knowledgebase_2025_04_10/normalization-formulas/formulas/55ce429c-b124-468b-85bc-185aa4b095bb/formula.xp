@@ -1,0 +1,21 @@
+!TEXT = '{time=DATETIME}|INFO|{$tpm_subsys="Check.R.Core.JobBase"}|{"[HOST_STARTSCANNING]"|"[HOST_STOPSCANNING]"}
+         {$temp_status="Начало"|$temp_status="Завершение"} сканирования {dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}
+         ({object.name=STRING+} (#{object.id=NUMBER})).'
+
+action = "scan"
+object = "task"
+status = switch $temp_status
+    case "Завершение" "success"
+    case "Начало" "ongoing"
+endswitch
+
+object.type = "scan"
+
+importance = "info"
+
+event_src.vendor = "altx_soft"
+event_src.title = "redcheck"
+event_src.category = "Host security"
+event_src.subsys = lower($tpm_subsys)
+
+id = "PT_Altx_soft_RedCheck_filemonitor_Scan_task"

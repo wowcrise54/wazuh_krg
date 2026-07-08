@@ -1,0 +1,44 @@
+TABULAR =  "{time=timegenerated},
+            {subject.name=objectpath},
+            {subject.group=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "Microsoft-SharePoint Products-SharePoint Foundation" and $number == 6873
+
+submessage("XML","Event_data",$eventdata)
+submessage("TEXT","Mail_data",$mail_data)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    $mail_data = $DataItem / eventdata / Data [0]  # данные о почтовом сообщении
+endsubformula
+
+subformula "Mail_data"
+    TEXT = 'An error occurred while processing the incoming e-mail file {$filepath=STRING} {REST}'
+endsubformula
+
+msgid = $number
+
+object = "file"
+object.name = substr($filepath, -29, 28)
+action = "receive"
+status = "failure"
+subject = "host"
+
+importance = "medium"
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    datafield1 = $eventuser
+endif
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_6873_error_processing_receive_email"

@@ -1,0 +1,151 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} production_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"controller":"ProjectsController"') != null
+    and (
+        (
+            find_substr($json, '"method":"POST"') != null
+            and find_substr($json, '"action":"create"') != null
+        )
+        or (
+            find_substr($json, '"method":"PATCH"') != null
+            and find_substr($json, '"action":"update"') != null
+        )
+        or (
+            find_substr($json, '"method":"DELETE"') != null
+            and find_substr($json, '"action":"destroy"') != null
+        )
+        or (
+            find_substr($json, '"method":"GET"') != null
+            and find_substr($json, '"action":"show"') != null
+        )
+        or (
+            find_substr($json, '"method":"POST"') != null
+            and find_substr($json, '"action":"archive"') != null
+        )
+        or (
+            find_substr($json, '"method":"POST"') != null
+            and find_substr($json, '"action":"unarchive"') != null
+        )
+    )
+)
+
+subject = "account"
+object = "resource"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_location"
+    TEXT = 'http{"s"?}://{HOSTNAME|IPV4|IPV6}/{$loc_meta_project=REST}'
+endsubformula
+
+subformula "parse_location"
+    TEXT = '{REST}'
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+action = switch $action
+    case "create" "create"
+    case "update" "modify"
+    case "destroy" "remove"
+    case "show" "view"
+    case "archive" "modify"
+    case "unarchive" "modify"
+endswitch
+
+$status_new = substr(string($status), 0, 1)
+status = switch $status_new
+    case "2" "success"
+    case "3" "success"
+    case "4" "failure"
+    case "5" "failure"
+endswitch
+
+if ($action == "create") then
+    submessage("TEXT", "parse_location", $location)
+endif
+
+if in_list(["create", "update"], $action) then
+    $start_project = find_substr($json, '"key":"project","value":{')
+    $end_project_1 = find_substr(substr($json, $start_project, length($json)), '}},')
+    $end_project_2 = find_substr(substr($json, $start_project, length($json)), '}}],')
+    $end_project = coalesce($end_project_1, $end_project_2)
+    object.property = "configuration"
+    object.new_value = replace(substr($json, $start_project+25, $end_project-25), "'", '"')
+endif
+
+if in_list(["update", "destroy", "show"], $action) then
+    $path_meta_project = strip($path, "/", "")
+endif
+
+subject.account.name = $username
+subject.account.id = $user_id
+subject.process.meta = $ua
+
+$value_0 = $params[0]["value"]
+$value_1 = $params[1]["value"]
+$value_2 = $params[2]["value"]
+$value_3 = $params[3]["value"]
+$value_4 = $params[4]["value"]
+
+if ($action == "create") then
+    if ($params[0]["key"] == "project") then
+        $params_project = $value_0
+    elif ($params[1]["key"] == "project") then
+        $params_project = $value_1
+    elif ($params[2]["key"] == "project") then
+        $params_project = $value_2
+    elif ($params[3]["key"] == "project") then
+        $params_project = $value_3
+    elif ($params[4]["key"] == "project") then
+        $params_project = $value_4
+    endif
+endif
+
+$meta_project = coalesce($['meta.project'], $path_meta_project, $loc_meta_project)
+$project_list = csv($meta_project, "/", "'")
+$project_path = coalesce($project_list[length($project_list)-1], $params_project["path"])
+$project_namespace_fullpath = strip($meta_project, "", "/" + $project_path)
+
+$project_name = $params_project["name"]
+$project_namespace_id = $params_project["namespace_id"]
+
+object.type = "project"
+object.name = $project_name
+object.storage.name = $project_path
+
+if $project_namespace_fullpath != null then
+    object.storage.path = $project_namespace_fullpath + "/"
+endif
+if ($project_path != null) and ($project_namespace_fullpath != null) then
+    object.storage.fullpath = $project_namespace_fullpath + "/" + $project_path
+endif
+
+src.ip = $remote_ip
+
+datafield1 = $project_path  # Project Slug
+datafield2 = $project_namespace_fullpath  # Namespace Fullpath
+
+numfield2 = $project_namespace_id  # Namespace ID
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "production"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_Production_Project_Management"

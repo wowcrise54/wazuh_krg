@@ -1,0 +1,35 @@
+EVENTLOG = 'EventID.text="30000"'
+COND = (($Channel=="Kaspersky Security for Exchange Servers" and $Provider["Name"]=="KSE") 
+        or ($Channel=="Application" and $Provider["Name"] == "KSCM8"))
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+submessage("TEXT", "SPLIT", $Data[0])
+
+subformula "SPLIT"
+    # Извлечение datafield1, subject.domain, subject.name и object.name из $Data[0]
+    TEXT='{UNTIL("\r\n")} {"User"|"Пользователь"} {$name1=STRING+}
+    {"has modified the application settings. \r\nModification scope: "|
+    "внес изменения в параметры программы.\r\nОбласть изменений: "}
+    {object.name=UNTIL(". \r\n")|object.name=UNTIL(".\r\n")} {REST}'
+
+    $csv = csv($name1, "\\", "'")
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+endsubformula
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_microsoft_exchange_servers"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Kaspersky_Security_for_Exchange_eventlog_30000_change_settings"

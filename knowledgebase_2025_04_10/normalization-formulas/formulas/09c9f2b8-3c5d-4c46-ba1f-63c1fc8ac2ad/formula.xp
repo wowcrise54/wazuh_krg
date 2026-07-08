@@ -1,0 +1,58 @@
+TABULAR = ""
+
+COND = $software == "Commvault_BackupRecovery"
+       and in_list(["Create a Library", "Delete a Library", "Full Library Scan"], $msgid) == true
+
+subformula "get_data"
+    TEXT = '{UNTIL("Library: ")}{object.name=UNTIL("\\";")}
+            {UNTIL("MediaAgent: ")?}{$event_src=UNTIL("\\";")?}
+            {REST}'
+endsubformula
+
+subject = "account"
+
+if $msgid == "Create a Library" then
+    action = "create"
+elif $msgid == "Delete a Library" then
+    action = "remove"
+else
+    action = "check"
+endif
+
+object = "resource"
+status = "success"
+
+$csv = csv($user_name, "\\", '`')
+if length($csv) == 2 then
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+else
+    subject.name = $csv[0]
+endif
+
+submessage("TEXT", "get_data", $data)
+
+object.type = "library"
+
+datafield1 = $display_user_name  # отображаемое имя пользователя
+
+time = epoch_to_datetime($event_time)
+msgid = $msgid
+importance = "medium"
+
+if find_substr($data, "MediaAgent") != null then
+   if ipv4($event_src) != null then
+        event_src.ip = ipv4($event_src)
+    elif ipv6($event_src) != null then
+        event_src.ip = ipv6($event_src)
+        datafield10 = 'aaa'
+    else
+        event_src.hostname = $event_src
+    endif
+endif
+
+event_src.vendor = "commvault"
+event_src.title = "complete_backup_and_recovery"
+event_src.category = "Backup server"
+
+id = "PT_Commvault_Complete_Backup_and_Recovery_odbc_library_manipulation"

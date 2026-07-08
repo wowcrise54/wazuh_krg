@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A file with a suspicious extension was created on behalf of an instant messenger or email program, or malicious file activity was detected. This may indicate a phishing attack or malware being delivered to user's computer.</Description>
+  <EventDescriptions>
+    <EventDescription id="032d63ea-387d-4cfb-bfd3-b74c15aa3498">Instant messenger process {subject.process.name} on behalf of user {subject.account.name} created file "{object.name}" with a suspicious extension on host {event_src.host}</EventDescription>
+    <EventDescription id="0f48b605-bd05-466b-81d7-1352eb220460">Suspicious activity of file "{object.name}" created by email process {subject.process.name} on behalf of user {subject.account.name} on host {event_src.host}. Event context: {datafield11}.</EventDescription>
+    <EventDescription id="685f0b20-63cb-4209-bf1f-0d43572c1e99">Suspicious activity of file "{object.name}" created by instant messenger process {subject.process.name} on behalf of user {subject.account.name} on host {event_src.host}. Event context: {datafield11}.</EventDescription>
+    <EventDescription id="6b9740da-fd2d-4ea2-b0fb-da20e3e01d84">Email process {subject.process.name} on behalf of user {subject.account.name} created file "{object.name}" with a suspicious extension on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

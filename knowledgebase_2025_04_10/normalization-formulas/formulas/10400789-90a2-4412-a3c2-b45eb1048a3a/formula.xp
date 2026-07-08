@@ -1,0 +1,62 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="smtp-proxy"}[{NUMBER}]: msg_id="{msgid="1BFF-000F"}"
+         Allow {WORDDASH} {WORDDASH} {$pt1=WORD} {src.ip=IPV4|src.ip=IPV6} {dst.ip=IPV4|dst.ip=IPV6}
+         {src.port=NUMBER} {dst.port=NUMBER} {$msg=STRING*} ({datafield1=WORDDASH+})'
+
+$kv = keyvalue($msg, " ", "=", '"')
+
+subject = "account"
+action = "send"
+object = "message"
+status = "success"
+
+$dog = find_substr($kv["sender"], "@")
+if $dog != null then
+    subject.name = substr($kv["sender"], 0, $dog)
+    subject.domain = strip($kv["sender"], subject.name + "@", "")
+else
+    subject.name = $kv["sender"]
+endif
+
+object.property = "recipient"
+object.value = $kv["recipients"]
+
+count.bytes_in = $kv["rcvd_bytes"]
+count.bytes_out = $kv["sent_bytes"]
+protocol = upper($pt1)
+
+if find_substr($kv["recipients"], ";") != null then
+    datafield2 = length(csv($kv["recipients"], ";", "'"))
+else
+    datafield2 = 1
+endif
+
+# datafield1 - Proxy policy name
+# datafiedl2 - количество указанных получателей
+if $kv["server_SSL_server"] != "NONE" then
+    datafield7 = $kv["server_SSL_server"]     # алгоритмы шифрования сервера
+endif
+if $kv["client_SSL_server"] != "NONE" then
+    datafield8 = $kv["client_SSL_server"]     # алгоритмы шифрования клиента
+endif
+if $kv["tls_profile"] != "NONE" then
+    datafield9 = $kv["tls_profile"]    # профиль TLS
+endif
+if $kv["tls_version"] != "NONE" then
+    datafield10 = $kv["tls_version"]    # версия TLS
+endif
+
+importance = "info"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_1BFF000F_SMTP_request"

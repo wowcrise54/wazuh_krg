@@ -1,0 +1,34 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} ATD2ESM[{NUMBER}]:
+        {$first_json=UNTIL("\\"MsgId\\": \\"H-ST-01-1\\"")}{$second_json=REST}'
+
+action = "terminate"
+object = "session"
+status = "success"
+
+$json = $first_json + '"MsgId": "H-ST-01-1"' + $second_json
+
+subformula 'json_string'
+    JSON = ''
+
+    src.ip = $Client
+
+    msgid = $MsgId
+endsubformula
+
+submessage('JSON', 'json_string', $json)
+
+importance = "info"
+
+event_src.vendor = "mcafee"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "atd"
+event_src.category = "Network security"
+
+id = "PT_McAfee_ATD_syslog_session_terminated"

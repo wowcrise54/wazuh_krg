@@ -1,0 +1,51 @@
+EVENTLOG = 'EventID="4928"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+action = "create"
+object = "ds_object"
+
+if $Keywords == "0x8020000000000000" then
+status = "success"
+elif $Keywords == "0x8010000000000000" then
+status = "failure"
+endif
+
+object.state = $Data["StatusCode"]
+
+if $Data["SourceAddr"] != '-' then
+    $dot_pos = find_substr($Data["SourceAddr"], '.')
+    if $dot_pos != null then
+        src.fqdn = lower($Data["SourceAddr"])
+        src.hostname = lower(substr($Data["SourceAddr"], 0, $dot_pos))
+    else
+        src.hostname = lower($Data["SourceAddr"])
+    endif
+    datafield1 = $Data["SourceAddr"]
+endif
+datafield2 = $Data["DestinationDRA"]
+datafield3 = $Data["SourceDRA"]
+datafield4 = $Data["NamingContext"]
+datafield5 = $Data["Options"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.vendor = "microsoft"
+event_src.title = "active_directory"
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_4928_Active_Directory_replica_source_naming_context_established"

@@ -1,0 +1,47 @@
+EVENTLOG = 'EventID = "5861"'
+COND =  $Channel == "Microsoft-Windows-WMI-Activity/Operational"
+        and $Provider["Name"] == "Microsoft-Windows-WMI-Activity"
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "success"
+
+subject.account.id = $Security["UserID"]
+
+$csv = csv($UserData["Operation_ESStoConsumerBinding"]["CONSUMER"], "=", "")
+object.name = strip($csv[1], '"', '"')  # Event Log Consumer
+object.path = lower(strip($UserData["Operation_ESStoConsumerBinding"]["Namespace"], "//./", ""))
+object.property = "PossibleCause"
+object.type = "WMI subscription"
+object.value = lower($UserData["Operation_ESStoConsumerBinding"]["PossibleCause"])
+$tmp = csv(($UserData["Operation_ESStoConsumerBinding"]["PossibleCause"]), '"', '"')
+object.query = $tmp[5]
+
+src.hostname = lower($UserData["Operation_ESStoConsumerBinding"]["ClientMachine"])
+
+datafield1 = lower($UserData["Operation_ESStoConsumerBinding"]["ESS"])  # Eventing subsystem
+datafield2 = $tmp[7]  # Query Language
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+category.generic = "Interprocess Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_5861_WMI_subscription_created"

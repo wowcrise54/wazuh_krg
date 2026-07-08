@@ -1,0 +1,37 @@
+!TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+         {event_src.id=WORD} ({time=DATETIME}) {event_src.subsys="firewall"}: msg_id="{msgid="3000-0173"}"
+         {"fqdn_dst_match="STRING?} Deny {WORDDASH}
+         {WORDDASH} {NUMBER} {$pt1=WORD} {NUMBER} {NUMBER} {src.ip=IPV4|src.ip=IPV6}
+         {dst.ip=IPV4|dst.ip=IPV6} {src.port=NUMBER} {dst.port=NUMBER}
+         {"offset"?} {NUMBER?} {$maybe_lost_key=WORD?} {NUMBER?} {WORD?} {NUMBER?}
+         {$msg=STRING+} ({datafield1=WORD+})'
+
+if find_substr($msg, "=") == 0 then
+    $msg = $maybe_lost_key + $msg
+endif
+$kv = keyvalue($msg, " ", "=", '"')
+
+action = "access"
+object = "resource"
+status = "failure"
+
+dst.geo.country = $kv["geo_dst"]
+protocol = upper($pt1)
+reason = $kv["msg"]
+
+# datafield1 - Firewall policy name
+
+importance = "info"
+
+event_src.vendor = "watchguard"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fireware_xtmv"
+event_src.category = "Network security"
+
+id = "PT_WatchGuard_FireWare_XTMv_syslog_30000173_Site_blocked_by_policy"

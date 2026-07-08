@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        lxd[{NUMBER}]: lvl={WORD} msg=" - binding TCP socket" socket={$socket=UNTIL(" t")}={time=DATETIME}'
+
+action = "assign"
+object = "socket"
+status = "success"
+
+if find_substr($socket, "[") != null then
+    $csv = csv($socket, "]:", '`')
+    dst.ip = maybe_ipv6(strip($csv[0], "[", ""))
+    dst.port = $csv[1]
+else
+    $csv = csv($socket, ":", '`')
+    dst.ip = maybe_ipv4($csv[0])
+    dst.port = $csv[1]
+endif
+
+protocol = "tcp"
+
+importance = "info"
+
+category.generic = "Socket"
+category.high = "Network Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "lxd"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_LXD_syslog_bind_socket"

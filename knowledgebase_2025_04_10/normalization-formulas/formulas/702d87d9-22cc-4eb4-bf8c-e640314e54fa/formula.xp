@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} 
+        {$tmp_subsys="CMDLOGGER"} [emWeb]: cmd_logger_api {STRING} {NUMBER} %% NOTE 
+        CLI: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}:{subject.account.name=UNTIL(":")} {object.process.cmdline=STRING+}'
+
+COND = (object.process.cmdline != "User logged in")
+        
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+dst.hostname = $Computer
+
+importance = "info"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "dell"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "n1548"
+event_src.category = "Network device"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Dell_N1548_syslog_Command_executed"

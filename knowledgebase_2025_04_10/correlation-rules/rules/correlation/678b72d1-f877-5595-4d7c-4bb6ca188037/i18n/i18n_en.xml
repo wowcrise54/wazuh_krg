@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Cloning and creating snapshots and backups of disks attached to critical virtual machines in VK Cloud.\nAttackers can use copies of critical objects to access the data stored on them, create their own virtual machines outside of the area protected by security systems, and hide the evidence of their activity. The obtained data can then be used to further compromise the system.</Description>
+  <EventDescriptions>
+    <EventDescription id="14bd8d71-8d86-f1e4-4634-9191f737dc2d">User backed up a disk attached to a critical virtual machine on host {event_src.host}</EventDescription>
+    <EventDescription id="2a18f743-717b-cef3-1f3d-359ed6b32af9">User {subject.account.name} took a snapshot of a disk attached to a critical virtual machine on host {event_src.host}</EventDescription>
+    <EventDescription id="38e28587-c261-6b97-83a6-a02a0cdab20c">User {subject.account.name} cloned a disk attached to a critical virtual machine on host {event_src.host}</EventDescription>
+    <EventDescription id="ecefa2f7-7049-24a6-a9ac-dabe68ad8117">User {subject.account.name} copied a disk attached to a critical virtual machine using a snapshot on host {event_src.host}</EventDescription>
+    <EventDescription id="f2250327-0100-c9d0-cfe7-dc2c8b481050">User {subject.account.name} backed up a disk attached to a critical virtual machine on host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

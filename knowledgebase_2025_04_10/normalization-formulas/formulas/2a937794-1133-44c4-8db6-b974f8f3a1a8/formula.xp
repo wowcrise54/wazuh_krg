@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys=WORDDASH} {":"?} sensor_id={event_src.id=NUMBER} node={HOSTNAME} type={msgid="USER_AUTH"}
+        {UNTIL("acct=")}"{subject.account.name=WORDDASH}" exe={$application=UNTIL(" hostname=")}{"?"|src.hostname=HOSTNAME}
+        addr={"?"|src.ip=IPV4|src.ip=IPV6} terminal={"?"|logon_service=WORDDASH} res=success\''
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+$stripped_name_path = strip($application, "\"", "\"")
+$name_path = csv($stripped_name_path, "/", "~")
+
+subject.process.name = $name_path[length($name_path) - 1]
+subject.process.path = strip($stripped_name_path, "", subject.process.name)
+subject.process.fullpath = $stripped_name_path
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_2_4_syslog_plain_user_authentication"

@@ -1,0 +1,80 @@
+event MigratedAccessProccessLsass:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        correlation_name == "LSASS_Memory_Access_SubRule"
+        and find_substr(lower(subject.state), "migration in process chain exist") != null
+        and filter::CheckWL_Process_Access("LSASS_Memory_Dump_Via_Migrated_Process", lower(subject.process.fullpath))
+    }
+
+rule LSASS_Memory_Dump_Via_Migrated_Process: MigratedAccessProccessLsass
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Access"
+    }
+
+    on MigratedAccessProccessLsass {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        $subject.process.chain = subject.process.chain
+        
+        $object.property = object.property
+        $object.value = object.value
+        $subject.state = subject.state
+
+        $object.process.path = object.process.path
+        $object.process.name = object.process.name
+        $object.process.fullpath = object.process.fullpath
+        $object.process.id = object.process.id
+        $object.process.guid = object.process.guid
+        $object.process.chain = object.process.chain 
+
+        $datafield5 = datafield5    # Идентификатор потока субъекта
+        $datafield9 = datafield9    # Цепочка вызовов процесса
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    
+        $alert.key = lower(subject.process.fullpath)
+        $alert.regex_match = lower(regex(subject.state, "{\S+(\s+←\s+\S+)*\}\s+←\s+(\S+)", 2))
+        $alert.context = "lsass.exe dumped by process " + $alert.regex_match + " via migration to the process " + subject.process.name
+    }
+
+ emit {
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "access"
+    $object = "process"
+    $status = "success"
+    
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: LSASS Memory"
+
+    $labels = $labels + "|lsass_cache_to_correlation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

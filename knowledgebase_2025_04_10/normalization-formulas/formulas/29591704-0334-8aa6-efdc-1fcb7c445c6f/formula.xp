@@ -1,0 +1,137 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "VM_MIGRATION_START",  # 62
+           "VM_MIGRATION_DONE",  # 63
+           "VM_MIGRATION_ABORT",  # 64
+           "VM_MIGRATION_FAILED",  # 65
+           "VM_MIGRATION_START_SYSTEM_INITIATED",  # 67
+           "VM_MIGRATION_NO_VDS_TO_MIGRATE_TO",  # 166
+           "VM_MIGRATION_NOT_ALL_VM_NICS_WERE_PLUGGED_BACK",  # 12,003
+           "VM_MIGRATION_PLUGGING_VM_NICS_FAILED",  # 12,004
+           "VM_MIGRATION_TO_SERVER_FAILED",  # 120
+           "VM_MIGRATION_TRYING_RERUN",  # 128
+           "VM_CANCEL_MIGRATION",  # 161
+           "VM_CANCEL_MIGRATION_FAILED"  # 162
+       ], $event_class)
+
+subject = "account"
+action = "move"
+object = "virtual_machine"
+if in_list([
+    "VM_MIGRATION_START", "VM_MIGRATION_START_SYSTEM_INITIATED", "VM_CANCEL_MIGRATION_FAILED"
+    ], $event_class) then
+    status = "ongoing"
+elif in_list([
+    "VM_MIGRATION_DONE", "VM_MIGRATION_NOT_ALL_VM_NICS_WERE_PLUGGED_BACK",
+    "VM_MIGRATION_PLUGGING_VM_NICS_FAILED"
+    ], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # VM_MIGRATION_START
+    # VM_MIGRATION_DONE
+    # VM_CANCEL_MIGRATION
+    # VM_MIGRATION_START_SYSTEM_INITIATED
+    TEXT = "Migration {'started'|'completed'|'cancelled'|'initiated by system'} ({$kv=KEYVALUE(',', ':', '\\'')}"
+endsubformula
+
+subformula "parse_body"
+    # VM_MIGRATION_ABORT
+    TEXT = "Migration failed: {$reason_raw=STRING*} ({$kv=KEYVALUE(',', ':', '\\'')}"
+endsubformula
+
+subformula "parse_body"
+    # VM_MIGRATION_FAILED
+    # VM_MIGRATION_TO_SERVER_FAILED
+    TEXT = "Migration failed {$reason_raw=STRING*} ({$kv=KEYVALUE(',', ':', '\\'')}"
+endsubformula
+
+subformula "parse_body"
+    # VM_CANCEL_MIGRATION_FAILED
+    TEXT = "Failed to cancel migration for VM: {$vm_name=REST}"
+endsubformula
+
+subformula "parse_body"
+    # VM_MIGRATION_NO_VDS_TO_MIGRATE_TO
+    TEXT = "No available host was found to migrate VM {$vm_name=STRING+} to."
+endsubformula
+
+subformula "parse_body"
+    # VM_MIGRATION_NOT_ALL_VM_NICS_WERE_PLUGGED_BACK
+    # VM_MIGRATION_PLUGGING_VM_NICS_FAILED
+    TEXT = "After migration of {$vm_name=STRING+} {'following'?} vm nics failed to be plugged back{$vm_nics=REST}"
+endsubformula
+
+subformula "parse_body"
+    # VM_MIGRATION_TRYING_RERUN
+    TEXT = "Failed to migrate VM {$vm_name=STRING+} to Host {$dst_host_name=HOSTNAME|$dst_host_ip=IPV4|$dst_host_ip=IPV6} {$reason_raw=STRING*} Trying to migrate to another Host."
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+$user = strip($kv["User"], "", ").")
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+$vm_name = coalesce($vm_name, $kv["VM"])
+
+object.name = $vm_name
+
+src.hostname = strip($kv["Source"], "", ").")
+dst.hostname = strip($kv["Destination"], "", ").")
+
+duration = $kv["Duration"]
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = strip($kv["Source"], "", ").")  # Host Name
+
+$reason_raw_code = switch $event_class
+    case "VM_MIGRATION_ABORT" $reason_raw
+    case "VM_MIGRATION_FAILED" strip($reason_raw, "due to a failed validation: [", "]")
+    case "VM_MIGRATION_START_SYSTEM_INITIATED" strip($kv["Reason"], "", ").")
+    case "VM_MIGRATION_TO_SERVER_FAILED" strip($reason_raw, "due to a failed validation: [", "]")
+    case "VM_MIGRATION_TRYING_RERUN" strip($reason_raw, "due to a failed validation: [", "]")
+    case "VM_MIGRATION_NOT_ALL_VM_NICS_WERE_PLUGGED_BACK" "VM NICs failed to be plugged back"
+    case "VM_MIGRATION_PLUGGING_VM_NICS_FAILED" "VM NICs failed to be plugged back"
+    case "VM_CANCEL_MIGRATION" "Migration cancelled"
+    case "VM_CANCEL_MIGRATION_FAILED" "Failed to cancel migration"
+    case "VM_MIGRATION_NO_VDS_TO_MIGRATE_TO" "No available host was found to migrate VM to"
+endswitch
+
+if $reason_raw_code != "" then
+    reason = $reason_raw_code
+endif
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_VM_Migrate"

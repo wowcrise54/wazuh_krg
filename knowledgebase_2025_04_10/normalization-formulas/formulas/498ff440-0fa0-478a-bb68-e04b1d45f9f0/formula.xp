@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        django{"["NUMBER"]"?}: {WORD}: Добавлен {datafield1="CDP"} \'{object.storage.fullpath=UNTIL("\'")}'
+
+action = "download"
+object = "file_object"
+status = "success"
+
+$csv_path = csv(object.storage.fullpath, "/", "")
+object.storage.name = $csv_path[length($csv_path) - 1]
+if strip(object.storage.fullpath, '', object.storage.name) != '' then
+    object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+endif
+
+# datafield1 - Certificate Revocation List (CRL) Distribution Point
+
+importance = "info"
+
+event_src.title = "kontinent_tls_vpn"
+event_src.vendor = "security_code"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = "vpn-gateway"
+event_src.category = "VPN"
+
+id = "PT_Security_Code_Kontinent_TLS_VPN_syslog_cdp_added"

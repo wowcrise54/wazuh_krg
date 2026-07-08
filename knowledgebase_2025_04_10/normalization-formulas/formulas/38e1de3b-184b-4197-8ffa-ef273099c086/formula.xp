@@ -1,0 +1,149 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        haproxy{'['?}{NUMBER}{']'?}{':'?} {'Backup'?} Server {$ps=STRING} {$rest=REST}"
+
+COND = (
+    find_substr($rest, "was DOWN and now enters maintenance") != null
+    or find_substr($rest, "is going DOWN for maintenance") != null
+    or find_substr($rest, "leaving forced maintenance") != null
+    or find_substr($rest, "resolves again") != null
+    or find_substr($rest, "leaving maintenance") != null
+    or find_substr($rest, "but remains in maintenance") != null
+    or find_substr($rest, "remains in forced maintenance.") != null
+)
+
+action = "info"
+object = "application"
+status = "success"
+
+subformula "parse_status"
+    TEXT = "is {$st=WORD}/{$admf=WORD} (leaving {'forced'?} maintenance)."
+
+    $state = switch $st
+        case "UP" "running"
+        case "DOWN" "stopped"
+    endswitch
+
+    object.state = $state + "/" + lower($admf)
+    object.new_value = "off"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "('{$hostname=HOSTNAME}') is {$st=WORD}/{$admf=WORD} ({reason='resolves again'})."
+
+    $state = switch $st
+        case "UP" "running"
+        case "DOWN" "stopped"
+    endswitch
+
+    object.state = $state + "/" + lower($admf)
+    object.new_value = "off"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "was DOWN and now enters maintenance {'('$reason_raw=UNTIL(')')?} {$appended_status=REST}"
+
+    object.new_value = "on"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "is going DOWN for maintenance {'('$reason_raw=UNTIL(')')?} {$appended_status=REST}"
+
+    object.new_value = "on"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "is leaving forced maintenance but remains in maintenance {REST}"
+
+    object.value = "on"
+    object.new_value = "on"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "('{$hostname=HOSTNAME}') resolves again but remains in maintenance {REST}"
+
+    object.value = "on"
+    object.new_value = "on"
+endsubformula
+
+subformula "parse_status"
+    TEXT = "remains in forced maintenance."
+
+    object.value = "on"
+    object.new_value = "on"
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=STRING+} {NUMBER} active and {NUMBER} backup servers left. {'Running on backup.'?} {NUMBER} sessions active, {NUMBER} requeued, {NUMBER} remaining in queue."
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=STRING+} {NUMBER} active and {NUMBER} backup servers online. {'Running on backup.'?} {NUMBER} sessions requeued, {NUMBER} total in queue."
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", reason: {$kv=REST}"
+    
+    $kv = strip("reason: " + $kv, "", ".")
+    $kv = keyvalue($kv, ',', ':', '"')
+    $reason_raw = $kv["reason"]
+    datafield5 = $kv["info"]  # Info
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=STRING+} {NUMBER} active and {NUMBER} backup servers left. {'Running on backup.'?} {NUMBER} sessions active, {NUMBER} requeued, {NUMBER} remaining in queue."
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=STRING+} {NUMBER} active and {NUMBER} backup servers online. {'Running on backup.'?} {NUMBER} sessions requeued, {NUMBER} total in queue."
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = ", {$reason_raw=REST}"
+endsubformula
+
+subformula "parse_appended_status"
+    TEXT = "{REST}"
+endsubformula
+
+submessage("TEXT", "parse_status", $rest)
+submessage("TEXT", "parse_appended_status", $appended_status)
+
+$ps_list = csv($ps, "/", "")
+$proxy = $ps_list[0]
+$server = $ps_list[1]
+
+object.type = "proxied server"
+object.group = $proxy
+object.name = $server
+object.storage.name = $hostname
+object.property = "maintenance mode"
+
+datafield3 = $server  # Server Name
+datafield4 = $proxy   # Proxy Name
+
+reason = strip($reason_raw, "", " ")
+
+importance = "low"
+
+event_src.vendor = "haproxy_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "haproxy"
+event_src.category = "Proxy server"
+
+id = "PT_HAProxy_Technologies_HAProxy_syslog_Server_Maintenance_Mode"

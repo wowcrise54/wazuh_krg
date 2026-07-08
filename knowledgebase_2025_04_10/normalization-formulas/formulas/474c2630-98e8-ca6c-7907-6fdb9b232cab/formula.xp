@@ -1,0 +1,45 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.fqdn=HOSTNAME} {$product_name=UNTIL("|")}
+        {NUMBER}.{NUMBER}.{NUMBER}.{NUMBER} -               
+        {msgid="KLSRV_EVENT_HOSTS_NEW_DETECTED"}
+        [event@{NUMBER} {$raw_kv=UNTIL("]")} {$data=REST}' 
+
+action = "detect"
+object = "host"
+status = "success"
+
+$kv_extra = keyvalue($raw_kv, " ", "=", "\"")
+
+submessage("TEXT", "object", $data)
+subformula "object"
+    TEXT = "Обнаружено новое устройство \"{$name=WORDDASH}\" (Windows-домен \"{$domain=WORDDASH}\")."
+endsubformula
+
+object.name = lower($name)
+object.domain = lower($domain)
+
+datafield1 = $kv_extra["gn"]    # имя группы администрирования, в которую входит узел-источник
+
+reason = $kv_extra["etdn"]
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $product_name
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+if $kv_extra["hip"] != "127.0.0.1" then
+    event_src.ip = $kv_extra["hip"]
+endif
+event_src.hostname = lower($kv_extra["hdn"])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_plain_KLSRV_EVENT_HOSTS_NEW_DETECTED"

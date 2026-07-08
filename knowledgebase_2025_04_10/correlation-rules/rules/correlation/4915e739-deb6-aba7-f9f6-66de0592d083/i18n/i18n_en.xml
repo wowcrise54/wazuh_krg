@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to Grafana. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="4590c519-0518-6f11-ab01-72f7ca6e3c94">User {subject.account.name} from host {src.ip} logged in to a new instance of Grafana on host {event_src.host}. The instance is missing from the collected profile.</EventDescription>
+    <EventDescription id="6a162c9c-95e7-d655-006a-13ef5c1b604e">User {subject.account.name} from new host {src.ip} logged in to Grafana on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+    <EventDescription id="c4f2a965-491d-0b3c-d348-16a0addadcc8">New user {subject.account.name} from host {src.ip} logged in to Grafana on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

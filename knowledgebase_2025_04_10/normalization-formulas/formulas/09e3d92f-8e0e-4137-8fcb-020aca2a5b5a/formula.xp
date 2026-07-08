@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {$ip1=IPV4|$ip1=IPV6|$host1=HOSTNAME|}
+        SymantecServer:{$ip2=IPV4|$ip2=IPV6|$host2=HOSTNAME|}{","?} {UNTIL("Сайт:")} {"Сайт"?}
+        {datafield1=UNTIL(",Сервер")}: {datafield2=UNTIL(",")}
+        Не удалось отправить сообщение по адресу [{object.value=UNTIL("].")}'
+
+action = "send"
+object = "message"
+status = "failure"
+
+object.property = "receiver"
+
+# datafield1 - Site Name
+# datafield2 - Server name
+
+importance = "medium"
+
+event_src.vendor = "symantec"
+event_src.title = "endpoint_management"
+event_src.ip = coalesce($ip2, $ip1)
+event_src.hostname = coalesce($host2, $host1)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_syslog_sending_mail_failed_ru_ru"

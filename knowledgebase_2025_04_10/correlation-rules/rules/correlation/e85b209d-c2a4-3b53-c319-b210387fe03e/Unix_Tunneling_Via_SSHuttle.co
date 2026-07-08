@@ -1,0 +1,144 @@
+event Syscall_Execve_Run_SSHuttle:
+    key:
+        event_src.host, object.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Linux()
+        and (
+            regex(object.process.name, "(c|tc|sc|k|z|fi|da|ba)?sh$", 0) != null
+            or in_list(["ssh", "sshd"], object.process.name)
+        )
+        and (
+            regex(object.process.cmdline, "compile\(sys\.stdin\.read\(\d+\),\s*\"assembler\.py\",\s*\"exec\"\)", 0) != null
+            # для SSHuttle в object.process.meta попадает копия object.process.cmdline
+            or regex(object.process.meta, "compile\(sys\.stdin\.read\(\d+\),\s*\"assembler\.py\",\s*\"exec\"\)", 0) != null
+        ) 
+        and filter::CheckWL_Linux_Process_Creation("Unix_Tunneling_Via_SSHuttle",
+            lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|")))
+    }
+
+event Syscall_Connect:
+    key:
+        event_src.host, subject.process.id, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and action == "open"
+        and object == "connection"
+        and not filter::Loopback_Address(dst.ip)
+        and (
+            regex(subject.process.name, "(c|tc|sc|k|z|fi|da|ba)?sh$", 0) != null
+            or in_list(["ssh", "sshd"], subject.process.name)
+        )
+        and status == "success"
+    }
+
+rule Unix_Tunneling_Via_SSHuttle: (Syscall_Execve_Run_SSHuttle and Syscall_Connect) within 10s
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_Process_Creation"
+        $context = ""
+    }
+
+    on Syscall_Execve_Run_SSHuttle {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.domain = subject.account.domain
+        $subject.type = subject.type
+
+        if subject != null then
+            $prefix = "[" + logon_service + "] " + coalesce(subject.account.name, "<unknown>") + "(" + subject.account.id + ") → "
+        else
+            $prefix = "[sys] "
+        endif
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.group = object.account.group
+        $object.account.domain = object.account.domain
+
+        $prefix = $prefix + coalesce(object.account.name, "<unknown>") + "(" + object.account.id + ") → "
+
+        $object.process.id = object.process.id
+        $object.process.parent.id = object.process.parent.id
+        $object.process.cwd = object.process.cwd
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        
+        $context = $context + "[" + string(object.process.id) + "] " + object.process.cmdline
+
+        $logon_service = logon_service
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Binary File Owner User Name
+        $datafield3 = datafield3  # Binary File Access Mode
+        $datafield4 = datafield4  # Interpreter or Binary
+        $datafield5 = datafield5  # The file that caused the error
+
+        $numfield2 = numfield2  # Binary File Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([object.process.fullpath, coalesce(object.process.cmdline, object.process.meta)], "|"))
+        $alert.regex_match = coalesce(
+            regex(object.process.cmdline, "compile\(sys\.stdin\.read\(\d+\),\s*\"assembler\.py\",\s*\"exec\"\)", 0), 
+            regex(object.process.meta, "compile\(sys\.stdin\.read\(\d+\),\s*\"assembler\.py\",\s*\"exec\"\)", 0)
+        )
+    }
+
+    on Syscall_Connect {
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+
+    if in_list(["ssh", "sshd"], $object.process.name) then 
+        $reason = "Client Side" 
+    else 
+        $reason = "Server Side"
+    endif
+
+    $alert.context = $prefix + $context
+
+    $category.generic = "Attack"
+    $category.high = "Command And Control"
+    $category.low = "Protocol Tunneling"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

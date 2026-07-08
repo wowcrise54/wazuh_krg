@@ -1,0 +1,28 @@
+JSON = 'category=35'
+
+COND = $data["ID"] == "SWITCH_TO_SLAVE"
+
+subject = "account"
+action = "configure"
+object = "node"
+if $data["Status"] == "SUCCESS" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subject.name = $data["AdminName"]
+
+datafield1 = $cg_name   # узел безопасности
+datafield2 = $cg_cssid  # идентификатор узла безопасности
+
+time = $time
+msgid = $data["ID"]
+importance = "info"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+ 
+id = "PT_Security_Code_Kontinent_odbc_switch_to_slave"

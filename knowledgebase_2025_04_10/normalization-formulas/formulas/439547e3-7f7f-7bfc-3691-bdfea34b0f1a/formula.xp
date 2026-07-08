@@ -1,0 +1,31 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}Very-High|{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $tmp_subsys == "CloudGuard IaaS"
+       and find_substr($kv["calc_desc"], "Data Center scan failed") != null
+       
+action = "scan"
+object = "resource"
+status = "failure"
+
+object.type = "data center"
+object.name = $kv["data_center_name"]
+
+datafield1 = $kv["data_center_url"]  # data center url
+datafield2 = $kv["originsicname"]    # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+reason = strip($kv["calc_desc"],"",".")
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+importance = "high"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_CloudGuard_Scan_failed"

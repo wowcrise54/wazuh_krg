@@ -1,0 +1,36 @@
+!TABULAR = "{event_src.hostname=station},
+            {time=time_nsd},
+            {subject.account.name=login},
+            {reason=type_nsd}"
+
+subject = "account"
+
+switch reason
+    case 'Целостность'
+        action = "modify"
+        object = "file"
+        status = "success"
+
+        id = "PT_Voentelecom_SZI_NSD_odbc_LinterVS_Violation_integrity"
+    case 'ПАМ'
+        action = "login"
+        object = "system"
+        status = "failure"
+
+        dst.hostname = event_src.hostname
+
+        category.generic = "Operating System"
+        category.high = "Access Management"
+        category.low = "Communication"
+
+        id = "PT_Voentelecom_SZI_NSD_odbc_LinterVS_Bruteforce_attempt_by_user"
+endswitch
+
+subject.account.fullname = $fio
+
+event_src.subsys = "linter_vs"
+event_src.vendor = "voentelecom"
+event_src.title = "szi_nsd"
+event_src.category = "Host security"
+
+importance = "high"

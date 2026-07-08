@@ -1,0 +1,163 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.fqdn=HOSTNAME} {UNTIL("|")} {NUMBER}.{NUMBER}.{NUMBER}.{NUMBER} - {msgid="KLAUD_EV_OBJECTMODIFY"}
+        [event@{NUMBER} {$raw_kv=UNTIL("]")} {$data=REST}' 
+
+subject = "account"
+status = "success"
+
+$description = replace($data, " ", "\\\\r")
+$kv = keyvalue($description, " \\n", ":")
+$kv_extra = keyvalue($raw_kv, " ", "=", "\"")
+
+if find_substr($description, 'Задача для набора устройств') != null then
+    object = "task"
+    submessage("TEXT", "task", $description)
+endif
+
+if find_substr($description, 'Групповая задача') != null then
+    object = "task"
+    submessage("TEXT", "group_task", $description)
+endif
+
+if find_substr($description, 'Параметры') != null then
+    object = "configuration"
+    submessage("TEXT", "parameter", $description)
+endif
+
+if find_substr($description, 'Политика') != null then
+    object = "policy"
+    submessage("TEXT", "policy", $description)
+endif
+
+if find_substr($description, 'Инсталляционный пакет') != null then
+    object = "resource"
+    object.type = "package"
+    submessage("TEXT", "installation_package", $description)
+endif
+
+if find_substr($description, 'Доступ запрещен') != null then
+    object = "resource"
+    submessage("TEXT", "access", $description)
+endif
+
+if find_substr($description, 'Роль') != null then
+    object = "resource"
+    object.type = "role"
+    submessage("TEXT", "role", $description)
+endif
+
+if find_substr($description, 'Учетная запись пользователя') != null then
+    object = "account"
+    submessage("TEXT", "account", $description)
+endif
+
+if find_substr($description, 'Группа безопасности') != null then
+    object = "user_group"
+    submessage("TEXT", "user_group", $description)
+endif
+
+if find_substr(lower($description), 'изменил права доступа для сервера') != null then
+    object = "resource"
+    object.type = "administration server access rights"
+    submessage("TEXT", "access_rights", $description)
+endif
+
+if object == null then
+    object = "resource"
+endif
+
+subformula "task"
+    TEXT = 'Задача для набора устройств {$obj_name=STRING+} была {$action_raw=STRING} пользователем {$user=STRING}'
+endsubformula
+
+subformula "parameter"
+    TEXT = 'Параметры {"программы"?} {$obj_name=STRING+} были {$action_raw=STRING} пользователем {$user=STRING}'
+endsubformula
+
+subformula "group_task"
+    TEXT = 'Групповая задача {$obj_name=STRING+} была {$action_raw=STRING} пользователем {$user=STRING}'
+endsubformula
+
+subformula "policy"
+    TEXT = 'Политика {$obj_name=STRING+} была {$action_raw=STRING} пользователем {$user=STRING}'
+endsubformula
+
+subformula "installation_package"
+    TEXT = 'Инсталляционный пакет {$obj_name=STRING+} был {$action_raw=STRING} пользователем {$user=STRING}'
+endsubformula
+
+subformula "access"
+    TEXT = 'Доступ {$action_raw=WORD}: {STRING} инсталляционного пакета {$obj_name=STRING+} пользователем {$user=STRING}'
+endsubformula
+
+subformula "role"
+    TEXT = 'Роль {$obj_name=STRING+} была {$action_raw=STRING} пользователем {$user=STRING}'
+endsubformula
+
+subformula "account"
+    TEXT = 'Учетная запись пользователя {$obj_name=STRING+} была {$action_raw=STRING} пользователем {$user=STRING}'
+    
+    category.generic = "Account"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endsubformula
+
+subformula "user_group"
+    TEXT = 'Группа безопасности {$obj_name=STRING+} была {$action_raw=STRING} пользователем {$user=STRING}'
+    
+    category.generic = "Group"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endsubformula
+
+subformula "access_rights"
+    TEXT = 'Пользователь {$user=STRING+} {$action_raw=STRING} права доступа для Сервера администрирования.'
+endsubformula
+
+if in_list(["добавлена", "добавлен", "добавлены", "создана"], $action_raw) then 
+    action = "create"
+elif in_list(["изменена", "изменен", "изменены", "изменил"], $action_raw) then
+    action = "modify"
+elif in_list(["удалена", "удален", "удалены"], $action_raw) then
+    action = "remove"
+elif $action_raw == "разрешен" then
+    action = "allow"
+elif $action_raw == "запрещен" then
+    action = "deny"
+else
+    action = "modify"
+endif
+
+if object != "account" then
+    object.name = strip(strip($obj_name, '"', '"'), "'", "'")
+else
+    object.account.name = strip(strip($obj_name, '"', '"'), "'", "'")
+endif 
+
+$user_without_quotes = lower(strip(strip(strip($user, '"', '"'), '"', '".'), "'", "'."))
+subject.account.domain = substr($user_without_quotes, 0, find_substr($user_without_quotes, '\\'))
+subject.account.name = strip($user_without_quotes, subject.account.domain + '\\', '')
+
+datafield1 = $kv_extra["gn"]     # имя группы администрирования, в которую входит узел-источник
+
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch $kv_extra['p5']
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+if $kv_extra["hip"] != "127.0.0.1" then
+    event_src.ip = $kv_extra["hip"]
+endif
+event_src.hostname = lower($kv_extra["hdn"])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_plain_KLAUD_EV_OBJECTMODIFY"

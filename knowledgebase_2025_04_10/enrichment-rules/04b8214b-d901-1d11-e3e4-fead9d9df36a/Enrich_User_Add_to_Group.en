@@ -1,0 +1,91 @@
+event User_Adding_Process_Start:
+    filter {
+        filter::NotFromCorrelator()
+        and 
+        (
+            (
+                filter::ProcessStart_Windows_commandline("net1.exe", "net(1)?(\.exe)?\s+group\s+(.+\s)?\/do(m)?(ain)?|localgroup")
+                and regex(lower(object.process.cmdline), "\/add\\b", 0) != null
+            ) 
+            or filter::ProcessStart_Windows_commandline("net1.exe", "net(1)?(\.exe)?\s+user.{0,50}/add")
+        )
+    }
+
+event User_Adding_Powershell_Pipeline_Execute:
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and status == "success"
+        and (
+            in_list(["add-localgroupmember", "add-adgroupmember"], lower(object.process.name))
+            or (
+                not in_list(["get-command", "get-help"], lower(object.process.name))
+                and regex(lower(object.process.cmdline), "(?:^|[^\w-])(add-netuser|new-localuser|new-aduser)(?:$|[^\w\.\:\-])", 0) != null
+            )
+        )
+    }
+
+event User_Adding_Powershell_Command_Execute:
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and (
+            regex(lower(object.process.cmdline), "\\balgm\\b|add-(localgroupmember|adgroupmember)", 0) != null
+            or regex(lower(object.process.cmdline), "(?:^|[^\w-])(add-netuser|new-localuser|new-aduser)(?:$|[^\w\.\:\-])", 0) != null
+        )
+    }
+
+enrichment Enrich_User_Add_to_Group
+
+    enrich User_Adding_Process_Start:
+        enrich_fields {
+            # Group or Username
+            datafield10 = coalesce(regex(lower(object.process.cmdline), "(group|user)\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "(group|user)\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+            # Username or Password
+            datafield12 = regex(lower(object.process.cmdline), "((\"([^\"]+)\")|([^\"\s]+)){1}\s*\/add", 1)
+
+            datafield10 = strip(datafield10, "'", "'")
+            datafield12 = strip(datafield12, "'", "'")
+        }
+    
+    enrich User_Adding_Powershell_Pipeline_Execute:
+        enrich_fields {
+            if in_list(["add-localgroupmember", "add-adgroupmember"], lower(object.process.name)) then
+                # Group
+                datafield10 = coalesce(regex(lower(object.process.cmdline), "-(group|identity)\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "-(group|identity)\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+                # Username
+                datafield12 = coalesce(regex(lower(object.process.cmdline), "-member(s)?\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "-member(s)?\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+            else
+                # Username
+                datafield10 = coalesce(regex(lower(object.process.cmdline), "-(name|samaccountname|username)\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "-(name|samaccountname|username)\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+                # Password
+                datafield12 = coalesce(regex(lower(object.process.cmdline), "-(accountpassword|password)\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "-(accountpassword|password)\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+            endif
+
+            datafield10 = strip(datafield10, "'", "'")
+            datafield12 = strip(datafield12, "'", "'")
+        }
+    
+    enrich User_Adding_Powershell_Command_Execute:
+        enrich_fields {
+            if regex(lower(object.process.cmdline), "\\balgm\\b|add-(localgroupmember|adgroupmember)", 0) != null then
+                # Group
+                datafield10 = coalesce(regex(lower(object.process.cmdline), "-(group|identity)\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "-(group|identity)\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+                # Username
+                datafield12 = coalesce(regex(lower(object.process.cmdline), "-member(s)?\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "-member(s)?\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+            else
+                # Username
+                datafield10 = coalesce(regex(lower(object.process.cmdline), "-(name|samaccountname|username)\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "-(name|samaccountname|username)\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+                # Password
+                datafield12 = coalesce(regex(lower(object.process.cmdline), "-(accountpassword|password)\s+((\"([^\"]+)\")|([^\"\s]+))", 4), regex(lower(object.process.cmdline), "-(accountpassword|password)\s+((\"([^\"]+)\")|([^\"\s]+))", 5))
+            endif
+
+            datafield10 = strip(datafield10, "'", "'")
+            datafield12 = strip(datafield12, "'", "'")
+        }

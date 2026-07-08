@@ -1,0 +1,48 @@
+JSON = ''
+COND = (
+    $eventid != null
+    and $node != null
+    and $timestamp != null
+    and $items["SYSTEM_BOOT"] != null
+)
+
+$kv_main = keyvalue($items["SYSTEM_BOOT"][0], " ", "=", "'")
+$kv_msg = keyvalue($kv_main["msg"], " ", "=", '"')
+
+action = "start"
+object = "system"
+status = "success"
+
+chain_id = $eventid  # AuditD Event ID
+
+time = epoch_ms_to_datetime(number($timestamp + $timestampfractional))
+msgid = "SYSTEM_BOOT"
+importance = "info"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.subsys = "auditd"
+event_src.category = "Operating system"
+
+if $node != "" then
+    if maybe_ipv4($node) != null or maybe_ipv6($node) != null then
+        if (in_subnet($node, "127.0.0.0/8") == False and $node != "::1") then
+            event_src.ip = $node
+            labels = "node_contains_ext_ip"
+        else
+            event_src.ip = recv_ipv4
+        endif
+    else
+        $first_dot = find_substr($node, ".")
+        if $first_dot != null then
+            event_src.fqdn = $node
+            event_src.hostname = substr($node, 0, $first_dot)
+        else
+            event_src.hostname = $node
+        endif
+    endif
+else
+    event_src.ip = recv_ipv4
+endif
+
+id = "PT_UNIX_like_auditd_syslog_structured_system_boot"

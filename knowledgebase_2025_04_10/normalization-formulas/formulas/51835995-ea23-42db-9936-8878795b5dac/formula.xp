@@ -1,0 +1,32 @@
+TEXT = '{$f = DATETIME_ISO8601}{$datafield11 = IPV4} {$json=REST}'
+
+submessage("JSON", "parse_json", $json)
+
+subformula "parse_json"
+    JSON = ''
+    
+    COND = $rule["id"] == "553"
+
+    object.hash.md5 = $syscheck["md5_after"]
+    object.hash.sha1 = $syscheck["sha1_after"]
+    object.hash.sha256 = $syscheck["sha256_after"]
+    object.name = $syscheck["path"]
+    object.storage.fullpath = $syscheck["path"]
+    time = $timestamp
+    event_src.ip = $agent["ip"]
+    event_src.host = $agent["name"]
+    datafield7 = $syscheck["diff"]
+    datafield8 = $syscheck["event"]
+endsubformula
+
+datafield9 = $f
+
+event_src.title = "wazuh"
+event_src.vendor = "wazuh"
+object = "file_object"
+event_src.category = "File service"
+importance = "high"
+id = "wazuh_File_Integrity_Monitoring_deleted_files_rule"
+action = "access"
+status = "success"
+object.type = "File"

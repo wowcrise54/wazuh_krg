@@ -1,0 +1,17 @@
+!TEXT = '{time=DATETIME} - OK,{msgid="RECORDING_RULE_CHANGE_PRIORITY"},{subject.name=WORDDASH+},
+        Recording rule priority changed: RecRulesChangePriorityForm {LITERAL} ruleId=\'{object.id=NUMBER} {REST}'
+
+subject = "account"
+action = "modify"
+object = "rule"
+status = "success"
+
+reason = "Priority changed"
+
+importance = "info"
+
+event_src.vendor = "zoom_international"
+event_src.title = "call_recording"
+event_src.category = "Telecom"
+
+id = "PT_ZOOM_International_Call_Recording_filemonitor_Recording_rule_change_priority"

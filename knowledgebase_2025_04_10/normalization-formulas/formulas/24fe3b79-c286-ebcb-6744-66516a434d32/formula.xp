@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?} {time=DATETIME?} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?}
+        {"python3["?}{subject.process.id=NUMBER?}{"]"?}{":"?}
+        ansible-ansible.builtin.systemd{":"?} Invoked with {$kv=KEYVALUE(" ","=","")}'
+
+subject = "process"
+object = "service"
+status = "success"
+
+if $kv["state"] != "None" then
+    action = switch $kv["state"]
+        case "restarted" "restart"
+        case "stopped" "stop"
+        case "started" "start"
+    endswitch
+elif $kv["enabled"] != "None" then
+    if $kv["enabled"] == "False" then
+        action = "disable"
+    else
+        action = "enable"
+    endif
+endif
+
+object.name = $kv["name"]
+    
+importance = "info"
+
+category.high = "System Management"
+category.generic = "Service"
+category.low = "Manipulation"
+
+event_src.vendor = "ansible"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ansible"
+event_src.category = "Other"
+
+id = "PT_Ansible_Ansible_syslog_systemd_daemon_manipulation"

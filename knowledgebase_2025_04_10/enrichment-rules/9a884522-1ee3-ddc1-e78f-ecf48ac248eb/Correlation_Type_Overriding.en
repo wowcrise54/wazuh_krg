@@ -1,0 +1,64 @@
+query Check_Correlation_Name($correlation_name, $correlation_type) from Correlation_Types_To_Override {
+    correlation_name == $correlation_name
+    and correlation_type != $correlation_type
+}
+
+query Get_Correlation_Name_and_Importance($correlation_name, $correlation_type) from Correlation_Types_To_Override {
+    correlation_name == $correlation_name
+    and correlation_type != $correlation_type
+}
+    qhandler {
+        $correlation_type = correlation_type
+        $importance = importance
+    }
+
+
+event Correlated_event_to_override:
+    filter {
+       correlation_name != null
+       and correlation_type != null
+       and correlation_type != "subrule"
+       and alert.ioc_provider == null
+       and exec_query("Check_Correlation_Name", [lower(correlation_name), lower(correlation_type)])
+    }
+
+enrichment Correlation_Type_Overriding
+
+    enrich Correlated_event_to_override:
+        enrich_fields {
+            $result = exec_query("Get_Correlation_Name_and_Importance", [lower(correlation_name), lower(correlation_type)])
+            $corr_type = $result["$correlation_type"]
+            $new_importance = $result["$importance"]
+
+            if in_list(["incident", "event", "draft"], $corr_type) then
+                correlation_type = $corr_type
+            endif
+
+            if in_list(["info", "low", "medium", "high"], $new_importance) then
+                importance = $new_importance
+            endif
+
+            if correlation_type == "incident" then
+
+                if importance == "info" then
+                    importance = "low"
+                endif
+
+                if incident.aggregation.key == null then
+                    incident.aggregation.key = join([correlation_name, event_src.host, subject.account.id], "|")
+                endif
+
+                if incident.severity == null then
+                    incident.severity = importance
+                endif
+
+                if incident.category == null then
+                    incident.category = "Undefined"
+                endif
+
+                if incident.aggregation.timeout == null then
+                    incident.aggregation.timeout = 2h
+                endif
+
+            endif
+        }

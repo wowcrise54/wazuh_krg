@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon via Keycloak. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="8b916bf7-5ff3-80de-b8a2-0862fdbedd3e">New user {subject.account.name} from host {src.host} received a Keycloak security token on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="9c568033-1fa9-4276-afda-e34be936264b">User {subject.account.name} from host {src.host} received a Keycloak security token to access new resource {object.application.name} on host {event_src.host}. The resource is missing from the collected profile.</EventDescription>
+    <EventDescription id="c2120f81-97b6-3ecf-dd38-469f668c875b">User {subject.account.name} from new host {src.host} received a Keycloak security token on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

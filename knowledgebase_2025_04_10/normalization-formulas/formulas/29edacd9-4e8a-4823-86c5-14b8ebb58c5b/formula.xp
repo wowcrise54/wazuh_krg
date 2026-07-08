@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {"Message forwarded from"?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|"(none)"|}{":"?}{WORD?}{":"WORD?}
+        audit: {msgid="Dl_Util"} {subject.account.name=WORDDASH} {$status="OK"|"FAIL"|"FAILURE"}
+        {object.process.name=WORDDASH} audit object exec event detected {$temp_object_path=REST}'
+
+subject = "account"
+action = "start"
+object = "application"
+if $status == "OK" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.process.path = strip($temp_object_path, "", object.process.name)
+object.type = "download utility"
+
+importance = "medium"
+
+category.generic = "Application"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "ibm"
+event_src.title = "aix"
+event_src.category = "Operating system"
+
+id = "PT_IBM_AIX_syslog_download_utility_used"

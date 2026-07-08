@@ -1,0 +1,40 @@
+EVENTLOG = 'EventID="505"'
+COND = in_list(["AD FS 2.0/Admin", "AD FS/Admin"], $Channel) and
+       in_list(["AD FS 2.0", "AD FS"], $Provider["Name"])
+
+subject = "account"
+action = "update"
+object = "configuration"
+status = "failure"
+
+submessage("TEXT", "search_sertificate_data", $UserData["Event"]["EventData"]["Data"][0])
+
+subject.id = $Security["UserID"]
+object.name = "Proxy store"
+
+# в данном событии клиент аутентифицируется с помощью сертифката
+# datafield1 = слепок сертифката
+# datafield2 = субъект сертификата
+subformula "search_sertificate_data"
+    !TEXT = '{STRING+?}\'{datafield1 = WORD}\'{STRING+?}\'{datafield2 = UNTIL("\'")}{REST}'
+endsubformula
+reason = strip($UserData["Event"]["EventData"]["Data"][5], "", ".")
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "ad fs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Directory service"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_505_Update_to_the_application_proxy_store_failed"

@@ -1,0 +1,175 @@
+# {"class":"vim.event.EventEx","key":15468,"chainId":15468,"createdTime":"2022-02-17 09:19:42.079999+00:00","userName":"Administrator@VSPHERE.LOCAL","fullFormattedMessage":"Principal Management event by Administrator@VSPHERE.LOCAL at 02/17/2022 09:17:16 GMT : Deleting principal 'TestUser'","eventTypeId":"com.vmware.sso.PrincipalManagement","severity":"info","message":"","arguments":{"userName":"Administrator@VSPHERE.LOCAL","description":"Deleting principal 'TestUser'","userIp":"","timestamp":"02/17/2022 09:17:16 GMT","_sourcehost_":"vcsa7.rf.plat.form"},"objectId":"","objectName":""}
+
+JSON = ''
+COND = $eventTypeId == "com.vmware.sso.PrincipalManagement"
+
+if not in_list([null, ""], $userName) then
+    subject = "account"
+endif
+
+status = "success"
+
+# Account
+subformula "sso_event"
+    TEXT = 'Creating local person user {$obj_acct=UNTIL("\' with details (")}{$rest=REST}'
+    
+    action = "create"
+    object = "account"
+    
+    $sso_list = csv(strip($rest, "", ")"), ",", "'")
+    $sso_user = $sso_list[length($sso_list)-1]
+    
+    object.property = "(desc, email, first_name, last_name, user_name)"
+    object.new_value = "(" + $rest
+endsubformula
+
+subformula "sso_event"
+    TEXT = 'Updating local person user {$obj_acct=UNTIL("\' details (")}{$rest=REST}'
+    
+    action = "modify"
+    object = "account"
+    
+    $sso_list = csv(strip($rest, "", ")"), ",", "'")
+    $sso_user = $sso_list[length($sso_list)-1]
+    
+    object.property = "(desc, email, first_name, last_name, user_name)"
+    object.new_value = "(" + $rest
+endsubformula
+
+subformula "sso_event"
+    TEXT = 'Resetting local person user {$obj_acct=UNTIL("\' password")}'
+    
+    action = "modify"
+    object = "account"
+    object.property = "password"
+endsubformula
+
+subformula "sso_event"
+    TEXT = '{$act="Disable"|$act="Enable"} user account {$rest=REST}'
+    
+    action = lower($act)
+    object = "account"
+    
+    $kv_msg = keyvalue(strip($rest, "'{", "}'"), ",", ":", "'")
+    $sso_username = $kv_msg["Name"]
+    $sso_domain = $kv_msg["Domain"]
+endsubformula
+
+subformula "sso_event"
+    TEXT = 'Deleting principal {$obj_acct=REST}'
+    
+    action = "remove"
+    object = "account"
+endsubformula
+
+# Group
+subformula "sso_event"
+    TEXT = 'Creating local group \'{$obj_name=UNTIL("\' with details (\'")}{$desc=REST}'
+    
+    action = "create"
+    object = "user_group"
+    object.property = "description"
+    object.new_value = strip($desc, "", "')")
+endsubformula
+
+subformula "sso_event"
+    TEXT = 'Updating local group \'{$obj_name=UNTIL("\' details (\'")}{$desc=REST}'
+    
+    action = "modify"
+    object = "user_group"
+    object.property = "description"
+    object.new_value = strip($desc, "", "').")
+endsubformula
+
+subformula "sso_event"
+    TEXT = 'Adding users to local group {$obj_name=REST}'
+    
+    action = "modify"
+    object = "user_group"
+    object.property = "action"
+    object.value = "adding_users"
+    $obj_name = strip($obj_name, "'", "'")
+endsubformula
+
+subformula "sso_event"
+    TEXT = 'Removing principals from local group {$obj_name=REST}'
+    
+    action = "modify"
+    object = "user_group"
+    object.property = "action"
+    object.value = "removing_users_or_groups"
+    $obj_name = strip($obj_name, "'", "'")
+endsubformula
+
+subformula "sso_event"
+    TEXT = 'Adding groups to local group {$obj_name=REST}'
+    
+    action = "modify"
+    object = "user_group"
+    object.property = "action"
+    object.value = "adding_groups"
+    $obj_name = strip($obj_name, "'", "'")
+endsubformula
+
+# Possible Uncovered Events
+subformula "sso_event"
+    TEXT = '{$reason=REST}'
+    
+    action = "info"
+    object = "resource"
+    reason = strip($reason, "", "]")
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+if $userName != "" then
+    submessage("TEXT", "parse_user", $userName)
+    subject.account.name = $username
+    subject.account.domain = $domain
+endif
+
+$username = null
+$domain = null
+
+submessage("TEXT", "sso_event", $arguments["description"]) 
+
+# Account
+submessage("TEXT", "parse_user", coalesce($sso_user, strip($obj_acct, "'", "'")))
+    
+object.account.name = coalesce($sso_username, $username)
+object.account.domain = coalesce($sso_domain, $domain)
+
+# Group
+object.name = $obj_name
+
+chain_id = $chainId
+
+datafield4 = $arguments["_sourcehost_"]  # vCenter Host Name
+
+time = $arguments["timestamp"]
+msgid = strip(coalesce($eventTypeId, $class), "vim.event.", "")
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_vsphereeventlog_SSO_Principal_Management"

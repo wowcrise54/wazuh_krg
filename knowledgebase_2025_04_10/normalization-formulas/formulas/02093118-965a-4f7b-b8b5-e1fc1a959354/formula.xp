@@ -1,0 +1,30 @@
+TABULAR =  "id,
+            {subject.account.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name},
+            {subject.account.privileges=object_type}
+            "
+
+COND = $gr_name == "Входы/выходы в систему"
+       and $ev_desc == "Окончание сеанса работы"
+       and $status == "Успешно"
+
+subject = "account"
+action = "logout"
+object = "application"
+status = "success"
+
+importance = "info"
+
+category.generic = "Application"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_admin_logout"

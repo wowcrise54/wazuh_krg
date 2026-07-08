@@ -1,0 +1,33 @@
+EVENTLOG = 'EventID="4885"'
+!COND = $Channel=="Security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "service"
+object.type = "certificate_services"
+status = "success"
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+subject.name = lower($Data["SubjectUserName"])
+subject.domain = lower($Data["SubjectDomainName"])
+
+object.property = "auditing"
+
+object.value =
+switch $Data["AuditFilter"]
+    case "0" "all auditing disabled"
+    case "127" "all auditing enabled"
+endswitch
+
+datafield1 = $Data["RequestId"]
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.hostname = lower($Computer)
+event_src.category = "Certification authority"
+
+id = "PT_Microsoft_Certification_Authority_eventlog_4885_Audit_filter_for_Certificate_Services_changed"
+importance = "info"

@@ -1,0 +1,135 @@
+query CheckCommand($commandline) from Malicious_Commands {
+    regex_match($commandline, column::command_value)
+}
+
+event ServiceInstalledFromNonSystemPath_7045_601:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "windows"
+        and (
+                (
+                    msgid == "7045"
+                    and object.process.cmdline != null
+                )
+            or msgid == "601"
+        )
+        and regex(lower(object.process.cmdline), "\w:\\\\program\s+files|\\\\systemroot\\\\system32\\\\driver.*?\.sys|(\w:\\\\windows\\\\)?system32\\\\driver.*?\.sys|%systemroot%(\\\\system32)?|\w:\\\\windows\\\\system32|\w:\\\\programdata\\\\microsoft\\\\windows\sdefender\\\\definition updates\\\\", 0) == null       
+        and filter::CheckWL_Specific_Only("Windows_Service_Installed", lower(join([object.name, object.process.cmdline], "|")))
+    }
+
+event ServiceInstalledFromNonSystemPath_4697:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "windows"
+        and msgid == "4697"
+        and object.process.fullpath != null 
+        and regex(lower(object.process.fullpath), "\w:\\\\program\s+files|\\\\systemroot\\\\system32\\\\driver.*?\.sys|(\w:\\\\windows\\\\)?system32\\\\driver.*?\.sys|%systemroot%(\\\\system32)?|\w:\\\\windows\\\\system32|\w:\\\\programdata\\\\microsoft\\\\windows\sdefender\\\\definition updates\\\\", 0) == null       
+        and filter::CheckWL_Specific_Only("Windows_Service_Installed", lower(join([object.name, object.process.fullpath], "|")))
+    }
+
+rule Windows_Service_Installed: ServiceInstalledFromNonSystemPath_7045_601 or ServiceInstalledFromNonSystemPath_4697
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on ServiceInstalledFromNonSystemPath_7045_601 {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $object.process.cmdline = object.process.cmdline
+
+        $object.name = object.name
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        $object.path = object.path
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        if exec_query("CheckCommand", [lower(object.process.cmdline)]) then
+            $reason = "malicious service"
+            $correlation_type = "incident"
+            $incident.category = "ForbiddenServiceUsage"
+        else
+            $reason = "service from non-system location"
+            $correlation_type = "event"
+            $incident.category = "SecurityBackdoorDetection"
+        endif
+        
+        $alert.key = lower(join([object.name, object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), select_query_first("CheckCommand", [lower(object.process.cmdline)], "command_value"), 0)
+        $alert.context = $reason
+    }
+
+    on ServiceInstalledFromNonSystemPath_4697 {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.process.id = subject.process.id
+        $subject.process.parent.id = subject.process.parent.id
+        
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.cmdline = object.process.cmdline
+
+        $object.process.parent.id = object.process.parent.id
+
+        $object.name = object.name
+        $object.type = object.type
+        $object.property = object.property
+        $object.value = object.value
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $reason = "service from non-system location"
+        $correlation_type = "event"
+        $incident.category = "SecurityBackdoorDetection"
+        
+        $alert.key = lower(join([object.name, object.process.fullpath], "|"))
+        $alert.context = $reason
+    }
+
+emit {
+    $subject = "account"
+    $action = "create"
+    $object = "service"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "System Services: Service Execution"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

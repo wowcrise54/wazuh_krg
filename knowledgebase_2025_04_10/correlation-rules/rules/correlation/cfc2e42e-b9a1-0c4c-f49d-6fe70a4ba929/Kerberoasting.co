@@ -1,0 +1,114 @@
+event Get_Users:
+    key:
+        event_src.host, subject.account.name, src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "1644"
+        and (
+            match(object.query, "( &  (objectClass=user)  (servicePrincipalName=*) )") # kerberoast.vba
+            or (
+                regex(object.query, "\(servicePrincipalName=\*\)", 0) != null
+                and regex(object.query, "\( !  \(userAccountControl&2\) \)", 0) != null
+                and (
+                    regex(object.query, "\(sAMAccountType=805306368\)", 0) != null # rubeus.exe
+                    or regex(object.query, "\(userAccountControl&512\)", 0) != null # GetUserSPNs.py (impacket)
+                )
+            )
+            or (
+                match(object.query, "( &  (servicePrincipalName=*) ( !  (objectCategory=CN=Computer,*) ) )") # orpheus.py (с GetUserSPNs.py)
+                and lower(object.value) == "serviceprincipalname,samaccountname,pwdlastset,memberof,useraccountcontrol,lastlogon"
+            )
+            or (
+                # PowerView (powershell)
+                regex(object.query, "\(servicePrincipalName=\*\)", 0) != null
+                and regex(object.query, "\(sAMAccountType=805306368\)", 0) != null
+            )
+        )
+        and object == "request" 
+     }
+
+event Tickets_Requested:
+    key:
+        event_src.host, subject.account.name, src.host
+    filter {
+        lower(correlation_name) == "subrule_tickets_requested"
+        and filter::CheckWL_Specific_Only("Kerberoasting", alert.key) # alert.key = lower(join([event_src.host, subject.account.name, src.host, datafield6], "|"))
+     }
+
+rule Kerberoasting: (Get_Users and Tickets_Requested) timer 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Get_Users {
+    
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.name = object.account.name        
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+        
+        $object.query = object.query
+        
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.host = src.host
+            
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+    }
+    
+    on Tickets_Requested {
+    
+        $datafield2 = datafield2 # TicketEncryptionType
+        $datafield6 = datafield6 # TicketEncryptionType в человекопонятном виде
+        
+        $datafield1 = datafield1 # Количество потенциально интересных запрошенных билетов
+        $datafield3 = datafield3 # Имена сервисов, к которым были получены тикеты
+        $datafield4 = datafield4 # SIDы сервисов
+        
+        $alert.key = alert.key
+    }
+    
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "access"
+    $object = "system"
+    $status = "success"
+
+    $importance = "medium"
+    
+    # Пока неясно, будет ли эта проверка полезной, но... Если используем rubeus с выставленным типом шифрования aes, в object.query будет вот такой артефакт: (msDS-SupportedEncryptionTypes|24). Т.е. значение "24" соответствует типам шифрования AES256-CTS-HMAC-SHA1-96 (0x12) и AES128-CTS-HMAC-SHA1-96 (0x11). Таким образом, можно избавиться от возможных противоречий:
+    if regex($object.query, "\(msDS-SupportedEncryptionTypes|24\)", 0) != null and not in_list(["0x11", "0x12"], $datafield2) then 
+        $detect = "drop"
+    endif
+    
+    $alert.context = join(["attackers' username:" + $subject.account.name, "attackers' host:" + $src.host, "count of requested tickets:" + $datafield1, "received tickets for services: " + $datafield3], " | ")
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Steal or Forge Kerberos Tickets"
+    
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($subject.account.name), $src.host, lower($datafield6)], "|")
+    $incident.category = "Undefined"
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

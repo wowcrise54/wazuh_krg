@@ -1,0 +1,127 @@
+event MongoDB_Drop_User:
+    key:
+    event_src.host, event_src.title, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "dropUser"
+        and event_src.title == "mongodb"
+        and action == "remove"
+        and object == "account"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("MongoDB_Mass_Drop_User", lower(join([event_src.title, src.host, coalesce(subject.account.name, subject.account.id), event_src.host], "|")))
+    }
+    
+event MongoDB_Dropped_All_Users:
+    key:
+    event_src.host, event_src.title, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "dropAllUsersFromDatabase"
+        and event_src.title == "mongodb"
+        and action == "remove"
+        and object == "user_group"
+        and status == "success"
+        and filter::CheckWL_Specific_Only("MongoDB_Mass_Drop_User", lower(join([event_src.title, src.host, coalesce(subject.account.name, subject.account.id), event_src.host], "|")))
+    }
+
+rule MongoDB_Mass_Drop_User: ((MongoDB_Dropped_All_Users) or (MongoDB_Drop_User[5,] with different object.account.id)) timer 5m
+
+
+init {
+        $labels = "w_auto"
+        $dropped_users = []
+    }
+
+on MongoDB_Dropped_All_Users {
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.storage.name = object.storage.name
+        
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.mac = src.mac
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([event_src.title, src.host, coalesce(subject.account.name, subject.account.id), event_src.host], "|"))
+    }
+    
+on MongoDB_Drop_User {
+        if length($dropped_users) == 0 then
+            $subject.account.name = subject.account.name
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.domain = subject.account.domain
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+            
+            $object.storage.name = object.storage.name
+            
+            $src.host = src.host
+            $src.ip = src.ip
+            $src.hostname = src.hostname
+            $src.fqdn = src.fqdn
+            $src.mac = src.mac
+            $src.port = src.port
+            $src.asset = src.asset
+
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+            
+            $alert.key = lower(join([event_src.title, src.host, coalesce(subject.account.name, subject.account.id), event_src.host], "|"))
+        endif
+        
+        if not in_list($dropped_users, object.account.id) then
+            $dropped_users = append($dropped_users, object.account.id)
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+    
+    $importance = "high"
+    
+    if (length($dropped_users) > 1) then
+        $object.account.name = join($dropped_users, "|") # Список удалённых пользователей
+    endif
+    
+    $subject = "account"
+    $action = "remove"
+    $object = "user_group"
+    $status = "success"
+    
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Account Access Removal"
+    
+    $incident.aggregation.key = join([$correlation_name, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataDeletion"
+    $incident.aggregation.timeout = 2h
+}

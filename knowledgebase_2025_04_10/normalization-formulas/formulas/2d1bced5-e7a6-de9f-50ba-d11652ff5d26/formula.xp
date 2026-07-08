@@ -1,0 +1,32 @@
+JSON = 'Provider = "Microsoft-Windows-WMI-Activity"'
+COND = $EventData["Operation"] != null
+        and $EventData["Path"] != null
+        and $EventData["ProviderGuid"] != null
+        and $EventID == 12
+
+action = "execute"
+object = "command"
+status = "success"
+
+object.process.id = $EventData["ClientProcessId"]
+
+object.path = $EventData["Path"]
+object.type = "WMI operation"
+object.query = $EventData["Operation"]
+
+datafield1 = $ThreadID                       # Thread ID
+datafield2 = $EventData["HostId"]            # Host ID
+datafield3 = $EventData["ProviderGuid"]      # Provider GUID
+datafield4 = $EventData["ProviderName"]      # Provider
+datafield5 = $EventData["GroupOperationId"]  # Group operation ID
+if $Name != "" then datafield6 = $Name endif           # process name if not empty
+
+time = $Timestamp
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_ETW_WMI_provider_info"

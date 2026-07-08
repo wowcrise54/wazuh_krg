@@ -1,0 +1,121 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+{$vobd="vobd:""["$corr=WORD"]" WORD":" "["$class=UNTIL("]")?}
+{$hostd="Hostd:" WORD "hostd["WORD"] [Originator@"NUMBER $kv=UNTIL("]") "Event"NUMBER":"?}
+{$svc="The ESX command line shell"|$svc="The ESXi command line shell"|$svc="SSH access"|$svc="The DCUI"|$svc="SSH"|$svc="ESXi Shell"}{"for the host"|"has been"}{$rest=REST}'
+COND = (
+    (
+        $vobd == "vobd:"
+        and in_list(["UserLevelCorrelator", "GenericCorrelator"], $corr)
+        and in_list([
+            "vob.user.ssh.enabled", "vob.user.ssh.disabled",
+            "esx.audit.ssh.enabled", "esx.audit.ssh.disabled",
+            "vob.user.shell.enabled", "vob.user.shell.disabled",
+            "esx.audit.shell.enabled", "esx.audit.shell.disabled",
+            "vob.user.dcui.enabled", "vob.user.dcui.disabled",
+            "esx.audit.dcui.enabled", "esx.audit.dcui.disabled"
+        ], $class)
+    )
+    or ($hostd == "Hostd:")
+)
+
+subject = "account"
+object = "service"
+status = "success"
+
+subformula "parse_vim_event"
+    TEXT = '{$host_name=HOSTNAME|$host_name=IPV4|$host_name=IPV6} has been {$act="enabled"|$act="disabled"}{"."?}'
+endsubformula
+
+subformula "parse_hostdiag_event"
+    TEXT = '{$act="enabled"|$act="disabled"}{"."?}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{"vpxuser:"?}{$domain=HOSTNAME}{"\\\\"}{"\\\\"?}{$username=REST}'
+endsubformula
+
+subformula "parse_user"
+    TEXT = '{$user_rest=STRING+}'
+    
+    $user_list = csv($user_rest, "@", "'")
+    if length($user_list) == 2 then
+        $username = $user_list[0]
+        $domain = $user_list[1]
+    else
+        $username = $user_rest
+    endif
+endsubformula
+
+$kv_msg = keyvalue($kv, " ", "=", "'")
+submessage("TEXT", "parse_user", $kv_msg["user"])
+
+if in_list(["ESXi Shell", "SSH"], $svc) then
+    submessage("TEXT", "parse_vim_event", $rest)
+else
+    submessage("TEXT", "parse_hostdiag_event", $rest)
+endif
+
+if $act == "enabled" then
+    action = "start"
+else
+    action = "stop"
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+switch $svc
+    case "ESXi Shell"
+        object.name = "TSM"
+        object.value = "ESXi Shell"
+        msgid = "LocalTSMEnabledEvent"
+    case "The ESXi command line shell"
+        object.name = "TSM"
+        object.value = "ESXi Shell"
+        msgid = "esx.audit.shell." + $act
+    case "The ESX command line shell"
+        object.name = "TSM"
+        object.value = "ESXi Shell"
+        msgid = "esx.audit.shell." + $act
+    case "SSH"
+        object.name = "TSM-SSH"
+        object.value = "Secure Shell (SSH)"
+        msgid = "RemoteTSMEnabledEvent"
+    case "SSH access"
+        object.name = "TSM-SSH"
+        object.value = "Secure Shell (SSH)"
+        msgid = "esx.audit.ssh." + $act
+    case "The DCUI"
+        object.name = "DCUI"
+        object.value = "Direct Console UI (DCUI)"
+        msgid = "esx.audit.dcui." + $act
+endswitch
+object.property = "description"
+
+datafield6 = $host_name  # Host Name
+
+chain_id = $kv_msg["opID"]  # opID field of header
+
+importance = "medium"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+if find_substr($Computer,".") != null then
+    event_src.fqdn = $Computer
+    $Computer = csv($Computer, ".", "")[0]
+endif
+event_src.vendor = "vmware"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "esxi"
+event_src.subsys = lower(strip(coalesce($vobd, $hostd), "", ":"))
+event_src.category = "Virtualization"
+
+id = "PT_VMware_ESXi_6_0_syslog_Host_Access_Services"

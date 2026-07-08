@@ -1,0 +1,103 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {DATETIME}
+       {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+       PT_SIEM: [ID {NUMBER} {STRING} {$rest=UNTIL("</record>")}{REST}'
+
+COND = (
+        find_substr($rest, 'event="add new user login to the system"') != null or
+        find_substr($rest, 'event="delete user') != null or
+        find_substr($rest, 'event="modify user') != null
+       )
+
+$rest = $rest + "</record>"
+       
+subformula "parse_xml"
+   XML = 'record'
+endsubformula
+submessage("XML", "parse_xml", $rest)
+
+$text_lst = append($text_lst, $record["text"][0]["!"])
+$text_lst = append($text_lst, $record["text"][1]["!"])
+$text_lst = append($text_lst, $record["text"][2]["!"])
+$text_lst = append($text_lst, $record["text"][3]["!"])
+$text_lst = append($text_lst, $record["text"][4]["!"])
+$text_lst = append($text_lst, $record["text"][5]["!"])
+$text_lst = append($text_lst, $record["text"][6]["!"])
+$text_lst = append($text_lst, $record["text"][7]["!"])
+$text_lst = append($text_lst, $record["text"][8]["!"])
+$text_lst = append($text_lst, $record["text"][9]["!"])
+$text_lst = append($text_lst, $record["text"][10]["!"])
+$text_lst = append($text_lst, $record["text"][11]["!"])
+$text_str = replace(join($text_lst, "|"), "", "||*")
+$text_args_dict = keyvalue($text_str,"|","=","")
+
+subject = "account"
+if $record["@event"] == "add new user login to the system" then
+    action = "create"
+elif find_substr($record["@event"], "delete user") != null then
+    action = "remove"
+elif find_substr($record["@event"], "modify user") != null then
+     action = "modify"
+endif
+object = "account"
+if find_substr($record/return/@errval, "failure") != null then
+    status = "failure"
+elif find_substr($record/return/@errval, "success") != null then
+    status = "success"
+endif
+
+$shell = coalesce($text_args_dict["old shell"], $text_args_dict["shell"])
+$homedir = coalesce($text_args_dict["old homedir"], $text_args_dict["homedir"])
+
+if $shell != null then
+    $values = append($values, "shell=" + $shell)
+endif
+if $homedir != null then
+    $values = append($values, "homedir=" + $homedir)
+endif
+
+subject.account.name = $record/subject/@ruid
+subject.account.group = $record/subject/@rgid
+subject.account.privileges = $record/subject/@uid
+subject.account.session_id = $record/subject/@sid
+subject.process.id = $record/subject/@pid
+
+object.account.name = $record/user/@username
+object.account.id = $record/user/@uid
+object.account.group = $record/group/@groupname
+
+object.property = "account properties"
+object.value = join($values, ", ")
+
+if action == "modify" then  # собираем новые значения полей
+    if $text_args_dict["new homedir"] != null then
+        $new_values = append($new_values, "new_homedir=" + $text_args_dict["new homedir"])
+    endif
+    if $text_args_dict["new shell"] != null then
+        $new_values = append($new_values, "new_shell=" + $text_args_dict["new shell"])
+    endif
+endif
+object.new_value = join($new_values, ", ")
+
+if status == "failure" then
+    reason = $record/return/@retval
+endif
+
+time = datetime($record["@iso8601"])
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+                   
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_user_operations_xml"

@@ -1,0 +1,28 @@
+JSON = 'category=40'
+
+COND = $data["ID"] == "ADMIN_LOGIN"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+subject.account.name = $data["LoginInfo"]["AdminName"]
+
+object.name = $cg_name
+object.id = $cg_cssid
+
+time = $time
+msgid = $data["ID"]
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.ip = recv_ipv4
+event_src.category = "Network security"
+
+id = "PT_Security_Code_Kontinent_odbc_admin_login"

@@ -1,0 +1,37 @@
+TABULAR = 'entryid, action, {time=datatime}, {subject.id=user}, username'
+
+!COND = $action == "ADMIN-AUDIT" and find_substr($entrydata,"ADD MANAGED DEVICE") != Null
+
+subject = "account"
+action = "bind"
+object = "device"
+status = "success"
+
+submessage("TEXT", "SPLIT", $entrydata)
+
+
+if find_substr($username,"\\") != Null then
+    submessage("TEXT", "SPLIT2", $username)
+else
+    subject.name = $username
+endif
+
+subformula "SPLIT"
+    TEXT = "{$kv=KEYVALUE('\" ', '=')}"
+    object.name = strip($kv['target'],"\"","")
+    msgid = strip($kv['auditevent'],"\"","")
+endsubformula
+
+subformula "SPLIT2"
+    TEXT = '{subject.domain=WORDDASH}\\{subject.name=STRING}'
+endsubformula
+
+if length($computer) != 0 then
+    event_src.hostname = $computer
+endif
+event_src.vendor =  "lumension"
+event_src.title = "endpoint_security"
+event_src.category = "Host security"
+
+id = "PT_Lumension_Endpoint_Security_odbc_add_device"
+importance = "info"

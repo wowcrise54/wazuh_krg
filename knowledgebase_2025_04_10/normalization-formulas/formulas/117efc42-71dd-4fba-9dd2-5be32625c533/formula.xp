@@ -1,0 +1,41 @@
+EVENTLOG = 'EventID="4717"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.account.id = $Data["SubjectUserSid"]
+subject.account.name = lower($Data["SubjectUserName"])
+subject.account.domain = lower($Data["SubjectDomainName"])
+
+object.account.id = $Data["TargetSid"]
+
+object.property = "privileges"
+object.value = $Data["AccessGranted"]
+
+datafield1 = maybe_number16($Data["SubjectLogonId"])    # ID сессии
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+reason = "System security access was granted"
+
+# Subject: The ID and logon session of the user that changed the policy - always the local system
+
+id = "PT_Microsoft_Windows_eventlog_4717_System_security_access_was_granted_to_an_account"
+importance = "medium"

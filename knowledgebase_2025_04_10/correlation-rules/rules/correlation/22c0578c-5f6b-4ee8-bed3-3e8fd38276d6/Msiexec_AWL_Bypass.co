@@ -1,0 +1,129 @@
+event Run_MSIExec:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_commandline("msiexec.exe", "((-|\/)(z|y|i)\\b.*?|\\b(http|ftp)|(\s+|\"|')\\\\\\\\)")
+        and filter::CheckWL_Process_Creation("Msiexec_AWL_Bypass", lower(object.process.cmdline))
+    }
+
+rule Msiexec_AWL_Bypass: Run_MSIExec
+
+    init {
+        $labels = "w_auto|CheckWL_Process_Creation"
+    }
+    
+    on Run_MSIExec {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $subject.state = subject.state
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+
+        $object.fullpath = regex(lower(object.process.cmdline), "((i|y|z)\s+\\\\*\"*)(.*\.(msi|dll))(\s|\\\\\"|\"|$)", 3) # полный путь до файла
+        $object.name = regex(lower(object.process.cmdline), "msiexec.*?([^\\\\]+\.(msi|dll))", 1)  # имя файла
+        $object.path = strip($object.fullpath, "", $object.name)
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+        
+        if ($object.process.parent.name == "services.exe" or $object.process.parent.name == "svchost.exe") then
+            $reason = "Service execution"
+        elif $object.process.parent.name == "scheduler.exe" then
+            $reason = "Task execution"
+        else
+            $reason = "User execution"
+        endif
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = regex(object.process.cmdline, "(?i)(-|\/)((i|y|z)\s+\\\\*\"*)(.*\.(msi|dll))(\s|\\\\\"|\"|$)", 0)
+        $alert.context = $subject.account.name
+    }
+
+emit {
+    if regex($object.process.cmdline,"(?i)\\b(http|ftp)|(\s|\"|')\\\\\\\\", 0) != null then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+    
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $C2_host = regex(lower($object.process.cmdline),"(http(s)?://|ftp://|(\s|\"|')\\\\\\\\)(.*?)(\\\\|\/)", 4)
+    if $C2_host != null then
+        $port_raw = regex($C2_host,":(\d+)$", 1)
+        $dst.port = strip($port_raw, ":", "")
+        $dst.host = regex($C2_host, "\w+\.\w+\.\w+\.?\w+", 0)
+        
+        if maybe_ipv4($dst.host) != null or maybe_ipv6($dst.host) != null then
+            $dst.ip = $dst.host
+        else
+            $maybe_dot_pos = find_substr($dst.host, '.')
+            if $maybe_dot_pos != null then
+                $dst.fqdn = $dst.host
+                $dst.hostname = substr($dst.host, 0, $maybe_dot_pos)
+            else
+                $dst.hostname = $dst.host
+            endif
+        endif
+    endif
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "System Binary Proxy Execution: Msiexec"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

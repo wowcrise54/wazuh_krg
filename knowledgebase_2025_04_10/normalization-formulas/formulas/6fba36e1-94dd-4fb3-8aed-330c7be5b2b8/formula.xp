@@ -1,0 +1,82 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"multiscanner"|"sandbox"} - {msgid="dpi.start"} - {$json_data=REST}'
+
+action = "start"
+object = "scan"
+status = "success"
+subject = "application"
+
+# Parsing JSON submessage from PT Multiscanner
+submessage('JSON', 'multiscanner', $json_data)
+subformula 'multiscanner'
+    JSON = 'scan_id'
+
+    object.state = $meta['state']
+    
+    object.hash.sha256 = upper($file['sha256'])
+    object.hash.md5 = upper($file['md5'])
+    object.hash.sha1 = upper($file['sha1'])
+    
+    if $meta['http']['host'] != null and $meta['http']['host'] != "" then
+        object.property = "referred host"
+        object.value = $meta['http']['host']
+    endif
+    
+    if find_substr($file['name'], "\\") != null then
+        $csv = csv($file['name'], "\\", "`")
+        $name = $csv[length($csv)-1]
+        object.storage.path = strip($file['name'], "", $name)
+        object.storage.name = strip($name, "/", "")
+        object.storage.fullpath = object.storage.path + object.storage.name
+    elif find_substr($file['name'], "/") != null then
+        $csv = csv($file['name'], "/", "`")
+        $name = $csv[length($csv)-1]
+        object.storage.path = strip($file['name'], "", $name)
+        object.storage.name = strip($name, "/", "")
+        object.storage.fullpath = object.storage.path + object.storage.name
+    else 
+        object.storage.name = $file['name']      # имя файла    
+    endif
+
+    protocol = $meta['proto']
+    
+    src.ip = $meta['src']['ip']
+    src.port = $meta['src']['port']
+    datafield2 = $meta['http']['host']
+    
+    dst.ip = $meta['dst']['ip']
+    dst.port = $meta['dst']['port']
+               
+    if find_substr($meta['http']['referer'], 'unknow') == null and $meta['http']['referer'] != "" then
+        datafield3 = $meta['http']['referer']    # URL источника запроса
+    endif
+    datafield4 = $meta['http']['user_agent']     # браузер и его версия
+    datafield5 = $meta['http']['uri']            # uri
+    datafield7 = $file['size']                   # size file
+    if $file['mime_type'] != '' then
+        object.type = $file['mime_type']          # mime type file
+    endif
+    datafield9 = $meta['smtp']['message_id']     # некоторое сообщение пользователя
+    datafield10 = $meta['smtp']['sender']        # email-адрес, любой
+
+    chain_id = $scan_id
+    
+    subject.type = $entry_point_id
+
+    time = epoch_to_datetime(number($created))
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "multiscanner"
+event_src.category = "Anti-virus"
+
+id = "PT_Positive_Technologies_Multiscanner_syslog_dpi_start"

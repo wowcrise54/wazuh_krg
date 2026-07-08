@@ -1,0 +1,26 @@
+!TEXT = '{"<"NUMBER">"?} {DATETIME} {$Computer=HOSTNAME} {subject.name=WORD+}:
+        [{time=DATETIME}] V1 [{WORD}][{WORD}] {"<"msgid=WORDDASH">"} Update failed, code: {$n1=NUMBER},aditional code {$n2=WORD}
+        , aditional description {$n3=WORD} {REST}'
+
+subject = "application"
+action = "install"
+object = "update"
+status = "failure"
+
+reason = "code: " + string($n1) +  ", aditional code: " + $n2 + ", description: " + $n3
+object.type = "virus signature"
+importance = "high"
+
+event_src.vendor = "eset"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "eset_remote_administrator_server"
+
+event_src.category = "Host security"
+
+id = "PT_ESET_Eset_remote_administrator_server_Update_failed"

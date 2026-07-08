@@ -1,0 +1,29 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        ssh-auditor{"["NUMBER"]"}: {$msgid_raw_1="4002"}{$msgid_raw_2="Vault_started"}, Pid: {object.process.id=NUMBER}, Ver: {$ver = STRING+}
+        Syslog server: {REST}'
+
+action = "start"
+object = "service"
+status = "success"
+
+object.version = strip($ver,'',',')  # обрезаем лишние символы в конце
+
+msgid = $msgid_raw_1 + "_" + $msgid_raw_2
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.title = "safeinspect"
+event_src.vendor = "new_security_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Application server"
+
+id = "PT_New_Security_Technologies_SafeInspect_2_1_syslog_4002_Vault_started"

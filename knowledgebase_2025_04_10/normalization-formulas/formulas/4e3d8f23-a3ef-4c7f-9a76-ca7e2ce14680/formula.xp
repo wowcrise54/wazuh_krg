@@ -1,0 +1,48 @@
+TABULAR = "name,
+           {src.hostname=machine},
+           state,
+           {object.value=progress},
+           {time=start_time},
+           elapsed_time,
+           estimated_time,
+           {datafield1=guid},
+           result,
+           {msgid=event_type}"
+
+COND = $event_type == "Validating"
+
+action = "check"
+object = "task"
+if $state == "completed" then
+    switch $result
+        case "Succeeded"
+            status = "success"
+            importance = "info"
+        case "Failed"
+            status = "failure"
+            importance = "medium"
+    endswitch
+else
+    status = "ongoing"
+    datafield3 = duration($estimated_time)
+    importance = "info"
+endif
+
+if $name == "Validating backups" or $name == "Validating" then
+    object.type = "default plan"
+else
+    object.name = $name
+    object.type = "custom plan"
+endif
+object.property = "percent of progress"
+
+# datafield1 - GUID процесса, если использовать данный GUID в acrocmd, можно посмотреть весь лог
+# datafield3 - предполагаемое время, необходимое для завершения задачи
+
+duration = duration($elapsed_time)
+
+event_src.vendor = "acronis"
+event_src.title = "backup"
+event_src.category = "Backup server"
+
+id = "PT_Acronis_Backup_customeventcollector_Validating"

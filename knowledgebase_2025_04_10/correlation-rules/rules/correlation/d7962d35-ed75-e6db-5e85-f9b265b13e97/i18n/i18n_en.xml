@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to Microsoft SQL Server. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="2718f5fd-86e3-78f9-c993-54d99303e92e">User {subject.account.name} from host {src.host} logged in to a new instance of Microsoft SQL Server on host {event_src.host}. The instance is missing from the collected profile.</EventDescription>
+    <EventDescription id="2cfd3b28-b1d6-a743-07b3-4824687831c5">User {subject.account.name} from host {src.host} used new logon type {logon_type} ({datafield6}) to log in to Microsoft SQL Server on host {event_src.host}. The logon type is missing from the collected profile.</EventDescription>
+    <EventDescription id="4b1993d3-d3a8-28af-b31d-d4891baf0975">New user {subject.account.name} from host {src.host} logged in to Microsoft SQL Server on host {event_src.host}. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="8ca54f38-527a-0f9d-13a1-5f2f830ef49f">User {subject.account.name} from new host {src.host} logged in to Microsoft SQL Server on host {event_src.host}. The address is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

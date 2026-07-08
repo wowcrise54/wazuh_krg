@@ -1,0 +1,17 @@
+TEXT = '{time=DATETIME}:t@{NUMBER}:INFO: Password Modification Successful ({UNTIL(")")}. Bind DN: {UNTIL("Modified DN:")}
+        "{"CN"|"cn"}={object.name=WORDDASH}{UNTIL("dc=")?}{UNTIL("DC=")?}{$domain=UNTIL("\\"")}'
+
+action = "modify"
+object = "account"
+status = "success"
+
+object.domain = join(csv(lower($domain), ',dc=', '"'), '.')
+
+reason = "password changed"
+importance = "low"
+
+event_src.vendor = "vmware"
+event_src.title = "vsphere"
+event_src.category = "Virtualization"
+
+id = "PT_VMware_vSphere_filemonitor_password_modification"

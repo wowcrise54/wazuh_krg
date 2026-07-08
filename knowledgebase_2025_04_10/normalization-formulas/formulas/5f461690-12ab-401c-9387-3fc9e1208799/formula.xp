@@ -1,0 +1,84 @@
+# {
+#   "time_id": "2016-08-31 12:35:46.447",
+#   "unixtime_id": 1472646946,
+#   "initiator_name": "user1@somecorp.com",
+#   "target_name": "2311;phone-context=defaultprofile@somecorp.com",
+#   "referred_name": null,
+#   "unixtime_end": 1472647205,
+#   "response_code": 200,
+#   "response_description": "ОК",
+#   "MediaTypes": 16
+# }
+
+!TABULAR = '{time=time_id},
+            unixtime_id,
+            initiator_name,
+            target_name,
+            MediaTypes'
+
+subject = "account"
+action = "call"
+object = "account"
+
+if $response_code == 200 then
+    status = "success"
+else
+    status = "failure"
+endif
+
+# parsing for initiator user
+$uri = strip($initiator_name,"sip:", ";user=phone")
+$pos = find_substr($uri, ";gruu")
+if $pos != Null then
+    $uri = substr($uri, 0, $pos)
+endif
+$pos = find_substr($uri, ";phone-context=")
+if $pos != Null then
+    subject.id = substr($uri, 0, $pos)
+    $uri = substr($uri, $pos + 15, length($uri))
+endif
+subject.name = lower($uri)
+
+# parsing for target user
+$uri = strip($target_name,"sip:", ";user=phone")
+$pos = find_substr($uri, ";gruu")
+if $pos != Null then
+    $uri = substr($uri, 0, $pos)
+endif
+$pos = find_substr($uri, ";phone-context=")
+if $pos != Null then
+    object.id = substr($uri, 0, $pos)
+    $uri = substr($uri, $pos + 15, length($uri))
+endif
+object.name = lower($uri)
+
+# parsing for referred user
+if $referred_name != Null then
+    $uri = strip($referred_name,"sip:", ";user=phone")
+    $pos = find_substr($uri, ";gruu")
+    if $pos != Null then
+        $uri = substr($uri, 0, $pos)
+    endif
+    $pos = find_substr($uri, ";phone-context=")
+    if $pos != Null then
+        datafield4 = substr($uri, 0, $pos)
+        $uri = substr($uri, $pos + 15, length($uri))
+    endif
+    datafield3 = $uri
+endif
+
+datafield1 = $unixtime_id   # Время начала звонка
+datafield2 = $unixtime_end  # Время окончания звонка
+# datafield3 - Пользователь, перенаправивший звонок
+# datafield4 - Номер сотрудника, перенаправившего звонок
+
+reason = $response_description  # Описание статуса звонка
+
+duration = number(datafield2) - number(datafield1)
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "skype_lync"
+event_src.category = "Voice over IP"
+
+id = "PT_Microsoft_Skype_Lync_odbc_Session"

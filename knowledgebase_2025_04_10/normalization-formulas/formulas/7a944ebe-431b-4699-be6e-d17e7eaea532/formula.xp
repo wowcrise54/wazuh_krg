@@ -1,0 +1,47 @@
+!TEXT = 'CEF:0|Netwrix|{$tmp_subsys="Logon Activity"}|1.0|Failed Logon|{"Failed Logon Interactive logon"|"Failed Logon Logon"}
+        |0|shost={event_src.ip=IPV4|$hostname=HOSTNAME}{$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+$csv1 = csv($kv["suser"], "\\", "*")
+subject.domain = $csv1[0]
+subject.name = $csv1[length($csv1) - 1]
+
+$dot_pos = find_substr($kv["filePath"], '.')
+if maybe_ipv4($kv["filePath"]) != null then
+    src.ip = $kv["filePath"]
+    dst.ip = src.ip
+elif $dot_pos != null then
+    src.fqdn = $kv["filePath"]
+    dst.fqdn = src.fqdn
+    src.hostname = substr($kv["filePath"], 0, $dot_pos)
+    dst.hostname = src.hostname
+elif ($kv["filePath"] != "unknown") and ($kv["filePath"] != "N/A") then
+    src.hostname = $kv["filePath"]
+    dst.hostname = src.hostname
+endif
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        event_src.fqdn = lower($hostname)
+        event_src.hostname = lower(substr($hostname, 0, $dot_pos))
+    elif $hostname != "unknown" then
+        event_src.hostname = lower($hostname)
+    endif
+endif
+
+reason = strip($kv["msg"], "Cause: ", ".")
+
+time = $kv["start"]
+importance = "low"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Other"
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_User_login_failure"

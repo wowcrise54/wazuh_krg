@@ -1,0 +1,49 @@
+TABULAR = "{msgid=teampass_action},
+           {subject.account.id=src_ip},
+           {subject.account.name=account},
+           {time=datetime},
+           {reason=reason}"
+
+COND = $teampass_action == "user_mngt"
+
+subject = "account"
+
+action = switch reason
+    case "at_user_added" "create"
+    case "at_user_deleted" "remove"
+    case "at_user_locked" "lock"
+    case "at_user_unlocked" "unlock"
+endswitch
+if action == null then 
+    action = "modify" 
+endif
+
+object = "account"
+status = "success"
+
+if find_substr($email, "@") != null then
+    subject.account.contact = $email
+    subject.account.domain = csv($email, "@", "'")[1]
+endif
+if $admin == 1 then
+    subject.account.privileges = "admin"
+endif
+if $name != null or $lastname != null then
+    subject.account.fullname = $name + " " + $lastname
+endif
+
+importance = "low"
+
+if in_list(["at_user_locked", "at_user_unlocked"], reason) then
+    category.low = "Control"
+else
+    category.low = "Manipulation"
+endif
+category.generic = "Account"
+category.high = "Users And Rights Management"
+
+event_src.vendor = "opensource"
+event_src.title = "teampass"
+event_src.category = "AAA"
+
+id = "PT_Opensource_TeamPass_odbc_user_management"

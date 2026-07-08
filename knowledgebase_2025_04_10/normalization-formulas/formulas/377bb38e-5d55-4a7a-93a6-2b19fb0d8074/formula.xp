@@ -1,0 +1,42 @@
+EVENTLOG = 'EventID.text="560"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Security"
+
+subject = "account"
+action = "access"
+object = "resource"
+status = "success"
+
+subject.name = lower($Data[8])
+subject.domain = lower($Data[9])
+if $Data[15] != '-' then
+    subject.privileges = $Data[15]  # список привилегий, которыми пользовался пользователь во время доступа к объекту
+endif
+
+object.name = $Data[2]
+object.type = $Data[1]
+object.property = "AccessList"
+object.value = $Data[14]
+
+datafield1 = $Data[3]   # id дескриптора
+datafield2 = $Data[6]   # id процесса
+datafield3 = $Data[10]  # id логона
+datafield4 = '{' + $Data[4] + ',' + $Data[5] + '}'  # id операции
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_forwarded_560_Access_was_granted_to_an_already_existing_object"

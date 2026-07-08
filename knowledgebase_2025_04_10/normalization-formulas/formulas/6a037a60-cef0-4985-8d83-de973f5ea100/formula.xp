@@ -1,0 +1,21 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "3885367360"
+
+action = "info"
+object = "application"
+status = "success"
+
+object.name = "Zdiscovery"
+
+msgid = string($zntf_status)
+
+importance = "low"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_violation_file_of_zdiscovery"

@@ -1,0 +1,88 @@
+TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|},header,
+        {NUMBER},{NUMBER},{datafield1="chmod(2)"},{WORDDASH?},{WORD} {time=DATETIME}
+        {NUMBER}, + {duration=NUMBER} msec,argument,{NUMBER},{WORD},
+        {reason="new file mode"},path,{$temp_csv=CSV}'
+
+subject = "account"
+action = "modify"
+object = "file_object"
+
+if $temp_csv[18] == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subject.account.name = $temp_csv[9]
+subject.account.session_id = $temp_csv[15]
+
+object.fullpath = $temp_csv[0]
+
+$csv_path = csv(strip($temp_csv[0], "", "/"), "/", "")
+object.name = $csv_path[length($csv_path) - 1]
+if strip(object.fullpath, "", object.name) != '' then
+    object.path = strip(object.fullpath, "", object.name)
+endif
+object.property = "permissions|owner|owner group"
+object.type = "attribute"
+object.new_value = join([$temp_csv[2], $temp_csv[3], $temp_csv[4]], "|")
+
+$temp_src = csv($temp_csv[16], " ", "")[2]
+if ipv4($temp_src) != null or ipv6($temp_src) != null then
+    src.ip = $temp_src
+elif find_substr($temp_src, ".") != null then
+    src.fqdn = $temp_src
+    $csv_fqdn = csv($temp_src, ".", "")
+    src.hostname = $csv_fqdn[length($csv_fqdn) - 1]
+else
+    src.fqdn = $temp_src
+endif
+
+# datafield1 - тип события
+
+if find_substr($temp_csv[0], "/etc/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/lib/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/kernel/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/bin/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/sbin/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/platform/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/boot/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/var/lib/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/usr/bin/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/usr/sadm/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/usr/sbin/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/usr/ccs/") != null then
+    importance = "medium"
+elif find_substr($temp_csv[0], "/usr/include/") != null then
+    importance = "medium"
+else
+    importance = "info"
+endif
+
+category.generic = "File System Object"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_change_mode_csv"

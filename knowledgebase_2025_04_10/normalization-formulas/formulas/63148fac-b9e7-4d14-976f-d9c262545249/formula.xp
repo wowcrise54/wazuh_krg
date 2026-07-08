@@ -1,0 +1,93 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_REDUCE_DISK_FINISHED_SUCCESS",  # 382
+           "USER_REDUCE_DISK_FINISHED_FAILURE",  # 383
+           "USER_EXTEND_DISK_SIZE_FAILURE",  # 370
+           "USER_EXTEND_DISK_SIZE_SUCCESS",  # 371
+           "USER_EXTENDED_DISK_SIZE"  # 377
+       ], $event_class)
+
+subject = "account"
+action = "modify"
+object = "resource"
+
+if $event_class == "USER_EXTENDED_DISK_SIZE" then
+    status = "ongoing"
+elif in_list(["USER_REDUCE_DISK_FINISHED_SUCCESS", "USER_EXTEND_DISK_SIZE_SUCCESS"], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # USER_REDUCE_DISK_FINISHED_SUCCESS
+    TEXT = "Disk {$disk_alias=STRING+} has been successfully reduced."
+endsubformula
+
+subformula "parse_body"
+    # USER_REDUCE_DISK_FINISHED_FAILURE
+    TEXT = "Failed to reduce Disk {$disk_alias=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_EXTEND_DISK_SIZE_FAILURE
+    TEXT = "Failed to extend size of the disk {$disk_alias=STRING+} to {$new_size=STRING+} GB, User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_EXTEND_DISK_SIZE_SUCCESS
+    TEXT = "Size of the disk {$disk_alias=STRING+} was successfully updated to {$new_size=STRING+} GB by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_EXTENDED_DISK_SIZE
+    TEXT = "Extending disk {$disk_alias=STRING+} to {$new_size=STRING+} GB was initiated by {$user=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+$user = strip($user, "", ".")
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+if $event_class == "USER_REDUCE_DISK_FINISHED_FAILURE" then
+    $disk_alias = strip($disk_alias, "'", "'.")
+else
+    $disk_alias = strip($disk_alias, "'", "'")
+endif
+
+object.type = "disk"
+object.name = $disk_alias
+object.property = "size"
+object.new_value = $new_size
+
+logon_service = $authz_provider
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_Disk_Size_Management"

@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} pcfg: Link {$tmp_state="UP"|$tmp_state="DOWN"} on {interface=WORD+}'
+
+action = lower($tmp_state)
+object = "interface"
+status = "success"
+
+object.property = "layer"
+object.value = "physical"
+
+if time == null then
+    time = recv_time
+endif
+importance = "info"
+
+event_src.vendor = "allied_telesis"
+event_src.title = "switch"
+event_src.category = "Network device"
+
+id = "PT_Allied_Telesis_Switch_syslog_link_up_down_on_port"

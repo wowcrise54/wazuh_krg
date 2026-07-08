@@ -1,0 +1,20 @@
+!TEXT = '{msgid="11021"}, {$mm=WORD}/{$dd=WORD}/{$yy=WORD}, {$csv=CSV}'
+
+action = "modify"
+object = "database"
+status = "success"
+
+reason = $csv[1]
+
+# Full year notation (FIXME before 2100):
+$yyyy = "20" + $yy
+# Gluing the date and time (from csv) to ISO8601:
+time = datetime($yyyy + "-" + $mm + "-" + $dd + "T" + $csv[0])
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "DHCP server"
+
+id = "PT_Microsoft_Windows_filemonitor_11021_Database_cleanup_end"

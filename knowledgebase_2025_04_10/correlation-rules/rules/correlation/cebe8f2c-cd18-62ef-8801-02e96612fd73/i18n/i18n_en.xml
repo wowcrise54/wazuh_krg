@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Possible creation of a remote shell using PowerShell functions System.IO.Pipes.NamedPipeServerStream and System.IO.Pipes.NamedPipeClientStream designed to create a server on user's host (bind shell) and to connect to a server on attacker's host (reverse shell). This may indicate the use of Fuegoshell one-liners.</Description>
+  <EventDescriptions>
+    <EventDescription id="72e2f6de-50c9-57ad-8a2d-dc300d1f7788">Using PowerShell, user {object.account.name} created a bind-shell connection from host {src.host}:{src.port} to host {event_src.host}</EventDescription>
+    <EventDescription id="e910923b-72b5-2571-bfd7-1136faf25fad">Using PowerShell, user {object.account.name} created a reverse-shell connection to host {dst.host}:{dst.port} from host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

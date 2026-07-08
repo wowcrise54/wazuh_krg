@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"}CEF:0|NetIQ|AA|6.{NUMBER}.{NUMBER}.{NUMBER}|{msgid="100"}|User logon started|4|
+        {"ep="?}{src.hostname=WORD?} {"ep_addr="?}{src.ip=IPV4|src.ip=IPV6} event={STRING} 
+        method_name={datafield5=STRING} {"session_id="?}{subject.account.session_id=WORD?} 
+        tenant_id={STRING} tenant_name={datafield2=WORD} user_name={$temp_subject=STRING} p={NUMBER}'
+
+subject = "account"
+action = "open"
+object = "session"
+status = "ongoing"
+
+$temp_csv = csv($temp_subject, "\\\\", "`")  
+subject.account.domain = $temp_csv[0]
+subject.account.name = $temp_csv[1]
+
+# datafield2 - tenant name
+# datafield5 - logon_auth_method (mfa) 
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "netiq"
+event_src.title = "advanced_authentication"
+event_src.category = "AAA"
+
+id = "PT_NetIQ_AA_syslog_User_logon_started"

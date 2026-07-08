@@ -1,0 +1,44 @@
+TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|},
+        header,{NUMBER},{NUMBER},{datafield1="crontab-modify"},{WORDDASH?},
+        {WORD} {time=DATETIME} {NUMBER}, + {duration=NUMBER} msec,subject,
+        {subject.name=WORDDASH},{datafield3=WORDDASH},{datafield4=WORDDASH},
+        {WORDDASH},{WORDDASH},{NUMBER},{datafield2=NUMBER},{$csv=CSV}'
+
+subject = "account"
+action = "modify"
+object = "file"
+$stat = $csv[4]
+if $stat == "success" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+submessage("TEXT","Client",$csv[0])  # Хост клиента
+
+object.path = $csv[2]
+object.type = "crontab"
+
+# datafield1 -   #тип события (в данном случае всегда "crontab-modify")
+# datafield2 -  #id сессии
+# datafield3 -  #от чьего имени выполняется команда (username)
+# datafield4 -  #от чьего имени выполняется команда (group)
+
+subformula "Client"
+    TEXT = "{WORD} {WORD} {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}"
+endsubformula
+
+importance = "info"
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_modify_crontab_csv"

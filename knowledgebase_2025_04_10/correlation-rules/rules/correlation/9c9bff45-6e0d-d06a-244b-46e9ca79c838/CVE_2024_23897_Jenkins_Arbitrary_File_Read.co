@@ -1,0 +1,69 @@
+event Jenkins_File_Path_Replaced_By_Content:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "jenkins"
+        and regex(lower(object.query), "@", 0) != null
+        and status == "success"
+        and filter::CheckWL_Specific_Only("CVE_2024_23897_Jenkins_Arbitrary_File_Read", lower(datafield1))
+    }
+
+    
+rule CVE_2024_23897_Jenkins_Arbitrary_File_Read: Jenkins_File_Path_Replaced_By_Content
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Jenkins_File_Path_Replaced_By_Content {
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.mac = dst.mac
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+
+        $object.path = object.path
+        $object.query = object.query
+
+        $datafield1 = datafield1
+        $datafield3 = regex(lower(object.query), "@(\/[^\\\\>]+)", 1) # Полный путь к файлу
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(datafield1)
+        $alert.context = join(["Retrieved the contents of the", $datafield3, "file by using the @ symbol on", lower(dst.host)], " ")
+    }
+
+emit {
+    $subject = "application"
+    $action = "receive"
+    $object = "request"
+    $status = "success"
+
+    $correlation_type = "event"
+
+    $detect = "CVE-2024-23897"
+    
+    $importance = "high"
+    
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Exploit Public-Facing Application"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 2h
+}

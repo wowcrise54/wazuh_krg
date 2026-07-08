@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{NUMBER?}{$time_raw=DATETIME?} {"Message forwarded from"?} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|"(none)"|} {":"?} {subject.process.name="audisp-remote"}{"["?}{subject.process.id=NUMBER?}{"]"?}{":"?}{"-"*}
+{$act="Error connecting"|$act="Connected"|$act="connection"} to {dst.hostname=HOSTNAME|dst.ip=IPV4|dst.ip=IPV6}{$rest=REST}'
+
+switch $act
+    case "Error connecting"
+        action = "open"
+        status = "failure"
+    case "Connected"
+        action = "open"
+        status = "success"
+    case "connection"
+        action = "close"
+        status = "success"
+endswitch
+
+object = "connection"
+
+src.ip = event_src.ip
+src.hostname = $Computer
+
+if $act == "Error connecting" then
+    reason = strip($rest, ": ", "")
+endif
+
+time = coalesce($time_raw, recv_time)
+importance = "info"
+
+category.high = "Network Interaction Management"
+category.generic = "Connection"
+category.low = "Communication"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+
+id = "PT_UNIX_like_audispd_syslog_remote_plugin_connection"

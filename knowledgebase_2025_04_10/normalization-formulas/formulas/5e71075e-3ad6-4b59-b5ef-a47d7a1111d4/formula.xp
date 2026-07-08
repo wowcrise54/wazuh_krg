@@ -1,0 +1,68 @@
+TEXT = 'CEF:0|Netwrix|{$tmp_subsys="File Servers"}|1.0|Renamed|Renamed {"File"|"Folder"}|0|
+        shost={src.ip=IPV4|$hostname=HOSTNAME} {$kv=KEYVALUE(" ", "=")}'
+
+subject = "account"
+action = "rename"
+object = "file_object"
+
+if $kv["cat"] != "File" then
+    object.type = "folder"
+endif
+
+status = "success"
+
+subformula "SPLIT_1"
+    # Извлечение datafield5, object.name и subject.account.session_id
+    TEXT = 'Name changed from \" {object.name=UNTIL("\\"")} to \" {object.new_value=UNTIL("\\",")}
+    {"Process:" $process_raw=UNTIL(",")?} {"Session ID:"} {subject.account.session_id=REST}'
+endsubformula
+
+$csv1 = csv($kv["suser"], "\\", "*")
+
+subject.account.domain = $csv1[0]
+subject.account.name = $csv1[length($csv1) - 1]
+
+submessage("TEXT", "SPLIT_1", $kv["msg"])
+
+$proc_csv_path = csv(replace($process_raw, "\\", "\\\\\\\\"), "\\", "'")
+subject.process.name = $proc_csv_path[length($proc_csv_path) - 1]
+if strip(join($proc_csv_path, "\\"), "", subject.process.name) != '' then
+    subject.process.path = strip(join($proc_csv_path, "\\"), "", subject.process.name)
+endif
+subject.process.fullpath = subject.process.path + subject.process.name
+
+$obj_path = replace($kv["filePath"], "\\", "\\\\\\\\")
+object.fullpath = $obj_path
+if strip($obj_path, "", object.name) != '' then
+    object.path = strip($obj_path, "", object.name)
+endif
+
+object.property = "name"
+
+if $hostname != null then
+    $dot_pos = find_substr($hostname, '.')
+    if $dot_pos != null then
+        src.fqdn = $hostname
+        event_src.fqdn = src.fqdn
+        src.hostname = substr($hostname, 0, $dot_pos)
+        event_src.hostname = src.hostname
+    elif $hostname != "unknown" then
+        src.hostname = $hostname
+        event_src.hostname = src.hostname
+    endif
+endif
+
+time = $kv["start"]
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "netwrix"
+event_src.title = "netwrix_auditor"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Other"
+event_src.ip = src.ip
+
+id = "PT_Netwrix_Netwrix_Auditor_filemonitor_File_folder_renamed"

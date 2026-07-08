@@ -1,0 +1,31 @@
+Filter:
+    Name:
+        ru: "Проверяет, входит ли событие в список исключений"
+        en: "Checks if an event is on the exception list"
+    Description:
+        ru: "Проверяет, входит ли скоррелированное событие в список исключений. Проверка осуществляется по ключевым полям события"
+        en: "Checks if a correlated event is on the exception list using the event key fields"
+    UseAsEventName: False
+Args:
+    src_subnet:
+        Type: string
+        Name:
+            ru: "Подсеть источника в скоррелированном событии"
+            en: "Source subnet in a correlated event"
+    dst_subnet:
+        Type: string
+        Name:
+            ru: "Подсеть назначения в скоррелированном событии"
+            en: "Destination subnet in a correlated event"
+    rule_name:
+        Type: string
+        Name:
+            en: "Correlation rule name"
+            ru: "Название правила корреляции"
+    user:
+        Type: string
+        Name:
+            ru: "Идентификатор пользователя, к которому относится скоррелированное событие"
+            en: "ID of the user a correlated event is related to"
+ObjectId: PT-RF-100
+Origin: PT

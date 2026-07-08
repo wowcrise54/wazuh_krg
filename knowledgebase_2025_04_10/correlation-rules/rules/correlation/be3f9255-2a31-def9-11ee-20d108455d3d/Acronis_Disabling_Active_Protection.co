@@ -1,0 +1,40 @@
+event Disabling_Active_Protection:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "acronis"
+        and object.name == "active protection"
+        and action == "stop"
+        and filter::CheckWL_Specific_Only("Acronis_Disabling_Active_Protection", lower(event_src.host))
+    }
+
+rule Acronis_Disabling_Active_Protection: Disabling_Active_Protection
+    on Disabling_Active_Protection {
+            $action = action
+            $object = object
+            $status = status
+
+            $object.process.guid = object.process.guid
+            
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+        
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify Tools"
+
+    $alert.key = lower($event_src.host)
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareMalfunction"
+    $incident.aggregation.timeout = 2h
+}

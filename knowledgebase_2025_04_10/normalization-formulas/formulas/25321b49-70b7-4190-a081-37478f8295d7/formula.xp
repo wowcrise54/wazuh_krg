@@ -1,0 +1,42 @@
+TABULAR =  "{time=timegenerated},
+            {datafield4=objectpath},
+            {subject.group=publishername},
+            number,
+            eventuser,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield3=rulename}
+            "
+
+COND = $publishername == "Microsoft-Windows-DHCP-Server" and $number == 106
+
+submessage("XML","Event_data",$eventdata)
+submessage('TEXT', 'name', $eventuser)
+
+subformula "Event_data"
+    XML = 'DataItem'
+    datafield1 = strip($DataItem / eventdata / Data [1],"[","]")  # ip name
+    datafield2 = strip($DataItem / eventdata / Data [0],"[","]")  # reservation name
+    reason = "Reservation is configured under scope"
+endsubformula
+
+subformula 'name'
+    TEXT = '{subject.domain=WORDDASH}\\{subject.name=WORDDASH}'
+endsubformula
+
+msgid = $number
+
+object = "configuration"
+action = "modify"
+status = "success"
+subject = "account"
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_106_dhcpv4_reservation_configured"

@@ -1,0 +1,175 @@
+query CheckFile($file_name) from Unix_Sensitive_Files {
+    file_name == $file_name
+    and access_type == "write"
+}
+
+event File_Opened_In_W_Mode:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()       
+        and filter::OperatingSystem_UNIXLike()
+        and filter::FileModify_Linux(".*")
+        and event_src.subsys == "auditd"
+        and exec_query("CheckFile", [object.name])
+        and status == "success"
+        and filter::CheckWL_Linux_File_Operations("Unix_Sensitive_File_Modification", 
+            join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|"))
+    }
+    
+event SWP_File_Created:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::OperatingSystem_UNIXLike()
+        and event_src.subsys == "auditd"
+        and in_list(["file", "file_object"], object)
+        and action == "create"
+        and status == "success"
+        and match(object.name,".*.swp")
+        and exec_query("CheckFile", [regex(object.name,"^\.(.*?)\.swp$", 1)])
+        and filter::CheckWL_Linux_File_Operations("Unix_Sensitive_File_Modification", 
+            join([coalesce(subject.account.name, subject.account.id), subject.process.fullpath, object.fullpath], "|"))
+    }
+
+rule Unix_Sensitive_File_Modification: File_Opened_In_W_Mode or SWP_File_Created
+
+    init {
+        $labels = "w_auto|CheckWL_Linux_File_Operations"
+    }
+
+    on File_Opened_In_W_Mode {
+        $action = action  # create, modify, access, remove
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+                
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.meta = subject.process.meta
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.type = subject.type
+                
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.id = object.id
+        $object.type = object.type
+        $object.state = object.state
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+
+        $numfield2 = numfield2  # Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+  
+        $reason = select_query_first("CheckFile", [object.name], "description")
+    }
+
+    on SWP_File_Created {
+        $action = action  # create
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+                
+        $subject.process.name = subject.process.name
+        $subject.process.id = subject.process.id
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.cwd = subject.process.cwd
+        $subject.process.meta = subject.process.meta
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.type = subject.type
+                
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.id = object.account.id
+        $object.account.group = object.account.group
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.id = object.id
+        $object.type = object.type
+        $object.state = object.state
+
+        $datafield1 = datafield1  # Executable Name
+        $datafield2 = datafield2  # Owner User Name
+        $datafield3 = datafield3  # File Access Mode
+
+        $numfield2 = numfield2  # Owner User ID
+        
+        $subject.process.chain = subject.process.chain
+        $object.process.chain = object.process.chain
+        $datafield18 = datafield18  # chain with PID for subject
+        $datafield19 = datafield19  # chain with PID for object
+                
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+ 
+        $reason = select_query_first("CheckFile", [regex(object.name,"^\.(.*?)\.swp$", 1)], "description")
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = coalesce($action, "modify")
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "medium"
+
+    $alert.key = join([coalesce($subject.account.name, $subject.account.id), $subject.process.fullpath, $object.fullpath], "|")
+    $alert.context = join([coalesce($subject.account.name, $subject.account.id), $action, $object.name, "with", $subject.process.name], " ")
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Event Triggered Execution"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedDataChange"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,70 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "RESOURCE_CREATE - Creating resource succeeded") != null
+       or find_substr($kv["Category"], "RESOURCE_UPDATE_RELATIONSHIP - Updating parent child relationship succeeded") != null
+       or find_substr($kv["Category"], "RESOURCE_DELETE - Deleting resource(s) succeeded") != null
+       or find_substr($kv["Category"], "RESOURCE_DISCOVER - Discovering resource succeeded") != null
+
+subject = "account"
+object = "resource"
+status = "success"
+
+subformula "parse_category"
+    TEXT = 'RESOURCE_{$act="CREATE"|$act="UPDATE_RELATIONSHIP"|$act="DELETE"|$act="DISCOVER"} - 
+            {"Creating"|"Updating parent"|"Discovering"|"Deleting"} {"child relationship"|"resource"}{"(s)"?} 
+            succeeded. {"ID"|"ID(s)"|"ParentID"}: {$ids=REST}'
+   
+    action = switch $act
+        case "CREATE" "create"
+        case "UPDATE_RELATIONSHIP" "modify"
+        case "DELETE" "remove"
+        case "DISCOVER" "search"
+    endswitch
+    
+    if action == "remove" then
+        datafield1 = strip(strip($ids, '"', '"'), '[', ']') # Removed resource ids
+    elif action == "search" then
+        datafield1 = strip($ids, '"', '"')                  # Adapter id
+    else
+        object.id = strip($ids, '"', '"')
+    endif
+endsubformula
+
+submessage("TEXT", "parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+if action == "create" then
+    object.name = lower(strip($kv['Name'], '"', '".'))
+elif action == "modify" then
+    datafield1 = strip(strip($kv['ChildrenID(s)'], '"', '".'), '[', '].')   # Modified children ids
+elif action == "search" then
+    datafield2 = strip($kv['Name'], '"', '".')                              # Adapter name
+elif action == "remove" then
+    datafield2 = strip(strip($kv['Name(s)'], '"', '".'), '[', '].')         # Removed resource names
+endif
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "RESOURCE_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_resource_manipulation"

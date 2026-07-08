@@ -1,0 +1,108 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} teamcity-{$curr_log=WORDDASH}.log: [{$time=UNTIL(']')} {WORD} [{UNTIL(']')} - {STRING} - 
+{$act='Collecting changes'|$act='Finish collecting changes successfully'|$act='Finish collecting changes with errors'} for VCS root {$raw_message=REST}"
+
+subject = "application"
+action = "download"
+object = "resource"
+
+subformula "parse_vcs_root"
+    TEXT = "{$vcs_root_name=STRING+} {'{'}{$kv=REST}"
+    
+    $kv = strip($kv, '', '}')
+    $kv = replace($kv, "=", ": ")
+    $kv = keyvalue($kv, ",", "=", "'")
+    $vcs_root_id = $kv["parent id"]
+    $vcs_root_name = strip($vcs_root_name, '"', '"')
+endsubformula
+
+subformula "parse_repository_state"
+    TEXT = "RepositoryState{'{'}{$kv=REST}"
+    
+    $kv = strip($kv, '', '}')
+    $kv = keyvalue($kv, ", ", "=", "'")
+    $revisions = strip($kv["revisions"], "{", "}")
+    $default_branch = strip($kv["defaultBranch"], "refs/heads/", "")
+endsubformula
+
+subformula "parse_single_version_r_state"
+    TEXT = "SingleVersionRState{'{'}{$revisions=LITERAL*} at {DATETIME}{'}'}"
+endsubformula
+
+subformula "collecting"
+    TEXT = "{$vcs_root=UNTIL(' from state ')} {$src_state=UNTIL(' to state ')} {$tgt_state=UNTIL(', requested by: ')}{$comment=REST}"
+    
+    status = "ongoing"
+endsubformula
+
+subformula "finish"
+    TEXT = "{$vcs_root=UNTIL(' from state ')} {$src_state=UNTIL(' to state ')} {$tgt_state=LITERAL*}; {NUMBER} changes collected {NUMBER} changes persisted, total time: {STRING} persisting time: {STRING+?} requested by: {$comment=REST}"
+    
+    status = switch strip($act, "Finish collecting changes ", "")
+        case "successfully" "success"
+        case "with errors" "failure"
+    endswitch
+endsubformula
+
+subformula "get_chain_id"
+    TEXT = "{$clear_time=DATETIME},{$ms=NUMBER}"
+    
+    numfield3 = datetime_to_epoch_ms($clear_time) + $ms  # Millisecond Timestamp (to understand the events order)
+endsubformula
+
+submessage("TEXT", "get_chain_id", $time)
+
+switch $act
+    case "Collecting changes" submessage("TEXT", "collecting", $raw_message)
+    case "Finish collecting changes successfully" submessage("TEXT", "finish", $raw_message)
+    case "Finish collecting changes with errors" submessage("TEXT", "finish", $raw_message)
+endswitch
+
+submessage("TEXT", "parse_vcs_root", $vcs_root)
+
+subject.type = "vcs_root"
+subject.id = $vcs_root_id
+subject.name = $vcs_root_name
+
+if substr($src_state, 0, 15) == "RepositoryState" then
+    submessage("TEXT", "parse_repository_state", $src_state)
+elif substr($src_state, 0, 19) == "SingleVersionRState" then
+    submessage("TEXT", "parse_single_version_r_state", $src_state)
+endif
+
+object.type = "changes"
+object.property = "revisions"
+object.value = $revisions
+    
+$revisions = null
+
+if substr($tgt_state, 0, 15) == "RepositoryState" then
+    submessage("TEXT", "parse_repository_state", $tgt_state)
+elif substr($src_state, 0, 19) == "SingleVersionRState" then
+    submessage("TEXT", "parse_single_version_r_state", $tgt_state)
+endif
+
+object.new_value = $revisions
+
+if $comment != "" then
+    reason = $comment
+endif
+
+datafield3 = $default_branch  # Branch Name
+
+time = replace($time, ".", ",")
+msgid = replace(lower($act), "_", " ")
+importance = "low"
+
+event_src.vendor = "jetbrains"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "teamcity"
+event_src.category = "Other"
+event_src.subsys = "teamcity-" + $curr_log + ".log"
+
+id = "PT_JetBrains_TeamCity_syslog_VCSStates_Collecting_Changes"

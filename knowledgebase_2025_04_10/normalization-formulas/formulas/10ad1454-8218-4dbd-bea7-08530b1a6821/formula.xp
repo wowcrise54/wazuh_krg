@@ -1,0 +1,112 @@
+TEXT = '{"<"NUMBER">"?} {":"?} {DATETIME}
+       {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+       PT_SIEM: [ID {NUMBER} {STRING} {$rest=UNTIL("</record>")}{REST}'
+
+COND = (
+        find_substr($rest, 'event="login') != null or
+        find_substr($rest, 'event="logout') != null or
+        find_substr($rest, 'event="su"') != null or
+        find_substr($rest, 'event="su logout"') != null
+       )
+
+$rest = $rest + "</record>"
+
+subformula "parse_xml"
+   XML = 'record'
+endsubformula
+
+submessage("XML", "parse_xml", $rest)
+
+subject = "account"
+if find_substr($record["@event"], "logout") != null then
+    if find_substr($record["@event"], "su") != null then
+        action = "deelevate"
+        object = "account"
+
+        subject.account.privileges = "su"
+        object.account.privileges = $record/subject/@uid   # пониженные права
+    else
+        action = "logout"
+        object = "system"
+
+        subject.account.privileges = $record/subject/@uid
+    endif
+else
+    if find_substr($record["@event"], "su") != null then
+        action = "elevate"
+        object = "account"
+
+        subject.account.privileges = $record/subject/@uid
+        object.account.privileges = "su"   # повышенные права
+    else
+        action = "login"
+        object = "system"
+
+        subject.account.privileges = $record/subject/@uid
+    endif
+endif
+
+if find_substr($record/return/@errval, "failure") != null then
+    status = "failure"
+elif find_substr($record/return/@errval, "success") != null then
+    status = "success"
+endif
+
+subject.account.name = $record/subject/@ruid
+subject.account.group = $record/subject/@rgid
+subject.account.session_id = $record/subject/@sid
+subject.process.id = $record/subject/@pid
+
+$tid = csv($record/subject/@tid, " ", "")
+
+if in_list(["login - ssh", "login - rlogin", "login - telnet"], $record["@event"]) then
+    $logon_auth_method = "remote"
+elif in_list(["su", "login - local", "su logout"], $record["@event"]) then
+    $logon_auth_method = "local"
+endif
+
+if in_list(["localhost", $Computer, event_src.ip], $tid[2]) or substr($tid[2], 0, 4) == "127." then
+    $logon_auth_method = "local"
+endif
+
+if $logon_auth_method == "remote" then
+    src.ip = $tid[2]
+    if src.ip == null then
+        src.hostname = $tid[2]
+    endif
+
+    dst.hostname = $Computer
+    dst.ip = event_src.ip
+endif
+
+logon_auth_method = $logon_auth_method
+
+if status == "failure" then
+    reason = $record/return/@retval
+endif
+
+time = datetime($record["@iso8601"])
+importance = "low"
+
+if in_list(["login", "logout"], action) then
+    category.generic = "Operating System"
+    category.high = "Access Management"
+    category.low = "Communication"
+else
+    category.generic = "Account"
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+endif
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_user_login_xml"

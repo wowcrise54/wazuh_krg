@@ -1,0 +1,47 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {$event_src_ip=IPV4|$event_src_ip=IPV6|$event_src_host=HOSTNAME|} hub-all.log:
+    {$mday_raw=WORD} {$month_raw=WORD} {$year_raw=WORD} {$hours_raw=UNTIL(",")}{NUMBER}
+    WARN [{LITERAL*}] [{LITERAL*}] [{LITERAL*}]
+    Can\'t bind to LDAP with [{$user_name_raw=UNTIL("]")}\\n{$reason_raw=REST}'
+
+action = "open"
+object = "session"
+status = "failure"
+
+$user_csv = csv($user_name_raw, "@", "\'")
+if length($user_csv) > 1 then
+    subject.account.domain = $user_csv[length($user_csv)-1]
+    subject.account.name = strip($user_name_raw, "", "@" + subject.account.domain)
+else
+    subject.account.name = $user_name_raw
+endif
+
+protocol.layer7 = "ldap"
+
+$reason_raw_csv_1 = csv($reason_raw, "\\n", "'")
+$reason_raw_csv_2 = csv($reason_raw_csv_1[0], ": ", "'")
+reason = $reason_raw_csv_2[1]
+
+$dot_pos = find_substr($event_src_host, '.')
+
+if $dot_pos != null then
+    $event_src_fqdn = lower($event_src_host)
+    $event_src_hostname = lower(substr($event_src_host, 0, $dot_pos))
+else
+    $event_src_hostname = lower($event_src_host)
+endif
+src.ip = $event_src_ip
+src.hostname = $event_src_hostname
+src.fqdn = $event_src_fqdn
+
+time = $month_raw + " " + $mday_raw + " " + $year_raw + " " + $hours_raw
+importance = "medium"
+
+event_src.ip = $event_src_ip
+event_src.hostname = $event_src_hostname
+event_src.fqdn = $event_src_fqdn
+event_src.vendor = "jetbrains"
+
+event_src.title = "hub"
+event_src.category = "Other"
+
+id = "PT_JetBrains_Hub_syslog_cant_bind_ldap"

@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?} {$kv=KEYVALUE(" ", "=", "\\"")}'
+
+COND = $kv["device_id"] != null
+       and $kv["devname"] != null
+       and $kv["log_id"] == "0143040704"
+
+action = "info"
+object = "system"
+status = "success"
+
+datafield1 = $kv["cpu"]                                # загрузка процессора
+datafield2 = $kv["mem"]                                # загрузка памяти
+datafield3 = $kv["total_session"]                      # количество отслеживаемых соединений
+datafield4 = $kv["vd"]                                 # Virtual domain name
+datafield9 = join([$kv["type"], $kv["subtype"]], "|")  # Event type
+datafield11 = $kv["action"]                            # Action
+
+time = join([$kv["date"], $kv["time"]], " ")
+msgid = $kv["log_id"]
+importance = "info"
+
+event_src.vendor = "fortinet"
+event_src.title = "fortigate"
+event_src.hostname = $kv["devname"]
+event_src.id = $kv["device_id"]
+event_src.category = "Firewall"
+
+id = "PT_Fortinet_Fortigate_syslog_40704_Perfomance_statistics"

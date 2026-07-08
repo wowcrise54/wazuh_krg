@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME|} {$subsys="waf-user-actions:"} {DATETIME} [info]  \'Date\':\'{time=DATETIME}\'|\'Ip\':\'{src.ip=IPV4|src.ip=IPV6}\'|\'User\':\'{subject.account.name=WORD}\'|\'Action\':\'{$raw_action="login"|$raw_action="failed_login"}\'|\'Modified Page\':\'index\'|\'Item\':\'{subject.account.fullname=WORD?}\'|\'ID\':\'{object.account.id=WORD?}\''
+
+subject = "account"
+action = "login"
+
+status = if $raw_action == "failed_login" then "failure" else "success" endif
+
+object = "application"
+
+if status == "success" then
+    subject.account.fullname = subject.account.name
+endif
+
+importance = if status == "failure" then "medium" else "low" endif
+
+category.high = "Access Management"
+category.generic = "Application"
+category.low = "Communication"
+
+event_src.title = "application_firewall"
+event_src.vendor = "positive_technologies"
+event_src.category = "Application security"
+ 
+id = "PT_Positive_Technologies_Application_Firewall_syslog_User_Login"

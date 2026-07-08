@@ -1,0 +1,37 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = $kv["product"] == "VPN-1 & FireWall-1"
+       and find_substr($kv["cluster_info"], "(ClusterXL) interface") != null
+       and find_substr($kv["cluster_info"], "of member") != null
+
+action = "info"
+object = "interface"
+status = "success"
+
+subformula 'sub1'
+    # извлечение object.state, datafield2, object.value и interface из cluster_info
+    TEXT = '(ClusterXL) interface {interface = WORDDASH} of member {datafield2 = NUMBER} 
+            ({object.value = IPV4 |object.value = IPV6}) is {object.state="down"|object.state="up"} {REST}'
+endsubformula
+
+submessage('TEXT', 'sub1', $kv["cluster_info"])
+
+object.property = "ip address"
+
+#datafield2 - идентификатор участника кластера
+datafield4 = $kv["originsicname"]  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+importance = "info"
+
+$kv_names = keyvalue($kv["originsicname"], ",", "\\=", "~")
+event_src.hostname = coalesce($kv_names["CN"], $kv_names["cn"])
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($tmp_subsys)
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_VPN_and_Firewall_Cluster_member_interface_state"

@@ -1,0 +1,48 @@
+TABULAR = "{time=time},
+           {event_src.fqdn=station},
+           event_category,
+           event_id,
+           event_message,
+           event_type"
+
+COND = string($event_id) == "294"
+       and $event_category == "Системные"
+       and $event_type == "Информация"
+
+action = "start"
+object = "service"
+status = "success"
+
+subformula "message"
+    TEXT = '{"Включена защитная подсистема."|"Активирована подсистема cетевой защиты."} \nПодсистема: {object.name=STRING+}
+    \nПроцесс: {object.process.fullpath=STRING+}'
+    
+    $csv_fullpath = csv(object.process.fullpath, "\\", "~")
+    object.process.name = $csv_fullpath[length($csv_fullpath) - 1]
+    object.process.path = strip(object.process.fullpath, '', object.process.name)
+endsubformula
+
+object.type = "security subsystem"
+
+submessage("TEXT", "message", $event_message)
+
+msgid = $event_id
+importance = "medium"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "security_code"
+if $product == "Secret Net Studio" then
+    event_src.title = "secret_net_studio"
+else
+    event_src.title = "secret_net"
+endif
+event_src.category = "Host security"
+event_src.subsys = lower($event_category)
+if $event_category == "Системные" then
+    event_src.subsys = "system"
+endif
+
+id = "PT_SecurityCode_Secret_Net_odbc_294_security_subsystem_enabled"

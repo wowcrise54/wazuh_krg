@@ -1,0 +1,162 @@
+query Check_If_Host_Is_DC_By_Dst($ip, $host) from List_Servers {
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            asset_ip == $ip
+            and asset_ip != null
+        )
+        or (
+            (
+                host == $ip
+                or host == $host
+            )
+            and host != null
+        )
+    )
+}
+
+query Check_If_Host_Is_DC_AssetGrid($fqdn, $ip, $asset) from AssetGrid_Servers {
+    (
+        asset_id == $asset
+        and asset_id != null
+    ) or (
+        asset_fqdn == $fqdn
+        and asset_fqdn != null
+    ) or (
+        asset_ip == $ip
+        and asset_ip != null
+    )
+}
+
+event Connection_From_Internal_Detect:
+    key:
+        src.ip, dst.port, event_src.vendor
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                object == "connection"
+                and in_list(["allow", "deny", "open", "detect"], action)
+            )
+            or (
+                object == "packet"
+                and in_list(["allow", "deny"], action)
+            )
+        )
+        and in_list([22, 21, 23, 135, 445, 1433, 1434, 3306, 3389, 5800, 5900, 5958, 5986], dst.port)
+        and src.ip != null
+        and not filter::External_Address(src.ip)
+        and not filter::Loopback_Address(dst.ip)
+        and not in_subnet(dst.ip, "0.0.0.0/32")
+        and not (
+            match(lower(select_query_first("Check_If_Host_Is_DC_By_Dst", [dst.ip, lower(dst.fqdn)], "roles")), "*domain controller*")
+            or match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [dst.host, dst.ip, dst.asset], "roles"), "*\"Domain Controller\"*")
+        )
+        and filter::CheckWL_Networking_Enlighted("Network_Service_Discovery_From_Localnet", join([src.ip, string(dst.port)], "|"))
+    }
+
+rule Network_Service_Discovery_From_Localnet: (Connection_From_Internal_Detect[7,] with different dst.ip) timer 2m
+
+    init {
+        $host_count = 0
+        $labels = "w_auto|CheckWL_Networking_Enlighted"
+    }
+
+    on Connection_From_Internal_Detect {
+        $host_count = $host_count + 1
+
+        if $src.host == null then
+            $object = object
+            $action = action
+            
+            $subject.account.domain = subject.account.domain
+            $subject.account.name = subject.account.name
+            $subject.account.id = subject.account.id
+            $subject.account.fullname = subject.account.fullname
+
+            $subject.process.id = subject.process.id
+            $subject.process.name = subject.process.name
+            $subject.process.path = subject.process.path
+            $subject.process.fullpath = subject.process.fullpath
+
+            $object.account.domain = object.account.domain
+            $object.account.name = object.account.name
+            $object.account.id = object.account.id
+            $object.account.fullname = object.account.fullname
+
+            $object.process.id = object.process.id
+            $object.process.name = object.process.name
+            $object.process.path = object.process.path
+            $object.process.fullpath = object.process.fullpath
+
+            $subject.name = subject.name
+            
+            $object.property = "host count"
+
+            $src.host = src.host
+            $src.fqdn = src.fqdn
+            $src.hostname = src.hostname
+            $src.ip = src.ip
+            $src.asset = src.asset
+
+            $dst.port = dst.port
+
+            $direction = direction
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+
+            $alert.key = join([src.ip, string(dst.port)], "|")
+            $alert.context = "from: " + src.ip + " | to: "
+        elif $host_count == 2 and $event_src.host != event_src.host then
+            $event_src.host = null
+            $event_src.fqdn = null
+            $event_src.hostname = null
+            $event_src.ip = null
+            $event_src.asset = null
+            $event_src.subsys = null
+            $event_src.category = null
+        endif
+
+        $alert.context = $alert.context + dst.host + ","
+        if dst.fqdn != null then $datafield1 = $datafield1 + dst.fqdn + "," endif
+        if dst.hostname != null then $datafield2 = $datafield2 + dst.hostname + "," endif
+        if dst.ip != null then $datafield3 = $datafield3 + dst.ip + "," endif
+        if dst.asset != null then $datafield4 = $datafield4 + dst.asset + "," endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "rule"
+    $status = "success"
+
+    $importance = "low"
+
+    $object.value = $host_count
+    
+    $alert.context = strip($alert.context, "", ",")
+    $datafield1 = strip($datafield1, "", ",")
+    $datafield2 = strip($datafield2, "", ",")
+    $datafield3 = strip($datafield3, "", ",")
+    $datafield4 = strip($datafield4, "", ",")
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Network Service Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.account.id, $src.ip], "|")
+    $incident.aggregation.timeout = 2h
+    $incident.category = "NetworkScan"
+    $incident.severity = $importance
+}

@@ -1,0 +1,130 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER} {DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$hostname=HOSTNAME} PTAF4 {NUMBER}
+        {"ATTACK"|"VULNERABILITY"} - {$json_data=REST}'
+
+COND = find_substr($json_data, "event_id") != null
+       and find_substr($json_data, "AttackEvent") != null
+       
+submessage("JSON", "get_json_data", $json_data)       
+       
+subformula "get_json_data"
+    JSON = "" 
+    
+    $temp_action = join(remove([$AttackEvent["actions"][0]["name"], 
+                                $AttackEvent["actions"][1]["name"], 
+                                $AttackEvent["actions"][2]["name"], 
+                                $AttackEvent["actions"][3]["name"], 
+                                $AttackEvent["actions"][4]["name"],
+                                $AttackEvent["actions"][5]["name"], 
+                                $AttackEvent["actions"][6]["name"], 
+                                $AttackEvent["actions"][7]["name"], 
+                                $AttackEvent["actions"][8]["name"], 
+                                $AttackEvent["actions"][9]["name"]], null), ", ")
+                                
+    $temp_triggers_name = join(remove([$AttackEventMatched["variables"][0]["name"], 
+                                $AttackEventMatched["variables"][1]["name"], 
+                                $AttackEventMatched["variables"][2]["name"], 
+                                $AttackEventMatched["variables"][3]["name"], 
+                                $AttackEventMatched["variables"][4]["name"],
+                                $AttackEventMatched["variables"][5]["name"], 
+                                $AttackEventMatched["variables"][6]["name"], 
+                                $AttackEventMatched["variables"][7]["name"], 
+                                $AttackEventMatched["variables"][8]["name"], 
+                                $AttackEventMatched["variables"][9]["name"]], null), ", ")
+                                
+    $temp_triggers_values = join(remove([$AttackEventMatched["variables"][0]["value"], 
+                                $AttackEventMatched["variables"][1]["value"], 
+                                $AttackEventMatched["variables"][2]["value"], 
+                                $AttackEventMatched["variables"][3]["value"], 
+                                $AttackEventMatched["variables"][4]["value"],
+                                $AttackEventMatched["variables"][5]["value"], 
+                                $AttackEventMatched["variables"][6]["value"], 
+                                $AttackEventMatched["variables"][7]["value"], 
+                                $AttackEventMatched["variables"][8]["value"], 
+                                $AttackEventMatched["variables"][9]["value"]], null), ", ")
+   
+    subject = "rule"                
+    action = if find_substr($temp_action, "Block") != null then "deny" else "detect" endif
+    object = "attack"
+    status = "success"
+
+    if $AttackClient['username'] != null and $AttackClient['username'] != "Guest" and $AttackClient['username'] != "" then
+        subject = "account"
+        $subject_name_and_dom = csv($AttackClient['username'], "@", "'")
+        $account_name = $subject_name_and_dom[0]
+        if length($subject_name_and_dom) > 1 then
+            $account_domain = lower($subject_name_and_dom[1])
+        endif
+        subject.account.domain = $account_domain
+        subject.account.name = $account_name
+        subject.account.id = "synthetic:" + $AttackClient['username']
+    endif
+
+    subject.name = $AttackEvent['rule_name']
+    subject.type = join($AttackEvent['tags'], ", ")
+    subject.group = join($AttackEvent['classifications'], ", ")
+    subject.state = $temp_action
+
+    object.process.name = $AttackClient["browser"]
+    object.process.version = if $AttackClient["browser_version"] != "" then $AttackClient["browser_version"] else null endif
+    if object.process.name != null and object.process.version != null then
+        object.process.meta = object.process.name + "/" + object.process.version
+    endif
+    object.vendor = $AttackClient["os"]
+
+    object.id = $AttackHTTP["transaction_id"]
+    object.path = $AttackHTTP["path"]
+    object.type = $AttackHTTP["method"]
+    object.name = $AttackEventMatched["name"]
+    object.property = $temp_triggers_name
+    object.value = $temp_triggers_values
+
+    src.ip = $AttackClient['ip']
+    src.geo.city = if $AttackGEO['city'] != "" then $AttackGEO['city'] else null endif
+    src.geo.country = if $AttackGEO['country_name'] != "" then $AttackGEO['country_name'] else null endif
+
+    if not in_list([null, "", "''", "'", '\\"\\"', '\\"', "null", "None"], $AttackHTTP['host']) then
+        $maybe_port = csv($AttackHTTP['host'], ":", "'")
+        if length($maybe_port) == 2 then
+            $dst = $maybe_port[0]
+            dst.port = $maybe_port[1]
+        else
+            $dst = $AttackHTTP['host']
+        endif
+        if maybe_ipv4($dst) != null or maybe_ipv6($dst) != null then
+            dst.ip = $dst
+        else
+            dst.fqdn = $dst
+            dst.hostname = substr(dst.fqdn, 0, find_substr(dst.fqdn, "."))
+        endif
+    else
+        labels = "no REQUEST_HOST"
+    endif
+
+    reason = $AttackEventDescription['description'] + " Notes: " + $AttackEventMatchedNotes['notes']
+
+    datafield1 = $AttackEvent["application_name"]
+
+    time = $AttackEvent['timestamp']
+    importance = switch lower($AttackEvent["severity"])
+        case "info" "info"
+        case "low" "low"
+        case "medium" "medium"
+        case "high" "high"
+    endswitch
+
+    external_link = $AttackEvent["attack_url"]
+
+    if maybe_ipv4($PTAFNode["host"]) != null or maybe_ipv6($PTAFNode["host"]) != null then
+        event_src.ip = $PTAFNode["host"]
+    elif $PTAFNode["host"] != "" then
+        event_src.fqdn = lower($PTAFNode["host"])
+        event_src.hostname = lower(substr(dst.fqdn, 0, find_substr(dst.fqdn, ".")))
+    endif
+
+    event_src.hostname = lower($hostname)
+    event_src.title = "application_firewall"
+    event_src.vendor = "positive_technologies"
+    event_src.category = "Application security"
+endsubformula
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_Attack_detected"

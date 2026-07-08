@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+        {"("?}{"apache"|"apache2"|"httpd"}{")"?}{"["NUMBER"]"?}:
+        [{WORD?} {time=DATETIME}]
+        [{WORD}]
+        {"[pid "NUMBER"]"?}
+        [client {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}{":"src.port=NUMBER?}]
+        script {$script=STRING+} not found or unable to stat {", referer: "datafield1=REST?}'
+
+reason = "script not found or unable to stat"
+
+object.path = strip($script, "'","'")
+
+object = "application"
+action = "start"
+status = "failure"
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "apache"
+event_src.category = "Web server"
+
+id = "PT_Opensource_ASF_Apache_HTTP_Server_syslog_script_not_found"

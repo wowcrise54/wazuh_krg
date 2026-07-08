@@ -1,0 +1,41 @@
+EVENTLOG = ''
+COND = $Channel=="Microsoft-Windows-DNSServer/Audit" and $Provider["Name"]=="Microsoft-Windows-DNSServer" 
+       and ($EventID["text"]=="578" or $EventID=="578")
+
+subject = "service"
+action = "create"
+object = "policy"
+status = "success"
+
+object.domain = $Data['ZoneName']
+object.type = $Data['Type']
+object.name = $Data['Policy']
+
+datafield1 = $Data['ServerName']
+datafield2 = $Data['Criteria']
+datafield3 = $Data['Action']
+datafield4 = $Data['Scopes']
+datafield5 = $Data['Condition']
+datafield6 = $Data['IsEnabled']
+
+reason = "Create zone level policy"
+
+time = $TimeCreated["SystemTime"]
+msgid = "578"
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_578_DNS_Create_zone_level_policy"

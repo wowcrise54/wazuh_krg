@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        {event_src.subsys=WORDDASH} [{NUMBER}]: {datafield1=WORD}:
+        SYSERR({WORD}): readqf: cannot open {object.name=WORD}:
+        {reason=REST}'
+
+action = "open"
+object = "file"
+status = "failure"
+
+# datafield1 - queue id
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "sendmail"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Sendmail_syslog_file_in_queue_not_found"

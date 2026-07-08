@@ -1,0 +1,28 @@
+TABULAR =  "{time=timegenerated},
+            {dst.hostname=objectpath},
+            publishername,
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            {datafield1=rulename}
+            "
+
+COND = $publishername == "OpsMgr SDK Service" and $number == 26328
+
+action = "connect"
+object = "service"
+status = "success"
+
+object.name = "OpsMgr SDK"
+
+# datafield1 - rulename
+
+msgid = $number
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_26328_logon_event_for_sdk_session"

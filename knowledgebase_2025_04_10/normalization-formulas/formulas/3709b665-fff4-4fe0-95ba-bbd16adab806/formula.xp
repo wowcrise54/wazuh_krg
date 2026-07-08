@@ -1,0 +1,32 @@
+TEXT = '{datafield1=UNTIL("-")}{NUMBER},CALL,{NUMBER},{$kv=KEYVALUE(",","=","\'")}'
+
+COND = in_list(["rphost", "rmngr", "ragent"], $kv["process"])
+        and $kv["MName"] == "readInfoBaseAdmParams"
+        and $kv["t:applicationName"] == "Designer"
+        and $kv["Usr"] != null
+
+subject = "account"
+action = "view"
+object = "configuration"
+status = "success"
+
+subject.application.account.name = lower($kv["Usr"])
+subject.application.account.id = subject.application.account.name
+
+object.property = "infobase"
+object.value = $kv["p:processName"]
+
+src.hostname = $kv["t:computerName"]
+
+# datafield1 - время регистрации события
+datafield2 = $kv["p:processName"]   # информационная база
+
+time = recv_time
+
+importance = "low"
+
+event_src.vendor =  "1c"
+event_src.title = "1c_enterprise"
+event_src.category = "Application server"
+
+id = "PT_1C_1C_Enterprise_filemonitor_tech_log_read_1C_configuration"

@@ -1,0 +1,124 @@
+query isVPNnetwork($src.ip) from VPN_Networks {
+    in_subnet($src.ip, network)
+}
+
+query ServiceAccount($username, $sid) from Service_Accounts {
+    (
+        objectname != null
+        and objectname == $username
+    )
+    or 
+    (
+        objectsid != null
+        and objectsid == $sid
+    )
+}
+
+query ServiceAccount_Manual($username, $sid) from Service_Accounts_Manual {
+    (
+        objectname != null
+        and objectname == $username
+    )
+    or 
+    (
+        objectsid != null
+        and objectsid == $sid
+    )
+}
+
+query GetUser($ip) from Active_External_Sessions {
+    assigned_ip == $ip 
+}
+
+event Service_Account_Logon:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        
+        and action == "login"
+        and status == "success"
+        and lower(subject.account.id) != "s-1-5-18"
+
+        and subject.account.name != null
+        and subject.account.name != "anonymous logon"
+        and subject.account.name != "git"
+        and subject.account.name != "flus"
+
+        and src.ip != null
+        and exec_query("isVPNnetwork", [src.ip])
+
+        and (
+            exec_query("ServiceAccount", [lower(subject.account.name), subject.account.id])
+            or exec_query("ServiceAccount_Manual", [lower(subject.account.name), subject.account.id])
+        )
+        and filter::CheckWL_Specific_Only("Service_Logon_From_VPN_Network", lower(subject.account.name) + "|" + lower(src.ip))
+    }
+
+rule Service_Logon_From_VPN_Network: Service_Account_Logon
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Service_Account_Logon {     
+        $status = status
+        
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.host = event_src.host
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $datafield6 = datafield6
+        $datafield9 = datafield9
+        
+        $logon_type =   logon_type
+
+        $alert.key = lower(subject.account.name) + "|" + lower(src.ip)
+        $alert.context = select_query_first("GetUser", [src.ip], "username")
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Initial Access"
+    $category.low = "Valid Accounts: Domain Accounts"
+
+    $subject = "account"
+    $action = "login"
+    $object = "system"
+    
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

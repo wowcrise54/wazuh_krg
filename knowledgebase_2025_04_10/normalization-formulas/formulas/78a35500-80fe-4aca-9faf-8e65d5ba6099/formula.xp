@@ -1,0 +1,18 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {UNTIL("Info: ")}
+        ICID {datafield1=NUMBER} ACCEPT SG {object.value=STRING+} match {REST}'
+
+action = "receive"
+object = "message"
+status = "success"
+
+object.property = "sender"
+
+# datafield1 - incoming connection ID
+
+importance = "info"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_accept_sender_group"

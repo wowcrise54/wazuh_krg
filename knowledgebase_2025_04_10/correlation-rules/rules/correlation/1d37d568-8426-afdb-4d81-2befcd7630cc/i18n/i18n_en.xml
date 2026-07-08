@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>Suspicious logon to a top manager workstation. Authentication data differ from the collected profile.</Description>
+  <EventDescriptions>
+    <EventDescription id="26471ec1-9eeb-eb14-5b57-c9a8754a22c1">New user {subject.account.name} from host {src.host} logged in to host {event_src.host}, which is a top manager workstation. The user is missing from the collected profile.</EventDescription>
+    <EventDescription id="67034f56-768a-dc87-de73-5584e6f91899">User {subject.account.name} from host {src.host} accessed a new object in shared network resource "{object.storage.name}" after logging in to host {event_src.host}, which is a top manager workstation. The object is missing from the collected profile.</EventDescription>
+    <EventDescription id="7d17b6f2-4657-3c5d-5fcd-3eea65fe37fb">User {subject.account.name} from host {src.host} accessed new shared network resource "{object.storage.name}" after logging in to host {event_src.host}, which is a top manager workstation. The network resource is missing from the collected profile.</EventDescription>
+    <EventDescription id="b6fa33b1-9675-2157-0362-b81c6ecbea0c">User {subject.account.name} from host {src.host} used new logon type {logon_type} ({datafield6}) to log in to host {event_src.host}, which is a top manager workstation. The logon type is missing from the collected profile.</EventDescription>
+    <EventDescription id="cf466693-7a60-2204-e378-df6deb0bc9c5">User {subject.account.name} from new host {src.host} logged in to host {event_src.host}, which is a top manager workstation. The address is missing from the collected profile.</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,176 @@
+event SIDHistory_Enum:
+    key:
+        event_src.host, object.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "1644"
+        and event_src.title == "windows"
+        and lower(logon_service) == "ntdsapi"
+        and match(lower(object.query), "( &  (sidhistory=s-1-5-*-*-*-*-*) ( !  (objectclass=foreignsecurityprincipal) ) )")
+        and filter::CheckWL_LDAP_Request("DRSUAPI_User_Enumeration", join([lower(event_src.host), lower(subject.account.id)], "|")) 
+    }
+
+event ObjectSid_Enum:
+    key:
+        event_src.host, object.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "1644"
+        and event_src.title == "windows"
+        and lower(logon_service) == "ntdsapi"
+        and match(lower(object.query), "( &  (objectsid=s-1-5-*-*-*-*-*) ( !  (objectclass=foreignsecurityprincipal) ) )")
+        and filter::CheckWL_LDAP_Request("DRSUAPI_User_Enumeration", join([lower(event_src.host), lower(subject.account.id)], "|"))
+    }
+
+event IPC_Access:
+    key:
+        event_src.host, subject.account.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "5140"
+        and event_src.title == "windows"
+        and lower(object.storage.id) == "\\\\*\\ipc$"
+    }    
+    
+rule DRSUAPI_User_Enumeration: (IPC_Access and (SIDHistory_Enum[5,] with different object.query) and (ObjectSid_Enum[5,] with different object.query)) timer 10s
+
+    init {
+        $labels = "w_auto|CheckWL_LDAP_Request"
+    }
+    
+    on SIDHistory_Enum {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.dn = subject.account.dn
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name        
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+    
+        if $count_total_history == null then
+            
+            $logon_service = logon_service
+            
+            $object.process.id = object.process.id
+            
+            if src.host != null and $src.host == null then 
+                $src.host = src.host
+                $src.fqdn = src.fqdn
+                $src.hostname = src.hostname
+                $src.ip = src.ip
+                $src.port = src.port
+                $src.asset = src.asset
+            endif
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        endif
+        
+        $count_total_history = $count_total_history + 1
+        $sid_history = append($sid_history, regex(lower(object.query), "s-[0-9]-[0-9]-[0-9]+-[0-9]+-[0-9]+-[0-9]+-[0-9]+", 0))
+    }
+    
+    on ObjectSid_Enum {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.dn = subject.account.dn
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.name = object.account.name        
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        if $count_total_sid == null then
+            
+            $logon_service = logon_service
+            
+            $object.process.id = object.process.id
+            
+            if src.host != null and $src.host == null then 
+                $src.host = src.host
+                $src.fqdn = src.fqdn
+                $src.hostname = src.hostname
+                $src.ip = src.ip
+                $src.port = src.port
+                $src.asset = src.asset
+            endif
+            
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+        endif
+        
+        $count_total_sid = $count_total_sid + 1
+        $object_sid = append($object_sid, regex(lower(object.query), "s-[0-9]-[0-9]-[0-9]+-[0-9]+-[0-9]+-[0-9]+-[0-9]+", 0))
+    }
+    
+    on IPC_Access {
+    
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    }
+    
+emit {
+    $correlation_type = "event"
+    
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+    $status = "success"
+    
+    $alert.key = join([lower($event_src.host), lower($subject.account.id)], "|")
+    
+    $datafield1 = $count_total_history # количество различных sidhistory
+    $datafield2 = join($sid_history, "|") # запрошенные sidhistory
+    $datafield3 = $count_total_sid # количество различных objectsid
+    $datafield4 = join($object_sid, "|") # запрошенные objectsid
+    $alert.context = "sIDHistory enumerated: " + string($count_total_history) + " | objectSid enumerated: " + string($count_total_sid)
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping: NTDS"
+
+    $importance = "medium"    
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}
+    

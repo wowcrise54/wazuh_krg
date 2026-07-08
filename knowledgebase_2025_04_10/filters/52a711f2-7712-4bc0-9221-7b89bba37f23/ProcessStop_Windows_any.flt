@@ -1,0 +1,8 @@
+filter ProcessStop_Windows_any() {
+    filter::NotFromCorrelator()
+    and in_list(["windows", "sysmon"], event_src.title)
+    and action == "stop"
+    and category.generic == "Process"
+    and category.high == "Availability Management"
+    and category.low == "Control"
+}

@@ -1,0 +1,81 @@
+event Perf_Modify:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and (
+            match(lower(object.path), "\\registry\\user\\*\\software\\microsoft\\office test\\special\\perf\\")
+            or match(lower(object.path), "\\registry\\machine\\software\\microsoft\\office test\\special\\perf\\")
+        )
+        and filter::CheckWL_Registry_Actions("Perf_Key_Modify", lower(join([subject.process.fullpath, object.new_value], "|")))
+    }
+
+rule Perf_Key_Modify: Perf_Modify
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+    }
+
+    on Perf_Modify {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+        
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath   
+        $subject.process.guid = subject.process.guid
+        $subject.process.id = subject.process.id
+        
+        $object.name = object.name
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $event_src.fqdn = event_src.fqdn
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(join([subject.process.fullpath, object.new_value], "|"))
+        $alert.context = "A malicious DLL " + $object.new_value + " has been hosted on the host"
+    }
+
+insert_into Perf_Dll {
+    host = lower($event_src.host)
+    dllname = lower($object.new_value)
+}
+
+emit {
+    $correlation_type = "event"
+    
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "modify"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Persistence"
+    $category.low = "Office Application Startup: Office Test"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $object.new_value, $subject.process.fullpath], "|")
+    $incident.severity = $importance 
+    $incident.category = "SecurityBackdoorDetection"
+    $incident.aggregation.timeout = 2h
+}

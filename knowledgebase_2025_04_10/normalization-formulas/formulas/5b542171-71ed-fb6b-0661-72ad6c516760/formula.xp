@@ -1,0 +1,74 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.fqdn=HOSTNAME} {subject.name=UNTIL("|")} {subject.version=STRING} -      
+        {msgid="GNRL_EV_OBJECT_NOTCURED"}
+        [event@{NUMBER} {$raw_kv=UNTIL("]")} {$data=REST}'
+
+subject = "application" 
+action = "detect"
+object = "malware"
+status = "success"
+
+$description = replace($data, " ", "\\\\r")
+$kv = keyvalue($description, " \\n", ":")
+$kv_extra = keyvalue($raw_kv, " ", "=", "\"")
+
+$hashes = replace($kv_extra['p9'], "", "\\\\")
+subformula "hashes"
+    JSON = ""
+    object.hash.md5 = $md5
+    object.hash.sha256 = coalesce($sha256, $kv_extra['p1'], $kv["SHA256"])
+endsubformula
+
+submessage("JSON", "hashes", $hashes)
+
+object.type = $kv["Тип"]
+object.name = $kv["Название"]
+
+$name_domain = csv($kv_extra["p7"], "\\", "'")
+if length($name_domain) == 2 then
+    subject.account.name = $name_domain[1]
+    subject.account.domain = $name_domain[0]
+else
+    subject.account.name = $name_domain
+endif
+
+$csv_path = csv($kv_extra['p2'], '\\', '')
+if length($csv_path) > 1 then
+    object.storage.fullpath = lower($kv_extra['p2'])
+    object.storage.name = lower($csv_path[length($csv_path) - 1])
+    object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+else
+    object.storage.name = lower($kv_extra['p2'])
+endif
+
+datafield1 = $kv_extra["gn"]    # имя группы администрирования, в которую входит узел-источник
+datafield5 = $kv_extra["tdn"] # обозначение типа действия или категории события
+
+reason = $kv["Причина"]
+
+importance = "high"
+
+category.high = "Information Security"
+category.generic = "Malware"
+category.low = "Curing"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch subject.name
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "KES"     "endpoint_security"
+    case "SVM"     "security_for_virtualization"
+    case "KSVLA"   "security_for_virtualization_light_agent"
+    case "WSEE"    "security_for_windows_servers"
+    case "KAVFSEE" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $kv['hip'] != "127.0.0.1" then
+    event_src.ip = $kv_extra['hip']
+endif
+event_src.hostname = lower($kv_extra["hdn"])
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_syslog_plain_GNRL_EV_OBJECT_NOTCURED"

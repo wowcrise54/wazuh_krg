@@ -1,0 +1,96 @@
+JSON = ''
+COND = (
+    $eventid != null
+    and $node != null
+    and $timestamp != null
+    and $items["CONFIG_CHANGE"] != null
+    and (
+        find_substr($items["CONFIG_CHANGE"][0], "audit_rate_limit=") != null
+        or find_substr($items["CONFIG_CHANGE"][0], "audit_backlog_limit=") != null
+        or find_substr($items["CONFIG_CHANGE"][0], "audit_backlog_wait_time=") != null
+        or find_substr($items["CONFIG_CHANGE"][0], "audit_enabled=") != null
+        or find_substr($items["CONFIG_CHANGE"][0], "audit_failure=") != null
+    )
+)
+
+$kv_main = keyvalue($items["CONFIG_CHANGE"][0], " ", "=", "'")
+
+if $kv_main["auid"] != "4294967295" then
+    subject = "account"
+endif
+
+action = "configure"
+object = "logging"
+
+status = switch $kv_main["res"]
+    case "1" "success"
+    case "0" "failure"
+endswitch
+
+# Декодируем HEX, если требуется
+$auid_en = strip($kv_main["AUID"], '"', '"')
+if $auid_en == $kv_main["AUID"] then
+    $auid_en = hex_to_string($kv_main["AUID"])
+endif
+
+$auid_list = csv($auid_en, "@", "")
+
+if $kv_main["auid"] != "4294967295" then
+    subject.account.name = $auid_list[0]
+    subject.account.domain = $auid_list[1]
+
+    subject.account.id = $kv_main["auid"]
+endif
+
+subject.account.session_id = $kv_main["ses"]
+
+if $kv_main["audit_rate_limit"] != null then
+    object.property = "rate_limit"
+    object.new_value = $kv_main["audit_rate_limit"]
+elif $kv_main["audit_backlog_limit"] != null then
+    object.property = "backlog_limit"
+    object.new_value = $kv_main["audit_backlog_limit"]
+elif $kv_main["audit_backlog_wait_time"] != null then
+    object.property = "backlog_wait_time"
+    object.new_value = $kv_main["audit_backlog_wait_time"]
+elif $kv_main["audit_enabled"] != null then
+    object.property = "enabled"
+    object.new_value = $kv_main["audit_enabled"]
+elif $kv_main["audit_failure"] != null then
+    object.property = "failure"
+    object.new_value = $kv_main["audit_failure"]
+endif
+
+object.value = $kv_main["old"]
+
+chain_id = $eventid  # AuditD Event ID
+
+time = epoch_ms_to_datetime(number($timestamp + $timestampfractional))
+msgid = "CONFIG_CHANGE"
+importance = "info"
+
+event_src.title = "unix_like"
+event_src.vendor = event_src.title
+event_src.subsys = "auditd"
+event_src.category = "Operating system"
+
+if $node != "" then
+    if maybe_ipv4($node) != null or maybe_ipv6($node) != null then
+        if (in_subnet($node, "127.0.0.0/8") == False and $node != "::1") then
+            event_src.ip = $node
+            labels = "node_contains_ext_ip"
+        endif
+    else
+        $first_dot = find_substr($node, ".")
+        if $first_dot != null then
+            event_src.fqdn = $node
+            event_src.hostname = substr($node, 0, $first_dot)
+        else
+            event_src.hostname = $node
+        endif
+    endif
+else
+    event_src.ip = recv_ipv4
+endif
+
+id = "PT_UNIX_like_auditd_syslog_structured_config_change_params"

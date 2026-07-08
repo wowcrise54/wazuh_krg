@@ -1,0 +1,47 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME}
+        {msgid="CISE_Administrative_and_Operational_Audit"} {NUMBER} {NUMBER} 0 {UNTIL("Administrator-Login:")}
+        {"A CLI user has logged in from SSH"|"A SSH CLI user has attempted unsuccessfully to login"|
+        "Administrator authentication succeeded"|$tmp="Administrator authentication failed"} {$kv=KEYVALUE}'
+
+subject = "account"
+action = "login"
+object = "system"
+if $kv['AdminName'] == null then
+    status = "failure"
+    reason = $kv['OperationMessageText']
+    submessage("TEXT", "SPLIT", $kv['OperationMessageText'])
+elif in_list(["Wrong password", "This user is not allowed", "User not found"], $kv['OperationMessageText']) or $tmp != null then
+    status = "failure"
+    subject.account.name = $kv["AdminName"]
+    src.ip = $kv["AdminIPAddress"]
+    reason = $kv['OperationMessageText']
+else
+    status = "success"
+    subject.account.name = $kv["AdminName"]
+    src.ip = $kv["AdminIPAddress"]
+endif
+
+protocol.layer7 = switch $kv["AdminInterface"]
+    case "CLI" "ssh"
+    case "GUI" "http"
+endswitch
+
+datafield1 = $kv["AdminInterface"]  # интерфейс администратора
+
+subformula "SPLIT"
+    # Извлечение subject.name и src.ip из $kv['OperationMessageText']
+    !TEXT = "Failed password for {'invalid user'?} {subject.account.name=STRING} from {src.ip=IPV4|src.ip=IPV6} port
+            {src.port=NUMBER?} {STRING}"
+endsubformula
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "ise"
+event_src.vendor = "cisco"
+event_src.category = "AAA"
+
+id = "PT_Cisco_ACS_ISE_syslog_CISE_Administrative_and_Operational_Audit_login"

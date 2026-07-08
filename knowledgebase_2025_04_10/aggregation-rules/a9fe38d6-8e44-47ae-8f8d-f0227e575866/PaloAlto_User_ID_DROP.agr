@@ -1,0 +1,9 @@
+event User_ID_drop:
+    key:
+        event_src.host
+
+    object.type = "username to ip address mapping"
+    event_src.vendor = "palo_alto_networks"
+    event_src.title = "pan_os"
+
+aggregate PaloAlto_User_ID_DROP: User_ID_drop[-1,1] within 5m

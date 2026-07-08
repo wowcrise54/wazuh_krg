@@ -1,0 +1,251 @@
+event User_Create_TeamCity:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["teamcity-server.log", "teamcity-activities.log"], event_src.subsys)
+        and event_src.title == "teamcity"
+        and msgid == "user_create"
+        and subject.account.id == object.account.id
+    }
+
+event User_Start_Process_TeamCity:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["teamcity-server.log", "teamcity-activities.log"], event_src.subsys)
+        and event_src.title == "teamcity"
+        and msgid == "external_process_command_line"
+        and subject.account.name == "user"
+    }
+
+event Rest_Request_User_Create_TeamCity:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and id == "PT_JetBrains_TeamCity_syslog_Rest_Request_Finished"
+        and event_src.subsys == "teamcity-rest.log"
+        and object.type == "POST"
+        and status == "success"
+        # URL example: /404.html?jsp=/app/rest/users;.jsp
+        and regex(object.query, "\/\S+\?jsp=(\?|%2F)app(\/|%2F)rest(\/|%2F)users(\;|%3B).*?\.jsp$", 0) != null
+        and filter::CheckWL_Specific_Only("CVE_2024_27198_TeamCity_Authentication_Bypass", lower(join([event_src.host, src.ip, object.query], "|")))
+    }
+
+event Rest_Request_User_Create_Access_Token:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and id == "PT_JetBrains_TeamCity_syslog_Rest_Request_Finished"
+        and event_src.subsys == "teamcity-rest.log"
+        and object.type == "POST"
+        and status == "success"
+        # URL example: /404.html?jsp=/app/rest/users/id:2293/tokens/SevRKqNNGe;.jsp
+        and regex(object.query, "\/\S+\?jsp=(\?|%2F)app(\/|%2F)rest(\/|%2F)users(\/|%2F)id(\:|%3A)\d+(\/|%2F)tokens(\/|%2F).*?(\;|%3B)\.jsp$", 0) != null
+        and filter::CheckWL_Specific_Only("CVE_2024_27198_TeamCity_Authentication_Bypass", lower(join([event_src.host, src.ip, object.query], "|")))
+    }
+
+event Rest_Request_User_Execute_Process:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and id == "PT_JetBrains_TeamCity_syslog_Auth_Request_Processing"
+        and event_src.subsys == "teamcity-auth.log"
+        and object.type == "POST"
+        and status == "success"
+        and object.process.meta == "no auth"
+        # URL example: /app/rest/debug/processes?exePath=/bin/sh&params=-c&params=echo ReadyGO
+        and regex(object.query, "(\/|%2F)app(\/|%2F)rest(\/|%2F)debug(\/|%2F)processes\?exePath=", 0) != null
+        and filter::CheckWL_Specific_Only("CVE_2024_27198_TeamCity_Authentication_Bypass", lower(join([event_src.host, src.ip, object.query], "|")))
+    }
+
+rule CVE_2024_27198_TeamCity_Authentication_Bypass: 
+    (
+        (User_Create_TeamCity+ and Rest_Request_User_Create_TeamCity+)
+        or Rest_Request_User_Create_Access_Token+
+        or (Rest_Request_User_Execute_Process+ and User_Start_Process_TeamCity)
+    ) timer 5s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on User_Create_TeamCity {
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+
+        $object.account.fullname = object.account.fullname
+        $object.account.name = object.account.name
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.value = object.value
+
+        $numfield1 = numfield1   # Project Internal ID
+
+        $datafield1 = datafield1 # Project Fullpath
+        $datafield5 = datafield5 # Project ID
+    }
+    
+    on Rest_Request_User_Create_TeamCity {
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.port = src.port
+
+        $object.query = object.query
+        $object.type = object.type
+
+        $object.process.meta = object.process.meta
+
+        $reason = "User_Create"
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, src.ip, object.query], "|")) 
+        $alert.context = join(["Create user with id", $object.account.id], " ")
+        $alert.regex_match = regex($object.query, "\/\S+\?jsp=(\?|%2F)app(\/|%2F)rest(\/|%2F)users(\;|%3B).*?\.jsp$", 0)
+    }
+
+    on Rest_Request_User_Create_Access_Token {
+        $action = action
+        $object = object
+        $status = status
+        
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.port = src.port
+
+        $object.query = object.query
+        $object.type = object.type
+        $object.value = regex($object.query, "(\/|%2F)id(\:|%3A)\d+(\/|%2F)tokens(\/|%2F)(.*?)(\;|%3B)", 5)
+
+        $object.account.fullname = object.account.fullname
+        $object.account.name = object.account.name
+        $object.account.id = regex($object.query, "(\/|%2F)id(\/|%3A)(\d+)(\/|%2F)", 3)
+        $object.account.privileges = object.account.privileges
+
+        $object.process.meta = object.process.meta
+
+        $reason = "Access_Token_Create"
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, src.ip, object.query], "|"))
+        $alert.context = join(["Create token", $object.value, "for user with id", $object.account.id], " ")
+        $alert.regex_match = regex($object.query, "\/\S+\?jsp=(\?|%2F)app(\/|%2F)rest(\/|%2F)users(\/|%2F)id(\:|%3A)\d+(\/|%2F)tokens(\/|%2F).*?(\;|%3B)\.jsp$", 0)
+    }
+
+    on Rest_Request_User_Execute_Process {
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.port = src.port
+
+        $object.account.fullname = object.account.fullname
+        $object.account.name = object.account.name
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.query = object.query
+        $object.type = object.type
+
+        $object.process.meta = object.process.meta
+
+        $reason = "Process_Execute"
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([event_src.host, src.ip, object.query], "|"))
+        $alert.regex_match = regex($object.query, "(\/|%2F)app(\/|%2F)rest(\/|%2F)debug(\/|%2F)processes\?exePath=", 0)
+    }
+
+    on User_Start_Process_TeamCity {
+        $action = action
+        $object = object
+        $status = status
+
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        
+        $datafield20 = datafield20
+
+        $alert.context = join([$subject.account.id, $subject.account.name, $object.process.cmdline], "|")
+    }
+
+emit {
+    if in_list(["Access_Token_Create", "User_Create"], $reason) then
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+
+    $detect = "CVE-2024-27198"
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    switch $reason
+        case "Access_Token_Create"
+            $category.high = "Privilege Escalation"
+            $category.low = "Access Token Manipulation: Make and Impersonate Token"
+        case "User_Create"
+            $category.high = "Persistence"
+            $category.low = "Create Account: Local Account"
+        case "Process_Execute"
+            $category.high = "Initial Access"
+            $category.low = "Exploit Public-Facing Application"
+    endswitch
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $alert.key], "|")
+    $incident.severity = $importance
+    $incident.category = "VulnerabilityExploitation"
+    $incident.aggregation.timeout = 1h
+}

@@ -1,0 +1,41 @@
+TEXT = "{'<'NUMBER'>'?} {DATETIME?} {event_src.ip=IPV4|$Computer=HOSTNAME}
+        apt-detects[{NUMBER}]: \"Kaspersky Anti Targeted Attack Platform\", \"1.{UNTIL('\",')} \"{msgid='file_mail'}\",
+        {$csv=CSV(',','\"')}"
+
+action = "detect"
+object = "alert"
+status = "success"
+
+object.name = $csv[14]
+# Search for the start of the attachment name:
+$filename_start = find_substr($csv[9], "]/")
+# Extract the attachment name (all after the "]/" till the end)
+$filename = substr($csv[9], $filename_start, length($csv[9]) - $filename_start)
+object.property = "Malicious object"
+object.value = strip($filename, "]/", "//#")
+
+if $csv[16] != ""  and $csv[16] != "\"" then    # \" - workaround for the difference between normalizers
+    datafield1 = $csv[16]   # message-id
+endif
+datafield2 = $csv[17]   # sender address
+datafield3 = $csv[18]   # receiver addresses
+datafield4 = $csv[19]   # email subject
+
+time = $csv[3]
+
+if in_list(["Low", "Medium", "High"], $csv[1]) then
+    importance =  lower($csv[1])
+endif
+
+event_src.title = "kaspersky_anti_targeted_attack_platform"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_KATAP_syslog_v1_file_mail"

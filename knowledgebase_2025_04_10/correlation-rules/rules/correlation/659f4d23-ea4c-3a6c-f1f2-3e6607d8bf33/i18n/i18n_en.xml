@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="en">
+  <Description>A connection to samr and srvsvc named pipes on behalf of the same user from the same host was detected, which may indicate usage of one of the SharpHound (BloodHound) information collection methods: LocalGroup, RDP, DCOM, LocalAdmin, ComputerOnly</Description>
+  <EventDescriptions>
+    <EventDescription id="8deffe85-ccc0-47ed-9020-542792ecfa4a">User {subject.account.name} from host {src.host} used utility {object.process.name} to connect consecutively to {reason} named pipes of host {event_src.host}</EventDescription>
+    <EventDescription id="d22307b1-6ffe-44ef-a6b6-2cb9ef8a7dea">User {subject.account.name} from host {src.host} used utility {object.process.name} to connect to {reason} named pipe of host {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

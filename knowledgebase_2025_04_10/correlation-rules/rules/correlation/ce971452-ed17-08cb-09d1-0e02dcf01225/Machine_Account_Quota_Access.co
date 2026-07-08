@@ -1,0 +1,124 @@
+event LDAP_Attribute_Access:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "windows"
+        and msgid == "4662"
+        and not filter::ComputerAccount_Windows(subject.account.name)
+        and lower(datafield5) == "0x20"
+        and lower(object.type) == "19195a5b-6da0-11d0-afd3-00c04fd930c9" #DomainDNS
+        and find_substr(lower(datafield2),"{d064fb68-1480-11d3-91c1-0000f87a57d4}") != null # msDS-MachineAccountQuota
+        and filter::CheckWL_LDAP_Request("Machine_Account_Quota_Access", lower(join([subject.account.name, object.name, datafield2], "|")))
+    }
+
+event LDAP_Attribute_Query:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::AD_LDAP_Query()
+        and lower(subject.account.name) != "system"
+        and find_substr(lower(object.value), "ms-ds-machineaccountquota") != null
+        and filter::CheckWL_LDAP_Request("Machine_Account_Quota_Access", lower(join([object.account.name, src.host, object.query], "|")))
+    }
+    
+rule Machine_Account_Quota_Access: LDAP_Attribute_Access+ timer 2m or LDAP_Attribute_Query+ timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_LDAP_Request"
+    }
+
+    on LDAP_Attribute_Access {
+        $action = action
+        $object = object
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.name = object.name
+        $object.value = "domainDNS"
+        $object.type = object.type
+        $object.property = "ms-DS-MachineAccountQuota"
+
+        $datafield2 = datafield2
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.name, datafield2], "|"))
+        $alert.context = lower(object.value)
+    }
+
+    on LDAP_Attribute_Query {
+        $action = action
+        $object = object
+
+        $object.account.name = object.account.name
+        $object.account.fullname = object.account.fullname
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $dst.asset = event_src.asset
+        $dst.host = event_src.host
+        $dst.ip = event_src.ip
+        $dst.hostname = event_src.hostname
+        $dst.fqdn = event_src.fqdn
+
+        $object.query = object.query
+        $object.value = "domainDNS"
+        $object.property = object.value
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([object.account.name, src.host, object.query], "|"))
+        $alert.context = object.query
+        $alert.regex_match = regex(lower(object.value), "ms-ds-machineaccountquota", 0)
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery: Domain Account"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 5m
+}

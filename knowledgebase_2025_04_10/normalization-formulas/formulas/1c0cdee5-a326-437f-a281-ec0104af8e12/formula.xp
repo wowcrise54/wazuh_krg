@@ -1,0 +1,27 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        {time=DATETIME}: %{msgid="BGP-5-ADJCHANGE"}: {STRING} [{NUMBER}] {STRING} neighbor
+        {dst.ip=IPV4|dst.ip=IPV6} {$state=STRING} {$reason=REST}'
+
+action = switch $state
+    case "Up" "start"
+    case "Down" "stop" 
+endswitch
+
+object = "session"
+status = "success"
+
+object.state = $state
+
+protocol = "bgp"
+
+if length($reason) != 0 then
+    reason = substr ($reason, 2, length($reason) - 2)
+endif
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = "nexus"
+event_src.category = "Network device"
+
+id = "PT_Cisco_Nexus_syslog_bgp_neighbor_up_down"

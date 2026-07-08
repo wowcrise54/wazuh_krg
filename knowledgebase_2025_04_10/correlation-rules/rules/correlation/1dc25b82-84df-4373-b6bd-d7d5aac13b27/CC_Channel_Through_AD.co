@@ -1,0 +1,125 @@
+event Suspicious_LDAP_Attribute:
+    key:
+        event_src.host, subject.account.name, object.name, object.property
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and lower(object.type) == "user"
+        and not match(subject.account.name, "*$")
+        and in_list(["primaryinternationalisdnnumber", "otherfacsimiletelephonenumber", "primarytelexnumber", "msmqsigncertificates"], lower(object.property))
+        and filter::CheckWL_Specific_Only("CC_Channel_Through_AD", join([lower(subject.account.name),lower(object.name)], "|"))
+    }
+
+event LDAP_Attribute_Usage:
+    key:
+        event_src.host, subject.account.name, object.name, object.property
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "active_directory"
+        and msgid == "5136"
+        and lower(object.type) == "user"
+        and not match(subject.account.name, "*$")
+        and not match(lower(object.property), "extensionattribute*")
+        and not in_list(["primaryinternationalisdnnumber", "otherfacsimiletelephonenumber", "primarytelexnumber", "msmqsigncertificates",
+                         "lockouttime", "useraccountcontrol", "givenname", "samaccountname", "accountexpires",
+                         "title", "company", "department", "manager"], lower(object.property))
+        and filter::CheckWL_Specific_Only("CC_Channel_Through_AD", join([lower(subject.account.name),lower(object.name)], "|"))
+    }
+
+rule CC_Channel_Through_AD: Suspicious_LDAP_Attribute or (LDAP_Attribute_Usage[10,] timer 30s)
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+        $first_event = true
+    }
+
+    on Suspicious_LDAP_Attribute {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.name = object.name
+        $object.property = object.property
+        $object.value = object.value
+        $object.type = object.type
+        $object.state = object.state
+
+        $event_src.host = event_src.host
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.asset = event_src.asset
+
+        $reason = "suspicious_attribute"
+
+        $alert.key = join([lower(subject.account.name),lower(object.name)], "|")
+
+        if in_list(["primaryinternationalisdnnumber", "otherfacsimiletelephonenumber", "primarytelexnumber"], lower(object.property)) then
+            $alert.context = "known_tool: LDAPFragger | ioc: " + object.property
+        elif lower(object.property) == "msmqsigncertificates" then
+            $alert.context = "known_tool: ADC2.ps1 by HarmJ0y | ioc: " + object.property
+        endif
+
+        $incident.category = "HackToolsDetection"
+    }
+
+    on LDAP_Attribute_Usage {
+        if $first_event == true then
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.session_id = subject.account.session_id
+            $subject.account.id = subject.account.id
+            $subject.account.privileges = subject.account.privileges
+
+            $object.name = object.name
+            $object.property = object.property
+            $object.value = object.value
+            $object.type = object.type
+            $object.state = object.state
+
+            $event_src.host = event_src.host
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.asset = event_src.asset
+
+            $reason = "multiple_attribute_usage"
+
+            $alert.key = join([lower(subject.account.name),lower(object.name)], "|")
+            $alert.context = object.property
+
+            $first_event = false
+
+            $incident.category = "HostOrSoftCompromising"
+        else
+            $object.value = $object.value + " | " + object.value
+        endif
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "ds_object"
+    $status = "success"
+
+    $importance =  "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Command and Control"
+    $category.low = "Data Obfuscation: Protocol Impersonation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

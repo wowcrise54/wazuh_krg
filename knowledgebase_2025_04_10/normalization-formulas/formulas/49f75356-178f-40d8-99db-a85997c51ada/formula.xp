@@ -1,0 +1,91 @@
+TABULAR = '{chain_id=TransactionId},
+           {datafield2=SequenceId},
+           {time=OccurredAt},
+           {$selector=ObjectSelector},
+           {$login=Login},
+           {$workstation=Workstation},
+           {$account=NTAccount},
+           SequenceNumber,
+           {$temp_action=Action},
+           {msgid=ObjectType},
+           {$server=Server},
+           ServerIsPrimary'
+
+COND = $ObjectType == "User"
+
+subject = "account"
+
+if $temp_action == "Include" or $temp_action == "Exclude" then
+    action = "modify"
+    object = "user_group"
+
+    subject.account.name = lower($login)
+
+    $csv_account = csv(lower($account), "\\", "")
+    subject.name = $csv_account[1]    # Имя системного пользователя
+    subject.domain = $csv_account[0]  # Домен системного пользователя
+
+    $csv_selector = csv($selector, "/", "")
+    $employee = $csv_selector[length($csv_selector) - 1]
+    object.name = strip($selector, $csv_selector[0] + "/", "/" + $employee)
+    $csv_employee = csv($employee, "\\", "")
+    object.property = lower($temp_action) + " user"
+    object.value = $employee
+else
+    if $temp_action == "Insert" then
+        action = "create"
+
+        object.property = $FieldName
+        if $NewValue != "" then
+            object.value = $NewValue
+        endif
+    elif $temp_action == "Update" then
+        action = "modify"
+
+        object.property = $FieldName
+        object.value = $OldValue
+
+        object.new_value = $NewValue
+    elif $temp_action == "Delete" then
+        action = "remove"
+    endif
+
+    object = "account"
+
+    subject.account.name = lower($login)
+
+    $csv_account = csv(lower($account), "\\", "")
+    subject.name = $csv_account[1]    # Имя системного пользователя
+    subject.domain = $csv_account[0]  # Домен системного пользователя
+
+    $csv_selector = csv($selector, "/", "")
+    $csv_employee = csv(lower($csv_selector[1]), "\\", "")
+    object.account.name = $csv_employee[1]
+    object.account.domain = $csv_employee[0]
+
+    category.high = "Users And Rights Management"
+    category.low = "Manipulation"
+    category.generic = "Account"
+endif
+
+status = "success"
+
+src.hostname = lower($workstation)
+dst.hostname = lower($server)
+
+# datafield2 - Номер действия в рамках текущей транзакции
+
+if lower($workstation) == lower($server) then
+    logon_auth_method = "local"
+else
+    logon_auth_method = "remote"
+endif
+
+importance = "medium"
+
+event_src.vendor = "infowatch"
+event_src.title = "device_monitor"
+event_src.hostname = lower($server)
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Device_Monitor_odbc_user_actions"

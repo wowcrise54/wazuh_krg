@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?} 
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} 
+        {"%%"?}{WORD+}/{NUMBER}/{msgid="ENTITYREMOVE"}{"(l)"?}{"["NUMBER"]"?}:OID {STRING} Physical entity is removed.
+        (Index={object.id=NUMBER}, Severity={NUMBER}, ProbableCause={NUMBER},
+        EventType={NUMBER}, ContainedIn={NUMBER}, PhysicalName="{$PhysicalName=REST}'
+
+action = "disable"
+object = "module"
+status = "success"
+
+object.name = strip($PhysicalName, '', '")')
+
+importance = "high"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Module_removed"

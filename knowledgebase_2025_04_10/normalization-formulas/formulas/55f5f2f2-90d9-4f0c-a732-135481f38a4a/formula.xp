@@ -1,0 +1,25 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["product"] == "VPN-1 & FireWall-1"
+       and find_substr($kv["cluster_info"], "(ClusterXL) Starting ClusterXL") != null
+
+object = "service"
+action = "start"
+status = "success"
+
+object.name = "ClusterXL"
+
+datafield4 = $kv["origin_sic_name"]  # полное доменное имя
+datafield9 = $hostname               # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($kv["product"])
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_VPN_and_Firewall_Cluster_service_was_started"

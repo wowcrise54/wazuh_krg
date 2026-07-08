@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL(": ")}
+        Warning: Potential {object.name="Directory Harvest Attack"} detected {REST}'
+
+action = "detect"
+object = "attack"
+status = "success"
+
+reason = "Potential attack detected"
+
+importance = "medium"
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Potential Attack"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_potential_DHA_detected"

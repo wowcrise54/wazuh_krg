@@ -1,0 +1,41 @@
+TEXT = '{"<"NUMBER">"?}CEF:{NUMBER}|Check Point|
+        {$tmp_subsys=UNTIL("|")}Check Point|{UNTIL("|")}
+        {UNTIL("|")}{UNTIL("|")}{$kv=KEYVALUE(" ", "=", "~")}'
+
+COND = find_substr($kv["default_device_message"], "clish") != null
+       and find_substr($kv["default_device_message"], "User") != null
+       and
+           (
+            find_substr($kv["default_device_message"], "logged in with") != null
+            or find_substr($kv["default_device_message"], "running clish") != null
+           )
+       and find_substr($kv["default_device_message"], "permission") != null
+
+subject = "account"
+action = "login"
+object = "application"
+status = "success"
+
+subformula 'sub1'
+    # извлечение event_src.hostname, subject.account.name, subject.account.privileges
+    TEXT = '{"<"NUMBER">"?}{event_src.hostname = UNTIL(" ")} clish[{UNTIL("]")}: User {subject.account.name = UNTIL(" ")} {"logged" | "running"} {UNTIL("with")} {subject.account.privileges = UNTIL(" ")} permission {REST}'
+endsubformula
+
+submessage('TEXT', 'sub1', $kv["default_device_message"])
+
+object.name = "clish"
+
+time = epoch_ms_to_datetime(number($kv["rt"]))
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+event_src.subsys = lower($tmp_subsys)
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_CEF_Common_SSH_Clish_login"

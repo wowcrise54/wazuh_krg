@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-session"?}-{NUMBER}-{msgid="507003"}:
+        {protocol=WORD} flow from {UNTIL(":")}{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}/{src.port=NUMBER} to
+        {UNTIL(":")}{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}/{dst.port=NUMBER}
+        terminated by inspection engine, reason - {$reason_raw=REST}'
+
+action = "deny"
+object = "connection"
+status = "success"
+
+reason = strip($reason_raw, "", ".")
+
+importance = "info"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_507003_Flow_was_terminated_by_inspection_engine"

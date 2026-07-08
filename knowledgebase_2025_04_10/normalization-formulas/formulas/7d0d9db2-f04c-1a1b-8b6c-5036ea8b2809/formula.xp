@@ -1,0 +1,43 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} - 
+        {msgid="USRMGMT"} [{$until=UNTIL("]")} User account {STRING} was created'
+
+$kv = keyvalue($until, " ", "=", "\"")
+
+subject = if coalesce($kv["login_owner"], $kv["fio_owner"], $kv["session_id"]) != null then "account" else null endif
+action = "create"
+object = "account"
+status = "success"
+
+subject.account.name = $kv["login_owner"]
+subject.account.fullname = $kv["fio_owner"]
+subject.account.session_id = $kv["session_id"]
+
+object.account.name = $kv["login"]
+
+if ipv4($kv["ip"]) == null then
+    src.hostname = $kv["ip"]
+else
+    src.ip = $kv["ip"]
+endif
+
+dst.ip = event_src.ip
+dst.hostname = $Computer
+
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "avanpost"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "avanpost_websso"
+event_src.category = "AAA"
+
+id = "PT_Avanpost_Avanpost_WEBSSO_syslog_Account_create"

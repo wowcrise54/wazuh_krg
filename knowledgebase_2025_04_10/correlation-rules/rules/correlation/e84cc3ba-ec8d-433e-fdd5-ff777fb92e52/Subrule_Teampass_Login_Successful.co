@@ -1,0 +1,94 @@
+event Nginx_Connect:
+    key:
+        recv_ipv4     
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "nginx"
+        and lower(id) == "pt_opensource_apache_nginx_lighttpd_access_log_syslog_resource_access"
+        and lower(object.fullpath) == "/sources/identify.php"
+        and src.host != null
+        and lower(object.value) == "post"
+        and action == "access"
+        and status == "success"
+    }
+
+event Teampass_Logon:
+    key:
+        recv_ipv4
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "teampass"
+        and action == "login"
+        and subject.account.name != null
+        and status == "success"
+    }
+    
+rule Subrule_Teampass_Login_Successful: (Nginx_Connect and Teampass_Logon) within 1m
+
+    on Nginx_Connect {
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.state = object.state
+
+        $object.process.meta = object.process.meta
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+        
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+        
+        $protocol.layer7 = protocol.layer7
+        $datafield2 = datafield2 # Url
+        
+        $event_src.asset = event_src.asset
+        $event_src.hostname = event_src.hostname
+    }
+
+    on Teampass_Logon {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.contact = subject.account.contact
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.privileges = subject.account.privileges
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.ip = event_src.ip
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+   
+emit {
+    $subject = "account"
+    $object = "application"
+    $action = "login"
+    $status = "success"
+           
+    $correlation_type = "subrule"
+    
+    $category.generic = "Anomaly"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"    
+    
+    $importance = "info"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host, $subject.account.name], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

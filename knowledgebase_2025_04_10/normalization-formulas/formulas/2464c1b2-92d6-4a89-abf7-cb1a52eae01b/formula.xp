@@ -1,0 +1,47 @@
+EVENTLOG = 'EventID.text="20272"'
+!COND = $Channel=="System" and $Provider["Name"]=="RemoteAccess"
+
+subject = "account"
+action = "info"
+object = "session"
+status = "success"
+
+$data_extra_index = if length($Data) == 15 then 1 else 0 endif
+    
+$name_domain = csv($Data[1 + $data_extra_index], "\\", "'")
+
+if length($name_domain) == 1 then
+    subject.account.name = lower($name_domain[0])
+else
+    subject.account.domain = lower($name_domain[0])
+    subject.account.name = lower($name_domain[1])
+endif
+
+interface = $Data[2 + $data_extra_index]
+count.bytes_out = $Data[9 + $data_extra_index]
+count.bytes_in = $Data[10 + $data_extra_index]
+
+datafield1 = $Data[12 + $data_extra_index]                   # использованный туннель
+datafield2 = strip($Data[13 + $data_extra_index], '"', '"')  # cостояние карантина
+
+duration = number($Data[7 + $data_extra_index])*60 + number($Data[8 + $data_extra_index])
+reason = $Data[11 + $data_extra_index]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "vpn-gateway"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_20272_Connection_info"

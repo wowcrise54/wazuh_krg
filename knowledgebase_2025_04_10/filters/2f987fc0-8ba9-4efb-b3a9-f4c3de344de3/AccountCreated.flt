@@ -1,0 +1,10 @@
+filter AccountCreated() {
+    category.generic == "Account"
+    and category.high == "Users And Rights Management"
+    and category.low == "Manipulation"
+    and action == "create"
+    and status == "success"
+    and coalesce(object.name, object.id, object.path,
+                 object.account.name, object.account.id,
+                 object.application.account.name, object.application.account.id) != null
+}

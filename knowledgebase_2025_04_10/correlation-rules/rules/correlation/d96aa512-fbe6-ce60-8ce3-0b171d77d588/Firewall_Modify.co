@@ -1,0 +1,232 @@
+event Process_Start:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and in_list(["wmic.exe", "cmd.exe", "powershell.exe", "powershell_ise.exe", "pwsh.exe", "netsh.exe", "reg.exe"], lower(object.process.name))
+        and regex(lower(object.process.cmdline), "\\badvfirewall\s+(firewall\s+)?(add|delete|import|set)\\b", 0) != null
+        and filter::CheckWL_Process_Creation("Firewall_Modify", lower(join([coalesce(subject.account.name, subject.account.id), object.process.cmdline], "|")))
+    }
+
+event Powershell_Pipeline_Execute:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4103"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "\\b(advfirewall\s+(firewall\s+)?(add|delete|import|set)\\b)|[^\"']\\b(set|new|remove)-netfirewall(securityfilter|rule|setting|addressfilter|applicationfilter|interfacefilter|interfacetypefilter|portfilter|profile|servicefilter)\\b[^\"']", 0) != null
+        and lower(object.process.name) != "export-modulemember"
+        and filter::CheckWL_Powershell("Firewall_Modify", lower(join([coalesce(subject.account.name, subject.account.id), object.process.cmdline], "|")))
+    }
+
+event Powershell_Command_Execute:
+    key:
+        event_src.host, object.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4104"
+        and action == "execute"
+        and event_src.title == "windows"
+        and object == "command"
+        and regex(lower(object.process.cmdline), "\\b(advfirewall\s+(firewall\s+)?(add|delete|import|set)\\b)|[^\"']\\b(set|new|remove)-netfirewall(securityfilter|rule|setting|addressfilter|applicationfilter|interfacefilter|interfacetypefilter|portfilter|profile|servicefilter)\\b[^\"']", 0) != null
+        # Чтобы не фолзило на следующие подстроки:
+        # function 'Set-NetFirewallSetting' -Alias '*'
+        # ... "Set-NetFirewallAddressFilter",        "Set-NetFirewallApplicationFilter",        "Set-NetFirewallInterfaceFilter", ...
+        # ... function Set-NetFirewallAddressFilter{ ...
+        and regex(lower(object.process.cmdline), "((\\bfunction\s+(['\"])?)|['\"])(set|new|remove)-netfirewall(securityfilter|rule|setting|addressfilter|applicationfilter|interfacefilter|interfacetypefilter|portfilter|profile|servicefilter)\\b(['\"])?", 0) == null
+        and filter::CheckWL_Powershell("Firewall_Modify", lower(join([coalesce(subject.account.name, subject.account.id), regex(lower(object.process.cmdline), "\\b(advfirewall\s+(firewall\s+)?(add|delete|import|set)\\b)|\\b(set|new|remove)-netfirewall(securityfilter|rule|setting|addressfilter|applicationfilter|interfacefilter|interfacetypefilter|portfilter|profile|servicefilter)\\b", 0)], "|")))
+    }
+
+rule Firewall_Modify: Process_Start or Powershell_Pipeline_Execute or (Powershell_Command_Execute+ timer 1s)
+
+    init {
+        $labels = "w_auto"        
+        $first_event = true
+    }
+
+    on Process_Start {
+        $action = action  # start
+        $object = object  # process
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID
+
+        $datafield18 = datafield18  # Цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # Цепочка процесса-объекта с идентификаторами
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.rule = event_src.rule
+        
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "\\badvfirewall\s+(firewall\s+)?(add|delete|import|set)\\b", 0)
+        $alert.context = join([coalesce(object.process.parent.name, "ppid: " + object.process.parent.id), object.process.name, "regex_match: " + $alert.regex_match], " | ")
+        
+        $labels = $labels + "|CheckWL_Process_Creation"
+    }
+
+    on Powershell_Pipeline_Execute {
+        $action = action  # execute
+        $object = object  # command
+
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+
+        $object.process.cmdline = object.process.cmdline
+        $object.process.name = object.process.name
+
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.value = object.value
+
+        $datafield8 = datafield8  # Версия модуля
+        $datafield9 = datafield9  # Командлайн без приведения к нижнему регистру
+
+        $chain_id = chain_id
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), object.process.cmdline], "|"))
+        $alert.regex_match = regex(lower(object.process.cmdline), "\\b(advfirewall\s+(firewall\s+)?(add|delete|import|set)\\b)|\\b(set|new|remove)-netfirewall(securityfilter|rule|setting|addressfilter|applicationfilter|interfacefilter|interfacetypefilter|portfilter|profile|servicefilter)\\b", 0)
+        $alert.context = join([coalesce(object.process.parent.name, "ppid: " + object.process.parent.id), object.process.name, "regex_match: " + $alert.regex_match], " | ")
+
+        $labels = $labels + "|CheckWL_Powershell"
+    }
+
+    on Powershell_Command_Execute {
+        if $first_event then
+            $action = action  # execute
+            $object = object  # command
+
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.fullname = subject.account.fullname
+            $subject.account.id = subject.account.id
+
+            $object.account.name = object.account.name
+            $object.account.domain = object.account.domain
+            $object.account.fullname = object.account.fullname
+            $object.account.id = object.account.id
+
+            $object.process.cmdline = object.process.cmdline
+            $object.process.id = object.process.id
+
+            $object.id = object.id
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+            $object.value = object.value
+
+            $event_src.host = event_src.host
+            $event_src.fqdn = event_src.fqdn
+            $event_src.hostname = event_src.hostname
+            $event_src.ip = event_src.ip
+            $event_src.asset = event_src.asset
+            $event_src.vendor = event_src.vendor
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+
+            $alert.regex_match = regex(lower(object.process.cmdline), "\\b(advfirewall\s+(firewall\s+)?(add|delete|import|set)\\b)|\\b(set|new|remove)-netfirewall(securityfilter|rule|setting|addressfilter|applicationfilter|interfacefilter|interfacetypefilter|portfilter|profile|servicefilter)\\b", 0)
+            $alert.key = lower(join([coalesce(subject.account.name, subject.account.id), $alert.regex_match], "|"))
+            $alert.context = join([coalesce(object.account.name, object.account.id), object.fullpath, "regex_match: " + $alert.regex_match], " | ")
+            
+            $labels = $labels + "|CheckWL_Powershell"
+
+            $first_event = false
+        endif
+        
+        if $object.fullpath == null and object.fullpath != null then
+            $object.name = object.name
+            $object.path = object.path
+            $object.fullpath = object.fullpath
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses: Disable or Modify System Firewall"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = if find_substr(lower($alert.regex_match), "delete") != null then "ProtectionMalfunction" else "ProtectionBypassing" endif
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,74 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        [{time=DATETIME}] ["http{"s"?}-{WORD}-{WORD}-{NUMBER}-exec-{NUMBER}"/{dst.ip=IPV4|dst.ip=IPV6} INFO] 
+        [com.vmware.loginsight.web.actions.InstrumentationActionBean] [[{$act_info=REST}'
+
+if find_substr($act_info, "UserID: null") == null then
+    subject = "account"
+endif
+
+if find_substr($act_info, "PageLoaded") != null then
+    action = "open"
+elif find_substr($act_info, "PageClosed") != null then
+    action = "close"
+else
+    action = "info" 
+endif 
+
+object = "resource"
+status = "success"
+
+subformula "parse_action"
+    TEXT = '{$info=UNTIL(" PageLoaded: ")|$info=UNTIL(" PageClosed: ")|$json_info=UNTIL(" {")} {$page=REST}'
+
+    if $json_info == null then
+        $info = strip($info, "", "]")
+        $kv = keyvalue($info, "] [", ":")
+        
+        if $page != null then
+            $page_loaded_pos = find_substr($page, " (page load") 
+        endif
+        
+        if $page_loaded_pos != null then
+            $page_name = substr($page, 0, $page_loaded_pos)
+        else
+            $page_name = strip($page, "", "]")
+        endif
+    else
+        $json_info = strip($json_info, "", "]")
+        $kv = keyvalue($json_info, "] [", ":")
+        submessage('JSON', 'parse_json', '{' + strip($page, "", "]"))
+    endif
+endsubformula
+
+subformula "parse_json"
+    JSON = ''
+    
+    object.property = "action on page"
+    object.value = $name
+    $page_name = $where
+endsubformula
+
+submessage("TEXT", "parse_action", $act_info)
+
+if $kv["UserID"] != "null" then
+    subject.account.id = lower($kv["UserID"])
+endif
+
+subject.account.privileges = lower($kv["RBAC Capabilities"])
+subject.account.group = lower($kv["RBAC Group"])
+
+object.process.meta = $kv["UserAgent"]
+
+object.name = lower($page_name)
+object.type = "web page"
+
+datafield1 = $kv["Operations for Logs Version"] # AOFL version
+
+importance = "info"
+
+event_src.id = $kv["ClusterID"]
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_rbac_open_close_info_page"

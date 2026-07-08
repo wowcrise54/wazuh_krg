@@ -1,0 +1,9 @@
+filter FileCreate_Linux() {
+    event_src.title == "unix_like"
+    and event_src.subsys == "auditd"
+    and status == "success"
+    and action == "create"
+    and category.generic == "File System Object"
+    and in_list(["System Management", "Users And Rights Management"], category.high) 
+    and category.low == "Manipulation"
+}

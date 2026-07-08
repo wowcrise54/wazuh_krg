@@ -1,0 +1,36 @@
+EVENTLOG = 'EventID.text="551"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Security"
+
+subject = "account"
+action = "logout"
+object = "system"
+status = "success"
+
+subject.account.name = lower($Data[0])
+subject.account.domain = lower($Data[1])
+subject.account.session_id = maybe_number16(strip($Data[2], "(0x0,", ")"))
+
+dst.hostname = lower($Computer)
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_forwarded_551_A_user_initiated_the_logoff_process"

@@ -1,0 +1,49 @@
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {$Computer=STRING} {UNTIL(" events - - ")}CEF:0|{"Usergate"|"UserGate"}|{"UTM"|"NGFW"}|{NUMBER}|events|core|{WORDDASH}|
+        rt={$temp_time=NUMBER} deviceExternalId={event_src.id=STRING+} suser=System cat=device
+        act={msgid="scheduled_export_failed"} src={src.ip=IPV4|src.ip=IPV6} {UNTIL(" cs1=")}{$rest=REST}'
+
+subject = "account"
+action =  "execute"
+object = "task"
+status = "failure"
+
+subformula "SPLIT"
+    # Извлечение  reason из $rest
+    JSON=''
+    
+    subject.account.name = $rule['server_login']
+
+    object.name = $rule['name']
+    
+    $path_csv = csv($rule['server_path'], "/", "")
+    object.storage.fullpath = $rule['server_path']
+    object.storage.name = $path_csv[length($path_csv) - 1]
+    if strip(object.storage.fullpath, "", object.storage.name) != '' then
+        object.storage.path = strip(object.storage.fullpath, "", object.storage.name)
+    endif
+        
+    dst.hostname = $rule['server_address']
+    dst.port = $rule['server_port']  
+    
+    datafield1 = $rule['server_type']  # server type
+    
+    reason = $error_text
+endsubformula
+
+submessage("JSON", "SPLIT", $rest)
+
+time = epoch_ms_to_datetime($temp_time)
+importance = "low"
+
+event_src.vendor = "entensys"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_scheduled_export_failed"

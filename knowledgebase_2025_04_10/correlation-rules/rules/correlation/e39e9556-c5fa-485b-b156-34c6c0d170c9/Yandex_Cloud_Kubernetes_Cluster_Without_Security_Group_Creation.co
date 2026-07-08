@@ -1,0 +1,94 @@
+event Cluster_Creation:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "yandex"
+        and event_src.title == "yandex_cloud"
+        and event_src.subsys == "k8s"
+        and action == "create"
+        and object == "resource"
+        and object.type == "cluster"
+        and status == "success"
+        and datafield9 == null
+        and filter::CheckWL_Specific_Only("Yandex_Cloud_Kubernetes_Cluster_Without_Security_Group_Creation", lower(join([src.ip, object.storage.fullpath], "|")))
+    }
+
+rule Yandex_Cloud_Kubernetes_Cluster_Without_Security_Group_Creation: Cluster_Creation
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Cluster_Creation {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+
+        $subject.process.meta = subject.process.meta
+
+        $subject.state = subject.state
+        $subject.type = subject.type
+
+        $object.storage.fullpath = object.storage.fullpath
+
+        $object.id = object.id
+        $object.name = object.name
+        $object.path = object.path
+        $object.state = object.state
+        $object.type = object.type
+        $object.version = object.version
+        $object.property = object.property
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $logon_auth_method = logon_auth_method
+
+        $datafield1 = datafield1    # Наименование организации
+        $datafield2 = datafield2    # Наименование облака
+        $datafield3 = datafield3    # Наименование каталога
+        $datafield4 = datafield4    # Идентификатор сервисной учетной записи рабочих узлов
+        $datafield5 = datafield5    # Идентификатор сети
+        $datafield6 = datafield6    # Внутренний IP-адрес
+        $datafield7 = datafield7    # Внешний IP-адрес
+        $datafield10 = datafield10  # Параметры конфигурации кластера
+
+        $chain_id = chain_id
+
+        $alert.key = lower(join([src.ip, object.storage.fullpath], "|"))
+        $alert.context = lower(join(remove([subject.account.name, src.ip, object.storage.fullpath], null), " | "))
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "create"
+    $object = "resource"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Modify Cloud Compute Infrastructure: Create Cloud Instance"
+
+    $incident.aggregation.key = join([$correlation_name, $src.ip, $object.storage.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

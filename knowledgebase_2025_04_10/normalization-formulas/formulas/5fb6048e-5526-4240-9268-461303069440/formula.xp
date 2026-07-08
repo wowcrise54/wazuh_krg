@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|$Computer=HOSTNAME} slapd[{NUMBER}]:
+        conn={datafield1=NUMBER} op={NUMBER} RESULT tag={datafield2=NUMBER} err={$state=NUMBER} {REST}'
+
+action = "info"
+object = "request"
+status = "success"
+
+if $state == 0 then
+    object.state = "request executed successfully"
+else
+    object.state = "request failed to execute"
+endif
+
+# datafield1 - connection number
+# datafield2 - tag number
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "openldap"
+event_src.category = "Directory service"
+
+id = "PT_Opensource_OpenLDAP_syslog_result"

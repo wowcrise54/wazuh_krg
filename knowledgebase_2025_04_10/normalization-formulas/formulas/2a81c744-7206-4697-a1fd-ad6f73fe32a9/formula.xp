@@ -1,0 +1,25 @@
+!TABULAR = "audit_log_id_kf,
+            {time=change_date},
+            {subject.name=user_login},
+            {datafield1=user_fullname}"
+
+!COND = ($entity_type == "AgentJob" and $operation == "start_scan_job")
+
+subject = "account"
+action = "start"
+object = "task"
+status = "success"
+
+object.type = "integrity check job"
+
+# datafield1 - отображаемое имя пользователя-субъекта
+datafield2 = $user_email            # Почтовый адрес пользователя-субъекта
+
+importance = "low"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_6_odbc_Audit_Integrity_check_started"

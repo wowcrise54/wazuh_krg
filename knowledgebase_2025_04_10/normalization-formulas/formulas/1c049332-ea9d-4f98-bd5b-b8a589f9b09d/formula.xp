@@ -1,0 +1,57 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "IPS_APP_CTRL"
+
+action = "detect"
+object = "alert"
+status = "success"
+
+object.name = switch $type_of_attack
+    case 2 "Вызов функции SetWindowsHook для внедрения dll в чужой процесс"
+    case 5 "Вызов функции DupHandles для работы с объектами чужого процесса"
+    case 12 "Запуск службы"
+    case 13 "Взаимодействие с другим процессом посдредством отсылки оконных сообщений"
+    case 15 "Взаимодействие с другим процессом с помощью OLE объектов"
+    case 16 "Вызов функции для отправки ICMP сообщения"
+    case 17 "Вызов DNS API"
+    case 18 "Запуск доверенных (подписанных) процессов"
+    case 19 "Запуск недоверенных (неподписанных) процессов"
+    case 20 "Получение контекста десктопа или активного окна (возможно снятие скриншота)"
+    case 21 "Перехват нажатия клавиш"
+    case 22 "Право на работу с сетью для дочерних процессов приложения"
+    case 24 "Изменение файла HOSTS"
+endswitch
+
+if $permit == 1 then
+    object.state = "allowed"
+    importance = "low"
+else
+    object.state = "blocked"
+    importance = "high"
+endif
+
+object.property = "process name"
+object.value = $process_name
+
+reason = $comment
+
+# Name of the user who started the process
+datafield1 = $user_name
+
+# PID процесса
+datafield2 = $process_id
+
+event_src.vendor = "confident"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_ips_app_ctrl_application_suspicious_activity"

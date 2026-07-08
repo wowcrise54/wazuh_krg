@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        {event_src.subsys=WORDDASH} [{NUMBER}]: alias database
+        {object.path=STRING+} rebuilt by {subject.name=REST}'
+
+subject = "account"
+action = "update"
+object = "database"
+status = "success"
+
+importance = "info"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "sendmail"
+event_src.category = "Mail server"
+
+id = "PT_Opensource_Sendmail_syslog_database_rebuilt"

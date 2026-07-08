@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}: *
+        {WORDDASH}: {time=DATETIME}: {"#"|"%"} {msgid="APF-4-ROGUE_CLIENT_CONTAIN_FAILED"}: {STRING} Unable to contain
+        rogue client {src.mac=MACADDR}. Moved to pending.'
+
+action = "alert"
+object = "host"
+status = "success"
+
+reason = "Unable to contain rogue client. Moved to pending."
+
+importance = "medium"
+
+event_src.vendor = "cisco"
+event_src.title = "wlc"
+event_src.category = "Wireless"
+
+id = "PT_Cisco_WLC_syslog_APF_4_ROGUE_CLIENT_CONTAIN_FAILED"

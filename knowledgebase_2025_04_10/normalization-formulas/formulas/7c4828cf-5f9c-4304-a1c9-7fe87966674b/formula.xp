@@ -1,0 +1,112 @@
+EVENTLOG = 'EventID="6274"'
+
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+# данные пользователя, который авторизуется
+subject.account.id = $Data["SubjectUserSid"]
+subject.account.domain = lower($Data["SubjectDomainName"])
+
+if $Data["SubjectUserName"] != "-" and $Data["SubjectUserName"] != null then
+    $username = lower($Data["SubjectUserName"])
+    if find_substr($username, '@') != null then
+        subject.account.name = csv($username, '@', '')[0]
+    elif find_substr($username, '\\') != null then
+        subject.account.name = csv($username, '\\', '')[1]
+    else 
+        subject.account.name = $username
+    endif
+endif
+
+if $Data['AccountSessionIdentifier'] != '-' then
+    subject.account.session_id = $Data['AccountSessionIdentifier']
+endif
+
+# данные сервера, который дает права (он же в dst.*)
+if $Data["ProxyPolicyName"] != "-" then
+    object.type = $Data["ProxyPolicyName"]
+endif
+
+if $Data["NetworkPolicyName"] != "-" then
+    object.name = $Data["NetworkPolicyName"]
+endif
+if $Data["NASIdentifier"] != "-" then
+    object.id = $Data["NASIdentifier"]
+endif
+
+# данные машины пользователя
+if $Data["SubjectMachineName"] != "-" then
+    $hostname = lower($Data["SubjectMachineName"])
+endif
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    src.fqdn = $hostname
+    src.hostname = substr($hostname, 0, $dot_pos)
+else
+    src.hostname = $hostname
+endif
+
+if $Data["CallingStationID"] != "-" then
+    if coalesce(maybe_ipv4($Data["CallingStationID"]), maybe_ipv6($Data["CallingStationID"])) != null then
+        src.ip = $Data["CallingStationID"]
+    elif maybe_macaddr(substr($Data["CallingStationID"], 0, 17)) != null then
+        src.mac = substr($Data["CallingStationID"], 0, 17)
+    else 
+        datafield2 = $Data["CallingStationID"]  # Calling station ID
+    endif
+endif
+
+# данные сервера, который дает права
+if $Data["CalledStationID"] != "-" then
+    if coalesce(maybe_ipv4($Data["CalledStationID"]), maybe_ipv6($Data["    CalledStationID"])) != null then
+        dst.ip = $Data["CalledStationID"]
+    elif maybe_macaddr(substr($Data["CalledStationID"], 0, 17)) != null then
+        dst.mac = substr($Data["CalledStationID"], 0, 17)
+    else 
+        datafield3 = $Data["CalledStationID"]  # Called station ID
+    endif
+endif
+
+# данные сервера, который авторизует
+nas_ip = coalesce(maybe_ipv4($Data["NASIPv4Address"]), maybe_ipv6($Data["NASIPv6Address"]))
+
+logon_auth_method = "remote"
+
+if $Data["NASPort"] != "-" then
+    datafield4 = $Data["NASPort"]  # The Text field contains the name of the port using UTF-8 encoded 10646 [8] characters
+endif
+
+datafield1 = $Data["AuthenticationType"]  # Authentication type
+datafield5 = coalesce(maybe_ipv4($Data["ClientIPAddress"]), maybe_ipv6($Data["ClientIPAddress"]))  # RADIUS Client IP address
+datafield6 = $Data['Reason']    # человекочитаемое описание причины
+
+reason = $Data['ReasonCode']
+
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "nps"
+event_src.subsys = lower($Channel)
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "AAA"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_6274_NPS_discarded_the_request_for_a_user"

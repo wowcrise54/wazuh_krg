@@ -1,0 +1,41 @@
+TEXT = '* {$day_or_mon=WORD}{$locale="."|$locale="/"}{$mon_or_day=WORD}{$locale="."|$locale="/"}{$year=WORD} {$h=WORD}{":"|"."}{$m=WORD}{":"|"."}{$s=WORD}
+        {":"|"."}{WORD} Starting {object.name = STRING+} on port {src.port = NUMBER}'
+
+action = "start"
+object = "service"
+status = "success"
+
+if $locale == "." then  # определяем в каком формате дата
+    $mon = $mon_or_day
+    $day = $day_or_mon
+else
+    $mon = $day_or_mon
+    $day = $mon_or_day
+endif
+
+$ds = string($day)   # день
+$ms = string($mon)   # месяц
+$ys = string($year)  # год
+$hs = string($h)     # час
+$mis = string($m)    # минута
+$ss = string($s)     # секунда
+
+$mms = if length($ms) == 1 then "0"+ $ms else $ms endif
+$dds = if length($ds) == 1 then "0"+ $ds else $ds endif
+$mmis = if length($mis) == 1 then "0"+ $mis else $mis endif
+$hhs = if length($hs) == 1 then "0"+ $hs else $hs endif
+$sss = if length($ss) == 1 then "0"+ $ss else $ss endif
+
+time = $mms+"/"+$dds+"/"+$ys+" "+$hhs+":"+$mmis+":"+$sss
+
+importance = "info"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "entensys"
+event_src.title = "usergate_proxy_and_firewall"
+event_src.category = "Proxy server"
+
+id = "PT_Entensys_UserGate_Proxy_and_Firewall_filemonitor_run_service"

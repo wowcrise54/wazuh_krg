@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME?}
+        pdns[{NUMBER}]: Received {$type=WORD} for {object.value=STRING} from {src.ip=IPV4|src.ip=IPV6} which is not a master'
+
+action = "deny"
+object = "request"
+status = "success"
+
+object.type = lower($type)
+object.property = "DNS zone"
+
+reason = "sender is not a master"
+
+importance = "low"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "powerdns_authoritative_server"
+event_src.category = "DNS server"
+
+id = "PT_Opensource_PowerDNS_Authoritative_Server_syslog_incoming_notify_denied_from_non_master"

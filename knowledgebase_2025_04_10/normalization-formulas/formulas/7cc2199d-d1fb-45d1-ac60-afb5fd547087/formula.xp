@@ -1,0 +1,57 @@
+JSON = ""
+
+COND = $ENTITY_TYPE == "User" 
+        and $OPERATION == "remove_role"
+
+subject = "account"
+action = "modify"
+object = "account"
+status = "success"
+
+subject.account.name = $user_or_token['USERNAME']
+subject.account.id = $user_or_token['USER_ID']
+subject.account.fullname = $user_or_token['DISPLAY_NAME']
+subject.account.contact = $user_or_token['EMAIL']
+
+object.account.name = $ENTITY_DISPLAY_NAME
+
+object.id = $ENTITY_ID
+
+# For Infowatch TM 9.4 (begin)
+object.property = "role"
+object.value = join(remove([$PROPERTY_CHANGES["old"]["roles"][0]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][1]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][2]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][3]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][4]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][5]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][6]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][7]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][8]["DISPLAY_NAME"],
+                            $PROPERTY_CHANGES["old"]["roles"][9]["DISPLAY_NAME"]], null), '|')
+# For Infowatch TM 9.4 (end)
+
+submessage("JSON", "additional_info", $property_changes)
+subformula "additional_info"
+    !JSON = "old"
+    !COND = $old["roles"] != null
+
+    if length($old["roles"]) == 1 then
+        object.property = "role"
+        object.value = $old["roles"][0]["DISPLAY_NAME"]
+    endif
+endsubformula
+
+datafield1 = $user_or_token['DISPLAY_NAME']  # отображаемое имя пользователя-субъекта
+datafield2 = $user_or_token['EMAIL']         # почтовый адрес пользователя-субъекта
+datafield3 = $ENTITY_DISPLAY_NAME            # отображаемое имя пользователя-объекта
+
+time = $CHANGE_DATE + $user_or_token['TIMEZONE']
+importance = "medium"
+
+event_src.vendor = "infowatch"
+event_src.title = "traffic_monitor"
+event_src.subsys = "audit"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_customeventcollector_Audit_User_role_revoked"

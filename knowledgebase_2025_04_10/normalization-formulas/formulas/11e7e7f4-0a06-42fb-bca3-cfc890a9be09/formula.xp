@@ -1,0 +1,60 @@
+TEXT = '{"<"NUMBER">"?}{$time_syslog=DATETIME} {$syslog_or_file=UNTIL("external")} program exited with error status: {NUMBER}'
+
+action = "execute"
+object = "command"
+status = "failure"
+
+subformula "parse_syslog_or_file"
+    # File
+    TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {$service_name=STRING*} {$time_file=DATETIME} {"us="NUMBER?} {$error_message=REST}'
+
+    $possible_day_of_week = substr($service_name, -3, 3)
+
+    if in_list(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], $possible_day_of_week) then
+        $service_name = strip($service_name, "", $possible_day_of_week)
+    endif
+
+    $service_name = if $service_name == "" then null else $service_name endif
+endsubformula
+
+subformula "parse_syslog_or_file"
+    # Syslog
+    TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {$service_name=WORDDASH}{"["?}{NUMBER?}{"]"?}{":"?} {$error_message=REST}'
+endsubformula
+
+submessage("TEXT", "parse_syslog_or_file", $syslog_or_file)
+
+$error_message = strip($error_message, "ERROR: ", "")
+$error_message = strip($error_message, "Linux ", "")
+$error_message = strip($error_message, "FreeBSD ", "")
+$error_message = strip($error_message, "", ":")
+$error_message = strip($error_message, "", " (non-critical)")
+$error_message = strip($error_message, "", " [adaptive]")
+$error_message = strip($error_message, "", " failed")
+$error_message = strip($error_message, "", " command")
+
+object.property = "command_type"
+object.value = $error_message
+
+datafield2 = $service_name  # OpenVPN Daemon Name
+
+time = coalesce($time_file, $time_syslog)
+importance = "info"
+
+category.high = "System Management"
+category.generic = "Command"
+category.low = "Manipulation"
+
+event_src.vendor = "openvpn"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "openvpn"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_OpenVPN_OpenVPN_syslog_external_program_error"

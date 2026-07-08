@@ -1,0 +1,46 @@
+!JSON = "EventCode=4659"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing" and $EventType=="4"
+
+subject = "account"
+action = "access"
+object = "resource"
+status = "success"
+
+subject.id = $InsertionStrings[0]
+subject.name = lower($InsertionStrings[1])
+subject.domain = lower($InsertionStrings[2])
+
+if $InsertionStrings[5] == "File" then
+    object.type = "file"
+elif $InsertionStrings[5] == "Key" then
+    object.type = "registry key"
+else
+    object.type = lower($InsertionStrings[5])
+endif
+object.name = $InsertionStrings[6]
+object.property = "Handle ID"
+object.value = $InsertionStrings[7]
+
+reason = $InsertionStrings[9]
+
+datafield1 = maybe_number16($InsertionStrings[3])       # ID сессии
+datafield2 = maybe_number16($InsertionStrings[12])      # ID процесса-субъекта
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Logfile)
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_4659_The_handle_to_delete_an_object_was_requested"

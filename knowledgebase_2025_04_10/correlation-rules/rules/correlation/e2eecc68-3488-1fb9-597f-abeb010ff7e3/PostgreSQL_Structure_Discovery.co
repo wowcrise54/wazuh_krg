@@ -1,0 +1,176 @@
+event SelectDataBaseInfo:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and object == "request"
+        and event_src.title == "postgresql"
+        and (
+            # SELECT schema_name,schema_owner FROM information_schema.schemata;
+            regex(
+                lower(object.query), 
+                "\\bselect\\b.+?(\\bschema_name\\b|\\bschema_owner\\b).+?\\binformation_schema\.schemata\\b",
+                0) != null
+            or
+            # SELECT datname FROM pg_database;
+            regex(lower(object.query), "\\bselect\\b.+?\\bpg_database\\b", 0) != null
+            or
+            # select version()
+            regex(lower(object.query), "\\bselect\\b.+?\\bversion\(\)", 0) != null
+            or 
+            # show server_version
+            regex(lower(object.query), "\\bshow\\b.+?\\bserver_version\\b", 0) != null
+            or 
+            # SHOW rds.extensions;
+            # SELECT * FROM pg_extension;
+            regex(lower(object.query), "\\b(show\\b.+?\\brds\.extensions\\b)|(select\\b.+?\\bpg_extension\\b)", 0) != null
+            or
+            # Получение поддерживаемых языков: internal, c, sql, plpgsql
+            # SELECT lanname,lanacl FROM pg_language;
+            regex(lower(object.query), "\\bselect\\b.+?(\\blanname.+?lanacl\\b)|(\\blanacl.+?lanname\\b).+?\\bpg_language\\b", 0) != null
+            or
+
+            # Получение прав на таблицы.
+            # SELECT grantee,table_schema,table_name,privilege_type FROM information_schema.role_table_grants;
+            regex(lower(object.query), "\\bselect\\b.+?(\\bprivilege_type.+?table_name\\b)|(\\btable_name.+?privilege_type\\b).+?\\binformation_schema\.role_table_grants\\b", 0) != null
+            or
+            # Получение таблиц и их их владельцев.
+            # select schemaname,tablename,tableowner from pg_tables;
+            # С возможной перестановкой столбцов.
+            regex(lower(object.query), "\\bselect\\b.+?(\\btablename.+?tableowner\\b)|(\\btableowner.+?tablename\\b).+?\\bpg_tables\\b", 0) != null
+
+            # TODO: нужно сделать пример с custom базой данных
+            # or
+            # Получаем столбцы произвольной таблицы
+            # SELECT *
+            # FROM information_schema.columns
+            # WHERE table_schema = 'your_schema'
+            # AND table_name   = 'your_table';
+        )
+        and filter::CheckWL_Database_Actions(
+            "PostgreSQL_Structure_Discovery",
+            lower(join([coalesce(subject.application.account.name, subject.application.account.id), object.query], "|"))
+        )
+    }
+
+rule PostgreSQL_Structure_Discovery: SelectDataBaseInfo
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+    
+    on SelectDataBaseInfo {
+        $status = status
+
+        $subject.application.account.name = subject.application.account.name
+        $subject.application.account.id = subject.application.account.id
+        
+        $object.path = object.path     # database name
+        $object.query = object.query
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $logon_service = logon_service     # application (driver) name
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([coalesce(subject.application.account.name, subject.application.account.id), object.query], "|"))
+
+        $lower_query = lower(object.query)
+        # SELECT schema_name,schema_owner FROM information_schema.schemata;
+        $schemataSelect = regex($lower_query, "select.+?(schema_name|schema_owner).+?information_schema\.schemata", 0)
+        if $schemataSelect != null then 
+            $reason = "information_schema"
+            $alert.regex_match = $schemataSelect
+            $category.low = "File and Directory Discovery"
+        endif
+
+        # SELECT datname FROM pg_database;
+        $pgDatabaseSelect = regex($lower_query, "select.*?datname.*?pg_database", 0)
+        if $pgDatabaseSelect != null then 
+            $reason = "pg_database"
+            $alert.regex_match = $pgDatabaseSelect
+            $category.low = "File and Directory Discovery"
+        endif
+
+        # select version()
+        $versionSelect = regex($lower_query, "select.*?version\(\)", 0)
+        if $versionSelect != null then 
+            $reason = "version"
+            $alert.regex_match = $versionSelect
+            $category.low = "Software Discovery"
+        endif
+
+        # show server_version
+        $versionShow = regex($lower_query, ".*?show.*?server_version.*?", 0)
+        if $versionShow != null then 
+            $reason = "version"
+            $alert.regex_match = $versionShow
+            $category.low = "Software Discovery"
+        endif
+
+        # SHOW rds.extensions;
+        # SELECT * FROM pg_extension;
+        $pgExtensionSelect = regex($lower_query, "(show.*?rds\.extensions)|(select.*?pg_extension)", 0)
+        if $pgExtensionSelect != null then 
+            $reason = "pg_extension"
+            $alert.regex_match = $pgExtensionSelect
+            $category.low = "Software Discovery"
+        endif
+
+        # Получение поддерживаемых языков: internal, c, sql, plpgsql
+        # SELECT lanname,lanacl FROM pg_language;
+        $pgLanguage = regex($lower_query, "select.+?(\\blanname.+?lanacl\\b)|(\\blanacl.+?lanname\\b).+?pg_language", 0)
+        if $pgLanguage != null then 
+            $reason = "pg_language"
+            $alert.regex_match = $pgLanguage
+            $category.low = "System Location Discovery: System Language Discovery"
+        endif
+
+        # SELECT grantee,table_schema,table_name,privilege_type FROM information_schema.role_table_grants;
+        $roleTableGrants = regex($lower_query, "select.+?(\\bprivilege_type.+?table_name\\b)|(\\btable_name.+?privilege_type\\b).+?information_schema\.role_table_grants", 0)
+        if $roleTableGrants != null then 
+            $reason = "table_permissions"
+            $alert.regex_match = $roleTableGrants
+            $category.low = "Permission Groups Discovery"
+        endif
+
+        # select schemaname,tablename,tableowner from pg_tables;
+        $pgTables = regex($lower_query, "select.+?(\\btablename.+?tableowner\\b)|(\\btableowner.+?tablename\\b).+?pg_tables", 0)
+        if $pgTables != null then 
+            $reason = "table_owners"
+            $alert.regex_match = $pgTables
+            $category.low = "System Owner/User Discovery"
+        endif
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.application.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

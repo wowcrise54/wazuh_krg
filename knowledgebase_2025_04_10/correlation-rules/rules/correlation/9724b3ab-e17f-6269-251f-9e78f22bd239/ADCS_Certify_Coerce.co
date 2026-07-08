@@ -1,0 +1,216 @@
+query Check_If_Host_Is_DC_By_Source($host, $ip) from List_Servers {
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            asset_ip == $ip
+            and asset_ip != null
+        )
+        or (
+            (
+                host == $ip
+                or host == $host
+            )
+            and host != null
+        )
+    )
+}
+
+query Check_If_Host_Is_DC_AssetGrid($fqdn, $ip, $asset) from AssetGrid_Servers {
+    (
+        asset_id == $asset
+        and asset_id != null
+    ) or (
+        asset_fqdn == $fqdn
+        and asset_fqdn != null
+    ) or (
+        asset_ip == $ip
+        and asset_ip != null
+    )
+}
+
+event Initial_Connect: # Запрос атакующего к серверу
+    key:
+        event_src.host, dst.ip
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["3", "5156"], msgid)
+        and in_list(["sysmon", "windows"], event_src.title)
+        and dst.port == 135
+        and src.host != dst.host
+        and direction == "egress"
+        # Исключаем случай, когда "атакующий" - другой контроллер домена
+        and not match(lower(select_query_first("Check_If_Host_Is_DC_By_Source", [lower(src.host), src.ip], "roles")), "*domain controller*")
+        and not match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [lower(src.host), src.ip, lower(src.asset)], "roles"), "*\"Domain Controller\"*")
+        and filter::CheckWL_Networking("ADCS_Certify_Coerce", lower(join([object.account.name, object.process.fullpath, src.host, dst.host], "|")))
+    }
+
+event Server_Attacker: # Подключение cервера к атакующему
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and in_list(["3", "5156"], msgid)
+        and in_list(["sysmon", "windows"], event_src.title)
+        and dst.port == 445
+        and src.host != dst.host
+        and in_list(["система", "system"], lower(object.account.name))
+        and lower(object.process.name) == "system"
+        and object.process.id == "4"
+        and direction == "ingress"
+        and not filter::Loopback_Address(src.ip)
+        and (
+            match(lower(select_query_first("Check_If_Host_Is_DC_By_Source", [lower(src.host), src.ip], "roles")), "*domain controller*")
+            or match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [lower(src.host), src.ip, lower(src.asset)], "roles"), "*\"Domain Controller\"*")
+        )
+    }
+
+event Logon_From_ADCS:
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4624"
+        and in_list(["kerberos", "NtLmSsp"], logon_service)
+        and logon_type == 3
+        and (
+            in_list(["система", "system"], lower(subject.account.name))
+            or match(lower(subject.account.name),"*$")
+        )
+    }
+
+event Access_From_ADCS: 
+    key:
+        event_src.host, src.ip
+    filter {
+        filter::NotFromCorrelator() 
+        and msgid == "5140"
+        and event_src.title == "windows"
+        and lower(object.name) == "ipc$"
+        and not filter::UserAccount_Windows(subject.account.name, subject.account.id)
+        and find_substr(subject.account.privileges, "%%4416") != null
+    }
+
+rule ADCS_Certify_Coerce: (Initial_Connect and Server_Attacker 
+                      and (Logon_From_ADCS or Access_From_ADCS)) timer 2m
+
+    init {
+        $labels = "w_auto|CheckWL_Networking"
+    }
+
+    on Initial_Connect {
+        $subject.account.domain = object.account.domain
+        $subject.account.fullname = object.account.fullname
+        $subject.account.name = object.account.name
+        $subject.account.id = object.account.id
+
+        $subject.process.id = object.process.id
+        $subject.process.name = object.process.name
+        $subject.process.path = object.process.path
+        $subject.process.fullpath = object.process.fullpath
+        $subject.process.guid = object.process.guid
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        $alert.key = lower(join([object.account.name, object.process.fullpath, src.host, dst.host], "|"))
+    }
+
+    on Server_Attacker {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+
+        $direction = direction
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $protocol = protocol
+        
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset
+    }
+
+    on Logon_From_ADCS {
+        $object.property = object.property
+        $object.value = object.value
+
+        $object.account.name = subject.account.name
+        $object.account.fullname = subject.account.fullname
+        $object.account.domain = subject.account.domain
+        $object.account.session_id = subject.account.session_id
+        $object.account.id = subject.account.id
+        $object.account.privileges = subject.account.privileges
+
+        $logon_auth_method = logon_auth_method
+        $logon_service = logon_service
+        $logon_type = logon_type
+    }
+
+    on Access_From_ADCS {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.type = object.type
+        $object.new_value = object.new_value
+        $object.query = object.query
+
+        $object.account.name = subject.account.name
+        $object.account.fullname = subject.account.fullname
+        $object.account.domain = subject.account.domain
+        $object.account.session_id = subject.account.session_id
+        $object.account.id = subject.account.id
+        $object.account.privileges = subject.account.privileges
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $alert.context = $subject.account.name + " →(forced authentication)→ " + $object.account.name + " → " + $dst.host
+
+    # фильтр с direction == "egress", то есть event_src = src
+    if $event_src.ip == null and not in_subnet($src.ip, "127.0.0.0/8") and find_substr($src.host, "docker.internal") == null then
+        $event_src.ip = $src.ip
+    endif
+
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Forced Authentication"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.fullpath], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

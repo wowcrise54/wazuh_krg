@@ -1,0 +1,24 @@
+# {"TimeVal":"2015-07-14 09:58:42.000","DoorIndex":11,"Contents":"Доступ отклонен","OwnerName":"Гришкин М.","NumCom":4762707}
+
+TABULAR = "TimeVal, DoorIndex, Contents, OwnerName, NumCom"
+COND = $Contents == "Доступ отклонен"
+
+subject = "system"
+action = "deny"
+status = "success"
+object = "account"
+
+time = $TimeVal
+msgid = $Contents
+
+subject.name = "door"
+subject.id = $DoorIndex
+
+object.name = $OwnerName
+
+event_src.category = "Physical security"
+event_src.vendor = "positive_technologies"
+event_src.title = "access_control"
+
+id = "PT_Positive_Technologies_Access_control_odbc_Access_denied"
+importance = "info"

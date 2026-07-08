@@ -1,0 +1,134 @@
+TEXT = '{$json=REST}'
+COND = (
+    find_substr($json, '"operation_name":"pathLastCommit"') != null
+    and find_substr($json, '"meta.caller_id":"graphql:pathLastCommit"') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = "account"
+action = "read"
+object = "file_object"
+status = "success"
+
+subject.account.name = $['meta.user']
+if $['meta.gl_user_id'] != null then
+    subject.account.id = string($['meta.gl_user_id'])
+elif substr($['meta.client_id'], 0, 5) == "user/" then
+    subject.account.id = strip($['meta.client_id'], "user/", "")
+endif
+subject.account.session_id = $['meta.client_id']
+
+src.ip = $['meta.remote_ip']
+
+$variables_raw = $variables
+
+$s_project_fullpath = find_substr($variables_raw, '"projectPath"=>"')
+if $s_project_fullpath != null then
+    $project_fullpath_start = $s_project_fullpath + 16
+    $project_fullpath_tail = substr($variables_raw, $project_fullpath_start, length($variables_raw))
+    $project_fullpath_end = find_substr($project_fullpath_tail, '"')
+    $project_fullpath = substr($variables_raw, $project_fullpath_start, $project_fullpath_end)
+
+    $project_list = csv($project_fullpath, "/", "'")
+    $project_slug = $project_list[length($project_list) - 1]
+    $namespace_fullpath = strip($project_fullpath, "", "/" + $project_slug)
+
+    datafield1 = $project_slug        # Project Slug
+    datafield2 = $namespace_fullpath  # Namespace Fullpath
+endif
+
+$s_ref = find_substr($variables_raw, '"ref"=>"')
+if $s_ref != null then
+    $ref_start = $s_ref + 8
+    $ref_tail = substr($variables_raw, $ref_start, length($variables_raw))
+    $ref_end = find_substr($ref_tail, '"')
+    $ref = substr($variables_raw, $ref_start, $ref_end)
+
+    datafield3 = $ref  # Target Branch Name
+endif
+
+$s_ref_type = find_substr($variables_raw, '"refType"=>"')
+if $s_ref_type != null then
+    $ref_type_start = $s_ref_type + 12
+    $ref_type_tail = substr($variables_raw, $ref_type_start, length($variables_raw))
+    $ref_type_end = find_substr($ref_type_tail, '"')
+    $ref_type = substr($variables_raw, $ref_type_start, $ref_type_end)
+
+    datafield4 = $ref_type  # Ref Type
+endif
+
+$s_file_path = find_substr($variables_raw, '"path"=>"')
+if $s_file_path != null then
+    $file_path_start = $s_file_path + 9
+    $file_path_tail = substr($variables_raw, $file_path_start, length($variables_raw))
+    $file_path_end = find_substr($file_path_tail, '"')
+    $file_path = substr($variables_raw, $file_path_start, $file_path_end)
+
+    if length($file_path) == 0 then
+        object.type = "dir"
+        object.name = "<Root>"
+        object.path = "/"
+        object.fullpath = "/"
+        object.storage.name = "<Root>"
+        object.storage.path = "/"
+        object.storage.fullpath = "/"
+
+        datafield6 = $ref + "/"  # File Object Full Path
+    else
+        $file_path_list = csv($file_path, "/", "'")
+        $file_name = $file_path_list[length($file_path_list) - 1]
+        $file_dir = strip($file_path, "", $file_name)
+
+        object.type = "file"
+        object.name = $file_name
+        object.path = "/" + $file_dir
+        object.fullpath = "/" + $file_path
+        object.storage.name = $file_name
+        object.storage.path = $file_dir
+        object.storage.fullpath = $file_path
+
+        datafield6 = $ref + "/" + $file_path  # File Object Full Path
+    endif
+endif
+
+object.property = "last_commit"
+object.query = $query_string
+object.value = $operation_fingerprint
+
+datafield5 = $operation_name                # GraphQL Operation Name
+datafield7 = $query_fingerprint             # Query Fingerprint
+datafield8 = $operation_fingerprint         # Operation Fingerprint
+datafield9 = $['meta.feature_category']     # Feature Category
+datafield10 = $variables                    # GraphQL Variables
+datafield11 = string($['meta.organization_id'])       # Organization ID
+datafield12 = string($['query_analysis.complexity'])  # GraphQL Query Complexity
+datafield13 = string($['query_analysis.depth'])       # GraphQL Query Depth
+
+numfield1 = $['meta.organization_id']       # Organization ID
+numfield2 = $['query_analysis.complexity']  # GraphQL Query Complexity
+numfield3 = $['query_analysis.depth']       # GraphQL Query Depth
+numfield4 = $['meta.gl_user_id']            # GitLab User ID
+
+duration = $duration_s
+chain_id = $correlation_id
+msgid = coalesce($['meta.caller_id'], $operation_name)
+time = $time
+importance = "info"
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Communication"
+
+protocol.layer7 = "graphql"
+
+event_src.vendor = "gitlab"
+event_src.title = "gitlab"
+event_src.subsys = "graphql"
+event_src.category = "Other"
+
+id = "LOC_GitLab_GitLab_json_GraphQL_PathLastCommit"

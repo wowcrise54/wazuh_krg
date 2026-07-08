@@ -1,0 +1,100 @@
+event Protection_Components_Are_Disabled:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "kaspersky"
+        and event_src.title == "endpoint_security" 
+        and (
+            msgid == "Компоненты защиты выключены"
+            or msgid == "214"
+        )
+        and filter::CheckWL_Specific_Only("Kaspersky_Endpoint_Disable", lower(object.name))
+    }
+    
+event Application_Stopped:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "kaspersky"
+        and event_src.title == "endpoint_security" 
+        and (
+            msgid == "Продукт остановлен"
+            or msgid == "236"
+        )
+        and filter::CheckWL_Specific_Only("Kaspersky_Endpoint_Disable", lower(object.name))
+    }
+    
+rule Kaspersky_Endpoint_Disable: Protection_Components_Are_Disabled or Application_Stopped
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Protection_Components_Are_Disabled {
+        $action = action
+        $object = object
+        
+        $subject.account.domain = coalesce(subject.account.domain, subject.domain)
+        $subject.account.name = coalesce(subject.account.name, subject.name)
+        
+        $object.state = object.state
+        $object.name = object.name
+        
+        $datafield2 = datafield2  # program name 
+        
+        $reason = reason
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category 
+        
+        $alert.key = lower(object.name) 
+    }
+
+    on Application_Stopped {
+        $action = action
+        $object = object
+        
+        $subject.account.domain = coalesce(subject.account.domain, subject.domain)
+        $subject.account.name = coalesce(subject.account.name, subject.name)
+        
+        $object.name = object.name
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        
+        $alert.key = lower(object.name)
+    }
+
+emit {
+    $correlation_type = "incident"
+    
+    $subject = "account"
+    $status = "success"
+
+    $importance = "medium"
+    
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Impair Defenses"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionMalfunction"
+    $incident.aggregation.timeout = 2h
+}

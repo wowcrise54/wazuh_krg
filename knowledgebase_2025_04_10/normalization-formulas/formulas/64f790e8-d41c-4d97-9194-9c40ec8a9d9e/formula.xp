@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-config"?}-{NUMBER}-{msgid="111004"}: {src.ip=IPV4|src.ip=IPV6|"console"} end configuration: {$status_conf=WORD}'
+
+action = "configure"
+object = "system"
+
+if $status_conf == "OK" then
+    status = "success"
+elif $status_conf == "FAILED" then
+    status = "failure"
+endif
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_111004_End_configuration"

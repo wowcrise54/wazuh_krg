@@ -1,0 +1,48 @@
+TABULAR = 'action,
+           domain_name,
+           identity_src,
+           identity_type,
+           orig,
+           product,
+           snid,
+           src,
+           user,
+           time,
+           user'
+
+COND = ($product == "Identity Awareness" and $action == "authcrypt")
+
+action = "create"
+object = "resource"
+status = "success"
+
+object.type = "username to ip address mapping"
+object.property = "mapped address"
+object.value = $src
+object.account.name = coalesce($src_user_name, $user)
+object.account.domain = $domain_name
+object.group = $src_machine_group
+
+$shost = $src_machine_name
+if find_substr($shost, '@') != null then
+    src.fqdn = $shost
+    src.hostname = substr($shost, 0, find_substr($shost, "@"))
+else
+    src.hostname = $shost
+endif
+
+datafield1 = $snid             # идентификатор сессии
+datafield2 = $identity_src     # источник идентификационных данных
+datafield3 = $identity_type    # тип идентификационных данных
+datafield4 = $origin_sic_name  # имя и домен SIC шлюза безопасности, сгенерировавшего лог
+
+time = $time
+importance = "info"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.subsys = lower($product)
+event_src.ip = $orig
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_opseclog_Identity_Awareness_Mapping_success"

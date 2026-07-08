@@ -1,0 +1,35 @@
+EVENTLOG = ''
+COND = $Channel=="Microsoft-Windows-DNSServer/Audit" and $Provider["Name"]=="Microsoft-Windows-DNSServer" 
+       and ($EventID["text"]=="536" or $EventID=="536")
+
+subject = "service"
+action = "remove"
+object = "resource"
+status = "success"
+
+object.name = $Data['QNAME']
+object.type = $Data['QTYPE']
+
+datafield2 = $Data['Scope']
+
+reason = "Cache purge"
+
+time = $TimeCreated["SystemTime"]
+msgid = "536"
+importance = "info"
+
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_Eventlog_536_DNS_Cache_purge"

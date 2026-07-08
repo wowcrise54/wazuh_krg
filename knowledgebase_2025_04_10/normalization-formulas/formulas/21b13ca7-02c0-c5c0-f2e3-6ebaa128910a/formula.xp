@@ -1,0 +1,57 @@
+TEXT = "{'<'NUMBER'>'?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|$ev_src_host=HOSTNAME|''} {WORDDASH?}
+        [{WORD} {time=DATETIME} {NUMBER}] [wsgi:error] [pid {numfield1=NUMBER}{':tid'?} {NUMBER?}] 
+        [remote {src.ip=IPV4|src.ip=IPV6}:{src.port=NUMBER}]  
+        ipa: INFO: {'[jsonserver_session]'?} {$name=WORDDASH}{'@'?}{$domain=HOSTNAME?}: {'batch:'?} 
+        {msgid='user_mod'}/{NUMBER?}('{object.account.name=UNTIL('\\',')}{$information=UNTIL('):')} {$state=REST}"
+
+subject = "account"
+action = "modify"
+object = "account"
+
+switch $state
+    case "SUCCESS" status = "success"
+    case "InvalidSyntax" status = "failure"
+    case "NotFound" status = "failure"
+endswitch
+
+subject.account.name = lower($name)
+subject.account.domain = lower($domain)
+
+$temp = strip($information, ", ", "")
+$kv = keyvalue($temp, ",","=", "'")
+
+object.account.fullname = $kv["givenname"]      # Новое имя
+object.account.contact = $kv["telephonenumber"] # Новый номер телефона
+object.account.id = $kv["uidnumber"]            # Новый uid
+
+# numfield1 - process id of /usr/sbin/httpd
+
+datafield1 = $kv["version"]         # API version
+datafield2 = $kv["homedirectory"]   # Домашняя директория
+datafield3 = $kv["loginshell"]      # Шел при запуске
+if $kv["userpassword"] != null then
+    datafield4 = "true"    # Сменен ли пароль
+endif
+
+if find_substr($state, "SUCCESS") == null then
+    reason = $state
+endif
+
+importance = "info"
+
+category.high = "Users And Rights Management"
+category.generic = "Account"
+category.low = "Manipulation"
+
+event_src.vendor = "freeipa"
+event_src.title = "freeipa"
+event_src.category = "Directory service"
+
+if find_substr($ev_src_host, ".") != null then
+    event_src.fqdn = $ev_src_host
+    event_src.hostname = substr($ev_src_host, 0, find_substr($ev_src_host, "."))
+else
+    event_src.hostname = $ev_src_host
+endif
+
+id = "PT_FreeIPA_FreeIPA_syslog_User_changed"

@@ -1,0 +1,125 @@
+event Image_From_Marketplace_Creation:
+    key:
+        event_src.host, object.id
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and event_src.subsys == "glance"
+        and msgid == "create-image"
+        and status == "success"
+        and regex(body, "\"request_body\":\s*{(?:\"name\":\s*\".*?\",\s*\"store\":\s*\"s3\"|\"store\":\s*\"s3\",\s*\"name\":\s*\".*?\")}", 0) != null
+        and filter::CheckWL_Specific_Only("VK_Cloud_Image_From_Marketplace_Creation", lower(join([subject.account.id, datafield6, event_src.host], "|")))
+    }
+
+event VM_Create_Operation:
+    key:
+        event_src.host, datafield3
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.vendor == "vk"
+        and event_src.title == "vk_cloud"
+        and event_src.subsys == "nova"
+        and msgid == "create-vm"
+        and datafield3 != null
+        and status == "success"
+    }
+
+rule VK_Cloud_Image_From_Marketplace_Creation: (Image_From_Marketplace_Creation -> VM_Create_Operation?) timer 15m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+    on Image_From_Marketplace_Creation {
+        $subject = subject
+
+        $object.value = "file_object"
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.contact = subject.account.contact
+
+        $subject.process.meta = subject.process.meta
+
+        $image_id = object.id
+        $image_name = object.name
+
+        $datafield1 = datafield1  # Method
+        $datafield2 = datafield2  # URL
+        $datafield6 = datafield6  # An identifier for the owner of the image, usually the project/tenant ID
+        $datafield7 = datafield7  # Owner user name
+        $datafield8 = datafield8  # Owner project name
+        $datafield9 = datafield9  # Visibility for image
+
+        $alert.key = lower(join([subject.account.id, datafield6, event_src.host], "|"))
+        $alert.context = join(remove([subject.account.name, object.name], null), " | ")
+        $alert.regex_match = regex(body, "\"request_body\":\s*{(?:\"name\":\s*\".*?\",\s*\"store\":\s*\"s3\"|\"store\":\s*\"s3\",\s*\"name\":\s*\".*?\")}", 0)
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+    on VM_Create_Operation {
+        $is_vm_created = true
+
+        if $subject == null then
+            $subject = subject
+
+            $subject.account.id = subject.account.id
+            $subject.account.name = subject.account.name
+            $subject.account.domain = subject.account.domain
+            $subject.account.contact = subject.account.contact
+
+            $subject.process.meta = subject.process.meta
+        endif
+
+        $vm_id = object.id
+        $vm_name = object.name
+
+        $alert.context = join(remove([$alert.context, object.name], null), " | ")
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "create"
+
+    if not $is_vm_created then
+        $object = "file_object"
+
+        $object.type = "image"
+
+        $object.id = $image_id
+        $object.name = $image_name
+    else
+        $object = "virtual_machine"
+
+        $object.id = $vm_id
+        $object.name = $vm_name
+
+        $datafield3 = $image_id
+        $datafield4 = $image_name
+    endif
+
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Modify Cloud Compute Infrastructure: Create Cloud Instance"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "ProtectionBypassing"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,72 @@
+<!--
+  Wazuh 4.14 port of MaxPatrol SIEM rules PT-CR-3003, PT-CR-1670,
+  PT-CR-1029 and PT-CR-2750. Primary technique: MITRE ATT&CK T1546.004.
+-->
+<group name="linux,unix_shell_configuration,t1546_004,">
+
+  <!-- PT-CR-1670: system-wide shell configuration added or modified (FIM). -->
+  <rule id="110250" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">(?i)^/etc/(?:profile|profile\.d/[^/]+|bash(?:rc|\.bashrc)|bash\.bashrc|zsh(?:env|rc|profile|login|logout)|zprofile|zlogin|zlogout|csh\.cshrc|csh\.login|tcshrc|config/fish/config\.fish)$</field>
+    <description>System-wide Unix shell configuration changed: $(file). Possible shell persistence.</description>
+    <mitre><id>T1546.004</id></mitre>
+    <group>syscheck,attack,persistence,privilege_escalation,event_triggered_execution,shell_configuration,</group>
+  </rule>
+
+  <!-- PT-CR-1670: per-user shell configuration added or modified (FIM). -->
+  <rule id="110251" level="7">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">(?i)^/(?:home/[^/]+|root)/(?:\.(?:profile|bashrc|bash_profile|bash_login|bash_logout|zshenv|zshrc|zprofile|zlogin|zlogout|kshrc|cshrc|login|logout)|\.config/fish/config\.fish)$</field>
+    <description>User Unix shell configuration changed: $(file). Possible shell persistence.</description>
+    <mitre><id>T1546.004</id></mitre>
+    <group>syscheck,attack,persistence,event_triggered_execution,shell_configuration,</group>
+  </rule>
+
+  <!-- PT-CR-1029: editor swap file created for a monitored shell configuration. -->
+  <rule id="110252" level="7">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">(?i)^/(?:etc(?:/profile\.d)?|home/[^/]+|root)/(?:\.)?\.(?:profile|bashrc|bash_profile|bash_login|bash_logout|zshenv|zshrc|zprofile|zlogin|zlogout|kshrc|cshrc|login|logout)(?:\.sw[a-p]|\.swp)$</field>
+    <description>Editor swap file created for sensitive shell configuration: $(file).</description>
+    <mitre><id>T1546.004</id></mitre>
+    <group>syscheck,attack,persistence,event_triggered_execution,sensitive_file,shell_configuration,</group>
+  </rule>
+
+  <!-- PT-CR-1670/PT-CR-1029: auditd attribution for protected shell files. -->
+  <rule id="110253" level="10">
+    <if_sid>80700</if_sid>
+    <field name="audit.key" type="pcre2">^shell_config$</field>
+    <field name="audit.success" type="pcre2" negate="yes">(?i)^(?:no|0|false)$</field>
+    <description>Audit: UID $(audit.auid) changed a protected shell configuration using $(audit.exe).</description>
+    <mitre><id>T1546.004</id></mitre>
+    <group>audit,attack,persistence,privilege_escalation,event_triggered_execution,sensitive_file,shell_configuration,</group>
+  </rule>
+
+  <!-- PT-CR-2750: ioctl(TIOCSTI) terminal input injection. -->
+  <rule id="110254" level="12">
+    <if_sid>80700</if_sid>
+    <field name="audit.key" type="pcre2">^tiocsti$</field>
+    <description>Audit: TIOCSTI terminal input injection detected from $(audit.exe), UID $(audit.auid).</description>
+    <mitre>
+      <id>T1056</id>
+      <id>T1546.004</id>
+    </mitre>
+    <group>audit,attack,privilege_escalation,input_capture,terminal_injection,shell_configuration,</group>
+  </rule>
+
+  <!--
+    PT-CR-3003: behavior tagged by endpoint audit/eBPF policy when an Erlang SSH
+    daemon launches a shell, reverse-shell utility or sensitive-file reader.
+  -->
+  <rule id="110255" level="15">
+    <if_sid>80700</if_sid>
+    <field name="audit.key" type="pcre2">^erlang_ssh_rce$</field>
+    <field name="audit.exe" type="pcre2">(?i)/(?:sh|bash|dash|zsh|nc|ncat|netcat|socat|curl|wget|python[0-9.]*|perl|ruby|cat|head|tail|less|more)$</field>
+    <description>Possible CVE-2025-32433 exploitation: Erlang SSH context launched $(audit.exe), command $(audit.command).</description>
+    <mitre>
+      <id>T1190</id>
+      <id>T1546.004</id>
+    </mitre>
+    <group>audit,attack,initial_access,persistence,exploit,erlang_ssh,cve_2025_32433,</group>
+  </rule>
+
+</group>

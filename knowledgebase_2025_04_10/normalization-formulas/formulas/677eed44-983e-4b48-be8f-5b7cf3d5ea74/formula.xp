@@ -1,0 +1,16 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}{"."NUMBER?}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING} 
+        {"%%"?}{WORD+}/{NUMBER}/{msgid="SAVE"}{"(l)"?}{"["NUMBER"]"?}:The user chose N when deciding whether to save 
+        the configuration to the device.'
+
+action = "apply"
+object = "configuration"
+status = "failure"
+
+importance = "medium"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_Do_not_save_config"

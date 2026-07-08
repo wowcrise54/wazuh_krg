@@ -1,0 +1,35 @@
+TABULAR = 'time_stamp,
+           {time=datetime},
+           {msgid=event_id},
+           {$Computer=hostname},
+           severity,
+           event_source,
+           {reason=event_desc},
+           antivirus_version,
+           {event_src.ip=ip_address}'
+
+COND =  $event_id == 302710785
+
+subject = "application"
+action = "open"
+object = "session"
+status = "failure"
+
+subject.name = "Symantec Endpoint Security"
+subject.version = $antivirus_version
+
+importance = "high"
+
+event_src.vendor = "symantec"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "endpoint_protection_manager"
+event_src.subsys = lower($event_source)
+event_src.category = "Host security"
+
+id = "PT_Symantec_EPM_odbc_error_connect_to_server"

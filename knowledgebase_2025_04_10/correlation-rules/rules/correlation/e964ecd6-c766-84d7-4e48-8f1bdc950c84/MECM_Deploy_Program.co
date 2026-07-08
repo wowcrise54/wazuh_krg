@@ -1,0 +1,114 @@
+query GetCreatedModifiedProgram($account,$content) from MECM_Created_Modified_Programs {
+	column::account == $account
+	and column::program == $content
+}
+
+event Created_Modified_Programs:
+	key: 
+        subject.account.name
+	filter {
+		correlation_name == "MECM_Created_Modified_Program"
+	}
+
+event Distribute_Package_To_DPGroup:
+	key: 
+        subject.account.name
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.vendor == "microsoft"
+        and event_src.title == "mecm"
+        and msgid == "40403"
+        and action == "modify"}
+
+event Deploy_Program:
+    key:
+        subject.account.name
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.vendor == "microsoft"
+        and event_src.title == "mecm"
+        and msgid == "30006"
+        and action == "create"
+        and exec_query("GetCreatedModifiedProgram", [subject.account.name, datafield7])
+        and filter::CheckWL_Specific_Only("MECM_Deploy_Program", lower(join([subject.account.name, datafield7, object.id], "|")))  }  
+
+rule MECM_Deploy_Program: (Created_Modified_Programs and Distribute_Package_To_DPGroup? and Deploy_Program) timer 10m
+
+	init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+
+	on Created_Modified_Programs {
+        
+    $subject.account.name = subject.account.name
+	$subject.account.domain = subject.account.domain       
+
+	$datafield1 = datafield1 # mecm site code
+	$datafield2 = datafield2 # component of mecm (how the event was generated)
+	$datafield5 = datafield5 # module name of mecm 
+
+	$event_src.host = event_src.host
+	$event_src.fqdn = event_src.fqdn
+	$event_src.hostname = event_src.hostname
+	$event_src.ip = event_src.ip
+	$event_src.asset = event_src.asset
+	$event_src.vendor = event_src.vendor
+	$event_src.title = event_src.title
+	$event_src.subsys = event_src.subsys
+	$event_src.category = event_src.category
+	$event_src.rule = event_src.rule     
+
+	$object.application.name = object.name  # program name
+	$object.id = object.id
+
+	if $alert.context == null then
+        $alert.context = "created or modified program|" + $object.application.name + "|that belongs to|" + $object.id
+	else
+        $alert.context = $alert.context + "|created or modified program |" + $object.application.name + "|that belongs to|" + $object.id
+	endif }
+
+	on Distribute_Package_To_DPGroup {
+        $datafield7 = object.id      # distribution point group id
+	    $datafield8 = object.name    # distribution point group name
+
+        if $alert.context == null then
+            $alert.context = "distribute to DP|" + $datafield8
+        else
+            $alert.context = $alert.context + "|distribute to DP|" + $datafield8
+        endif 
+    }
+
+    on Deploy_Program {
+        $datafield9 = object.id                  # deployment id
+        $datafield10 = object.name               # deployment name
+        $object.application.name = datafield7    # program name
+
+        $alert.key = lower(join([subject.account.name, datafield7, object.id], "|"))
+
+        if $alert.context == null then
+            $alert.context = "deployment name|" + $datafield10
+        else
+            $alert.context = $alert.context + "|deployment name|" + $datafield10
+        endif 
+    }
+
+	emit {
+        
+    $correlation_type = "event"
+
+	$subject = "account"
+	$action = "install"
+	$object = "application"
+	$status = "success"
+
+	$importance = "medium"
+
+	$category.generic = "Attack"
+	$category.high = "Execution"
+	$category.low = "Software Deployment Tools"
+
+	$incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+	$incident.severity = $importance
+	$incident.category = "SoftwareInstallationPolicyViolation"
+	$incident.aggregation.timeout = 2h
+}

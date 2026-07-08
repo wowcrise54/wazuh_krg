@@ -1,0 +1,101 @@
+event Coerce_Ingress:
+    key:
+        event_src.host
+    filter {
+        lower(correlation_name) == "subrule_coerce_auth"
+        and filter::CheckWL_Windows_Shares("Coerce_Auth", alert.key)
+    }
+
+event System_Egress:
+    key:
+        event_src.host
+    filter {
+        lower(correlation_name) == "subrule_egress_system"
+    }
+
+rule Coerce_Auth: (Coerce_Ingress and System_Egress) within 3m
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Coerce_Ingress {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.process.name = object.process.name
+        $object.process.id = object.process.id
+        $object.process.guid = object.process.guid
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.asset = src.asset
+
+        $datafield6 = datafield6
+        $datafield7 = datafield7
+        $datafield8 = datafield8
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        
+        $reason = reason
+
+        $alert.key = alert.key
+
+        $labels = $labels + "|CheckWL_Windows_Shares"
+    }
+
+    on System_Egress {
+        $listener_ip = dst.ip
+        $listener_port = dst.port
+        $listener_host = dst.host
+        $listener_fqdn = dst.fqdn
+        $listener_asset = dst.asset
+    }
+
+emit {
+    if $src.ip == $listener_ip or $src.host == $listener_host then 
+        $correlation_type = "incident"
+    else
+        $correlation_type = "event"
+    endif
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "high"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Forced Authentication"
+    
+    if $src.host != $listener_host and $src.ip != $listener_ip then
+        $dst.ip = $listener_ip
+        $dst.port = $listener_port
+        $dst.host = $listener_host
+        $dst.fqdn = $listener_fqdn
+        $dst.asset = $listener_asset
+    endif
+
+    $alert.context = join(["attacker:" + $src.host, "listener:" + $listener_host], " | ")
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $src.host, $subject.account.id], "|")
+    $incident.category = "UserCompromising"
+    $incident.severity = $importance
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,114 @@
+EVENTLOG = 'Provider.Name="PT-XDR"'
+
+COND = $Channel == "sysmon"
+
+object = "service"
+switch $EventID
+    case "sysmon_already_installed"
+        action = "install"
+        object = "service"
+        status = "failure"
+        reason = "already installed; " + $Data["reason"]
+        importance = "info"
+    case "sysmon_already_started"
+        action = "start"
+        object = "service"
+        status = "failure"
+        reason = "already started; " + $Data["reason"]
+        importance = "info"
+    case "sysmon_config_updated_error"
+        action = "update"
+        object = "configuration"
+        status = "failure"
+        reason = $Data["reason"]
+        importance = "low"
+    case "sysmon_config_updated_success"
+        action = "update"
+        object = "configuration"
+        status = "success"
+        datafield1 = $Data["reason"]
+        importance = "info"
+    case "sysmon_installed_error"
+        action = "install"
+        object = "service"
+        status = "failure"
+        reason = $Data["reason"]
+        importance = "low"
+    case "sysmon_installed_success"
+        action = "install"
+        object = "service"
+        status = "success"
+        datafield1 = $Data["reason"]
+        importance = "info"
+    case "sysmon_started_error"
+        action = "start"
+        object = "service"
+        status = "failure"
+        reason = $Data["reason"]
+        importance = "low"
+    case "sysmon_started_success"
+        action = "start"
+        object = "service"
+        status = "success"
+        datafield1 = $Data["reason"]
+        importance = "info"
+    case "sysmon_unexpected_stopped"
+        action = "stop"
+        object = "service"
+        status = "success"
+        reason = $Data["reason"]
+        importance = "low"
+    case "sysmon_unexpected_uninstalled"
+        action = "uninstall"
+        object = "service"
+        status = "success"
+        reason = $Data["reason"]
+        importance = "low"
+    case "sysmon_uninstalled_error"
+        action = "uninstall"
+        object = "service"
+        status = "failure"
+        reason = $Data["reason"]
+        importance = "low"
+    case "sysmon_uninstalled_success"
+        action = "uninstall"
+        object = "service"
+        status = "success"
+        datafield1 = $Data["reason"]
+        importance = "low"
+    case "sysmon_updated_error"
+        action = "update"
+        object = "configuration"
+        status = "failure"
+        reason = $Data["reason"]
+        importance = "low"
+    case "sysmon_updated_success"
+        action = "update"
+        object = "configuration"
+        status = "success"
+        importance = "info"
+endswitch
+
+object.process.version = $Data["version"]
+
+importance = "info"
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.id = $Data["agent_id"]
+event_src.ip = $Data["agent_ip"]
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.subsys = $Channel
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_eventlog_sysmon"

@@ -1,0 +1,18 @@
+id = "PT_Juniper_Junos_syslog_connection_closed"
+
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME}{$ip=IPV4|$ip=IPV6|$host=HOSTNAME|} {$ip_pref=IPV4|$ip_pref=IPV6|$host_pref=HOSTNAME|} {":"?}
+        sshd{"["NUMBER"]"?}: %AUTH-6: Connection closed by {src.ip=IPV4|src.hostname=HOSTNAME} {REST}'
+
+# If the message without PREFIX, hostname or ip-address will be in $host_pref var
+event_src.hostname = coalesce($host, $host_pref)
+event_src.ip = coalesce($ip, $ip_pref)
+
+action = "stop"
+object = "session"
+status = "success"
+
+importance = "info"
+
+event_src.title = "junos"
+event_src.vendor = "juniper"
+event_src.category = "Network device"

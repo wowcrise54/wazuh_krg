@@ -1,0 +1,94 @@
+TEXT = "{'<'NUMBER'>'?}{':'?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} confluence_audit: {$json=REST}"
+COND = (
+    find_substr($json, '"actionI18nKey":"audit.logging.summary.global.security.settings.edited"') != null
+    or find_substr($json, '"actionI18nKey":"atlassian.audit.event.action.audit.config.updated"') != null
+    or find_substr($json, '"actionI18nKey":"audit.logging.summary.global.settings.edited"') != null
+)
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+
+subject = switch $author["type"]
+    case "user" "account"
+    case "system" "system"
+endswitch
+
+action = "modify"
+object = "configuration"
+status = "success"
+
+if $author["type"] == "user" then
+    subject.account.fullname = $author["name"]
+    subject.account.id = $author["id"]
+endif
+
+object.type = switch $auditType["actionI18nKey"]
+    case "audit.logging.summary.global.security.settings.edited" "security"
+    case "atlassian.audit.event.action.audit.config.updated" "audit"
+    case "audit.logging.summary.global.settings.edited" "global"
+endswitch
+
+$property = ""
+$value = ""
+$new_value = ""
+
+$cv_0 = $changedValues[0]
+$cv_1 = $changedValues[1]
+$cv_2 = $changedValues[2]
+$cv_3 = $changedValues[3]
+
+if $cv_0 != null then
+    $property = $property + $cv_0["key"]
+    $value = $value + $cv_0["from"]
+    $new_value = $new_value + $cv_0["to"]
+endif
+if $cv_1 != null then
+    $property = $property + " | " + $cv_1["key"]
+    $value = $value + " | " + $cv_1["from"]
+    $new_value = $new_value + " | " + $cv_1["to"]
+endif
+if $cv_2 != null then
+    $property = $property + " | " + $cv_2["key"]
+    $value = $value + " | " + $cv_2["from"]
+    $new_value = $new_value + " | " + $cv_2["to"]
+endif
+if $cv_3 != null then
+    $property = $property + " | " + $cv_3["key"]
+    $value = $value + " | " + $cv_3["from"]
+    $new_value = $new_value + " | " + $cv_3["to"]
+endif
+if $cv_4 != null then
+    $property = $property + " | and " + string(length($changedValues) - 4) + " more"
+    $value = $value + " | and " + string(length($changedValues) - 4) + " more"
+    $new_value = $new_value + " | and " + string(length($changedValues) - 4) + " more"
+endif
+    
+object.property = if $property != "" then $property else null endif
+if (substr($value, 0, 16) != " |  |  |  | and ") and (replace($value, "", " | ") != "") then
+    object.value = if $value != "" then $value else null endif
+endif
+if (substr($new_value, 0, 16) != " |  |  |  | and ") and (replace($new_value, "", " | ") != "") then
+    object.new_value = if $new_value != "" then $new_value else null endif
+endif
+
+src.ip = $source
+
+msgid = $auditType["actionI18nKey"]
+time = epoch_to_datetime($timestamp["epochSecond"])
+importance = "medium"
+
+event_src.vendor = "atlassian"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "confluence"
+event_src.category = "Other"
+
+id = "PT_Atlassian_Confluence_syslog_Audit_Configuration_Management"

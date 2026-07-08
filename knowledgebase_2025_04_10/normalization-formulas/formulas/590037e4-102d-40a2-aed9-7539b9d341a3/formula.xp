@@ -1,0 +1,49 @@
+!JSON = "EventCode=5158"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing" and $EventType=="4"
+
+subject = "rule"
+action = "allow"
+object = "socket"
+status = "success"
+
+subject.id = $InsertionStrings[5]
+
+object.process.id = $InsertionStrings[0]
+$name_and_path = csv($InsertionStrings[1], "\\", "'")
+if $name_and_path[0] == $InsertionStrings[1] then
+    object.process.name = $InsertionStrings[1]
+else
+    object.process.name = $name_and_path[length($name_and_path) - 1]
+    object.process.path = strip($InsertionStrings[1], "", object.process.name)
+    object.process.fullpath = $InsertionStrings[1]
+endif
+
+object.property = "ALE layer"
+$object_value_raw = switch $InsertionStrings[6]
+    case "%%14610" "Receive/Accept"
+    case "%%14611" "Connect"
+endswitch
+object.value = coalesce($object_value_raw, $InsertionStrings[6])
+
+dst.ip = $InsertionStrings[2]
+dst.port = $InsertionStrings[3]
+
+protocol = $InsertionStrings[4]
+
+datafield5 = $InsertionStrings[7]  # layer id
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+importance = "info"
+
+category.generic = "Socket"
+category.high = "Network Management"
+category.low = "Control"
+
+event_src.fqdn = lower($ComputerName)
+event_src.subsys = lower($Logfile)
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.category = "Firewall"
+
+id = "PT_Microsoft_Windows_wmi_5158_WFP_has_permitted_bind_to_local_port"

@@ -1,0 +1,11 @@
+filter Elevate_Windows_Endpoint() {
+    filter::NotFromCorrelator()
+    and event_src.title == "windows"
+    and category.high == "Users And Rights Management"
+    and category.low == "Manipulation"
+    and in_list(["elevate", "escalate"], action)
+    and event_src.vendor == "microsoft"
+    and filter::UserAccount_Windows(subject.account.name, subject.account.id)
+    and dst.host != null
+    and not in_list([4, 8], logon_type)
+}

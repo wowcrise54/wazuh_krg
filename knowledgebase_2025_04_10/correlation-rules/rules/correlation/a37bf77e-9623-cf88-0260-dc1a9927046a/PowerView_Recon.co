@@ -1,0 +1,224 @@
+event LDAP_Queries:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and (not filter::Loopback_Address(src.ip) or src.ip == null)
+        and event_src.title == "windows"
+        and msgid == "1644"
+        and (
+            match(lower(object.query), "(objectclass=domain)") # Get-Domain
+            or match(lower(object.query), "(objectclass=dnszone)") # Get-DomainDNSZone
+            or match(lower(object.query), "(objectclass=dnsnode)") # Get-DomainDNSRecord
+            or match(lower(object.query), "( &  (objectcategory=cn=group-policy-container,cn=schema,cn=configuration,dc=*)  (cn=*) )") # Get-DomainGPOLocalGroup
+            or match(lower(object.query), "( &  (objectcategory=cn=organizational-unit,cn=schema,cn=configuration,dc=*)  ( |  (name=*) ) )") # Get-DomainOU
+            or (
+                regex(lower(object.query), "\( |  \( |  \(objectsid=s-\d-\d-\d+-\d+-\d+-\d+-\d+\) \) \)", 0) != null # ConvertFrom-SID
+                and regex(lower(object.value), "^((samaccountname|name),?){2}$", 0) != null
+            )
+            # Get-DomainController
+            or (
+                # 516 – Domain Controllers (writable)
+                # 521 – Domain Controllers (Read-Only)
+                regex(lower(object.query), "[^!]\s{2}\(primarygroupid=516\)", 0) != null
+                and regex(lower(object.query), "[^!]\s{2}\(primarygroupid=521\)", 0) != null
+                # 67117056 - All Windows Server Domain Controllers - Displays all computers that are Domain Controllers
+                and regex(lower(object.query), "\(useraccountcontrol\|67117056\)", 0) != null
+            )
+            # Get-DomainManagedSecurityGroup
+            # -2147483648 = Security groups
+            # -2147483646 = Global security group
+            # -2147483644 = Domain local security group
+            # -2147483640 = Universal security group
+            or (
+                regex(lower(object.query), "objectcategory=cn=group", 0) != null
+                and regex(lower(object.query), "[^!]\s{2}\(grouptype&-214748364(8|6|4|0)\)", 0) != null
+            )
+            # Get-DomainFileServer
+            or (
+                regex(lower(object.query), "&  \(samaccounttype=805306368\) \( !  \(useraccountcontrol&2\) \)", 0) != null
+                and regex(lower(object.query), "(\((homedirectory|(script|profile)path)=.*?\)\s{0,}){3}", 0) != null
+                and regex(lower(object.value), "^((homedirectory|(script|profile)path),?){3}$", 0) != null
+            )
+            # Get-NetLocalGroup
+            or (
+                regex(lower(object.query), "^\(samaccounttype=(536870912|268435456)\)$", 0) != null
+                and regex(lower(object.value), "^(\[shortnames\](samaccountname|(objectsid|description),?){2})$", 0) != null
+            )
+            # Get-DomainForeignUser (не указывает конкретно на ForeignUser, но указывает на поиск пользователей)
+            or (
+                regex(lower(object.query), "[^!]\s{2}\(samaccounttype=805306368\)", 0) != null
+                and regex(lower(object.query), "\(memberof=.*?\)", 0) != null
+            )
+            # Get-DomainForeignGroupMember
+            or (
+                regex(lower(object.query), "[^!]\s{2}\(objectcategory=cn=group,cn=schema,cn=configuration,dc=.*?\)", 0) != null
+                and regex(lower(object.query), "\(member=.*?\)", 0) != null
+            )
+            # Get-DomainTrustMapping
+            # samaccounttype=805306369 - Find All Workstations
+            # useraccountcontrol&8192 - SERVER_TRUST_ACCOUNT
+            or match(lower(object.query), "( &  (samaccounttype=805306369)  (useraccountcontrol&8192) )")
+            # Get-DomainGroup (Get-DomainGroupMember)
+            or match(lower(object.query), "( &  (objectcategory=cn=group,cn=schema,cn=configuration,dc=*) )")
+        )
+        and object == "request"
+        and lower(subject.account.domain) != "nt authority"
+        and filter::CheckWL_LDAP_Request("PowerView_Recon", join([lower(subject.account.name), lower(subject.account.id), src.host], "|"))
+    }
+    
+rule PowerView_Recon: LDAP_Queries
+
+    init {
+        $labels = "w_auto|CheckWL_LDAP_Request"
+    }
+
+    on LDAP_Queries {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+        
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        $object.account.privileges = object.account.privileges
+
+        $object.process.id = object.process.id
+        
+        $object.query = object.query
+        $object.property = object.property
+        $object.value = object.value
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+
+        # Определение скрипта
+
+        $obj_query_lower = lower($object.query)
+        $obj_value_lower = lower($object.value)
+
+        if match($obj_query_lower, "(objectclass=domain)") then
+            $reason = "Get-Domain"
+        elif match($obj_query_lower, "(objectclass=dnszone)") then
+            $reason = "Get-DomainDNSZone"
+        elif match(lower(object.query), "(objectclass=dnsnode)") then
+            $reason = "Get-DomainDNSRecord"    
+        elif match($obj_query_lower, "( &  (objectcategory=cn=group-policy-container,cn=schema,cn=configuration,dc=*)  (cn=*) )") then
+            $reason = "Get-DomainGPOLocalGroup"
+        elif match($obj_query_lower, "( &  (objectcategory=cn=organizational-unit,cn=schema,cn=configuration,dc=*)  ( |  (name=*) ) )") then
+            $reason = "Get-DomainOU"
+        elif (
+            regex($obj_query_lower, "\( |  \( |  \(objectsid=s-\d-\d-\d+-\d+-\d+-\d+-\d+\) \) \)", 0) != null
+            and regex($obj_value_lower, "^((samaccountname|name),?){2}$", 0) != null
+        ) then $reason = "ConvertFrom-SID"
+        elif (
+            regex(lower(object.query), "[^!]\s{2}\(primarygroupid=516\)", 0) != null
+            and regex(lower(object.query), "[^!]\s{2}\(primarygroupid=521\)", 0) != null
+            and regex(lower(object.query), "\(useraccountcontrol\|67117056\)", 0) != null
+        ) then $reason = "Get-DomainController"
+        elif (
+            regex($obj_query_lower, "objectcategory=cn=group", 0) != null
+            and regex($obj_query_lower, "[^!]\s{2}\(grouptype&-214748364(8|6|4|0)\)", 0) != null
+        ) then $reason = "Get-DomainManagedSecurityGroup"
+        elif (
+            regex($obj_query_lower, "&  \(samaccounttype=805306368\) \( !  \(useraccountcontrol&2\) \)", 0) != null
+            and regex($obj_query_lower, "(\((homedirectory|(script|profile)path)=.*?\)\s{0,}){3}", 0) != null
+            and regex($obj_value_lower, "^((homedirectory|(script|profile)path),?){3}$", 0) != null
+        ) then $reason = "Get-DomainFileServer"
+        elif (
+            regex($obj_query_lower, "^\(samaccounttype=(536870912|268435456)\)$", 0) != null
+            and regex($obj_value_lower, "^(\[shortnames\](samaccountname|(objectsid|description),?){2})$", 0) != null
+        ) then $reason = "Get-NetLocalGroup"
+        elif (
+            regex($obj_query_lower, "[^!]\s{2}\(samaccounttype=805306368\)", 0) != null
+            and regex($obj_query_lower, "\(memberof=.*?\)", 0) != null
+        ) then $reason = "Get-DomainForeignUser"
+        elif (
+            regex($obj_query_lower, "[^!]\s{2}\(objectcategory=cn=group,cn=schema,cn=configuration,dc=.*?\)", 0) != null
+            and regex($obj_query_lower, "\(member=.*?\)", 0) != null
+        ) then $reason = "Get-DomainForeignGroupMember"
+        elif match($obj_query_lower, "( &  (samaccounttype=805306369)  (useraccountcontrol&8192) )") then
+            $reason = "Get-DomainTrustMapping"
+        elif match($obj_query_lower, "( &  (objectcategory=cn=group,cn=schema,cn=configuration,dc=*) )") then
+            $reason = "Get-DomainGroup (Get-DomainGroupMember)"
+        else
+            $reason = "-"
+        endif
+
+        $alert.key = join([lower($subject.account.name), lower(subject.account.id), $src.host], "|")
+        $alert.context = $reason
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "request"
+    $status = "success"    
+        
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+
+    # T1018
+    $remote_system_discovery = ["Get-Domain", "Get-DomainController", "Get-DomainFileServer"]
+    # T1016
+    $system_net_config_discovery = ["Get-DomainDNSZone", "Get-DomainDNSRecord"]
+    # T1087.002
+    $account_discovery = ["ConvertFrom-SID", "Get-DomainForeignUser", "Get-DomainForeignGroupMember", "Get-DomainOU"]
+    # T1069.001
+    $perm_local_groups_discovery = ["Get-NetLocalGroup"]
+    # T1069.002
+    $perm_domain_groups_discovery = ["Get-DomainGroup (Get-DomainGroupMember)", "Get-DomainManagedSecurityGroup"]
+    # T1615
+    $group_policy_discovery = ["Get-DomainGPOLocalGroup"]
+    # T1482
+    $domain_trust_discovery = ["Get-DomainTrustMapping"]
+
+    if in_list($remote_system_discovery, $reason) then
+        $category.low = "Remote System Discovery"
+    elif in_list($system_net_config_discovery, $reason) then
+        $category.low = "System Network Configuration Discovery"    
+    elif in_list($account_discovery, $reason) then
+        $category.low = "Account Discovery: Domain Account"    
+    elif in_list($perm_local_groups_discovery, $reason) then
+        $category.low = "Permission Groups Discovery: Local Groups"
+    elif in_list($perm_domain_groups_discovery, $reason) then
+        $category.low = "Permission Groups Discovery: Domain Groups"
+    elif in_list($group_policy_discovery, $reason) then
+        $category.low = "Group Policy Discovery"
+        $importance = "medium"
+    elif in_list($domain_trust_discovery, $reason) then
+        $category.low = "Domain Trust Discovery"
+        $importance = "medium"
+    else 
+        $category.low = "Remote System Discovery"
+    endif            
+
+    $incident.aggregation.key = join([$correlation_name, lower($src.host), lower($subject.account.id), lower($reason)], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}

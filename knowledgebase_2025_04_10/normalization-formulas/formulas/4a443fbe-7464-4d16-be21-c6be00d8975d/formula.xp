@@ -1,0 +1,49 @@
+EVENTLOG = 'EventID.text="1009"'
+COND = (($Channel=="Kaspersky Security for Exchange Servers" and $Provider["Name"]=="KSE") 
+        or ($Channel=="Application" and $Provider["Name"] == "KSCM8"))
+
+object = "module"
+status = "success"
+
+submessage("TEXT","SPLIT",$Data[0])
+
+subformula "SPLIT"  # EN
+    # Извлечение object.name, object.state и action из $Data[0]
+    TEXT='{object.process.name=UNTIL("\r\n")} {$object_name=STRING+} status: {$status=REST}'
+    object.name = strip($object_name, "", " component")
+endsubformula
+
+subformula "SPLIT"  # RU
+    # Извлечение object.name, object.state и action из $Data[0]
+    TEXT='{object.process.name=UNTIL("\r\n")} {"Состояние "} {$object_name=UNTIL(":")} {$status=REST}'
+     if find_substr($object_name, "компонента") != null then
+         object.name = strip($object_name, "компонента ", "" )
+     else
+         object.name = strip($object_name, "модуля ", "" )
+     endif
+endsubformula
+
+action = switch $status
+    case "Enabled" "start"
+    case "Disabled" "stop"
+    case "Не работает или работает с ошибками" "alert"
+    case "Выключен" "stop"
+    case "Включен" "start"
+endswitch
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+
+importance = "info"
+
+category.generic = "Executable Module"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security_for_microsoft_exchange_servers"
+event_src.subsys = lower($Channel)
+event_src.hostname = $Computer
+event_src.category = "Anti-virus"
+
+id = "PT_Kaspersky_Kaspersky_Security_for_Exchange_eventlog_1009_module_status"

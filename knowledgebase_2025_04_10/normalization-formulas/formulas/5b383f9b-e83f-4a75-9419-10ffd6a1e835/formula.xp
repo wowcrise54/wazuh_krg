@@ -1,0 +1,27 @@
+TABULAR =  "id,
+            {subject.name=account_name},
+            gr_name,
+            {msgid=ev_desc},
+            {time=time},
+            {object.name=source_name}
+            "
+
+COND = $gr_name == "Изменение настроек программы"
+       and $ev_desc == "Изменение параметров безопасности узлов"
+       and $status == "Успешно"
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+object.state = "security settings configured"
+
+importance = "info"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_administrator"
+event_src.subsys = "vpn"
+event_src.category = "VPN"
+
+id = "PT_Infotecs_Vipnet_Administrator_odbc_config_security_settings"

@@ -1,0 +1,67 @@
+event Logging_Outside:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "csp_vpn_gate"
+        and msgid == "00727001" 
+        and match(object.process.cmdline, "logging host*")
+        and filter::CheckWL_Specific_Only("S_Terra_Gate_Logging_To_Untrusted_Host", lower(join([subject.account.name, object.process.cmdline, src.host], "|")))
+
+    }
+
+rule S_Terra_Gate_Logging_To_Untrusted_Host: Logging_Outside
+    
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Logging_Outside {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+        
+        $object.process.cmdline = object.process.cmdline
+
+        $dst.host = regex(object.process.cmdline, "([0-9]{1,3}\.){3}[0-9]{1,3}", 0)
+        $dst.ip = $dst.host
+        
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $logon_service = logon_service
+        
+        $event_src.host = event_src.host
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, object.process.cmdline, src.host], "|"))
+        $alert.context = event_src.host + " | " + $dst.host
+    }
+
+emit {
+    $correlation_type = "event"
+
+    $action = "modify"
+    $object = "configuration"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "Command and Scripting Interpreter: Network Device CLI"
+
+    $incident.aggregation.key = join([$correlation_name, $subject.account.name, $object.process.cmdline, $src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 3h
+}

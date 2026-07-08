@@ -1,0 +1,31 @@
+!TABULAR = "C_3,
+            {datafield3 = C_5},
+            {time = EVENT_TIME},
+            {subject.account.session_id = SESSION_ID}"
+
+!COND = ($C_4 == "LOGON ERROR") and ($EVENT_TYPE == "VW_CRIT_DIARY_LOCK_INFO")
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+subformula "session_info"
+    !TEXT = "{dst.hostname=UNTIL(' (')} {STRING} - {subject.account.name=STRING} - {REST}"
+endsubformula
+
+submessage ("TEXT", "session_info", $C_3)
+
+# datafield3 - имя файла исполняемого модуля
+
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "cft"
+event_src.title = "ibso"
+event_src.category = "Other"
+
+id = "PT_CFT_IBSO_odbc_failure_login_to_system"

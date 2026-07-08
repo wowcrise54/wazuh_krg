@@ -1,0 +1,79 @@
+!TABULAR = "hostname,
+            {msgid=event_type},
+            {time=event_time},
+            severity,
+            {datafield1=group_name}"
+
+!COND = $event_type == "GNRL_EV_USB_FILE_OPERATION"
+
+$description = replace($description, " ", "\t")
+if find_substr($description, "\r\n") != null then
+    $kv = keyvalue($description, "\r\n", ":")
+else
+    $kv = keyvalue($description, " ", ": ")
+endif
+
+subject = "account"
+switch $kv["Результат\\Операция"]
+    case "Запись"
+    action = "modify"
+        subject.account.privileges = "write"
+    case "Чтение"
+    action = "open"
+        subject.account.privileges = "read"
+    case "Удаление"
+        action = "remove"
+endswitch
+    object = "file_object"
+status = "success"
+
+$csv = csv(substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' (')), "\\", "'")   # имя пользователя
+subject.account.domain = lower($csv[0])
+subject.account.name = lower($csv[1])
+
+$csv = csv($kv["Результат\\Название файла"], "\\", "\'")
+object.name = lower($csv[length($csv) - 1])
+if strip($kv["Результат\\Название файла"], "", object.name) != '' then
+    object.path = lower(strip($kv["Результат\\Название файла"], "", object.name))
+endif
+object.fullpath = lower(lower($kv["Результат\\Название файла"]))
+
+# datafield1 - имя группы администрирования, в которую входит узел-источник
+datafield4 = csv($kv["Устройство\\Идентификатор устройства"], "\\", "'")[1]          # имя устройства, на котором выполнены действия
+
+importance = switch $severity
+    case 1 "info"
+    case 2 "low"
+    case 3 "medium"
+    case 4 "high"
+endswitch
+
+category.generic = "File System Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $ip_address != "127.0.0.1" then
+    event_src.ip = $ip_address
+endif
+if ipv4($fqdn) == null and find_substr($fqdn, ".") != null then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_odbc_GNRL_EV_USB_FILE_OPERATION"

@@ -1,0 +1,23 @@
+TEXT = '{time=DATETIME} [{WORD}] info:     Создание нового списка ipset: {"{"} {$raw_kv=STRING}'
+
+subject = "account"
+action = "create"
+object = "resource"
+status = "success"
+
+$kv = keyvalue($raw_kv, ',', ':', '\"')
+
+subject.name = $kv['"user"']
+
+object.name = $kv['"setName"']
+object.type = "список ipset"
+object.property = "тип списка"
+object.value = $kv['"setType"']
+
+importance = "info"
+
+event_src.vendor = "information_embedding_company"
+event_src.title = "kolchuga-k"
+event_src.category = "Firewall"
+
+id = "PT_Information_Embedding_Company_Kolchuga_filemonitor_create_ipset_list"

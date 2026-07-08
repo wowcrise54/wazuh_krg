@@ -1,0 +1,20 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        [{time=DATETIME}] ["http{"s"?}-{WORD}-{WORD}-{NUMBER}-exec-{NUMBER}"/{event_src.ip=IPV4|event_src.ip=IPV6} INFO] 
+        [com.vmware.loginsight.database.dao.RBACUserDAO] [User \'{$acc_name=UNTIL("\'")} 
+        is locked after {$un_auth=NUMBER} unsuccessful authentications]'
+
+action = "lock"
+object = "account"
+status = "success"
+
+object.account.name = lower($acc_name)
+
+numfield1 = $un_auth    # Number of unsuccessful login attempts before lock
+
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_account_locked"

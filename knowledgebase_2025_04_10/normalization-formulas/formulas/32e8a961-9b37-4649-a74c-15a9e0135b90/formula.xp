@@ -1,0 +1,42 @@
+EVENTLOG = 'EventID="5633"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Microsoft-Windows-Security-Auditing"
+
+action = "info"
+object = "request"
+status = "success"
+
+object.state = $Data["ReasonText"]
+
+interface = $Data["InterfaceName"]
+
+datafield1 = maybe_number16($Data["SubjectLogonId"])  # Идентифкатор входа пользователя
+if $Data["Identity"] != "-" then
+    datafield2 = $Data["Identity"]                    # UPN учетной записи, для которой выполяется запрос проверки подлинности 802.1x
+endif
+if $Data["SubjectUserName"] != "-" then
+    datafield3 = lower($Data["SubjectUserName"])
+endif
+if $Data["SubjectDomainName"] != "-" then
+    datafield4 = lower($Data["SubjectDomainName"])
+endif
+datafield5 = $Data["ReasonCode"]
+datafield6 = $Data["ErrorCode"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_5633_A_request_was_made_to_authenticate_to_a_wired_network"

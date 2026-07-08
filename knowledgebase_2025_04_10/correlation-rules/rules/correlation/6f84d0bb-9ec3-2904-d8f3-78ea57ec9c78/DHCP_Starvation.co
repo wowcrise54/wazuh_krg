@@ -1,0 +1,81 @@
+query Get_Starvation_Threshold() from DHCP_Starvation_Threshold {
+    threshold == "threshold"
+}
+
+event Dhcp_Query:
+    key:
+        event_src.host
+    filter {   
+        filter::NotFromCorrelator()
+        and regex(protocol, "(?i)dhcp(v\d+)?", 0) != null
+        and action == "assign"
+        and in_list(["ongoing", "success"], status)
+        and src.mac != null
+        and filter::CheckWL_Specific_Only("DHCP_Starvation", lower(event_src.host))
+
+    }
+    
+rule DHCP_Starvation: (Dhcp_Query[100, ] with different src.mac) timer 1m
+
+    init {
+        $starvation_threshold = select_query_first("Get_Starvation_Threshold", [], "threshold_value")
+        $counter = 0
+        $first_event = true
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Dhcp_Query {
+        $counter = $counter + 1
+        if $first_event then
+            $first_event = False
+            
+            $src.hostname = src.hostname
+            $src.host = src.host
+            $src.mac = src.mac
+            
+            $protocol = protocol
+            
+            $event_src.ip = event_src.ip
+            $event_src.hostname = event_src.hostname
+            $event_src.fqdn = event_src.fqdn
+            $event_src.host = event_src.host
+            $event_src.asset = event_src.asset
+            $event_src.title = event_src.title
+            $event_src.subsys = event_src.subsys
+            $event_src.vendor = event_src.vendor
+            $event_src.category = event_src.category
+            $event_src.rule = event_src.rule
+            
+            $alert.key = lower(event_src.host)
+        endif
+        if $counter < $starvation_threshold then
+            $detect = "drop"
+        elif $counter >= $starvation_threshold then
+            $detect = "rule"
+        endif
+
+
+    }
+emit {
+    $correlation_type = "event"
+
+    $subject = "system"
+    $action = "detect"
+    $object = "attack"
+    
+    $status = "success"
+
+    $importance = "medium"
+    
+    $alert.context = join(["Attempts:", string($counter), "| DHCP Starvation was success for:", $event_src.host], " ")
+    
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Network Denial of Service"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host], "|")
+    $incident.severity = $importance
+    $incident.category = "DOSAttack"
+    $incident.aggregation.timeout = 2h
+}
+

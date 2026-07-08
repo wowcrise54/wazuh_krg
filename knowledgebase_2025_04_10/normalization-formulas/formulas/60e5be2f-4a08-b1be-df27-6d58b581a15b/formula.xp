@@ -1,0 +1,38 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME}
+        {logon_service="webgui-fcgi-server"}{"["NUMBER"]"}: {subject.account.name="User"|object.account.name="Admin"}
+        {"("}{"user"?} sid: {subject.account.session_id=UNTIL(",")}{"ip:" src.ip=IPV4")"}
+        {$f1="login failed due to"|$f1="is logged in as"}{reason="wrong password"|object.account.name="admin"}
+        ({$f2="attempt:"|$f2="admin sid:"}{$f3 = UNTIL(").")}'
+
+subject = "account"        
+action = "elevate"
+object = "account"
+if $f1 == "login failed due to" then
+    status = "failure"
+else
+    status = "success"
+endif
+
+object.process.cmdline = lower(object.process.cmdline)
+
+if $f2 == "attempt:" then
+    datafield1 = $f3  #Число попыток
+elif $f2 == "admin sid:" then
+    object.account.session_id = $f3
+endif    
+
+if status == "success" then
+    importance = "info"
+else
+    importance = "medium"    
+endif
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_coordinator"
+event_src.category = "Network device"
+
+id = "PT_Infotecs_VipNet_Coordinator_HW_syslog_Enter_Web_enable"

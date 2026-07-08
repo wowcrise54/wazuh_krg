@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} ptdpi[{NUMBER}]:
+        [{$a_instance=NUMBER}:{$a_sid=NUMBER}:{$a_revision=NUMBER}] {object.name=STRING*}
+        [Classification: {"(null)"|object.type=WORDDASH+}] [Priority: {$priority=NUMBER}]
+        {"{"}{protocol=WORDDASH}{"}"}
+        {src.ip=IPV4|src.ip=IPV6}{":"?}{src.port=NUMBER?} -> {dst.ip=IPV4|dst.ip=IPV6}{":"?}{dst.port=NUMBER?}'
+
+action = "detect"
+object = "alert"
+status = "success"
+
+if object.type == null then
+    object.type = "Not classified"
+endif
+
+if $priority == 1 then
+    importance = "high"
+elif $priority == 2 then
+    importance = "medium"
+elif $priority == 3 then
+    importance = "low"
+else
+    importance = "info"
+endif
+
+category.high = "Information Security"
+category.generic = "Attacks & Recon"
+category.low = "Potential Attack"
+
+event_src.vendor = "positive_technologies"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "nad"
+event_src.category = 'IDS/IPS'
+
+id = "PT_Positive_Technologies_NAD_syslog_alert"

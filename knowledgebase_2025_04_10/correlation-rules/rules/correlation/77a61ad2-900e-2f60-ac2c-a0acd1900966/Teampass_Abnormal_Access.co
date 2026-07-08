@@ -1,0 +1,186 @@
+# Проверяем режим сбора профиля и работы правила
+query AutoProfile($rule) from Auto_Profile {
+    rule == $rule
+}
+
+# Проверяем, если ли в профиле такой пользователь
+query CheckUsername($title, $username) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+}
+
+# Проверяем, использовал ли пользователь раньше этот адрес
+query CheckHost($title, $username, $src.host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_host == $src.host
+}
+
+# Проверяем, подключался ли пользователь к данному серверу ранее
+query CheckServer($username, $server_name, $server_ip) from Risk_User_Logon_Correlation_Profile {
+    login == $username
+    and (
+        dst_host == $server_name
+        or dst_ip == $server_ip
+    )
+}
+
+query CheckProfile($title, $username, $src_ip, $src_host, $dst_ip, $dst_host) from Risk_User_Logon_Correlation_Profile {
+    access_type == $title
+    and login == $username
+    and src_ip == $src_ip
+    and src_host == $src_host
+    and dst_ip == $dst_ip
+    and dst_host == $dst_host
+}
+
+event Anomaly_Logon_Application:
+    key:
+        event_src.host
+    filter {
+        correlation_name == "Subrule_Teampass_Login_Successful"
+        # Сверка с профилем
+        and not filter::Check_Profile(
+            event_src.title, # access_type
+            lower(subject.account.name),
+            string(src.ip),
+            lower(src.host),
+            coalesce(lower(dst.host), lower(event_src.host)),
+            null, # dst_path
+            null # additional_data
+        )
+        and filter::CheckWL_Profiling("Teampass_Abnormal_Access", lower(join([src.host, subject.account.name, 
+        event_src.host, event_src.title], "|")))
+    }
+   
+rule Teampass_Abnormal_Access: Anomaly_Logon_Application
+
+    init {       
+        # Если в таблице Auto_Profile нет правила, то считаем, что правило работает в режиме автопрофилирования
+        $auto_profile = coalesce(select_query_first("AutoProfile", ["Teampass_Abnormal_Access"], "auto_profiling"), 1)
+        $insert_into_cond = false
+        $ttl_tl = 7862400
+        $labels = "CheckWL_Profiling"
+    }
+    
+    on Anomaly_Logon_Application {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.id = subject.account.id
+        $subject.account.contact = subject.account.contact
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.privileges = subject.account.privileges
+        $subject.account.session_id = subject.account.session_id
+        
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+        $object.value = object.value
+        $object.state = object.state
+
+        $object.process.meta = object.process.meta
+
+        $protocol.layer7 = protocol.layer7
+        $datafield2 = datafield2    # Url
+
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.asset = src.asset
+        $src.geo.org = src.geo.org
+        $src.geo.country = src.geo.country
+
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $assigned_src_ip = assigned_src_ip
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.asset = event_src.asset
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        
+        # Проверяем отличие от профиля
+        
+        if not exec_query("CheckProfile", [$event_src.title, lower($subject.account.name), 
+        string($src.ip), lower($src.host), coalesce(string($dst.ip),string($event_src.ip)),
+        coalesce(lower($dst.host),lower($event_src.host))]) then
+            if not exec_query("CheckUsername", [lower(event_src.title), lower(subject.account.name)]) then
+                $reason = "no_user"
+                $importance = "high"
+                $insert_into_cond = true
+            elif not exec_query("CheckHost", [lower(event_src.title), lower(subject.account.name), lower(src.host)]) then
+                $reason = "new_address"
+                $importance = "medium"
+                $insert_into_cond = true
+            elif not exec_query("CheckServer", [lower(event_src.title), lower(subject.account.name), lower($dst.host)]) then
+                $reason = "new_server"
+                $importance = "low"
+                $insert_into_cond = true
+            else
+                $importance = "info"
+                $detect = "drop"
+            endif
+        else
+            $last_changed = select_query_first("CheckProfile", [$event_src.title, lower($subject.account.name), 
+            string($src.ip), lower($src.host), coalesce(string($dst.ip),string($event_src.ip)),
+            coalesce(lower($dst.host),lower($event_src.host))], "_last_changed")
+            if bool($last_changed) then         
+                    if datetime_to_epoch(time) - datetime_to_epoch(datetime($last_changed)) > div($ttl_tl, 2) then          
+                            $insert_into_cond = true
+                    endif
+                endif
+                $importance = "info"
+                $detect = "drop"
+            
+        endif
+        
+        # Если правило работает в режиме сбора профиля, то emit не нужен
+        
+        if $auto_profile == 2 then
+            $importance = "info"
+            $detect = "drop"
+        endif 
+
+        $alert.key = lower(join([src.host, subject.account.name, event_src.host, event_src.title], "|"))
+        $alert.context = $reason
+    }
+
+    insert_into Risk_User_Logon_Correlation_Profile if ($auto_profile !=0 and $insert_into_cond == true) {
+        login = lower($subject.account.name)    
+        access_type = $event_src.title
+        src_ip = string($src.ip)
+        src_host = lower($src.host)
+        dst_ip = coalesce(string($dst.ip),string($event_src.ip))
+        dst_host = coalesce(lower($dst.host),lower($event_src.host))
+    }
+   
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "login"
+    $object = "application"
+    $status = "success"
+        
+    $category.generic = "Anomaly"
+    $category.high = "Lateral Movement"
+    $category.low = "Remote Services"
+
+    $incident.aggregation.key = join([$correlation_name, $src.host, $subject.account.name], "|")
+    $incident.severity = if $importance == "info" then "low" else $importance endif
+    $incident.category = "UnauthorizedAccess"
+    $incident.aggregation.timeout = 2h
+}

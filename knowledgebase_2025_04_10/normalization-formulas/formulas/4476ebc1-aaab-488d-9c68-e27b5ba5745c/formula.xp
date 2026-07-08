@@ -1,0 +1,72 @@
+!EVENTLOG = 'EventID.text="800"'
+!COND = $Provider["Name"] == "PowerShell"
+        and $Channel == "Windows PowerShell"
+        and $Data[0] != null
+        and find_substr($Data[1], "PSConsoleHostReadline") == null
+        and find_substr($Data[1], "Set-StrictMode") == null
+        and find_substr($Data[1], "Set-ExecutionPolicy") == null
+        and find_substr($Data[1], "Get-ExecutionPolicy") == null
+        and find_substr($Data[2], "CommandInvocation(PSConsoleHostReadline): ") == null
+        and find_substr($Data[2], "CommandInvocation(Set-StrictMode): ") == null
+        and find_substr($Data[2], "CommandInvocation(Set-ExecutionPolicy): ") == null
+        and find_substr($Data[2], "CommandInvocation(Get-ExecutionPolicy): ") == null
+
+subject = "account"
+action = "execute"
+object = "command"
+status = "success"
+
+submessage("TEXT", "Get_command_type", $Data[2])
+
+$kv = keyvalue($Data[1], "\r\n\t", "=")
+
+$subject_raw = coalesce($kv["UserId"])
+$subject_raw_csv = csv($subject_raw, "\\", "'")
+if length($subject_raw_csv) > 1 then
+    subject.name = lower($subject_raw_csv[1])
+    subject.domain = lower($subject_raw_csv[0])
+else
+    subject.name = lower($subject_raw)
+endif
+
+subformula "Get_command_type"
+    TEXT = 'CommandInvocation({object.type=WORDDASH}){REST}'
+endsubformula
+
+$object_path_name = lower($kv["ScriptName"])
+$list_object_path_name = csv($object_path_name,'\\','"')
+object.name = $list_object_path_name[length($list_object_path_name) - 1]  # часть пути после последнего слеша
+object.path = strip($object_path_name, "", object.name)
+
+$host_app = $kv["HostApplication"]
+$host_app_path = csv($host_app, " ", '"')[0]
+$list_host_app_path_name = csv($host_app_path,'\\','"')
+$application = $list_host_app_path_name[length($list_host_app_path_name) - 1]  # часть пути после последнего слеша
+
+datafield1 = $Data[1]  # контекcт выполнения конвейера Powershell
+datafield2 = $Data[2]  # детали выполнения конвейера Powershell
+datafield3 = strip($host_app_path, "", $application)  # родительский процесс
+datafield4 = $application
+datafield5 = $kv["CommandLine"]    # командная строка как она есть
+datafield7 = $kv["HostId"]         # идентификатор узла
+datafield8 = $kv["EngineVersion"]  # версия модуля
+datafield9 = $host_app
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_Common_PowerShell_800_pipeline_executed"

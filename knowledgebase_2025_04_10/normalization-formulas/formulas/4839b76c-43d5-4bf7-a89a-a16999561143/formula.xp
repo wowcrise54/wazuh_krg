@@ -1,0 +1,33 @@
+!TABULAR = "
+            sal_id,
+            {time=sal_timegenerated},
+            sal_eventid,
+            sal_eventtype,
+            {src.ip=ip_address},
+            {src.port=sal_srcport},
+            sal_username,
+            sal_source,
+            detail
+           "
+
+!COND = (string($sal_eventid) == "15") and (string($sal_eventtype) == "1")
+
+if length($sal_username) != 0 then
+    subject = "account"
+    subject.name = $sal_username
+endif
+action = "terminate"
+object = "session"
+status = "success"
+
+reason = "timeout"
+
+importance = "medium"
+
+event_src.vendor = "security_code"
+event_src.title = "kontinent"
+event_src.subsys = "vpn"
+event_src.ip = recv_ipv4
+event_src.category = "VPN"
+
+id = "PT_Security_Code_Kontinent_odbc_Off_timeout"

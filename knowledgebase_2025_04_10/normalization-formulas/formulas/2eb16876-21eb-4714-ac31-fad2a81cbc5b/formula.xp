@@ -1,0 +1,38 @@
+EVENTLOG = 'EventID="4898"'
+COND = $Channel == "Security" and $Provider["Name"] == "Microsoft-Windows-Security-Auditing"
+
+subject = "system"
+action = "upload"             
+object = "certificate"
+status = "success"
+
+object.name = $Data["TemplateInternalName"]
+object.account.dn = $Data["TemplateDSObjectFQDN"]
+object.version = $Data["TemplateVersion"]
+object.property = "TemplateOID"
+object.value = $Data["TemplateOID"]
+object.type = "template"
+
+datafield1 = $Data["TemplateContent"]
+datafield2 = $Data["SecurityDescriptor"]
+numfield1 = $Execution["ThreadID"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID
+
+importance = "info"
+
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.vendor = "microsoft"
+event_src.title = "certification_authority"
+event_src.subsys = lower($Channel)
+event_src.category = "Certification authority"
+
+id = "PT_Microsoft_Certification_Authority_eventlog_4898_Certificate_Services_loaded_template"

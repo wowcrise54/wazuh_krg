@@ -1,0 +1,70 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        {$dt=STRING} - {$kv=KEYVALUE(",",":")}'
+
+COND = find_substr($kv["Category"], "MAINTENANCE_SCHEDULE_CREATE - Creating maintenance-schedule succeeded") != null
+       or find_substr($kv["Category"], "MAINTENANCE_SCHEDULE_UPDATE - Updating maintenance-schedule succeeded") != null
+       or find_substr($kv["Category"], "MAINTENANCE_SCHEDULE_DELETE - Deleting maintenance-schedule succeeded") != null
+       
+subject = "account"
+object = "task"
+status = "success"
+
+subformula "parse_category"
+    TEXT = "MAINTENANCE_SCHEDULE_{$act='CREATE'|$act='UPDATE'|$act='DELETE'} - {'Creating'|'Updating'|'Deleting'} 
+            maintenance-schedule succeeded. ID(s): {$obj_ids=REST}"
+    
+    action = switch $act
+        case "CREATE" "create"
+        case "UPDATE" "modify"
+        case "DELETE" "remove"
+    endswitch
+    
+    $obj_ids = strip(strip($obj_ids, '"','"'), '[', ']')
+
+    if not in_list($bad_values, $obj_ids) then
+        datafield1 = $obj_ids   # Maintenance schedule ids
+    endif
+endsubformula
+
+subformula "parse_names"
+    TEXT = "{$obj_names=UNTIL('\".')|$obj_names=UNTIL('].')}"
+    
+    $obj_names = strip(strip($obj_names, '"',''), '[', '')
+    
+    if not in_list($bad_values, $obj_names) then
+        datafield2 = $obj_names # Maintenance schedule names
+    endif
+endsubformula
+
+$bad_values = [null, 'n/a', 'null', '']
+
+submessage("TEXT", "parse_category", $kv["Category"])
+
+subject.account.id = lower($kv["UserId"])
+subject.account.name = lower($kv["UserName"])
+subject.account.provider = switch $kv["AuthSource"]
+    case "LOCAL" "local"
+endswitch
+
+if $kv["Session"] != "n/a" then
+    subject.account.session_id = lower($kv["Session"])
+endif
+
+object.type = "maintenance schedule"
+submessage("TEXT", "parse_names", $kv["Name(s)"])
+
+src.ip = coalesce(ipv4($kv["ClientIP"]), ipv6($kv["ClientIP"]))
+
+if $kv["AuthSource"] != "n/a" then
+    logon_service = $kv["AuthSource"]
+endif
+
+time = datetime(replace($dt, ".", ","))
+msgid = "MAINTENANCE_SCHEDULE_" + $act
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations"
+event_src.category = "Network monitoring system"
+
+id = "PT_VMware_Aria_Operations_syslog_maintenance_schedule_manipulation"

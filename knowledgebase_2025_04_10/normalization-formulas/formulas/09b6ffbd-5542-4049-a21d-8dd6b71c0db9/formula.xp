@@ -1,0 +1,29 @@
+EVENTLOG = 'EventID.text="32900"'
+
+!COND = $Provider["Name"] == "Veeam MP"
+
+action = "modify"
+object = "application"
+status = "success"
+
+object.name = $Data[2]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+src.ip = $Data[1]
+
+event_src.vendor = "veeam"
+event_src.title = "backup_replication"
+event_src.category = "Backup server"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+id = "PT_Veeam_Backup_Replication_eventlog_update_component"

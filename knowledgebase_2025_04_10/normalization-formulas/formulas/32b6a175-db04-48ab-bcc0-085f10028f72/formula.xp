@@ -1,0 +1,72 @@
+!JSON = 'AuditRecord.Sql_Text'
+!COND = (
+            $AuditRecord["Audit_Type"] == "4"
+            and upper(substr($AuditRecord["Sql_Text"], 0, 6)) == "UPDATE"
+        )
+        or (
+            $AuditRecord["Audit_Type"] == "1"
+            and $AuditRecord["Action"] == "6"
+        )
+
+subject = "account"
+action = "modify"
+object = "table"
+if $AuditRecord['Returncode'] == "0" then
+    status = "success"
+else
+    status = "failure"
+    reason = $AuditRecord['Returncode']
+endif
+
+if $AuditRecord['DB_User'] == "/" then
+    subject.account.id = "SYS"
+else
+    subject.account.id = $AuditRecord['DB_User']
+endif
+subject.account.name = subject.account.id
+
+subject.privileges = $AuditRecord['OSPrivilege']
+
+if $AuditRecord["Object_Name"] != null then
+    object.name = $AuditRecord["Object_Name"]
+    object.property = "schema"
+    object.value = $AuditRecord["Object_Schema"]
+else
+    $csv_query = csv($AuditRecord["Sql_Text"], " ", '"')
+    $csv_obj_name = csv($csv_query[1], ".", '"')    # Имя таблицы/схемы должно быть таковым по счёту
+    if length($csv_obj_name) == 2 then
+        object.name = $csv_obj_name[1]
+        object.property = "schema"
+        object.value = $csv_obj_name[0]
+    else
+        object.name = $csv_obj_name[0]
+    endif
+endif
+
+$src_csv = csv($AuditRecord['Userhost'], "\\", "'")
+if length($src_csv) > 1 then
+    src.hostname = $src_csv[1]
+    datafield9 = $src_csv[0]
+else
+    src.hostname = $AuditRecord['Userhost']
+endif
+
+datafield1 = $AuditRecord['OS_User']       # Имя пользователя ОС
+datafield5 = string($AuditRecord['Session_Id']) + ':' + string($AuditRecord['StatementId'])  # Идентификатор сеанса и идентификатор выполнной операции в одном сеансе
+object.query = $AuditRecord['Sql_Text']
+datafield7 = $AuditRecord['Audit_Type']    # Тип записи аудита. Может принимать значения 1-обычный аудит, 2-детальный аудит, 4-аудит SYS-операций, 8-обязательные записи аудита (mandatory)
+# datafield9 - Имя домена узла источника (при наличии)
+
+time = $AuditRecord['Extended_Timestamp']
+if in_list(["AUD$", "LINK$"], object.name) then
+    importance = "high"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "oracle"
+event_src.title = "oracle_database"
+event_src.subsys = "audit trail"
+event_src.category = "Database server"
+
+id = "PT_Oracle_Oracle_Database_filemonitor_Update_entry"

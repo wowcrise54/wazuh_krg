@@ -1,0 +1,157 @@
+event CreateRemoteThread:
+    key:
+        event_src.host, object.process.id, object.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "8"
+        and lower(object.process.name) == "mstsc.exe"
+    }
+
+event InjectDll:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "sysmon"
+        and msgid == "7"
+        and lower(subject.process.name) == "mstsc.exe"
+        and (
+            lower(object.process.name) == "rdpthief.dll"
+            or
+            lower(object.process.meta) == "- | - | -"
+            or lower(object.process.meta) == "description:- | product:- | company:-"
+            or lower(object.value) == "not signed"
+        )
+        and not match(lower(object.process.fullpath), "?:\\windows\\system32\\*")
+        and filter::CheckWL_Specific_Only("Intercept_Creds_From_MSTSC", lower(join([subject.process.fullpath, object.process.fullpath], "|")))
+    }
+
+event CreateCredsFile:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        filter::NotFromCorrelator()
+        and filter::FileCreate_Windows()
+        and lower(subject.process.name) == "mstsc.exe"
+        and (
+            lower(object.name) == "data.bin"
+            or match(lower(object.fullpath), "*\\appdata\\local\\temp\\*")
+            or regex(lower(object.name), "\.(rdp|png)$", 0) == null
+            )
+    }
+
+rule Intercept_Creds_From_MSTSC: (CreateRemoteThread and InjectDll and CreateCredsFile) within 5m
+
+    init {
+        $labels = "w_auto|proc_chain_exclude"
+    }
+
+    on CreateRemoteThread {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.guid = subject.process.guid
+        $subject.process.cmdline = subject.process.cmdline
+        $subject.process.parent.cmdline = subject.process.parent.cmdline
+        $subject.process.parent.name = subject.process.parent.name
+        $subject.process.parent.id = subject.process.parent.id
+        $subject.process.meta = subject.process.meta
+        $subject.process.hash = subject.process.hash
+
+        $object.account.session_id = object.account.session_id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        $object.account.provider = object.account.provider
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.guid = object.process.guid
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+        $object.process.parent.cmdline = object.process.parent.cmdline
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.id = object.process.parent.id
+ 
+        $datafield6 = datafield6  # Начальный адрес потока
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+        $labels = $labels + "|CheckWL_Specific_Only"
+    }
+    
+    on InjectDll {
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.privileges = subject.account.privileges
+
+        $subject.name = object.process.name
+        $subject.type = object.type
+        $subject.version = object.version
+        
+        $object.process.meta = object.process.meta
+
+        $datafield1 = object.process.path   # Путь библиотеки
+        $datafield2 = object.property  
+        $datafield3 = object.process.hash 
+        $datafield4 = object.value  
+        
+        $alert.key = lower(join([subject.process.fullpath, object.process.fullpath], "|"))
+
+    }
+    
+    on CreateCredsFile {
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+        $object.property = object.property
+
+        $alert.context = lower("credentials file: " + object.fullpath)
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "process"
+    $action = "start"
+    $object = "module"
+    $status = "success"
+
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "OS Credential Dumping"
+
+    $labels = $labels + "|lsass_cache_to_correlation"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, lower($subject.process.name)], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

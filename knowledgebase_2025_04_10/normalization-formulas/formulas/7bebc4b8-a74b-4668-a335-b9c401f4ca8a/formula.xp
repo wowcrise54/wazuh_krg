@@ -1,0 +1,40 @@
+!TABULAR = 'GLOBAL_ID,
+            MESSAGE_TEXT,
+           {time=EVENT_TIME},
+           DRIVER_NAME,
+           MESSAGE_ID'
+
+COND = $DRIVER_NAME == "Бастион-ELSYS" and
+       in_list([-1, 5, 6, 7, 8, 9, 10, 11, 15, 28, 29, 37, 55, 68, 69, 70, 123], $MESSAGE_ID) == true and
+       $MESSAGE_TEXT != ""
+
+if find_substr(lower($MESSAGE_TEXT), "взлом") != null then
+    action = "alert"
+    importance = "high"
+else
+    action = "info"
+    importance = "info"
+endif
+
+object = "device"
+status = "success"
+
+object.name = $SOURCE_DEVICE_NAME
+object.type = $DEVICE_TYPE_NAME
+
+reason = replace($MESSAGE_TEXT, $USER_COMMENT, "%st %cn")  # подстановка комментария в сообщение
+
+if $WORKSTATION_NAME == "Локальный компьютер" then
+    event_src.hostname = "localhost"
+else
+    event_src.hostname = $WORKSTATION_NAME
+endif
+
+msgid = $MESSAGE_ID
+
+event_src.vendor = "es_prom"
+event_src.title = "bastion"
+event_src.category = "Physical security"
+event_src.subsys = "bastion-elsys"
+
+id = "PT_es_prom_bastion_odbc_elsys_driver_info"

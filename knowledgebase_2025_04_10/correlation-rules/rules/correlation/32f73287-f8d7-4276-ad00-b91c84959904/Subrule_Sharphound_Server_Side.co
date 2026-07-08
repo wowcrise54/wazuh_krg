@@ -1,0 +1,73 @@
+event Connection_To_IPC:
+    key:
+        event_src.host, src.ip, src.port, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator() 
+        and event_src.title == "windows" 
+        and msgid == "5145"
+        and lower(object.storage.id) == "\\\\*\\ipc$"
+        and object.storage.name != null
+        and src.ip != null
+        and src.port != null
+        and src.ip != dst.ip
+        and in_list(["winreg","samr","srvsvc","wkssvc"], lower(object.storage.name))  
+    }
+
+rule Subrule_Sharphound_Server_Side: (Connection_To_IPC[2,4] with different object.storage.name) timer 30s
+
+    on Connection_To_IPC {  
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $object.storage.id = object.storage.id
+        $object.storage.path = object.storage.path
+        
+        $object.name = object.name
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+
+        $datafield6 = datafield6  # Полученные права (коды)
+        $datafield9 = datafield9  # Полученные права (письменный вариант)
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+
+emit {
+    $correlation_type = "subrule"
+
+    $subject = "account"
+    $action = "access"
+    $object = "file_object"
+    $status = "success"
+    
+    $importance = "info"
+    
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    $category.low = "Account Discovery"
+}

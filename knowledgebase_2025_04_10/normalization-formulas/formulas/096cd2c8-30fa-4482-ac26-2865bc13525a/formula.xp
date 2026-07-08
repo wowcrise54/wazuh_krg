@@ -1,0 +1,32 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$ev_src_host=WORDDASH} {subject.process.name=WORD}:
+        [{event_src.subsys="audit log"}]{"<"NUMBER">"?} Partition: {datafield1=WORDDASH}, [{subject.account.name=WORD}]
+        {logon_service=WORD}: [{NUMBER}:{src.ip=IPV4|src.ip=IPV6}:{chain_id=NUMBER}] {$type=WORD}: {$query=REST}'
+
+COND = in_list(["DELETE", "PUT", "POST", "GET"], $type)
+
+subject = "account"
+action = "send"
+object = "request"
+status = "success"
+
+object.path = $query
+object.type = $type
+object.query = join([$type, $query], " ")
+
+#datafield1 - Partition
+
+importance = "info"
+
+event_src.vendor = "a10_networks"
+event_src.title = "thunder_adc"
+
+if find_substr($ev_src_host, ".") != null then
+    event_src.fqdn = $ev_src_host
+    event_src.hostname = substr($ev_src_host, 0, find_substr($ev_src_host, "."))
+else
+    event_src.hostname = $ev_src_host
+endif
+
+event_src.category = "Other"
+
+id = "PT_A10_Networks_Thunder_ADC_syslog_HTTP_Request"

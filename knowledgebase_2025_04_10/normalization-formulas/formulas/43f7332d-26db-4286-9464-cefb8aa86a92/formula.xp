@@ -1,0 +1,46 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?} {$syslog_time=DATETIME} {$hostname=HOSTNAME} 
+        CheckPoint {NUMBER} - [ {$kv=KEYVALUE(";", ":", "\\"")}'
+
+COND = $kv["facility"] == "security/authorization messages"
+       and find_substr($kv["default_device_message"], "sudo:") != null
+
+subject = "account"
+action = "execute"
+object = "command"
+
+if find_substr($kv["default_device_message"], "user NOT in sudoers") != null then
+    status = "failure"
+    
+    reason = "user not in sudoers"
+else
+    status = "success"
+endif
+
+subject.account.name = strip(csv($kv["default_device_message"], ":", "")[1], " ", " ")
+
+# выделение атрибутов процесса из $kv["default_device_message"]
+$kv_mes = keyvalue(substr($kv["default_device_message"], find_substr($kv["default_device_message"], "TTY"),
+          length($kv["default_device_message"])), ";", "=", " ")
+
+object.account.name = $kv_mes["USER"]
+
+object.process.cmdline = $kv_mes["COMMAND"]
+object.process.cwd = $kv_mes["PWD"]
+
+logon_service = $kv_mes["TTY"]
+
+datafield9 = $hostname  # имя устройства с LogExporter
+
+time = coalesce(epoch_to_datetime(number($kv["time"])), $syslog_time)
+importance = "low"
+
+category.generic = "Command"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "checkpoint"
+event_src.title = "gaia"
+event_src.ip = $kv["origin"]
+event_src.category = "Network security"
+
+id = "PT_Checkpoint_Gaia_syslog_LogExporter_Common_Command_sudo_used"

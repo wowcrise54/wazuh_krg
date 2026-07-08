@@ -1,0 +1,92 @@
+EVENTLOG = 'EventID.text="33205"'
+
+COND = (
+        find_substr($Provider["Name"], "MSSQL$") != null
+        or $Provider["Name"] == 'MSSQLSERVER'
+       )
+       and (
+            find_substr($Data[0], "action_id:CR ") != null
+            or find_substr($Data[0], "action_id:AL ") != null
+            or find_substr($Data[0], "action_id:DR ") != null
+           )
+       and (
+            find_substr($Data[0], "class_type:DA") != null
+            or find_substr($Data[0], "class_type:SA") != null
+            or find_substr($Data[0], "class_type:A") != null
+           )
+
+$kv = replace($Data[0], " ", "\r\n")
+$kv = keyvalue($kv, "\n", ":")
+
+subject = "account"
+
+if $kv['action_id'] == "CR" then
+    action = "create"
+    importance = "medium"
+
+elif $kv['action_id'] == "AL" then
+
+    if find_substr($kv['statement'], "(STATE = OFF)") != null then
+        action = "disable"
+        importance = "high"
+    else
+        action = "modify"
+        importance = "medium"
+    endif
+
+elif $kv['action_id'] == "DR" then
+    action = "remove"
+    importance = "medium"
+endif
+
+object = "db_object"
+
+if $kv['succeeded'] == "true" then
+    status = "success"
+else
+    status = "failure"
+endif
+
+# разбираем домен и имя пользователя
+$csv = csv($kv['server_principal_name'], "\\", "'")
+if length($csv) == 2 then
+    subject.account.domain = lower($csv[0])
+    subject.account.name = lower($csv[1])
+else
+    subject.account.name = lower($csv[0])
+endif
+
+subject.account.id = $kv['server_principal_sid']
+
+object.name = $kv['object_name']
+
+object.type = switch $kv['class_type']
+    case "DA" "database audit specification"
+    case "SA" "server audit specification"
+    case "A" "audit"
+endswitch
+
+object.query = $kv['statement']
+
+datafield2 = $kv['server_instance_name']  # имя экземпляра
+datafield3 = $kv['database_name']  # имя используемой БД
+datafield4 = $kv['action_id']  # идентификатор действия
+datafield5 = $kv['class_type']  # Тип класса сущности, для которой был проведен аудит
+
+time = $kv['event_time']
+msgid = $EventID['text']
+
+event_src.vendor = "microsoft"
+event_src.title = "sql_server"
+
+$first_dot = find_substr($Computer, '.')
+if $first_dot != null then
+    event_src.fqdn = lower($Computer)
+    event_src.hostname = lower(substr($Computer, 0, $first_dot))
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.subsys = lower($Channel)
+event_src.category = "Database server"
+
+id = "PT_Microsoft_SQL_Server_eventlog_33205_audit_object_operation"

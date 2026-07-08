@@ -1,0 +1,18 @@
+TEXT = 'reboot system {$act="boot"|$act="down"} {$time_w=STRING $time_m=WORD $time_d=NUMBER $time_t=STRING}'
+
+if $act == "boot" then
+    action = "start"
+else
+    action = "stop"
+endif
+object = "system"
+status = "success"
+
+time = datetime($time_m + " " + string($time_d) + " " + $time_t + ":00")
+importance = "medium"
+
+event_src.vendor = "oracle"
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_start_or_shutdown_system"

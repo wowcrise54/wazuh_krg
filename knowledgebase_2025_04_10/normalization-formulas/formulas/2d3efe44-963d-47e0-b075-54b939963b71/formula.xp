@@ -1,0 +1,45 @@
+JSON = 'atype="authCheck"'
+
+COND = $ts["$date"] != null
+       and (
+           ($param["command"] == "isMaster" and $param["args"]["client"]["application"]["name"] != "mongodump")
+           or $param["command"] == "saslStart"
+       )
+
+subject = "host"
+action = "connect"
+object = "database"
+status = "success"
+
+object.name = $param["args"]["$db"]
+object.value = $param["args"]["mechanism"]
+object.property = if object.value != null then "sasl mechanism" else null endif
+
+src.ip = $remote["ip"]
+src.port = $remote["port"]
+dst.ip = $local["ip"]
+dst.port = $local["port"]
+
+if (src.ip + ":" + string(dst.port)) != $param["args"]["hostInfo"] then
+    dst.hostname = strip($param["args"]["hostInfo"], "", ":" + string(dst.port))
+endif
+
+datafield1 = $param["args"]["client"]["platform"]               # платформа подключившегося пользователя         
+datafield2 = $param["args"]["client"]["application"]["name"]    # клиентское приложение использованное для подключения
+datafield3 = $param["args"]["client"]["driver"]["name"]         # используемый клиент
+datafield4 = $param["args"]["client"]["driver"]["version"]      # версия клиента
+datafield5 = $param["args"]["client"]["os"]["type"]             # тип ОС
+datafield6 = $param["args"]["client"]["os"]["name"]             # название ОС
+datafield7 = $param["args"]["client"]["os"]["architecture"]     # архитектура ОС
+datafield8 = $param["args"]["client"]["os"]["version"]          # версия ОС
+
+msgid = $param["command"]
+time = $ts["$date"]
+importance = "info"
+
+event_src.vendor = "opensource"
+event_src.title = "mongodb"
+event_src.category = "Database server"
+event_src.ip = $local["ip"]
+
+id = "PT_Opensource_MongoDB_filemonitor_Connection"

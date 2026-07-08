@@ -1,0 +1,53 @@
+EVENTLOG = 'EventID.text="20274"'
+!COND = $Channel=="System" and $Provider["Name"]=="RemoteAccess"
+
+subject = "account"
+action = "start"
+object = "session"
+status = "success"
+
+$data_extra_index = if length($Data) == 5 then 1 else 0 endif
+
+$field_with_name = $Data[1 + $data_extra_index]
+if find_substr($field_with_name, "\\") != null then
+    $name_domain = csv($field_with_name, "\\", "'")
+    subject.account.domain = lower($name_domain[0])
+    subject.account.name = lower($name_domain[1])
+elif find_substr($field_with_name, "@") != null then
+    $name_domain = csv($field_with_name, "@", "'")
+    subject.account.domain = lower($name_domain[1])
+    subject.account.name = lower($name_domain[0])
+else
+    subject.account.name = lower($field_with_name)
+endif
+
+# Положение следующего блока строк в коде зафиксировано из-за порядка обработки данных
+dst.fqdn = event_src.fqdn
+dst.hostname = event_src.hostname
+
+$dot_pos = find_substr($Computer, '.')
+
+if $dot_pos != null then
+    dst.fqdn = lower($Computer)
+    dst.hostname = lower(substr($Computer, 0, $dot_pos))
+    event_src.fqdn = dst.fqdn
+    event_src.hostname = dst.hostname
+else
+    dst.hostname = lower($Computer)
+    event_src.hostname = dst.hostname
+endif
+
+assigned_src_ip = $Data[3 + $data_extra_index]
+interface = $Data[2 + $data_extra_index]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = "vpn-gateway"
+event_src.category = "Operating system"
+event_src.id = $Provider["Name"]
+
+id = "PT_Microsoft_Windows_eventlog_20274_Start_session"

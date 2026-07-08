@@ -1,0 +1,110 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} api_json.log: {$json=REST}'
+COND = (
+    find_substr($json, '"meta.caller_id":"POST /api/:version/projects/:id/merge_requests"') != null
+    or find_substr($json, '"meta.caller_id":"POST /api/:version/projects/:id/merge_requests/:merge_request_iid/approve"') != null
+    or find_substr($json, '"meta.caller_id":"POST /api/:version/projects/:id/merge_requests/:merge_request_iid/unapprove"') != null
+    or find_substr($json, '"meta.caller_id":"PUT /api/:version/projects/:id/merge_requests/:merge_request_iid/merge"') != null
+)
+
+subject = "account"
+object = "resource"
+
+subformula "parse_json"
+    JSON = ''
+endsubformula
+
+subformula "parse_path"
+    TEXT = '/api/v{NUMBER}/projects/{$project_id=NUMBER|LITERAL+}/merge_requests'
+endsubformula
+
+subformula "parse_path"
+    TEXT = '/api/v{NUMBER}/projects/{$project_id=NUMBER|LITERAL+}/merge_requests/{$internal_id=NUMBER}/{"approve"|"unapprove"|"merge"}'
+endsubformula
+
+submessage("JSON", "parse_json", $json)
+submessage("TEXT", "parse_path", $path)
+
+$s_source_branch = find_substr($json, '{"key":"source_branch","value":"')
+$e_source_branch = find_substr(substr($json, $s_source_branch, length($json)), '"}')
+$source_branch = substr($json, $s_source_branch + 32, $e_source_branch - 32)
+$source_branch = if length($source_branch) != 0 then $source_branch else null endif
+
+$s_target_branch = find_substr($json, '{"key":"target_branch","value":"')
+$e_target_branch = find_substr(substr($json, $s_target_branch, length($json)), '"}')
+$target_branch = substr($json, $s_target_branch + 32, $e_target_branch - 32)
+$target_branch = if length($target_branch) != 0 then $target_branch else null endif
+
+if $route == "/api/:version/projects/:id/merge_requests" then
+    action = "create"
+    
+    object.property = "branch"
+    object.value = $source_branch
+    object.new_value = $target_branch
+
+    external_link = "https://docs.gitlab.com/ee/api/merge_requests.html#create-mr" 
+elif $route == "/api/:version/projects/:id/merge_requests/:merge_request_iid/approve" then
+    action = "allow"
+    external_link = "https://docs.gitlab.com/ee/api/merge_request_approvals.html#approve-merge-request"
+elif $route == "/api/:version/projects/:id/merge_requests/:merge_request_iid/unapprove" then
+    action = "reject"
+    external_link = "https://docs.gitlab.com/ee/api/merge_request_approvals.html#unapprove-merge-request"
+elif $route == "/api/:version/projects/:id/merge_requests/:merge_request_iid/merge" then
+    action = "apply"
+    external_link = "https://docs.gitlab.com/ee/api/merge_requests.html#merge-a-merge-request"
+endif
+
+$status_new = substr(string($status), 0, 1)
+
+if in_list(["2", "3"], $status_new) then
+    status = switch action == "apply"
+        case true "ongoing"
+        case false "success" 
+    endswitch
+
+elif in_list(["4", "5"], $status_new) then
+    status = "failure"
+endif
+
+subject.account.name = $username
+subject.account.id = $user_id
+
+if ($token_type != null) and ($token_id != null) then
+    subject.account.privileges = $token_type + ":" + string($token_id)
+endif
+
+subject.process.meta = $ua
+
+object.type = "merge_request"
+
+src.ip = coalesce($['meta.remote_ip'], $remote_ip)
+
+$project_list = csv($['meta.project'], "/", "'")
+$project_path = $project_list[length($project_list)-1]
+$project_namespace_fullpath = strip($['meta.project'], "", "/" + $project_path)
+
+datafield1 = $project_path  # Project Slug
+datafield2 = $project_namespace_fullpath  # Namespace Fullpath
+datafield3 = $source_branch  # Branch Name
+
+numfield1 = $project_id  # Project ID
+numfield3 = $internal_id  # MR Internal ID (!x)
+
+chain_id = $correlation_id
+
+time = $time
+msgid = coalesce($['meta.caller_id'], $controller + "#" + $action)
+importance = "low"
+
+event_src.vendor = "gitlab"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "gitlab"
+event_src.subsys = "api"
+event_src.category = "Other"
+
+id = "PT_GitLab_GitLab_syslog_API_JSON_MR_Management"

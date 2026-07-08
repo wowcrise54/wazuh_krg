@@ -1,0 +1,282 @@
+!TABULAR = "hostname,
+            {msgid=event_type},
+            {time=event_time},
+            description,
+            par7,
+            severity,
+            {datafield1=group_name}"
+
+!COND = $event_type == "GNRL_EV_OBJECT_BLOCKED"
+        and (
+            in_list(["Объект помещен на карантин",
+                     "Запрещено",
+                     "Загрузка объекта запрещена",
+                     "Запуск заблокирован",
+                     "Объект будет помещен на карантин при перезагрузке"], $event_name)
+            )
+
+$description = replace($description, " ", "\t")
+if find_substr($description, "\r\n") != null then
+    $kv = keyvalue($description, "\r\n", ":")
+else
+    $kv = keyvalue($description, " ", ": ")
+endif
+
+subformula "get_name"
+    TEXT = '{UNTIL(":")}{$value=REST}'
+endsubformula
+subformula "get_name"
+    TEXT = '{REST}'
+endsubformula
+
+subject.name = $product_name
+subject.version = $product_version
+
+switch $event_name
+    case "Объект помещен на карантин"
+        action = "detect"
+        object = "malware"
+        status = "success"
+
+        if $product_name == "KES" then
+            $hash_raw = coalesce($kv['Хеш'], $kv['SHA256'])
+            submessage("TEXT", "get_name", $kv['Результат'])
+            object.name = coalesce($value, $kv['Название'], $kv['Помещено на карантин'])
+            object.storage.fullpath = lower($kv['Объект'])
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        else
+            $hash_raw = $par1
+            object.name = $par5
+            object.storage.fullpath = $par2
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        endif
+
+        reason = "Объект помещен на карантин"
+        
+        object.state = "quarantined"
+
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Mitigation"
+
+    case "Запрещено"
+        subject = "account"
+        action = "access"
+        object = "resource"
+        status = "failure"
+
+        $domain_user = csv($par7, "\\", "'")
+        if length($domain_user) == 2 then
+            subject.account.name = $domain_user[1]
+            subject.account.domain = $domain_user[0]
+        else
+            subject.account.name = $par7
+        endif
+
+        if $product_name == "KES" then
+            $hash_raw = coalesce($kv['Хеш'], $kv['SHA256'])
+            submessage("TEXT", "get_name", $kv['Результат'])
+            object.name = coalesce($value, $kv['Название'])
+            object.storage.fullpath = lower($kv['Объект'])
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        else
+            $hash_raw = $par1
+            object.storage.fullpath = $par2
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        endif
+
+        reason = "Запрещено"
+
+    case "Загрузка объекта запрещена"
+        subject = "account"
+        action = "access"
+        object = "resource"
+        status = "failure"
+
+        if $product_name == "KES" then
+            $hash_raw = coalesce($kv['Хеш'], $kv['SHA256'])
+            submessage("TEXT", "get_name", $kv['Результат'])
+            object.name = coalesce($value, $kv['Название'], $kv['Запрещено'])
+            object.storage.fullpath = lower(csv($kv['Объект'], " ", "")[0])
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        else
+            $hash_raw = $par1
+            object.name = $par5
+            object.storage.fullpath = $par2
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        endif
+
+        object.state = "blocked"
+        object.property = "signature"
+
+        reason = "Загрузка объекта запрещена"
+
+    case "Запуск заблокирован"
+        subject = "account"
+        action = "start"
+        object = "process"
+        status = "failure"
+
+        if $product_name == "KES" then
+            $hash_raw = coalesce($kv['Хеш'], $kv['SHA256'])
+            submessage("TEXT", "get_name", $kv['Результат'])
+            object.name = coalesce($value, $kv['Название'], $kv['Запрещено'])
+            object.storage.fullpath = lower($kv['Объект'])
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        else
+            $hash_raw = $par1
+            object.name = $par5
+            object.storage.fullpath = $par2
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        endif
+
+        object.state = "blocked"
+        object.property = "signature"
+
+        reason = "Запуск заблокирован"
+
+    case "Объект будет помещен на карантин при перезагрузке"
+        action = "detect"
+        object = "malware"
+        status = "success"
+
+        if $product_name == "KES" then
+            $hash_raw = coalesce($kv['Хеш'], $kv['SHA256'])
+            submessage("TEXT", "get_name", $kv['Результат'])
+            object.name = coalesce($value, $kv['Название'], $kv['перезагрузке'])
+            object.storage.fullpath = lower($kv['Объект'])
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        else
+            $hash_raw = $par1
+            object.name = $par5
+            object.storage.fullpath = $par2
+            $csv_p = replace(object.storage.fullpath, "/", "\\\\")
+            $csv_path = csv($csv_p, '/', '')
+            if length($csv_path) > 1 then
+                object.storage.name = $csv_path[length($csv_path) - 1]
+                object.storage.path = strip(object.storage.fullpath, '', object.storage.name)
+            else
+                object.storage.name = $csv_p
+            endif
+        endif
+
+        object.state = "null"
+
+        reason = "Объект будет помещен на карантин при перезагрузке"
+
+        category.high = "Information Security"
+        category.generic = "Malware"
+        category.low = "Mitigation"
+endswitch
+
+$domain_user = csv(lower($par7), "\\", "'")
+if length($domain_user) == 2 then
+    subject.account.name = $domain_user[1]
+    subject.account.domain = $domain_user[0]
+else
+    subject.account.name = $par7
+endif
+        
+if $hash_raw != null then
+    object.hash.sha256 = upper($hash_raw)
+    object.hash.md5 = upper($kv['MD5'])
+endif
+
+# datafield1 - имя группы, в которую входит узел-источник
+object.type = $kv['Тип']
+
+importance = switch $severity
+    case 1 "info"
+    case 2 "low"
+    case 3 "medium"
+    case 4 "high"
+endswitch
+
+event_src.vendor = "kaspersky"
+event_src.title = switch lower($product_name)
+    case "1093"    "security_center"
+    case "1103"    "security_center_network_agent"
+    case "kes"     "endpoint_security"
+    case "kesl"    "endpoint_security_for_linux"
+    case "svm"     "security_for_virtualization"
+    case "ksvla"   "security_for_virtualization_light_agent"
+    case "wsee"    "security_for_windows_servers"
+    case "kavfsee" "security_for_windows_servers"
+endswitch
+if event_src.title == null then
+    event_src.title = "security_center"
+endif
+
+if $ip_address != "127.0.0.1" then
+    event_src.ip = $ip_address
+endif
+if ipv4($fqdn) == null and find_substr($fqdn, ".") != null then
+    event_src.fqdn = lower($fqdn)
+endif
+event_src.hostname = lower($hostname)
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Security_Center_odbc_GNRL_EV_OBJECT_BLOCKED"

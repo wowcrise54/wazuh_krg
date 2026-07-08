@@ -1,0 +1,44 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        {event_src.subsys=WORDDASH} {":"?} sensor_id={event_src.id=NUMBER} node={HOSTNAME} type={msgid="IDS_SELFTEST"}
+        msg=audit({STRING} {$values=KEYVALUE(" ", "=", "\\\"")}'
+
+subject = "account"
+action = "start"
+object = "service"
+status = "success"
+
+subject.account.session_id = $values["ses"]
+subject.account.id = $values["auid"]
+subject.account.name = $values["acct"]
+
+object.process.id = $values["pid"]
+$process_path = csv($values["exe"], "/", "")
+object.process.name = $process_path[length($process_path) - 1]
+object.process.path = strip($values["exe"], "", object.process.name)
+object.process.fullpath = object.process.path + object.process.name
+
+object.type = "selftest"
+
+src.hostname = if $values["hostname"] != "?" then $values["hostname"] else null endif
+src.ip = if $values["addr"] != "?" then $values["addr"] else null endif
+
+logon_service = $values["terminal"]
+
+importance = "low"
+
+category.generic = "Service"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "infotecs"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "vipnet_ids"
+event_src.category = "IDS/IPS"
+
+id = "PT_Infotecs_VipNet_IDS_2_4_syslog_plain_selftest_start"

@@ -1,0 +1,45 @@
+!JSON = "EventCode=4662"
+!COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "access"
+object = "ds_object"
+if $EventType == "4" then
+    status = "success"
+elif $EventType == "5" then
+    status = "failure"
+endif
+
+subject.account.id = $InsertionStrings[0]
+subject.account.name = lower($InsertionStrings[1])
+subject.account.domain = lower($InsertionStrings[2])
+subject.account.session_id = maybe_number16($InsertionStrings[3])
+
+object.name = strip($InsertionStrings[6],"%{","}")
+object.type = strip($InsertionStrings[5],"%{","}")
+
+datafield2 = $InsertionStrings[11]  # Подробности операции
+datafield5 = $InsertionStrings[10]  # Маска доступа (содержит в себе весь AccessList)
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+
+importance = "medium"
+
+category.generic = "Directory Service Object"
+category.high = "System Management"
+category.low = "Manipulation"
+
+event_src.vendor = "microsoft"
+event_src.title = "active_directory"
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+event_src.subsys = lower($Logfile)
+event_src.category = "Operating system"
+
+id = "PT_Microsoft_Windows_wmi_4662_An_operation_was_performed_on_an_object"

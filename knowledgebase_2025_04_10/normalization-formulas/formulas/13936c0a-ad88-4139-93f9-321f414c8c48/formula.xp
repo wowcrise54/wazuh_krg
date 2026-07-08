@@ -1,0 +1,26 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} pfsp: TMS {$tmp_fault=STRING+} fault for resource
+        {$tmp_resource=STRING+} on TMS {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME|}
+        {$tmp_status_fault="cleared"?} (alert #{datafield1=NUMBER})'
+
+if $tmp_status_fault == null then
+    action = "alert"
+    importance = "high"
+else
+    action = "info"
+    importance = "info"
+endif
+
+object = "process"
+object.type = "mitigation"
+object.name = strip($tmp_resource, "\'", "\'")
+status = "success"
+
+# datafield1 - ID
+
+reason = strip($tmp_fault, "\'", "\'")
+
+event_src.title = "peakflow_sp"
+event_src.vendor = "arbor_networks"
+event_src.category = "Network security"
+
+id = "PT_Arbor_Networks_Peakflow_SP_syslog_tms_fault"

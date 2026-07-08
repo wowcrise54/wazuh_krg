@@ -1,0 +1,27 @@
+JSON = 'Provider = "Microsoft-Windows-Win32k"'
+COND = $EventID == 460
+
+subject = "process"
+action = "start"
+object = "module"
+status = "success"
+
+subject.process.id = $EventData["Pid"]
+
+datafield1 = $ThreadID
+datafield2 = $EventData["ProcessCreateTime"]   # ProcessCreate time
+if $Name != "" then datafield11 = $Name endif  # process name if not empty
+
+time = $Timestamp
+msgid = $EventID
+importance = "info"
+
+category.generic = "Executable Module"
+category.high = "Availability Management"
+category.low = "Control"
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_ETW_Write_clipboard"

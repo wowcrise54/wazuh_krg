@@ -1,0 +1,83 @@
+TEXT = '{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|},header,
+        {NUMBER},{NUMBER},{datafield1="acl(2) - SETACL command"},{WORDDASH?},{WORD}
+        {time=DATETIME} {NUMBER}, + {duration=NUMBER} msec, argument,{NUMBER},
+        {WORD},{WORD},argument,{NUMBER},{WORD}, nentries,{$r=REST}'
+
+$i = find_substr($r, "path,")     # ищем где начинается слово path
+
+$re = substr($r, $i, length($r))  # остаток события после прав ACL
+
+subject = "account"
+action = "modify"
+object = "resource"
+
+submessage("TEXT", "formula", $re)  # Парсинг остатка события
+submessage("TEXT", "client", $ip)   # Хост клиента
+
+subformula 'formula'
+    TEXT = '{$csv=CSV(",","\'")}'
+    subject.name = $csv[9]
+    $csv_path = csv($csv[1], "/", "'")
+    object.name = $csv_path[length($csv_path) - 1]
+    object.path = strip($csv[1], "", object.name)
+    object.property = "acl"
+    if $csv[19] == "success" then
+        status = "success"
+    else
+        status = "failure"
+    endif
+
+    $ip = $csv[17]
+    # datafield1 - тип события (в данном случае всегда "chmod(2)")
+    datafield2 = $csv[16]  # id сессии
+    datafield3 = $csv[4]   # новый владелец (username)
+    datafield4 = $csv[5]   # группа владелец (group)
+    datafield5 = strip(substr($r, 0, $i)," ",", ")  # права ACL для файла/каталога
+endsubformula
+
+subformula "client"
+    TEXT = "{WORD} {WORD} {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}"
+endsubformula
+
+if find_substr(object.path, "/etc/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/lib/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/kernel/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/bin/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/sbin/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/platform/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/boot/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/var/lib/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/usr/bin/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/usr/sadm/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/usr/sbin/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/usr/ccs/") != null then
+    importance = "medium"
+elif find_substr(object.path, "/usr/include/") != null then
+    importance = "medium"
+else
+    importance = "info"
+endif
+
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "solaris"
+event_src.category = "Operating system"
+
+id = "PT_Oracle_Solaris_syslog_set_acl_csv"

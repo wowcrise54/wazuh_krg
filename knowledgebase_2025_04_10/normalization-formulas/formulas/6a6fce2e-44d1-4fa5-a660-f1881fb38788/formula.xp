@@ -1,0 +1,152 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING?}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_ADD_PERMISSION",  # 850
+           "USER_ADD_PERMISSION_FAILED",  # 851
+           "USER_REMOVE_PERMISSION",  # 852
+           "USER_REMOVE_PERMISSION_FAILED",  # 853
+           "USER_ADD_SYSTEM_PERMISSION",  # 866
+           "USER_ADD_SYSTEM_PERMISSION_FAILED",  # 867
+           "USER_REMOVE_SYSTEM_PERMISSION",  # 868
+           "USER_REMOVE_SYSTEM_PERMISSION_FAILED"  # 869
+       ], $event_class)
+
+subject = "account"
+object = "account"
+
+subformula "parse_vdc_object"
+    TEXT = "{'VM Pool'|'Disk Profile'|'Bottom'|'System'|'VM'|'Host'|'Template'|'AdElements'|'Tag'|'Bookmark'|'Cluster'|'MultiLevelAdministration'|'Storage'|'EventNotification'|'ImportExport'|'Data Center'|'User'|'Role'|'Quota'|'Gluster Volume'|'Disk'|'Network'|'Snapshot'|'Event'|'GlusterHook'|'Provider'|'GlusterService'|'ExternalTask'|'Vnic Profile'|'MAC Pool'|'Cpu Profile'} {$vdc_object_name=REST}"
+    
+    $vdc_object_type = strip($vdc_object, "", " " + $vdc_object_name)
+endsubformula
+
+subformula "850"
+    # USER_ADD_PERMISSION
+    TEXT = "User/Group {$object_name=STRING+} Namespace {$namespace=STRING+} Authorization provider: {$authz=STRING+} was granted permission for Role {$role_name=STRING+} on {$vdc_object=STRING+} by {$user=REST}"
+    
+    action = "grant"
+    status = "success"
+    
+    $object_name = strip($object_name, "", ",")
+    $vdc_object = strip($vdc_object, "", ",")
+    $user = strip($user, "", ".")
+endsubformula
+
+subformula "851_853_867_869"
+    # USER_ADD_PERMISSION_FAILED
+    # USER_REMOVE_PERMISSION_FAILED
+    # USER_ADD_SYSTEM_PERMISSION_FAILED
+    # USER_REMOVE_SYSTEM_PERMISSION_FAILED
+    TEXT = "User {$user=STRING+} failed to {$action_raw='grant'|$action_raw='remove'} permission for Role {$role_name=STRING+} {'on'|'from'} {$vdc_object=STRING+} to User/Group {$object_name=REST}"
+    
+    action = switch $action_raw
+        case "grant" "grant"
+        case "remove" "revoke"
+    endswitch
+    status = "failure"
+    
+    $object_name = strip($object_name, "", ".")
+endsubformula
+
+subformula "852_868"
+    # USER_REMOVE_PERMISSION
+    # USER_REMOVE_SYSTEM_PERMISSION
+    TEXT = "User/Group {$object_name=STRING+} Role {$role_name=STRING+} permission was removed from {$vdc_object=STRING+} by {$user=REST}"
+    
+    action = "revoke"
+    status = "success"
+    
+    $user = strip($user, "", ".")
+endsubformula
+
+subformula "866"
+    # USER_ADD_SYSTEM_PERMISSION
+    TEXT = "User/Group {$object_name=STRING+} was granted permission for Role {$role_name=STRING+} on {$vdc_object=STRING+} by {$user=REST}"
+    
+    action = "grant"
+    status = "success"
+    
+    $user = strip($user, "", ".")
+endsubformula
+
+$event_class = replace($event_class, "", ",")
+
+switch $event_class
+    case "USER_ADD_PERMISSION" submessage("TEXT", "850", $raw_message)
+    case "USER_ADD_PERMISSION_FAILED" submessage("TEXT", "851_853_867_869", $raw_message)
+    case "USER_REMOVE_PERMISSION" submessage("TEXT", "852_868", $raw_message)
+    case "USER_REMOVE_PERMISSION_FAILED" submessage("TEXT", "851_853_867_869", $raw_message)
+    case "USER_ADD_SYSTEM_PERMISSION" submessage("TEXT", "866", $raw_message)
+    case "USER_ADD_SYSTEM_PERMISSION_FAILED" submessage("TEXT", "851_853_867_869", $raw_message)
+    case "USER_REMOVE_SYSTEM_PERMISSION" submessage("TEXT", "852_868", $raw_message)
+    case "USER_REMOVE_SYSTEM_PERMISSION_FAILED" submessage("TEXT", "851_853_867_869", $raw_message)
+endswitch
+
+submessage("TEXT", "parse_vdc_object", $vdc_object)
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+$object_list = csv($object_name, "@", "'")
+if length($object_list) == 2 then
+    object.name = $object_list[0]
+    object.domain = $object_list[1]
+else
+    object.name = $object_name
+endif
+
+if substr($event_class, 0, 11) == "USER_REMOVE" then
+    object.account.privileges = $role_name
+    object.property = "removed_role"
+    object.value = $role_name
+elif substr($event_class, 0, 8) == "USER_ADD" then
+    object.property = "granted_role"
+    object.value = $role_name
+endif
+
+logon_service = $authz_provider
+
+switch $vdc_object_type
+    case "Data Center" datafield1 = $vdc_object_name  # Data Center Name
+    case "Storage" datafield2 = $vdc_object_name  # Domain Storage Name
+    case "Cluster" datafield3 = $vdc_object_name  # Cluster Name
+    case "VM" datafield5 = $vdc_object_name  # Virtual Machine Name
+    case "Host" datafield6 = $vdc_object_name  # VDS (Host) Name
+    case "Network" datafield8 = $vdc_object_name  # Network Name
+endswitch
+if $vdc_object_name != "" then
+    datafield4 = $vdc_object_name  # Entity Name
+endif
+datafield7 = $vdc_object_type  #  VDC Object Type
+
+msgid = $event_class
+importance = "medium"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "ovirt"
+event_src.category = "Virtualization"
+
+id = "PT_Opensource_oVirt_syslog_Permissions_Management"

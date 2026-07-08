@@ -1,0 +1,23 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL("Info: ")}
+login: {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME} user:{subject.account.name=STRING} session:
+        {subject.account.session_id=WORD} The {protocol="HTTP"} session has been established
+        successfully.'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "success"
+
+logon_auth_method = "remote"
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_login_webui"

@@ -1,0 +1,53 @@
+!TABULAR = "id,
+            {time = start_time},
+            {datafield1 = node_name},
+			{event_src.ip = ip},
+			rule_name,
+			message"
+
+!COND = (find_substr($rule_name, "Статус программы")!= null)
+
+action = "modify"
+object = "application"
+status = "success"
+
+submessage("TEXT", "message", $rule_name)
+
+subformula "message"
+    # Извлечение object.name и importance из $rule_name
+    !TEXT = 'Статус программы {object.name = REST}'
+    if object.name != "Деловая почта" then
+        importance = "high"
+    else importance = "low"
+    endif
+endsubformula
+
+if ($message == "Ошибка при декодировании ответа") then
+    object.state = $message
+	
+elif find_substr($message, "неизвестно")!=null then
+    object.state = "Состояние неизвестно"
+	
+elif find_substr($message, "включен")!=null and (object.name != "Деловая почта") then
+    object.state = "включен"
+	
+elif find_substr($message, "включена")!=null then
+    object.state = "включена"
+
+elif find_substr($message, "выключен")!=null and (object.name != "Деловая почта") then
+    object.state = "выключен"
+	
+elif find_substr($message, "выключена")!=null then
+    object.state = "выключена"
+	
+elif find_substr($message, "отсутствует")!=null then
+    object.state = "отсутствует"	
+endif
+
+# datafield1 - имя узла
+
+event_src.vendor = "infotecs"
+event_src.title = "vipnet_statewatcher"
+event_src.category = "Network monitoring system"
+
+id = "PT_Infotecs_VipNet_StateWatcher_odbc_Application_status"

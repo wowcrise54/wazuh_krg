@@ -1,0 +1,28 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{"%"|"#"}{msgid="FIREWALL-I-LOG"}:
+        zone-pair \'{$src_zone=WORD}{$dst.zone=WORD}\' rule{subject.id=NUMBER}
+        {"("WORDDASH")"?}{$action=WORD}{protocol=WORD}{src.ip=IPV4|src.ip=IPV6}:
+        {src.port=NUMBER}({$int_in=UNTIL(" ")}{src.mac=MACADDR}) ->
+        {dst.ip=IPV4|dst.ip=IPV6}:{dst.port=NUMBER}dscp{NUMBER},
+        {count.packets=NUMBER}packets'
+
+subject = "rule"
+if $action == "permitted" then
+    action = "allow"
+elif $action == "denied" then
+    action = "deny" 
+endif   
+object = "connection"
+status = "success"
+
+datafield1 = $src_zone  # Ingress zone
+datafield2 = $dst.zone  # Egress zone
+
+interface = $int_in
+
+importance = "info"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_firewall_rule_event"

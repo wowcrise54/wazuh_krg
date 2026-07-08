@@ -1,0 +1,143 @@
+query Check_If_Host_Is_DC($ip, $host) from List_Servers {
+    (
+        (
+            asset_fqdn == $host
+            and asset_fqdn != null
+        )
+        or (
+            asset_ip == $ip
+            and asset_ip != null
+        )
+        or (
+            (
+                host == $ip
+                or host == $host
+            )
+            and host != null
+        )
+    )
+}
+
+query Check_If_Host_Is_DC_AssetGrid($fqdn, $ip, $asset) from AssetGrid_Servers {
+    (
+        asset_id == $asset
+        and asset_id != null
+    ) or (
+            asset_fqdn == $fqdn
+            and asset_fqdn != null
+    ) or (
+            asset_ip == $ip
+            and asset_ip != null
+    )
+}
+
+event Network_Account_Login:
+    key:
+        event_src.host, subject.account.name, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and (
+            (
+                match(lower(select_query_first("Check_If_Host_Is_DC", [event_src.ip, lower(event_src.fqdn)], "roles")), "*domain controller*")
+                and not match(lower(select_query_first("Check_If_Host_Is_DC", [src.ip, lower(src.fqdn)], "roles")), "*domain controller*")
+            ) or (
+                match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [event_src.fqdn, event_src.ip, event_src.asset], "roles"), "*\"Domain Controller\"*")
+                and not match(select_query_first("Check_If_Host_Is_DC_AssetGrid", [src.fqdn, src.ip, src.asset], "roles"), "*\"Domain Controller\"*")
+            )
+        )
+        and filter::LoginAttempt_Windows_Endpoint_All_Accounts()
+        and not filter::Loopback_Address(src.ip)
+        and status == "success"
+        and logon_type == 3
+        and filter::CheckWL_Windows_Login("DCShadow_Attack", lower(join([subject.account.name, src.host, dst.host], "|")))
+    }
+
+event Computer_Account_Modification:
+    key:
+        event_src.host, subject.account.name, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4742"
+        and event_src.title == "windows"
+        and subject.account.name != null
+        and regex(lower(datafield2), "gc/.*?/.*?|e3514235–4b06–11d1-ab04–00c04fc2dcd2", 0) != null
+    }
+
+rule DCShadow_Attack: Network_Account_Login and Computer_Account_Modification within 30s
+
+    init {
+        $labels = "w_auto"
+    }
+
+    on Network_Account_Login {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.id = subject.account.id
+        $subject.account.session_id = subject.account.session_id
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $logon_type = logon_type
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.key = lower(join([subject.account.name, src.host, dst.host], "|"))
+        $labels = $labels + "|CheckWL_Windows_Login"
+    }
+
+    on Computer_Account_Modification {
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.fullname = object.account.fullname
+        $object.account.id = object.account.id
+        
+        $datafield2 = datafield2  # Имена серверов, которые используются установленными на нём сервисами
+        
+        $alert.regex_match = regex(lower(datafield2), "gc/.*?/.*?|e3514235–4b06–11d1-ab04–00c04fc2dcd2", 0)
+        $alert.context = object.account.name
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "modify"
+    $object = "account"
+    $status = "success"
+
+    $importance = "high"
+
+    if $src.asset != null then
+        $incident.attacking_assets = append($incident.attacking_assets, $src.asset)
+    endif
+
+    $category.generic = "Attack"
+    $category.high = "Defense Evasion"
+    $category.low = "Rogue Domain Controller"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $src.ip, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

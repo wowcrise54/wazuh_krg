@@ -1,0 +1,50 @@
+TEXT = '{"<"NUMBER">"?}{":"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|}
+        mysql-server_auditing: {IPV4|IPV6|HOSTNAME},{subject.account.name=WORDDASH},
+        {src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME|},{subject.account.session_id=NUMBER},
+        {datafield2=NUMBER},QUERY,{"`"WORDDASH"`"?},\'RENAME USER {$data=CSV}'
+
+subject = "account"
+action = "rename"
+object = "account"
+
+if $data[1] == "0" then
+    status = "success"
+else
+    status = "failure"
+
+    reason = $data[1]
+endif
+
+subformula "User_rename"
+    TEXT = "\\'{$object_acount=WORDDASH}\\'@\\'{$old_host=STRING+} TO \\'{$new_name=WORDDASH}\\'@\\'{$allowed_hosts=STRING} {REST}"
+endsubformula
+
+submessage("TEXT","User_rename",$data[0])
+
+object.account.id = $object_acount
+object.account.name = $object_acount
+
+object.new_value = $new_name
+
+# datafield2 - queryid
+datafield4 = strip($old_host,'','\\\'')         # allowed hosts
+datafield5 = strip($allowed_hosts,'','\\\'\'')  # allowed hosts
+
+importance = "low"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.title = "mysql"
+event_src.vendor = "oracle"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Database server"
+
+id = "PT_Oracle_MySQL_syslog_rename_user"

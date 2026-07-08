@@ -1,0 +1,72 @@
+event New_Request:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "exchange"
+        and in_list(["1", "5", "6"], msgid)
+        and status == "success"
+        and lower(object.name) == "new-mailboxexportrequest"
+        and filter::CheckWL_Specific_Only("PST_Upload_Via_Administrator_Exchange", lower(object.process.cmdline))
+    }
+
+event Delete_Request:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "exchange"
+        and in_list(["1", "5", "6"], msgid)
+        and status == "success"
+        and lower(object.name) == "remove-mailboxexportrequest"
+    }
+
+rule PST_Upload_Via_Administrator_Exchange: (New_Request and Delete_Request) within 1m
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on New_Request {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        $object.name = object.name    # commandlet
+        $object.value = object.value  # параметры командлета 
+        $object.process.cmdline = object.process.cmdline
+
+        $alert.key = lower(object.process.cmdline)
+        $alert.regex_match = "archived account: " + regex(lower(object.process.cmdline), '-mailbox\s\\"(.+)\\"\s.*', 1)
+        $alert.context = $alert.regex_match
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+    
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+    $status = "success"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Collection"
+    $category.low = "Email Collection: Remote Email Collection"
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.domain, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "DataLeakage"
+    $incident.aggregation.timeout = 2h
+}

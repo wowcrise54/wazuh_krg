@@ -1,0 +1,281 @@
+EVENTLOG = 'Provider.Name="PT-XDR"'
+
+COND = $Channel == "rule_engine"
+
+## Все доступные msgid-ы
+#re_lsass_guard_alert      Скопирована память процесса lsass
+#re_malware_file_copied      Скопирован вредоносный файл
+#re_malware_file_downloaded      Скачан вредоносный файл
+#re_malware_file_ran      Запущен вредоносный файл
+#re_malware_process_created_file      Создание файла вредоносным процессом
+#re_malware_process_forked      Клонирован вредоносный процесс
+#re_malware_process_ran_one      Запуск процесса вредоносным процессом
+#re_malware_process_took_connection      Вредоносный процесс установил соединение
+#re_malware_process_took_dns_query      Вредоносный процесс выполнил DNS-запрос
+#re_mdi_event      MS Defender создал событие безопасности
+#re_mdi_malware      MS Defender обнаружил вредоносный файл
+#re_module_started      Модуль запущен
+#re_module_stopped      Модуль остановлен
+#re_ms_office_exec_proc      Процесс из офисного пакета MS запустил процесс
+#re_possible_credential_stealing      Возможная кража учётных данных
+#re_process_connected_to_cnc_host      Процесс подключился к C&C-узлу
+#re_process_resolved_cnc_host      Процесс выполнил DNS-запрос к C&C узлу
+#re_process_wrote_dump_to_file      Процесс создал файл дампа памяти
+#re_process_wrote_lsass_dump_to_file      Процесс создал файл дампа памяти процесса lsass
+#re_suspicious_file_copied      Скопирован подозрительный файл
+#re_suspicious_file_downloaded      Скачан подозрительный файл
+#re_suspicious_file_ran      Запущен подозрительный файл
+#re_suspicious_process_created_file      Создание файла подозрительным процессом
+#re_suspicious_process_forked      Клонирован подозрительный процесс
+#re_suspicious_process_ran_one      Запуск процесса подозрительным процессом
+#re_suspicious_process_took_connection      Подозрительный процесс установил соединение
+#re_suspicious_process_took_dns_query      Подозрительный процесс выполнил DNS-запрос
+
+$uber_choice = csv($EventID, "_", "'")
+
+if $uber_choice[1] == "module" then
+    action = if $uber_choice[2] =="started" then "start" else "stop" endif
+    object = "module"
+    status= "success"
+    
+    importance = "info"
+elif $EventID == "re_mdi_event" then
+    subject = "application"
+    action = "info"
+    object = "service"
+    status = "success"
+    
+    subject.name = $Data["body"]["Product Name"]
+    subject.version = $Data["body"]["Platform version"]
+    subject.state = $Data["body"]["Product status"]
+    
+    importance = "info"
+elif $EventID == "re_mdi_malware" then
+    #TODO край как нужны события
+    subject = "application"
+    action = "check"
+    object = "malware"
+    status = "success"
+    
+    subject.name = $Data["body"]["Product Name"]
+    subject.version = $Data["body"]["Platform version"]
+    
+    object.fullpath = $Data["object.fullpath"]
+    $temp_o_name = csv(object.fullpath, "\\", "'")
+    object.name = $temp_o_name[length($temp_o_name) - 1]
+    object.path = strip(object.fullpath, "", object.name)
+    
+    importance = "high"
+elif in_list(["re_process_wrote_lsass_dump_to_file", "re_lsass_guard_alert", "re_possible_credential_stealing"], $EventID) then
+    subject = "process"
+    action = "access"
+    object = "process"
+    status = "success"
+    
+    # Поле $Data["credential"] содержит одного пользователя, поле в body содержит список всех УЗ из lsass
+    if $Data["credential"] != null then
+        $temp_o_account = csv(lower($Data["credential"]), "\\", "'")
+        if $temp_o_account[1] != null then
+            object.account.domain = $temp_o_account[0]
+            object.account.name = $temp_o_account[1]
+        else
+            object.account.name = $temp_o_account[0]
+        endif
+    endif
+    
+    object.process.id = $Data["body"]["target_process_id"]
+    object.process.fullpath = lower($Data["body"]["target_process_image"])
+    $temp_o_p_name = csv(object.process.fullpath, "\\", "'")
+    object.process.name = $temp_o_p_name[length($temp_o_p_name) - 1]
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+    object.process.guid = strip($Data["body"]["target_process_guid"], "{", "}")
+    
+    if $Data["body"]["granted_access"] != null then
+        object.property = "GrantedAccess"
+        object.value = $Data["body"]["granted_access"]
+    endif
+    
+    if $Data["body"]["leaked_users"] != null then
+        datafield7 = join($Data["body"]["leaked_users"], ", ")  # Возможно скомпрометированные пользователи
+    elif $Data["body"]["users"] then
+        datafield7 = join($Data["body"]["users"], ", ")
+    else
+        datafield7 = $Data["credential"]
+    endif
+    datafield7 = lower(datafield7)
+    
+    datafield8 = $Data["body"]["calltrace"]         # Цепочка вызовов процесса
+    
+    importance = "high"
+    
+    category.generic = "Attack"
+    category.high = "Credential Access"
+    category.low = "OS Credential Dumping"
+elif $uber_choice[1] == "malware" or $uber_choice[1] == "suspicious" then
+    subject = "process"
+    status = "success"
+    if $uber_choice[2] == "file" or $uber_choice[4] == "file" then
+        action = switch $uber_choice[3]
+            case "created" "create"
+            case "copied" "copy"
+            case "downloaded" "download"
+            case "ran" "execute"
+        endswitch
+        object = "file"
+    elif $uber_choice[2] == "process" then
+        switch $uber_choice[3]
+            case "forked"
+                action = "copy"
+                object = "process"
+            case "ran"
+                action = "create"
+                object = "process"
+            case "took"
+                if $uber_choice[4] == "connection" then
+                    action = "create"
+                    object = "connection"
+                    
+                    dst.ip = $Data["body"]["targetip"]
+                    dst.port = $Data["body"]["targetport"]
+                    if $Data["body"]["targethost"] != "-" and $Data["body"]["targethost"] != null then
+                        $dot_pos = find_substr($Data["body"]["targethost"], '.')
+                        if $dot_pos != null then
+                            dst.fqdn = lower($Data["body"]["targethost"])
+                            dst.hostname = lower(substr($Data["body"]["targethost"], 0, $dot_pos))
+                        else
+                            dst.hostname = lower($Data["body"]["targethost"])
+                        endif
+                    endif
+                    src.ip = $Data["body"]["sourceip"]
+                    src.port = $Data["body"]["sourceport"]
+                    if $Data["body"]["sourcehost"] != "-" and $Data["body"]["sourcehost"] != null then
+                        $dot_pos = find_substr($Data["body"]["sourcehost"], '.')
+                        if $dot_pos != null then
+                            src.fqdn = lower($Data["body"]["sourcehost"])
+                            src.hostname = lower(substr($Data["body"]["sourcehost"], 0, $dot_pos))
+                        else
+                            src.hostname = lower($Data["body"]["sourcehost"])
+                        endif
+                    endif
+                    protocol = lower($Data["body"]["protocol"])
+                else
+                    action = "execute"
+                    object = "request"
+                    
+                    object.property = "result dns query"
+                    object.value = $Data["body"]["queryresult"]
+                    
+                    if maybe_ipv4($Data["body"]["queryhost"]) != null or maybe_ipv6($Data["body"]["queryhost"]) != null then
+                        dst.ip = $Data["body"]["queryhost"]
+                    else
+                        if $Data["body"]["queryhost"] != "-" and $Data["body"]["queryhost"] != null then
+                            $dot_pos = find_substr($Data["body"]["queryhost"], '.')
+                            if $dot_pos != null then
+                                dst.fqdn = lower($Data["body"]["queryhost"])
+                                dst.hostname = lower(substr($Data["body"]["queryhost"], 0, $dot_pos))
+                            else
+                                dst.hostname = lower($Data["body"]["queryhost"])
+                            endif
+                        endif
+                    endif
+                    
+                    $dot_pos = find_substr($Computer, '.')
+                    
+                    if $dot_pos != null then
+                        src.fqdn = lower($Computer)
+                        src.hostname = lower(substr($Computer, 0, $dot_pos))
+                    else
+                        src.hostname = lower($Computer)
+                    endif
+                endif
+        endswitch
+    endif
+    object.process.fullpath = lower($Data["object.process.fullpath"])
+    object.process.guid = strip($Data["object.process.guid"], "{", "}")
+    object.process.id = $Data["object.process.id"]
+    object.process.name = lower($Data["object.process.name"])
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+    
+    object.fullpath = lower($Data["object.fullpath"])
+    $temp_o_name = csv(object.fullpath, "\\", "'")
+    object.name = $temp_o_name[length($temp_o_name) - 1]
+    object.path = strip(object.fullpath, "", object.name)
+    
+    importance = if $uber_choice[1] == "malware" then "high" else "low" endif
+elif $uber_choice[1] == "process" then
+    subject = "process"
+    status = "success"
+    switch $uber_choice[2]
+        case "connected"
+            action = "connect"
+            object = "host"
+        case "resolved"
+            action = "execute"
+            object = "request"
+        case "wrote"
+            action = "create"
+            object = "file"
+    endswitch
+    
+    object.fullpath = lower($Data["object.fullpath"])
+    $temp_o_name = csv(object.fullpath, "\\", "'")
+    object.name = $temp_o_name[length($temp_o_name) - 1]
+    object.path = strip(object.fullpath, "", object.name)
+    
+    importance = "low"
+elif $EventID == "re_ms_office_exec_proc" then
+    subject = "process"
+    action = "create"
+    object = "process"
+    status = "success"
+    
+    object.process.fullpath = lower($Data["object.process.fullpath"])
+    object.process.guid = strip($Data["object.process.guid"], "{", "}")
+    object.process.id = $Data["object.process.id"]
+    object.process.name = lower($Data["object.process.name"])
+    object.process.path = strip(object.process.fullpath, "", object.process.name)
+    
+    subject.type = "office"
+    object.fullpath = lower($Data["object.fullpath"])
+    $temp_o_name = csv(object.fullpath, "\\", "'")
+    object.name = $temp_o_name[length($temp_o_name) - 1]
+    object.path = strip(object.fullpath, "", object.name)
+    
+    importance = "low"
+endif
+
+
+if object != "module" then
+    subject.process.fullpath = lower($Data["subject.process.fullpath"])
+    subject.process.guid = strip($Data["subject.process.guid"], "{", "}")
+    subject.process.id = $Data["subject.process.id"]
+    subject.process.name = lower($Data["subject.process.name"])
+    subject.process.path = strip(subject.process.fullpath, "", subject.process.name)
+endif
+
+if object != "module" then datafield5 = join($Data["actions"], ", ") + ". expect actions: " + join($Data["expect_actions"], ", ") endif
+# datafield5 - Действия в рамках данного правила
+datafield9 = $Data["subject.process.chains"]["chain_proc_info"]    # Цепочка имен процессов и их ID
+datafield10 = $Data["subject.process.chains"]["chain_proc_names"]  # Цепочка имен процессов
+
+chain_id = $Data["uuid"]
+msgid = $EventID
+time = $TimeCreated["SystemTime"]
+
+event_src.id = $Data["agent_id"]
+event_src.ip = $Data["agent_ip"]
+
+event_src.vendor = "positive_technologies"
+event_src.title = "xdr"
+event_src.subsys = $Channel
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+
+event_src.category = "Host security"
+
+id = "PT_Positive_Technologies_XDR_eventlog_rule_engine"

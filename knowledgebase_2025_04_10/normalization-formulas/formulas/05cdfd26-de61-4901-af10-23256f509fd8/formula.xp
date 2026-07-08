@@ -1,0 +1,21 @@
+!TEXT = '{$maybe_time=STRING*} route,{$topics=STRING+}
+        Discarding packet: {reason = REST}'
+
+action = "reject"
+object = "message"
+status = "success"
+
+protocol = "OSPFIGP"
+
+# $maybe_time - reserved for the future
+# $topics - reserved for the case of in_list() searches
+
+time = recv_time
+
+importance = "low"
+
+event_src.vendor = "mikrotik"
+event_src.title = "routeros"
+event_src.category = "Network device"
+
+id = "PT_MikroTik_RouterOS_syslog_ospf_discarding_packet"

@@ -1,0 +1,44 @@
+TEXT = '{$maybe_time=STRING*} {$otype="ovpn"|$otype="pptp"|$otype="l2tp"|$otype="sstp"},{$topics=STRING+}
+        {subject.name=STRING} logged {$act="in"|$act="out"}, {$split=REST}'
+
+subformula "Ending"
+    !TEXT = "{src.ip=IPV4|src.ip=IPV6}"
+endsubformula
+
+subformula "Ending"
+    !TEXT = "{duration=NUMBER} {count.bytes_in=NUMBER} {count.bytes_out=NUMBER} {count.packets_in=NUMBER} {count.packets_out=NUMBER} {'from'?} {src.ip=IPV4|src.ip=IPV6|}"
+endsubformula
+
+subject = "account"
+
+if $act == "in" then
+    action = "start"
+else
+    action = "stop"
+endif
+
+object = "session"
+status = "success"
+
+object.property = "tunnel protocol"
+if $otype == "ovpn" then
+    object.value = "OpenVPN"
+else
+    object.value = $otype
+endif
+
+submessage("TEXT","Ending",$split)
+
+# $maybe_time - reserved for the future
+# $topics - reserved for the case of in_list() searches
+
+time = recv_time
+
+importance = "info"
+
+event_src.vendor = "mikrotik"
+event_src.title = "routeros"
+event_src.subsys = "vpn-gateway"
+event_src.category = "Network device"
+
+id = "PT_MikroTik_RouterOS_syslog_vpn_session_start_stop"

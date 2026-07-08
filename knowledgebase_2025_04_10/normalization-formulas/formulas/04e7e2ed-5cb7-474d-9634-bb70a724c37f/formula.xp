@@ -1,0 +1,30 @@
+TABULAR = 'zntf_id,
+           {time=zntf_datetime},
+           {object.path=path},
+           {dst.hostname=zntf_computer}'
+
+!COND = string($zntf_status) == "1737883705" or string($zntf_status) == "1737883711"
+
+subject = "account"
+action = "detect"
+object = "file"
+status = "success"
+
+submessage("TEXT", "SPLIT", $zntf_user)
+
+msgid = string($zntf_status)
+
+subformula "SPLIT"
+    # Извлечение subject.domain и subject.name из $zntf_user
+    TEXT = '{$csv = CSV("\\\\", "\'")}'
+    subject.domain = $csv[0]
+    subject.name = $csv[1]
+endsubformula
+
+importance = "medium"
+
+event_src.title = "zgate"
+event_src.vendor = "zecurion"
+event_src.category = "DLP"
+
+id = "PT_Zecurion_Zgate_odbc_find_incident_file"

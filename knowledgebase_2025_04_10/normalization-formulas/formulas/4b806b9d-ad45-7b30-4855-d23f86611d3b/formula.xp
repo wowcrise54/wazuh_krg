@@ -1,0 +1,103 @@
+TEXT ='<186> {NUMBER?} {time=DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.fqdn=HOSTNAME} {WORD} - {msgid="8194"} [message@{NUMBER} {"-] <U+FEFF>@cee:"?} {$data=REST}'
+
+$maybe_kv = keyvalue($data, " ", "=", "\"")
+subformula "get_json_data"
+    JSON = ''
+endsubformula
+
+action = "detect"
+object = "malware"
+status = "success"
+
+if $maybe_kv == null then
+    submessage("JSON", "get_json_data", $data)
+endif
+
+if $maybe_kv["user_name"] != null then
+    object.account.fullname = $maybe_kv["user_name"]
+else 
+    object.account.fullname = $user_name
+endif
+
+$temp_csv = csv(object.account.fullname, '\\', '')
+object.account.name = $temp_csv[1]
+object.account.domain = $temp_csv[0]
+if object.account.name == null then
+    object.account.name = csv(object.account.fullname, '\\\\', '')[1]
+endif
+
+if $maybe_kv["session_id"] != null then
+    object.account.session_id = $maybe_kv["session_id"]
+else
+    object.account.session_id = $session_id  # Object hash sha-256
+endif
+
+object.state = "not cured"
+
+if $maybe_kv["threat_name"] != null then
+    object.type = $maybe_kv["threat_name"]
+else
+    object.type = $threat_name    # Имя вредоносного файла
+endif
+
+if $maybe_kv["object_name"] != null then
+    object.fullpath = $maybe_kv["object_name"]
+else
+    object.fullpath = $object_name
+endif
+
+$tmp = csv(object.fullpath, "\\", "'")
+object.name = $tmp[length($tmp) - 1]
+object.path = strip(object.fullpath, "", object.name)
+
+if $maybe_kv["pid"] != null then
+    object.process.id = $maybe_kv["pid"]
+else
+    object.process.id = $pid
+endif
+
+if $maybe_kv["process_name"] != null then
+    object.process.name = $maybe_kv["process_name"]
+else
+    object.process.name = $process_name
+endif
+
+if $maybe_kv["host_name"] != null then
+    $host = $maybe_kv["host_name"]
+else 
+    $host = $host_name
+endif
+
+if $host != "localhost" then
+    src.ip = maybe_ipv4($host)
+endif
+
+if src.ip == null and $host != "localhost" then
+    src.hostname = $host
+endif
+
+if $maybe_kv["object_hash_md5"] != null then
+    datafield2 = $maybe_kv["object_hash_md5"]
+else
+    datafield2 = $object_hash_md5  # Object hash MD5
+endif
+
+if $maybe_kv["object_hash_sha256"] != null then
+    datafield3 = $maybe_kv["object_hash_sha256"]
+else
+    datafield3 = $object_hash_sha256  # Object hash sha-256
+endif
+
+reason = "Object not found"
+importance = "low"
+
+category.generic = "IS Incident"
+category.high = "Information Security"
+category.low = "State"
+
+event_src.vendor = "kaspersky"
+event_src.title = "security"
+event_src.category = "Host security"
+event_src.hostname = csv(event_src.fqdn, ".", "")[0]
+
+id = "PT_Kaspersky_Security_11_syslog_8194_object_is_not_cured"

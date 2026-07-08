@@ -1,0 +1,48 @@
+query CheckVPN($assigned_ip) from Active_External_Sessions {
+    assigned_ip == $assigned_ip
+}
+    qhandler {
+        $user = username
+        $domain = user_domain
+        $id = user_id
+        $external_ip = external_ip
+        $external_host = external_host
+        $country = country
+        $provider = provider
+    }
+
+query isVPN($assigned_ip) from Active_External_Sessions {
+    assigned_ip == $assigned_ip
+}
+
+event Connect_from_VPN_Pool_Address:
+    filter {
+        correlation_name != null
+        and src.ip != null
+        and exec_query("isVPN", [src.ip])
+    }
+    
+enrichment VPN_Connected_User_Addition
+
+    enrich Connect_from_VPN_Pool_Address:
+        enrich_fields {       
+
+            $data = exec_query("CheckVPN",[src.ip])
+            if subject.application.account.name == null then 
+                subject.application.account.name = $data["$user"]
+                subject.application.account.domain = $data["$domain"]
+                subject.application.account.id = $data["$id"]
+            endif
+
+            external_src.ip = $data["$external_ip"]
+            external_src.geo.country = $data["$country"]
+            external_src.geo.org = $data["$provider"]
+
+            if $data["$external_host"] != $data["$external_ip"] then
+                external_src.host  = $data["$external_host"]
+            endif
+
+            if external_src.ip != null and subject.application.account.name != null then
+                labels = labels + "|vpn_session_enriched" # Метка для валидации проставления src.ip при VPN коннекте
+            endif
+}

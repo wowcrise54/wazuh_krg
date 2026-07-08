@@ -1,0 +1,70 @@
+event Revoke_All_Permissions:
+    key:
+        event_src.host
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "REVOKE"
+        and event_src.title == "apache_cassandra"
+        and regex(lower(object.query), "\\brevoke\s+all\s+permissions\\b", 0) != null
+        and filter::CheckWL_Database_Actions("Apache_Cassandra_Revoke_All_Permissions", lower(object.query))
+    }
+     
+rule Apache_Cassandra_Revoke_All_Permissions: Revoke_All_Permissions
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+    
+    on Revoke_All_Permissions {
+        $status = status
+        
+        $subject.application.account.name = subject.application.account.name
+      
+        $object.name = object.name
+        $object.property = object.property
+        $object.query = object.query
+
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.host = src.host
+
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.host = dst.host
+            
+        $datafield1 = datafield1     # Категория CQL-запроса
+        
+        $alert.key = lower(object.query)
+        
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    }
+        
+emit {
+    $correlation_type = "event"
+
+    $subject = "account"
+    $action = "revoke"
+    $object = "db_object"
+    
+    $importance = "medium"
+
+    $category.generic = "Attack"
+    $category.high = "Impact"
+    $category.low = "Account Access Removal"
+    
+    if $event_src.host != null then
+        $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.application.account.name], "|")
+    else
+        $incident.aggregation.key = join([$correlation_name, $subject.application.account.name], "|")
+    endif
+    $incident.severity = $importance
+    $incident.category = "PermissionViolation"
+    $incident.aggregation.timeout = 2h
+}

@@ -1,0 +1,40 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME}{$Computer=HOSTNAME}
+        USER_MGR {"["?} {WORD}{UNTIL(" ")?} {"]"?}{"- ["?}{"origin ip="?}{"\\""?}
+        {event_src.ip=IPV4|src.ip=IPV6|}{UNTIL(": ")} user_mgr.c({NUMBER}) {NUMBER} %% 
+        {"["?}{WORD?}{"]"?}{logon_service=WORD?}{"session :"?} User
+        {subject.account.name=STRING+}
+        {"Failed to login because of"|"couldn\'t login to the switch due to"}{reason=REST}'
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+dst.hostname = $Computer
+
+reason = strip(reason, "", "\\u0000")
+
+if in_list(["http", "ssh", "telnet"], lower(logon_service)) then
+    logon_auth_method = "remote"
+else
+    logon_auth_method = "local"
+endif
+
+importance = "info"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "eltex"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "fastpath"
+event_src.category = "Network device"
+
+id = "PT_Eltex_MES5448_syslog_Login_to_system_fail"

@@ -1,0 +1,10 @@
+filter CheckWL_WhiteListValue_2(string $rule_name, string $host, string $user, string $specific_value, string $specific_value_2) {
+    table::Common_whitelist_value {
+        (column::rule == $rule_name or column::rule == "*")
+        and (column::host == $host or column::host == "*")
+        and (column::user_id == $user or column::user_id == "*")
+        and (column::specific_value == $specific_value
+             or column::specific_value == $specific_value_2
+             or column::specific_value == "*")
+    }
+}

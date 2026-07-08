@@ -1,0 +1,33 @@
+TEXT = '{"<"NUMBER">"?}{DATETIME?} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|} 
+        [{time=DATETIME}] ["{"LogSearchMaster"|"AliasStudentStudyPool"}-thread-{NUMBER}"/{src.ip=IPV4|src.ip=IPV6} INFO] 
+        [com.vmware.loginsight.analytics.distributed.DistributedLogSearcher] 
+        [Master returned {"last"|"first"} result: {$kv_str=STRING+}ClientInfo({$client_info=UNTIL(")")}, 
+        {"last"|"first"}-response-time: {NUMBER} msec progress: {NUMBER}.{NUMBER}]'
+
+subject = "service"
+action = "extract"
+object = "virtual_key"
+status = "success"
+
+$kv = keyvalue($kv_str,",",":")
+$kv_client = keyvalue($client_info,",",":")
+
+object.property = "token"
+object.value = $kv["token"]
+
+# Host IP to which the token will send
+dst.ip = coalesce(ipv4($kv_client["userHost"]),ipv6($kv_client["userHost"]))
+
+datafield1 = lower($kv_client["userName"])  # Who requested token
+datafield2 = $kv["type"]                    # Token type
+datafield3 = $kv["token"]                   # Token value
+datafield4 = $kv_client["origin"]           # Token request location
+datafield5 = $kv_client["userData"]         # Info about search
+
+importance = "info"
+
+event_src.vendor = "vmware"
+event_src.title = "aria_operations_for_logs"
+event_src.category = "Other"
+
+id = "PT_VMware_AOFL_syslog_return_token"

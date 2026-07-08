@@ -1,0 +1,43 @@
+TABULAR =  "{time=timegenerated},
+            {datafield4=objectpath},
+            {datafield5=publishername},
+            number,
+            {$tmp_subsys=channel},
+            {event_src.hostname=loggingcomputer},
+            eventdata,
+            {datafield2=rulename}
+            "
+
+COND = $publishername == "Health Service Modules" and $number == 11105
+
+if $eventuser != NULL and $eventuser != "N/A" then
+    subject = "account"
+    subject.account.name = lower($eventuser)
+    object.account.name = subject.account.name
+endif
+action = "terminate"
+object = "process"
+status = "success"
+
+submessage("XML","Event_data",$eventdata)
+subformula "Event_data"
+    XML = 'DataItem'
+    object.process.name = $DataItem / eventdata / Data [1]
+    reason = $DataItem / eventdata / Data [4]
+endsubformula
+
+# datafield2 - правило сбора событий
+
+msgid = $number
+importance = "high"
+
+category.high = "Availability Management"
+category.generic = "Process"
+category.low = "Control"
+
+event_src.vendor = "microsoft"
+event_src.subsys = lower($tmp_subsys)
+event_src.title = "system_center_operations_manager"
+event_src.category = "Network monitoring system"
+
+id = "PT_Microsoft_SCOM_odbc_11105_consolidator_module_processing_thread_failed"

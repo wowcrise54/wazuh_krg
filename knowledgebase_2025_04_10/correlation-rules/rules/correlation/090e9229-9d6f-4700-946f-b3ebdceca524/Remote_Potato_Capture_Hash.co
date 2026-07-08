@@ -1,0 +1,104 @@
+event Remote_Oxid_Request:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        correlation_name == "Subrule_Not_Self_Relay"
+        and filter::CheckWL_Specific_Only("Remote_Potato_Capture_Hash", alert.context)
+    }
+    
+event IMarshal_Interface:
+    key:
+        event_src.host, subject.process.id, subject.process.name
+    filter {
+        lower(correlation_name) == "subrule_imarshal_interface"
+    }
+    
+rule Remote_Potato_Capture_Hash: (Remote_Oxid_Request and IMarshal_Interface) within 30s
+
+    init {
+        $labels = "w_auto|CheckWL_Specific_Only"
+    }
+    
+    on Remote_Oxid_Request {
+        $subject.process.id = subject.process.id
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+            
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.fqdn = event_src.fqdn
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.category = event_src.category
+        $event_src.rule = event_src.rule
+    
+        if $object.account.name == null then
+            $object.account.name = object.name
+            $object.account.domain = object.domain
+            $object.account.id = object.id
+        endif
+
+        $object.name = object.name
+        $object.domain = object.domain
+        $object.id = object.id
+
+        $alert.key = alert.context
+    }
+    
+    on IMarshal_Interface {
+        $subject.account.name = subject.account.name
+        $subject.account.id = subject.account.id
+        $subject.account.domain = subject.account.domain
+
+        if object.account.name != null then
+            $object.account.name = object.account.name
+            $object.account.id = object.account.id
+            $object.account.domain = object.account.domain
+        endif
+
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+
+        if $subject.account.name != null and $object.account.name != null then
+            $alert.context = $subject.account.name + " -> " + $object.account.name
+        endif
+    }
+    
+emit {
+    $correlation_type = "incident"
+    
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "initiate"
+    $object = "connection"
+    $status = "success"
+
+    $importance = "high"
+    
+    $category.generic = "Attack"
+    $category.high = "Credential Access"
+    $category.low = "Adversary-in-the-Middle: LLMNR/NBT-NS Poisoning and SMB Relay"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.process.name], "|")
+    $incident.severity = $importance
+    $incident.category = "HackToolsDetection"
+    $incident.aggregation.timeout = 2h
+}
+    

@@ -1,0 +1,54 @@
+TEXT = '{"<"NUMBER">"?} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME|} {WORDDASH?}
+        {$client=IPV4|$client=IPV6|$client_host=HOSTNAME} - {subject.account.name=WORDDASH} [{DATETIME}] 
+        "{object.query=UNTIL(" HTTP")} /{NUMBER}.{NUMBER}" 
+        {$st=NUMBER} {NUMBER} {msgid="CUPS-Delete-Class"} {REST}'
+
+subject = "account"
+action = "modify"
+object = "configuration"
+if $st == 200 or $st == 201 then
+    status = "success"
+else
+    status = "failure"
+endif
+
+object.type = "printer group"
+
+if ($client != "127.0.0.1" or $client != "0.0.0.0") then
+    src.ip = maybe_ipv4($client)
+endif
+
+if $client_host != "localhost" then
+    src.hostname = $client_host
+endif
+
+if status == "failure" then
+    reason = switch $st
+             case 304 "The requested file has not changed"
+             case 400 "Bad HTTP request"
+             case 401 "Unauthorized, authentication (username + password) is required."
+             case 403 "Access is forbidden"
+             case 404 "The file or resource does not exist"
+             case 405 "URL access method is not allowed"
+             case 413 "Request too large"
+             case 426 "Upgrading to TLS-encrypted connection"
+             case 500 "Server error. Check error_log for details"
+             case 501 "The client requested encryption but encryption support is not enabled/compiled in"
+             case 505 "HTTP version number not supported"
+    endswitch
+endif
+
+importance = "info"
+
+event_src.vendor = "cups"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "cups"
+event_src.category = "Other"
+
+id = "PT_CUPS_CUPS_syslog_Printer_group_delete"

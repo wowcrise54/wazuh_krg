@@ -1,0 +1,30 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$event_src.title="ASA"|$event_src.title="PIX"|$event_src.title="FWSM"|$event_src.title="FTD"}{"-auth"?}-{NUMBER}-{msgid="113019"}: Group = {$tunnel_group=STRING}
+        Username = {$subject_name=STRING} IP = {src.ip=IPV4|src.ip=IPV6}, Session disconnected. Session Type: {$type=STRING}
+        Duration: {duration=DURATION}, Bytes xmt: {count.bytes_out=NUMBER}, Bytes rcv: {count.bytes_in=NUMBER}, Reason: {reason=REST}'
+
+if $subject_name != "," then
+    subject = "account"
+    subject.account.name = strip($subject_name, "", ",")
+endif
+
+action = "stop"
+object = "session"
+status = "success"
+
+if $type != "," then
+    object.type = strip($type, "", ",")
+endif
+
+if $tunnel_group != "," then
+    datafield4 = strip($tunnel_group, "", ",")  # tunnel group
+endif
+
+importance = "info"
+
+event_src.vendor = "cisco"
+event_src.title = lower($event_src.title)
+event_src.subsys = "vpn-gateway"
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_113019_Session_disconnected"

@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"}{time=DATETIME} {src.hostname=HOSTNAME} PTAF: {datafield1="AFLogMaker is Alive"}{"date="?}{datafield2=DATETIME?}'
+
+subject = "service"
+action = "info"
+object = "alert"
+status = "success"
+
+event_src.hostname = src.hostname
+
+importance = "info"
+
+category.generic = "Monitoring"
+category.high = "System Monitoring"
+
+event_src.title = "application_firewall"
+event_src.vendor = "positive_technologies"
+event_src.category = "Application security"
+
+id = "PT_Positive_Technologies_Application_Firewall_syslog_LogMaker_Info"

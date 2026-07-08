@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME}
+    {datafield1="postgres"}{"["object.process.id=NUMBER"]"}:{"["WORDDASH"]"}{DATETIME}{WORD}
+    {"["NUMBER"]"}{STRING}LOG:{msgid="disconnection"}:{"session time:"datafield2=STRING}
+    {"user="subject.account.name=STRING}{"database="object.name=STRING}host=
+    {$host_ipv4=IPV4|$host_ipv6=IPV6|$host_name=HOSTNAME|$host=STRING}'
+
+subject = "account"
+action = "disconnect"
+object = "database"
+status = "success"
+
+# datafield1 - Название процесса в InfoWatch
+# datafield2 - Время сессии
+
+if $host != "[local]" then
+    src.hostname = $host_name
+    src.ip = coalesce($host_ipv4, $host_ipv6)
+    logon_auth_method = "remote"
+else
+    logon_auth_method = "local"
+endif
+
+importance = "info"
+
+event_src.vendor = "infowatch"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "traffic_monitor"
+event_src.category = "DLP"
+
+id = "PT_InfoWatch_Traffic_Monitor_7_syslog_Disconnection"

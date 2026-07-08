@@ -1,0 +1,45 @@
+TEXT = '{event_src.ip = IPV4|event_src.ip = IPV6|"-"} {$uname = STRING} {datafield1 = STRING+} {"Y\t"|"N\t"} {$t1 = STRING} {$t2 = STRING}
+        {STRING} {$hostname = HOSTNAME|"-"} {STRING} {$dhost = STRING} {dst.ip = IPV4 | dst.ip = IPV6|"-"} {dst.port = NUMBER|"-"}
+        {duration = NUMBER| "-"} {count.bytes_in = NUMBER| "-"} {count.bytes_out = NUMBER| "-"} {STRING} {protocol  = STRING} {STRING} {object.path = STRING}
+        {$re = STRING+} {"Denied\t"|"Failed\t"} {NUMBER}-{NUMBER}-{NUMBER}{$csv_1 = CSV("\\t", "\'")}'
+
+if $dhost != "-" then 
+    dst.hostname = lower($dhost)
+endif
+
+submessage ("TEXT", "parse_kv", $re)
+
+subformula "parse_kv"
+    !TEXT = '{$csv = CSV(" ", "\'")}'
+    $max = length($csv) - 1
+    reason = $csv[$max] # код ошибки
+endsubformula
+
+time = $t1+' '+$t2
+
+subject = "account"
+object = "resource"
+action = "access"
+status = "failure"
+
+if find_substr($uname, '\\') != null then
+    subject.domain = lower(substr($uname, 0, find_substr($uname, '\\')))
+    subject.name = lower(substr($uname, find_substr($uname, '\\')+1, length($uname)))
+else
+    subject.name = lower($uname)
+endif
+
+event_src.hostname = lower($hostname)
+event_src.vendor = "microsoft"
+
+if $csv_1[2] != null then
+    event_src.title = "tmg"
+    id = "PT_Microsoft_TMG_filemonitor_proxy_act_Denied"
+else 
+    event_src.title = "isas"
+    id = "PT_Microsoft_ISAS_filemonitor_proxy_act_Denied"
+endif
+
+event_src.category = "Proxy server"
+
+importance = "high"

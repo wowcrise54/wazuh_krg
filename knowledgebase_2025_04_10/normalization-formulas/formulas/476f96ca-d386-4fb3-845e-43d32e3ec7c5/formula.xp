@@ -1,0 +1,97 @@
+TABULAR = "journal_id,
+          {time=event_date},
+          {$Computer=client_name}"
+
+COND = $journal_id == "POLICY"
+       and in_list([1, 5, 7, 9, 13], $action)
+
+if $user_name != "" then
+    subject = "account"
+    submessage("TEXT", "subject_name", $user_name)
+endif
+action = "modify"
+object = "policy"
+# status: success / failure
+
+if $result < 0 then     # error
+    status = "failure"
+    
+    importance = "high"
+elif $result > 0 then   # warning
+    status = "success"
+    
+    importance = "low"
+else                    # OK
+    status = "success"
+    
+    importance = "info"
+endif
+
+subformula "subject_name"
+    TEXT = "{subject.domain=WORDDASH}\\{subject.name=WORDDASH}"
+endsubformula
+subformula "subject_name"
+    TEXT = "{subject.name=WORDDASH}"
+endsubformula
+
+object.name = switch $action
+    case 1 "logon"
+    case 5 "audit"
+    case 7 "integrity control"
+    case 9 "cleanup"
+    case 13 "user rights"
+endswitch
+
+if $action == 13 then
+    object.value = switch $parameter
+        case 0 "Аудит: Просмотр журналов"
+        case 1 "Аудит: Управление"
+        case 2 "Аудит: Управление"
+        case 3 "Ресурсы: Управление дискреционным доступом"
+        case 4 "Ресурсы: Управление контролем целостности"
+        case 5 "Параметры безопасности: Управление"
+        case 6 "Параметры безопасности: Просмотр"
+        case 7 "Интерактивный вход: Разрешен"
+        case 8 "Удаленный вход: Разрешен"
+        case 9 "Интерактивный вход: Запрещен"
+        case 10 "Удаленный вход: Запрещен"
+        case 11 "Деактивация системы защиты"
+        case 12 "Низкоуровневый доступ к жестким дискам"
+        case 13 "Ресурсы: Управление мандатным доступом"
+        case 14 "Печать разрешена"
+        case 15 "Печать запрещена"
+        case 16 "Аудит: Просмотр теневых копий распечатываемых документов"
+        case 17 "Аудит: Просмотр теневых копий файлов"
+        case 18 "Низкоуровневый доступ к сменным накопителям"
+        case 19 "Межсетевой экран: Просмотр настроек"
+        case 20 "Межсетевой экран: Изменение настроек"
+        case 21 "Учетные записи: Принудительная двухфакторная аутентификация"
+        case 22 "Принудительное завершение работы по расписанию"
+        case 23 "СОВ МЭ: Просмотр настроек"
+        case 24 "СОВ МЭ: Изменение настроек"
+    endswitch
+    if object.value != null then
+        object.property = "список пользователей/групп"
+    endif
+endif
+
+if $comment != "" then
+    reason = $comment
+endif
+
+if $computer_name != "" then
+    src.hostname = $computer_name
+endif
+
+event_src.vendor = "confident"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "dallas_lock"
+event_src.category = "DLP"
+
+id = "PT_Confident_Dallas_Lock_odbc_policy_policy_changed"

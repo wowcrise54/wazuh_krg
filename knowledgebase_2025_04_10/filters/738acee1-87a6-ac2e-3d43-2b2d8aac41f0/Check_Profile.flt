@@ -1,0 +1,21 @@
+filter Check_Profile(string $access_type, string $login, string $src_ip, string $src_host, string $dst_host, string $dst_path, string $additional_data) {
+    table::Risk_User_Logon_Correlation_Profile {
+        column::access_type == $access_type
+        and column::login == $login
+        and column::src_ip == $src_ip
+        and column::src_host == $src_host
+        and column::dst_host == $dst_host
+        and column::dst_path == $dst_path
+        and column::additional_data == $additional_data
+        and column::_last_changed > number(time) - 3931200
+    }
+    or table::Risk_User_Logon_Correlation_Profile_Manual {
+        column::access_type == $access_type
+        and column::login == $login
+        and column::src_ip == $src_ip
+        and column::src_host == $src_host
+        and column::dst_host == $dst_host
+        and column::dst_path == $dst_path
+        and column::additional_data == $additional_data
+        }
+}

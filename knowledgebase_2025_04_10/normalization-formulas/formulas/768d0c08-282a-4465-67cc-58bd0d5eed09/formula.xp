@@ -1,0 +1,66 @@
+TEXT = '<{NUMBER}>{DATETIME}{WORDDASH} mongod:{$json = REST}'
+COND = find_substr($json, 'createUser') != null
+submessage('JSON', 'json_in_syslog_create_user', $json)
+subformula 'json_in_syslog_create_user'
+   JSON = ''
+   COND = $ts["$date"] != null and ( ($atype == "createUser" and $param["user"] != null) or ($atype == "authCheck" and $param["command"] == "createUser") )
+  
+   subject.account.id = $users[0]["user"]
+   subject.account.name = $users[0]["user"]
+
+   subject.account.privileges = join(remove([$roles[0]["db"] + ":" + $roles[0]["role"], $roles[1]["db"] + ":" + $roles[1]["role"], $roles[2]["db"] + ":" + $roles[2]["role"], $roles[3]["db"] + ":" + $roles[3]["role"], $roles[4]["db"] + ":" + $roles[4]["role"], $roles[5]["db"] + ":" + $roles[5]["role"], $roles[6]["db"] + ":" + $roles[6]["role"], $roles[7]["db"] + ":" + $roles[7]["role"], $roles[8]["db"] + ":" + $roles[8]["role"], $roles[9]["db"] + ":" + $roles[9]["role"]], ":"), "|")
+
+   if $atype == "createUser" then
+       status = "success"
+       object.account.id = $param["user"]
+       object.account.name = $param["user"]
+       datafield2 = $param["db"]
+       $temp_roles = $param["roles"]
+       msgid = $atype
+   else
+       status = "failure"
+       object.account.id = $param["args"]["createUser"]
+       object.account.name = $param["args"]["createUser"]
+       datafield2 = $param["args"]["$db"]
+       $temp_roles = $param["args"]["roles"]
+       reason = $result
+       msgid = $param["command"]
+   endif
+
+   object.account.privileges = join(remove([$temp_roles[0]["db"] + ":" + $temp_roles[0]["role"], $temp_roles[1]["db"] + ":" + $temp_roles[1]["role"], $temp_roles[2]["db"] + ":" + $temp_roles[2]["role"], $temp_roles[3]["db"] + ":" + $temp_roles[3]["role"], $temp_roles[4]["db"] + ":" + $temp_roles[4]["role"], $temp_roles[5]["db"] + ":" + $temp_roles[5]["role"], $temp_roles[6]["db"] + ":" + $temp_roles[6]["role"], $temp_roles[7]["db"] + ":" + $temp_roles[7]["role"], $temp_roles[8]["db"] + ":" + $temp_roles[8]["role"], $temp_roles[9]["db"] + ":" + $temp_roles[9]["role"]], ":"), "|")
+
+   src.ip = $remote["ip"]
+   src.port = $remote["port"]
+   dst.ip = $local["ip"]
+   dst.port = $local["port"]
+
+   datafield1 = $users[0]["db"]    # БД пользователя субъекта
+   # datafield2 - БД пользователя объекта
+
+   $roles_list = remove([$temp_roles[0]["role"], $temp_roles[1]["role"], $temp_roles[2]["role"], $temp_roles[3]["role"], $temp_roles[4]["role"], $temp_roles[5]["role"], $temp_roles[6]["role"], $temp_roles[7]["role"], $temp_roles[8]["role"], $temp_roles[9]["role"]], null)
+
+   if find_substr(object.account.privileges, datafield1 + ":root") != null then 
+       importance = "medium"
+   elif in_list($roles_list, "root") or in_list($roles_list, "dbOwner") or in_list($roles_list, "userAdmin") or in_list($roles_list, "userAdminAnyDatabase") or in_list($roles_list, "readWriteAnyDatabase") or in_list($roles_list, "dbAdminAnyDatabase") or in_list($roles_list, "clusterAdmin") or in_list($roles_list, "hostManager") then
+       importance = "low"
+   else
+       importance = "info"
+   endif
+
+   time = $ts["$date"]
+   event_src.ip = $local["ip"]
+endsubformula
+
+subject = "account"
+action = "create"
+object = "account"
+
+category.generic = "Account"
+category.high = "Users And Rights Management"
+category.low = "Manipulation"
+
+event_src.vendor = "opensource"
+event_src.title = "mongodb"
+event_src.category = "Database server"
+
+id = "PT_Opensource_MongoDB_syslog_Create_user"

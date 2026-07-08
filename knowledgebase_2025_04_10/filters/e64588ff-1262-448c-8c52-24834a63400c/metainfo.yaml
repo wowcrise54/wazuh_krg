@@ -1,0 +1,21 @@
+Filter:
+    Name:
+        ru: "Проверяет специфичное значение для событий операций с файлами по системе вайтлистинга"
+        en: "Checks a specific value for file operation events against the whitelisting system"
+    Description:
+        ru: "Данный фильтр используется для сокращения повторяющейся части проверки через систему табличных списков"
+        en: "This filter is used to reduce the repetitive part of the check through the table list system"
+    UseAsEventName: False
+Args:
+    specific_value:
+        Type: string
+        Name:
+            en: "specific value"
+            ru: "проверяемое специфическое значение"
+    rule_name:
+        Type: string
+        Name:
+            ru: "название правила корреляции"
+            en: "correlation rule name"
+ObjectId: PT-RF-48
+Origin: PT

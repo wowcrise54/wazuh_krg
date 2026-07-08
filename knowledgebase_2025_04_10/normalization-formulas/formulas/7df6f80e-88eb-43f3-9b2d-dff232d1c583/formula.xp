@@ -1,0 +1,26 @@
+TEXT = '{$maybe_time=STRING*} system,info{UNTIL(":")?} {object.type=STRING+} 
+        {reason="added"|reason="changed"|reason="removed"|reason="moved"} by {subject.account.name=STRING}'
+
+COND = find_substr(object.type, "dhcp server") == null
+
+subject = "account"
+action = "modify"
+object = "configuration"
+status = "success"
+
+if find_substr(object.type, ":") != null then
+    object.type = csv(object.type, ": ", "")[1]
+endif
+
+# $maybe_time - reserved for the future
+# $topics - reserved for the case of in_list() searches
+
+time = recv_time
+
+importance = "low"
+
+event_src.vendor = "mikrotik"
+event_src.title = "routeros"
+event_src.category = "Network device"
+
+id = "PT_MikroTik_RouterOS_syslog_system_config_changed"

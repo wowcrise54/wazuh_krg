@@ -1,0 +1,17 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{time=DATETIME}{"%"|"#"}{msgid="AAA-F-INFO"}:
+        Authentication attempts:{object.property=UNTIL(" has")}been set to \"
+        {object.new_value=WORDDASH}\"'
+        
+action = "modify"
+object = "configuration"
+status = "success"
+
+object.type = "AAA"
+
+importance = "medium"
+
+event_src.vendor = "eltex"
+event_src.title = "esr"
+event_src.category = "Network device"
+
+id = "PT_Eltex_ESR_syslog_change_user_block_rule"

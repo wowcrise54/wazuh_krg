@@ -1,0 +1,128 @@
+event Network_Login:
+    key:
+        event_src.host, subject.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "4624"
+        and filter::LoginAttempt_Windows_Endpoint()
+        and logon_type == 3
+        and not filter::Loopback_Address(src.ip)
+        and filter::CheckWL_Windows_Login_Without_W_Auto("Remoting_WinExec", lower(join([subject.account.name, src.host, dst.host], "|")))
+    }
+
+event WinExec_Start:
+    key:
+        event_src.host, object.account.session_id
+    filter {
+        filter::NotFromCorrelator()
+        and filter::ProcessStart_Windows_any()
+        and event_src.title == "windows"
+        and object.account.session_id != subject.account.session_id
+        and lower(object.process.parent.name) == "winexesvc.exe"
+        and filter::CheckWL_Process_Creation("Remoting_WinExec", lower(join([object.account.id, object.process.cmdline], "|")))
+    }
+
+rule Remoting_WinExec: (Network_Login and WinExec_Start) within 2m
+    init {
+        $labels = "w_auto|CheckWL_Windows_Login_Without_W_Auto|CheckWL_Process_Creation" 
+    }
+ 
+    on Network_Login {
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+
+        $object.account.id = subject.account.id
+        $object.account.name = subject.account.name
+        $object.account.domain = subject.account.domain
+        $object.account.session_id = subject.account.session_id
+
+        $subject.process.name = subject.process.name
+        $subject.process.path = subject.process.path
+        $subject.process.fullpath = subject.process.fullpath
+        $subject.process.id = subject.process.id
+
+        $src.host = src.host
+        $src.fqdn = src.fqdn
+        $src.hostname = src.hostname
+        $src.ip = src.ip
+        $src.port = src.port
+        $src.asset = src.asset
+    
+        $dst.host = dst.host
+        $dst.fqdn = dst.fqdn
+        $dst.hostname = dst.hostname
+        $dst.ip = dst.ip
+        $dst.port = dst.port
+        $dst.asset = dst.asset  
+
+        $logon_type = logon_type
+        $logon_service = logon_service
+
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.ip = event_src.ip
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+
+        $alert.context = lower(join([subject.account.name, coalesce(src.host, src.ip), coalesce(dst.host, dst.ip)], "|"))
+    }
+
+    on WinExec_Start {
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+
+        $datafield6 = datafield6    # Идентификатор сессии в формате UUID    
+
+        $alert.key = lower(join([object.account.id, object.process.cmdline], "|"))
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "start"
+    $object = "process"
+    $status = "success"
+
+    $category.generic = "Attack"
+    $category.high = "Execution"
+    $category.low = "System Services: Service Execution"
+
+    $importance = "medium"
+    
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.id], "|")
+    $incident.severity = $importance
+    $incident.category = "HostOrSoftCompromising"
+    $incident.aggregation.timeout = 2h
+}

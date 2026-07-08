@@ -1,0 +1,39 @@
+EVENTLOG = ''
+
+COND = $Channel == "Kaspersky Endpoint Security"
+       and $Provider["Name"] == "avp"
+       and $EventID["text"] == "1006"
+
+action = "update"
+object = "resource"
+status = "success"
+
+$kv = keyvalue($Data[0], "\n", ":")
+
+object.name = $kv["Объект\\Название"]
+object.path = $kv["Объект\\Путь"]
+object.type = "file"
+if $kv["Дата выпуска"] != "Неизвестно" then
+    object.version = $kv["Дата выпуска"]
+endif
+
+datafield1 = substr($kv["Пользователь"], 0, find_substr($kv["Пользователь"], ' ('))     # Имя пользователя
+reason = $kv["Результат"]
+
+time = $TimeCreated["SystemTime"]
+msgid = $EventID["text"]
+importance = "info"
+
+event_src.vendor = "kaspersky"
+event_src.title = "endpoint_security"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = $Computer
+    event_src.hostname = substr($Computer, 0, $dot_pos)
+else
+    event_src.hostname = $Computer
+endif
+event_src.category = "Host security"
+
+id = "PT_Kaspersky_Endpoint_Security_eventlog_1006_file_updated"

@@ -1,0 +1,24 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME_SYSLOG|time=DATETIME_ISO8601} {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=HOSTNAME|}{":"?}
+        %{$title="ASA"|$title="PIX"|$title="FWSM"|$title="FTD"}--{NUMBER}-{msgid="419001"}:
+        Dropping TCP packet from {interface=UNTIL(":")}{src.ip=IPV4|src.ip=IPV6|src.hostname=HOSTNAME}/{src.port=NUMBER}
+        to {datafield1=UNTIL(":")}{dst.ip=IPV4|dst.ip=IPV6|dst.hostname=HOSTNAME}/{dst.port=NUMBER}, reason:{reason=REST}'
+
+action = "deny"
+object = "packet"
+status = "success"
+
+protocol = "tcp"
+
+# datafield1 - интерфейс на стороне dst
+
+importance = "info"
+
+category.generic = "Packet"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "cisco"
+event_src.title = lower($title)
+event_src.category = "Firewall"
+
+id = "PT_Cisco_ASA_FWSM_PIX_syslog_419001_Dropping_TCP_packet"

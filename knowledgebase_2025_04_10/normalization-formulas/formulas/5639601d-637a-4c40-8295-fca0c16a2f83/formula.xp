@@ -1,0 +1,24 @@
+!TEXT='{"<"NUMBER">"} {time=DATETIME} {event_src.ip=IPV4|event_src.ip=IPV6|$raw_hostname=HOSTNAME} {STRING}
+       {NUMBER?} ACCOUNT ({$obvalue=STRING} [{object.id=NUMBER}] delivered'
+
+action = "deliver"
+object = "message"
+status = "success"
+
+object.property = "receiver"
+object.value = strip($obvalue,'',')')
+
+importance = "info"
+
+event_src.vendor = "communigate_systems"
+event_src.title = "communigate"
+$dot_pos = find_substr($raw_hostname, '.')
+if $dot_pos != null then
+    event_src.fqdn = $raw_hostname
+    event_src.hostname = substr($raw_hostname, 0, $dot_pos)
+else
+    event_src.hostname = $raw_hostname
+endif
+event_src.category = "Mail server"
+
+id = "PT_CommuniGate_Systems_CommuniGate_syslog_mail_delivered"

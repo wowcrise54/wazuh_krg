@@ -1,0 +1,61 @@
+#<14>1 2023-11-23T11:55:32Z utmcore@oreterheiont utm-loganalyzer traffic - - ﻿CEF:0|Usergate|UTM|6|traffic|ddos_protection|1|rt=1700740527000 deviceExternalId=utmcore@B suser= act=alert cs1Label=Rule cs1=UDP DoS Alert src=188.43.67.205 spt=443 cs2Label=Source Zone cs2=OUTSIDE cs3Label=Source Country cs3= app= proto=UDP dst=172.30.36.134 dpt=53499 cs4Label=Destination Zone cs4=Unknown cs5Label=Destination Country cs5= sourceTranslatedAddress=0.0.0.0 sourceTranslatedPort=0 destinationTranslatedAddress=0.0.0.0 destinationTranslatedPort=0 in=0 out=6052382 cn1Label=Packets sent cn1=0 cn2Label=Packets received cn2=4736
+
+TEXT = '{"<"NUMBER">"?} {NUMBER?} {DATETIME?} {event_src.hostname=STRING}
+        {WORDDASH} traffic - - CEF:0|Usergate|UTM|{NUMBER}|traffic|ddos_protection|{$tmp_importance=WORD}|rt={$temp_time=NUMBER} deviceExternalId=
+        {event_src.id=STRING} suser={$user=STRING?} act={$act="accept"|$act="alert"|$act="drop"} {$kv=KEYVALUE(" ","=")}'
+
+if $tmp_importance != "Unknown" then
+    $tmp_importance = number($tmp_importance)
+else 
+    $tmp_importance = 0
+endif
+
+if $kv["cs1Label"] == "Rule" then
+    subject = "rule"
+    subject.name = $kv["cs1"]
+endif
+switch $act
+    case "accept"
+        action = "allow"
+        importance = "info"
+    case "alert"
+        action = "alert"
+        importance = "low"
+        status = "success"
+    case "drop"
+        action = "deny"
+        importance = "low"
+        status = "failure"
+endswitch
+
+object = "connection"
+
+if lower($user) != "unknown" then
+    subject.account.name = $user
+endif
+
+src.ip = $kv["src"]
+src.port = $kv["spt"]
+src.geo.country = $kv["cs3"]
+dst.ip = $kv["dst"]
+dst.port = $kv["dpt"]
+dst.geo.country = $kv["cs5"]
+
+protocol = $kv["proto"]
+
+count.bytes_out = $kv["out"]
+count.bytes_in = $kv["in"]
+count.packets_out = $kv["cn2"]
+count.packets_in = $kv["cn1"]
+
+time = epoch_ms_to_datetime($temp_time)
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.vendor = "entensys"
+event_src.title = "usergate_utm"
+event_src.category = "Network security"
+
+id = "PT_Entensys_UserGate_UTM_syslog_CEF_ddos_protection"

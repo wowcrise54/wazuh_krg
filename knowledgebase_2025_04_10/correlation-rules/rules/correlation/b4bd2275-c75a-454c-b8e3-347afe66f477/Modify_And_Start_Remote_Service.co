@@ -1,0 +1,174 @@
+event Change_Remote_Service_ImagePath:
+    key:
+        event_src.host, subject.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "13"
+        and event_src.title == "sysmon"
+        and action == "modify"
+        and status == "success"
+        # Выполнение от процесса services.exe.
+        and match(lower(subject.process.fullpath), "?:\\windows\\system32\\services.exe")
+
+        # Модификация команды запуска сервиса.
+        and lower(object.name) == "imagepath"
+
+        # Вероятные сервисы
+        and (
+            lower(object.path) == "\\registry\\machine\\system\\currentcontrolset\\services\\sensorservice\\"
+            or 
+            lower(object.path) == "\\registry\\machine\\system\\currentcontrolset\\services\\btagservice\\"
+        )
+        and filter::CheckWL_Registry_Actions(
+            "Modify_And_Start_Remote_Service",
+            regex(lower(object.path), "registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.*)\\\\$", 1) + "|" + lower(object.value)
+        )
+    }
+
+event Start_Process_By_System:
+    key:
+        event_src.host, object.process.parent.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "1"
+        and event_src.title == "sysmon"
+        and match(lower(object.process.parent.fullpath), "?:\\windows\\system32\\services.exe")
+    }
+
+event Connect_To_Services:
+    key:
+        event_src.host, object.process.id
+    filter {
+        filter::NotFromCorrelator()
+        and msgid == "3"
+        and event_src.title == "sysmon"
+        and direction == "ingress"
+        and protocol == "tcp"
+        and match(lower(object.process.fullpath), "?:\\windows\\system32\\services.exe")
+    }
+    
+rule Modify_And_Start_Remote_Service: (Connect_To_Services? and Change_Remote_Service_ImagePath and Start_Process_By_System) timer 5m
+
+    init {
+        $labels = "w_auto|CheckWL_Registry_Actions"
+    }
+
+    on Connect_To_Services {
+        $dst.asset = dst.asset
+        $dst.host = dst.host
+        $dst.ip = dst.ip
+        $dst.hostname = dst.hostname
+        $dst.fqdn = dst.fqdn
+        $dst.port = dst.port
+        $dst.mac = dst.mac
+
+        $src.asset = src.asset
+        $src.host = src.host
+        $src.ip = src.ip
+        $src.hostname = src.hostname
+        $src.fqdn = src.fqdn
+        $src.port = src.port
+        $src.mac = src.mac
+
+        $src_attacking = true
+
+        $event_src.ip = event_src.ip
+    }
+
+    on Change_Remote_Service_ImagePath {
+        # object
+        $object.name = object.name
+        $object.property = object.property
+        $object.new_value = object.new_value
+        $object.path = object.path
+        $object.fullpath = object.fullpath
+    
+        $datafield5 = regex(lower(object.path), "registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.*)\\\\$", 1)
+
+        # event src host
+        $event_src.host = event_src.host
+        $event_src.fqdn = event_src.fqdn
+        $event_src.hostname = event_src.hostname
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+        $event_src.category = event_src.category
+    
+        # other
+        $alert.key = regex(lower(object.path), "registry\\\\machine\\\\system\\\\currentcontrolset\\\\services\\\\(.*)\\\\$", 1) + "|" + lower(object.value)
+        $reason = reason
+    }
+
+    on Start_Process_By_System {
+        # subject
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.session_id = subject.account.session_id
+        $subject.account.id = subject.account.id
+        $subject.account.privileges = subject.account.privileges
+
+        $object.account.id = object.account.id
+        $object.account.name = object.account.name
+        $object.account.domain = object.account.domain
+        $object.account.session_id = object.account.session_id
+        $object.account.privileges = object.account.privileges
+        
+        # object
+        $object.process.id = object.process.id
+        $object.process.name = object.process.name
+        $object.process.path = object.process.path
+        $object.process.fullpath = object.process.fullpath
+        $object.process.hash = object.process.hash
+        $object.process.hash.md5 = object.process.hash.md5
+        $object.process.hash.imphash = object.process.hash.imphash
+        $object.process.hash.sha1 = object.process.hash.sha1
+        $object.process.hash.sha256 = object.process.hash.sha256
+        $object.process.version = object.process.version
+        $object.process.cmdline = object.process.cmdline
+        $object.process.guid = object.process.guid
+        $object.process.meta = object.process.meta
+        $object.process.original_name = object.process.original_name
+        $object.process.cwd = object.process.cwd
+        $object.process.chain = object.process.chain 
+ 
+        $datafield18 = datafield18  # цепочка процесса-субъекта с идентификаторами
+        $datafield19 = datafield19  # цепочка процесса-объекта с идентификаторами
+
+        $object.process.parent.id = object.process.parent.id
+        $object.process.parent.name = object.process.parent.name
+        $object.process.parent.path = object.process.parent.path
+        $object.process.parent.fullpath = object.process.parent.fullpath
+        $object.process.parent.guid = object.process.parent.guid
+        $object.process.parent.cmdline = object.process.parent.cmdline
+    }
+
+emit {
+    $correlation_type = "event"
+
+    if $subject.account.name != null then
+        $subject = "account"
+    else
+        $subject = "process"
+    endif
+    $action = "modify"
+    $object = "reg_object"
+    $status = "success"
+
+    $importance = "medium"
+    
+    if $src_attacking then
+        $category.generic = "Attack"
+        $category.high = "Lateral Movement"
+        $category.low = "Remote Services: SMB/Windows Admin Shares"
+    else
+        $category.generic = "Attack"
+        $category.high = "Execution"
+        $category.low = "System Services: Service Execution"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, lower($event_src.host), lower($object.new_value)], "|")
+    $incident.severity = $importance 
+    $incident.category = "SecurityBackdoorDetection"
+    $incident.aggregation.timeout = 2h
+}

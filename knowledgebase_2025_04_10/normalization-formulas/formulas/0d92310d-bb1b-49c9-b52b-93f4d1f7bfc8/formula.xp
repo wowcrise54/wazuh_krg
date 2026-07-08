@@ -1,0 +1,36 @@
+TEXT = '{"<"NUMBER">"?}{":"?}{time=DATETIME_SYSLOG_HUAWEI|time=DATETIME}
+        {event_src.ip=IPV4|event_src.ip=IPV6|event_src.hostname=STRING}
+        {"%%"NUMBER?}{$tmp_subsys=WORD}/{NUMBER}/
+        {msgid="SSHS_REKEY_STATUS"}{"(l)"|"(s)"|}:{"CID="UNTIL(";")?}
+        SSH server key renegotiation with client.({$tmp=UNTIL(")")}'
+
+$kv = keyvalue($tmp,", ","=","~")
+
+subject = "system"
+action = "update"
+object = "resource"
+status = switch $kv["Status"]
+    case "Begin" "ongoing"
+    case "Success" "success"
+endswitch
+
+subject.account.session_id  = $kv["SessionID"]
+object.type = "virtual key"
+
+src.ip = $kv["IPAddress"]
+dst.hostname = event_src.hostname
+protocol.layer7 = "ssh"
+
+#datafield10 - значение VRF ssh сервера
+datafield10 = $kv["VPNInstanceName"]
+
+reason = $kv["RekeyReason"]
+
+importance = "low"
+
+event_src.vendor = "huawei"
+event_src.title = "vrp"
+event_src.subsys = lower($tmp_subsys)
+event_src.category = "Network device"
+
+id = "PT_Huawei_VRP_syslog_SSHS_rekey_status"

@@ -1,0 +1,15 @@
+event Auditd_event:
+    filter {
+        filter::NotFromCorrelator()
+        and event_src.title == "unix_like"
+        and event_src.subsys == "auditd"
+        and msgid == "SYSTEM_BOOT"
+    }
+
+
+enrichment Collect_Booted_Linux_Hosts
+    enrich Auditd_event:
+        insert_into Booted_Linux_Hosts {
+            column::host = event_src.host
+            column::time = time
+        }

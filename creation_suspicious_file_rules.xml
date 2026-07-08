@@ -1,0 +1,81 @@
+<!--
+  Port of MP SIEM rule PT-CR-225 / Creation_Suspicious_File to Wazuh 4.14.
+
+  Data source: Microsoft Sysmon Event ID 11 (FileCreate).
+  Install as /var/ossec/etc/rules/creation_suspicious_file_rules.xml.
+  Custom rule IDs intentionally use the Wazuh-recommended 100000-120000 range.
+-->
+<group name="windows,creation_suspicious_file,">
+
+  <!--
+    Internal selector. Wazuh rule 61613 is the stock Sysmon Event ID 11 rule.
+    Sysmon Event ID 11 already contains Image, ProcessId/ProcessGuid, User and
+    TargetFilename, so a separate 30-second process-start correlation is not
+    required to retain the MP SIEM detection semantics.
+  -->
+  <rule id="110200" level="0" noalert="1">
+    <if_sid>61613</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)^(?!.*\\(?:Program Files|ProgramData\\(?:Symantec|Kaspersky)|Windows Defender|Windows\\(?:SoftwareDistribution|Installer|Microsoft|WinSxS|Temp Diag)|WinSxS)(?:\\|$)).*(?:\.sh|\.hta|\.ps1|\.py|\.vba|\.vbe|\.com|\.cmd|\.bat|\.vbs|\.js|\.xsl|\.sct|\.scr|\.dll|\.exe|\.dmp|\.ace|\.kirbi|\.mof|mimilsa\..+|\.cs|\.csproj|\.proj|ntds\.dit)$</field>
+    <description>Potentially malicious file creation candidate.</description>
+    <group>sysmon,</group>
+  </rule>
+
+  <!-- Credential-dumping artifacts: medium in MP SIEM, high in Wazuh. -->
+  <rule id="110201" level="12">
+    <if_sid>110200</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)(?:\.dmp|\.kirbi|mimilsa\..+|ntds\.dit)$</field>
+    <description>Potential credential-dumping artifact $(win.eventdata.targetFilename) created by $(win.eventdata.image) as $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1003</id>
+    </mitre>
+    <group>sysmon,attack,credential_access,os_credential_dumping,</group>
+  </rule>
+
+  <!-- PowerShell profile creation can provide persistence on shell startup. -->
+  <rule id="110202" level="10">
+    <if_sid>110200</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)\\Documents\\(?:PowerShell|WindowsPowerShell)\\(?:Microsoft\.(?:PowerShell|VSCode)_)?Profile\.ps1$</field>
+    <description>Possible persistence through PowerShell profile $(win.eventdata.targetFilename), created by $(win.eventdata.image) as $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1546.013</id>
+    </mitre>
+    <group>sysmon,attack,persistence,event_triggered_execution,</group>
+  </rule>
+
+  <!-- Remaining suspicious extensions correspond to the MP SIEM subrule. -->
+  <rule id="110203" level="7">
+    <if_sid>110200</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2" negate="yes">(?i)(?:(?:\.dmp|\.kirbi|mimilsa\..+|ntds\.dit)|\\Documents\\(?:PowerShell|WindowsPowerShell)\\(?:Microsoft\.(?:PowerShell|VSCode)_)?Profile\.ps1)$</field>
+    <description>Potentially malicious file $(win.eventdata.targetFilename) created by $(win.eventdata.image) as $(win.eventdata.user).</description>
+    <mitre>
+      <id>T1570</id>
+    </mitre>
+    <group>sysmon,attack,lateral_movement,lateral_tool_transfer,</group>
+  </rule>
+
+  <!--
+    FIM coverage for MITRE ATT&CK T1546.013. Rule 554 is the stock
+    "file added" rule and rule 550 is the stock "integrity checksum changed"
+    rule. The FIM directories must also be configured on the endpoint.
+  -->
+  <rule id="110204" level="10">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">(?i)\\Documents\\(?:PowerShell|WindowsPowerShell)\\(?:Microsoft\.(?:PowerShell|VSCode)_)?Profile\.ps1$</field>
+    <description>PowerShell profile created: $(file). Possible PowerShell profile persistence.</description>
+    <mitre>
+      <id>T1546.013</id>
+    </mitre>
+    <group>attack,persistence,event_triggered_execution,fim,</group>
+  </rule>
+
+  <rule id="110205" level="10">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">(?i)\\Documents\\(?:PowerShell|WindowsPowerShell)\\(?:Microsoft\.(?:PowerShell|VSCode)_)?Profile\.ps1$</field>
+    <description>PowerShell profile modified: $(file). Possible PowerShell profile persistence.</description>
+    <mitre>
+      <id>T1546.013</id>
+    </mitre>
+    <group>attack,persistence,event_triggered_execution,fim,</group>
+  </rule>
+
+</group>

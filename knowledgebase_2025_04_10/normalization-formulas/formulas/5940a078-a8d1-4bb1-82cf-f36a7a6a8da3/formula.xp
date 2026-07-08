@@ -1,0 +1,117 @@
+JSON = "EventCode=6274"
+
+COND = $Logfile=="Security" and $SourceName=="Microsoft-Windows-Security-Auditing"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+if $InsertionStrings[0] != "-" then
+    subject.account.id = $InsertionStrings[0]
+endif
+if $InsertionStrings[1] != "-" then
+    subject.account.name = lower($InsertionStrings[1])
+endif
+if $InsertionStrings[2] != "-" then
+    subject.account.domain = lower($InsertionStrings[2])
+endif
+
+if $InsertionStrings[12] != "-" then
+    object.id = $InsertionStrings[12]
+endif
+
+if $InsertionStrings[18] != "-" then
+    object.name = $InsertionStrings[18]
+endif
+
+if $InsertionStrings[17] != "-" then
+    object.type = $InsertionStrings[17]
+endif
+
+if $InsertionStrings[5] != "-" then
+    $hostname = lower($InsertionStrings[5])
+endif
+$dot_pos = find_substr($hostname, '.')
+if $dot_pos != null then
+    src.fqdn = $hostname
+    src.hostname = substr($hostname, 0, $dot_pos)
+else
+    src.hostname = $hostname
+endif
+
+$src_mac = maybe_macaddr($InsertionStrings[9])
+$src_ip = coalesce(maybe_ipv4($InsertionStrings[16]), maybe_ipv6($InsertionStrings[16]))
+$nas_ip_addr = coalesce(maybe_ipv4($InsertionStrings[10]), maybe_ipv6($InsertionStrings[11]))
+$ip_from_id = coalesce(maybe_ipv4($InsertionStrings[9]), maybe_ipv6($InsertionStrings[9]))
+
+if $src_ip == $nas_ip_addr and $ip_from_id != null then
+    src.ip = $ip_from_id
+else
+    src.ip = $src_ip
+    src.mac = $src_mac
+endif
+
+datafield1 = $InsertionStrings[21]  # Authentication type
+
+# Server that grants rights data
+if $InsertionStrings[8] != "-" then
+    if coalesce(maybe_ipv4($InsertionStrings[8]), maybe_ipv6($InsertionStrings[8])) != null then
+        dst.ip = $InsertionStrings[8]
+    elif maybe_macaddr(substr($InsertionStrings[8], 0, 17)) != null then
+        dst.mac = substr($InsertionStrings[8], 0, 17)
+    else 
+        datafield3 = $InsertionStrings[8]  # Called station ID
+    endif
+endif
+
+if $InsertionStrings[14] != "-" then
+    datafield4 = $InsertionStrings[14]  # The Text field contains the name of the port using UTF-8 encoded 10646 [8] characters
+endif
+
+datafield5 = coalesce(maybe_ipv4($InsertionStrings[16]), maybe_ipv6($InsertionStrings[16])) # RADIUS Client IP address
+
+if $InsertionStrings[25] != "-" then
+    datafield6 = $InsertionStrings[25]  # Human-readable description of reason
+endif
+
+if $InsertionStrings[23] != '-' then
+    subject.account.session_id = $InsertionStrings[23]
+endif
+
+dst.ip = coalesce(maybe_ipv4($InsertionStrings[8]), maybe_ipv6($InsertionStrings[8]))
+dst.mac = maybe_macaddr(substr($InsertionStrings[8], 0, 17))
+
+if $InsertionStrings[14] != "-" then
+    dst.port = $InsertionStrings[14]
+endif
+
+nas_ip = $nas_ip_addr
+
+logon_auth_method = "remote"
+
+reason = strip($InsertionStrings[25], '', '.')
+
+time = $TimeGenerated
+msgid = $EventIdentifier
+importance = "medium"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "nps"
+event_src.subsys = lower($Logfile)
+
+$dot_pos = find_substr($ComputerName, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($ComputerName)
+    event_src.hostname = lower(substr($ComputerName, 0, $dot_pos))
+else
+    event_src.hostname = lower($ComputerName)
+endif
+
+event_src.category = "AAA"
+
+id = "PT_Microsoft_Windows_wmi_6274_NPS_discarded_the_request_for_a_user"

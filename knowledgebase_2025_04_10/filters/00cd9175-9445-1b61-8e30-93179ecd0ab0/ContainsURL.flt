@@ -1,0 +1,7 @@
+filter ContainsURL(string $value) {
+    bool(length($value) >= 7)
+    and table::Generic_Regexes {
+        column::regex_type == "common_url"
+        and regex_match($value, column::regex_value)
+    }
+}

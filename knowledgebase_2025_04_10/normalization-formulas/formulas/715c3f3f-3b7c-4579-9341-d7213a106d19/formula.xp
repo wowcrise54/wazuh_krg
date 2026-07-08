@@ -1,0 +1,41 @@
+EVENTLOG = 'EventID.text="529"'
+COND = lower($Channel)=="security" and $Provider["Name"]=="Security"
+
+subject = "account"
+action = "login"
+object = "system"
+status = "failure"
+
+subject.account.name = lower($Data[0])
+subject.account.domain = lower($Data[1])
+
+logon_type = $Data[2]
+
+reason = "A logon attempt was made with an unknown user name or a known user name with a bad password"
+
+msgid = $EventID["text"]
+time = $TimeCreated["SystemTime"]
+
+importance = "low"
+
+category.generic = "Operating System"
+category.high = "Access Management"
+category.low = "Communication"
+
+event_src.vendor = "microsoft"
+event_src.title = "windows"
+event_src.subsys = lower($Channel)
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "AAA"
+
+# Положение следующего блока строк в коде зафиксировано из-за порядка обработки данных
+dst.fqdn = event_src.fqdn
+dst.hostname = event_src.hostname
+
+id = "PT_Microsoft_Windows_forwarded_529_Logon_failure"

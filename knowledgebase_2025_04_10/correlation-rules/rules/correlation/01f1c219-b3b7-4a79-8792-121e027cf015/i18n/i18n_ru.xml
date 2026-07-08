@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization locale="ru">
+  <Description>Выполнение некоторых SQL-команд может свидетельствовать о получении информации о пользователях базы данных MySQL, что может быть признаком активности злоумышленника</Description>
+  <EventDescriptions>
+    <EventDescription id="03b90360-9417-42cd-a906-eae3e8532bf1">Пользователь {subject.account.name} с помощью SQL-команды получил информацию о пользователях базы данных MySQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="040b70bc-8cd9-47d5-8bf7-9aa6c8477758">Пользователь {subject.account.name} с помощью SQL-команды получил информацию об имени своей учетной записи в базе данных MySQL на узле {event_src.host}</EventDescription>
+    <EventDescription id="107c585a-254d-444e-836a-0fd3b2d4c406">Пользователь {subject.account.name} с помощью SQL-команды получил список прав и ролей в базе данных MySQL на узле {event_src.host}</EventDescription>
+  </EventDescriptions>
+</Localization>

@@ -1,0 +1,19 @@
+TEXT = '{"<"NUMBER">"?}{NUMBER?}{":"?} {time=DATETIME} {UNTIL(": ")}
+        Warning: Dropping connection due to {reason="potential Directory Harvest Attack"} from host=(\'{src.ip=IPV4|src.ip=IPV6}\',
+        {"\'"src.hostname=HOSTNAME"\'"?}{"None"?} ){REST}'
+
+action = "deny"
+object = "connection"
+status = "success"
+
+importance = "medium"
+
+category.generic = "Connection"
+category.high = "Network Interaction Management"
+category.low = "Control"
+
+event_src.title = "email_security_appliance"
+event_src.vendor = "cisco"
+event_src.category = "Application security"
+
+id = "PT_Cisco_ESA_syslog_dropping_connection_potential_DHA"

@@ -1,0 +1,54 @@
+TEXT = '* {$day_or_mon=WORD}{$locale="."|$locale="/"}{$mon_or_day=WORD}{$locale="."|$locale="/"}{$year=WORD} {$h=WORD}{":"|"."}{$m=WORD}{":"|"."}{$s=WORD}
+        {":"|"."}{WORD} Stopping proxy server'
+
+action = "stop"
+object = "application"
+status = "success"
+
+object.name = "UserGate"
+
+if $locale == "." then  # определяем в каком формате дата
+    $mon = $mon_or_day
+    $day = $day_or_mon
+else
+    $mon = $day_or_mon
+    $day = $mon_or_day
+endif
+
+$ds = string($day)   # день
+$ms = string($mon)   # месяц
+$ys = string($year)  # год
+$hs = string($h)     # час
+$mis = string($m)    # минута
+$ss = string($s)     # секунда
+
+if length($ms) == 1 then  # проверка на длину месяца в символах. Если символ один, то перед ним дописываем 0 иначе, оставляем все как есть.
+    $mms = "0"+ $ms else
+    $mms = $ms
+endif
+if length($ds) == 1 then
+    $dds = "0"+ $ds else
+    $dds = $ds
+endif
+if length($mis) == 1 then
+    $mmis = "0"+ $mis else
+    $mmis = $mis
+endif
+if length($hs) == 1 then
+    $hhs = "0"+ $hs else
+    $hhs = $hs
+endif
+if length($ss) == 1 then
+    $sss = "0"+ $ss else
+    $sss = $ss
+endif
+
+time = $mms+"/"+$dds+"/"+$ys+" "+$hhs+":"+$mmis+":"+$sss
+
+importance = "info"
+
+event_src.vendor = "entensys"
+event_src.title = "usergate_proxy_and_firewall"
+event_src.category = "Proxy server"
+
+id = "PT_Entensys_UserGate_Proxy_and_Firewall_filemonitor_stop_usergate"

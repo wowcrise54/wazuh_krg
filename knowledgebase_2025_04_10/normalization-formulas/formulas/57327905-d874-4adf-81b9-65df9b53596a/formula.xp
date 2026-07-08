@@ -1,0 +1,22 @@
+TEXT = '{"<"NUMBER">"?}{time=DATETIME} {$Computer=HOSTNAME} {subject.name="KWTS"}: 
+        {object.name="Anti-Phishing"} bases applied: publishing-time="{object.version=UNTIL("\\"")}'
+
+subject = "application"
+action = "download"
+object = "update"
+status = "success"
+
+importance = "info"
+
+event_src.title = "kaspersky_web_traffic_security"
+event_src.vendor = "kaspersky"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.category = "Web security"
+
+id = "PT_Kaspersky_KWTS_syslog_bases_applied"

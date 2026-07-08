@@ -1,0 +1,78 @@
+event Access_To_File_System:
+    key:
+        event_src.host
+    filter {
+        filter::MSSQL_Query("EX", "X")
+        and (
+            match(lower(object.query), "*sp_oamethod*opentextfile*")
+            or match(lower(object.query), "*xp_fixeddrives*")
+            or match(lower(object.query), "*xp_availablemedia*")
+            or match(lower(object.query), "*xp_dirtree*")
+            or match(lower(object.query), "*xp_subdirs*")
+        )
+        and filter::CheckWL_Database_Actions("MSSQL_File_System_Discovery", lower(object.query))
+    }
+
+rule MSSQL_File_System_Discovery: Access_To_File_System
+    
+    init {
+        $labels = "w_auto|CheckWL_Database_Actions"
+    }
+
+    on Access_To_File_System {
+        $status = status
+
+        $subject.account.id = subject.account.id
+        $subject.account.name = subject.account.name
+        $subject.account.domain = subject.account.domain
+        $subject.account.fullname = subject.account.fullname
+
+        if find_substr(object.value, "xp") != null then
+            $object.value = object.value
+        else
+        # пример отлавливаемой данным ниже регулярным выражением строки
+        # exec sp_oamethod @o, 'opentextfile', @f out, 'C:\\ForHacker\\HuckFile.txt', 1
+            $object.value = string(regex(object.query, ", '(.*?)',", 1))
+        endif
+        $object.query = object.query     
+        
+        $datafield2 = datafield2     # имя экземпляра
+        $datafield3 = datafield3     # имя используемой БД
+        $datafield4 = datafield4     # идентификатор действия
+        $datafield5 = datafield5     # тип класса сущности, для которой был проведен аудит
+        
+        $alert.key = lower(object.property)
+
+        $event_src.ip = event_src.ip
+        $event_src.hostname = event_src.hostname
+        $event_src.fqdn = event_src.fqdn
+        $event_src.host = event_src.host
+        $event_src.asset = event_src.asset
+        $event_src.vendor = event_src.vendor
+        $event_src.title = event_src.title
+        $event_src.subsys = event_src.subsys
+    }
+
+emit {
+    $correlation_type = "incident"
+
+    $subject = "account"
+    $action = "execute"
+    $object = "command"
+
+    $importance = "low"
+
+    $category.generic = "Attack"
+    $category.high = "Discovery"
+    
+    if match(lower($object.query), "*xp_fixeddrives*") or match(lower($object.query), "*xp_availablemedia*") then
+        $category.low = "System Information Discovery"
+    else
+        $category.low = "File and Directory Discovery"
+    endif
+
+    $incident.aggregation.key = join([$correlation_name, $event_src.host, $subject.account.name], "|")
+    $incident.severity = $importance
+    $incident.category = "SoftwareSuspiciousActivity"
+    $incident.aggregation.timeout = 2h
+}

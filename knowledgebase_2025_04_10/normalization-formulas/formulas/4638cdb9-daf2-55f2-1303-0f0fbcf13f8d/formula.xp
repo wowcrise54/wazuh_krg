@@ -1,0 +1,161 @@
+TEXT = "{'<'NUMBER'>'?}{NUMBER?} {DATETIME}{event_src.ip=IPV4|event_src.ip=IPV6|$Computer=HOSTNAME} {STRING} {STRING}
+{time=DATETIME},{STRING} {WORD} [{UNTIL(']')} ({UNTIL(')')} [{chain_id=UNTIL(']')} EVENT_ID: {$event_class=WORDDASH}({UNTIL('),')} {$raw_message=REST}"
+COND = in_list([
+           "USER_REMOVE_SNAPSHOT",  # 342
+           "USER_REMOVE_SNAPSHOT_FINISHED_SUCCESS",  # 356
+           "USER_REMOVE_SNAPSHOT_FINISHED_FAILURE",  # 357
+           "USER_FAILED_REMOVE_SNAPSHOT",  # 343
+           "USER_REMOVE_DISK_SNAPSHOT",  # 373
+           "USER_FAILED_REMOVE_DISK_SNAPSHOT",  # 374
+           "USER_REMOVE_DISK_SNAPSHOT_FINISHED_SUCCESS",  # 375
+           "USER_REMOVE_DISK_SNAPSHOT_FINISHED_FAILURE",  # 376
+           "MERGE_SNAPSHOTS_ON_HOST"  # 72
+       ], $event_class)
+
+subject = "account"
+if in_list([
+    "USER_REMOVE_SNAPSHOT", "USER_REMOVE_SNAPSHOT_FINISHED_SUCCESS",
+    "USER_REMOVE_SNAPSHOT_FINISHED_FAILURE", "USER_FAILED_REMOVE_SNAPSHOT"
+    ], $event_class) then
+    action = "remove"
+else
+    action = "modify"
+endif
+object = "file_object"
+
+if in_list(["USER_REMOVE_SNAPSHOT", "USER_REMOVE_DISK_SNAPSHOT"], $event_class) then
+    status = "ongoing"
+elif in_list([
+    "MERGE_SNAPSHOTS_ON_HOST", "USER_REMOVE_SNAPSHOT_FINISHED_SUCCESS",
+    "USER_REMOVE_DISK_SNAPSHOT_FINISHED_SUCCESS"
+    ], $event_class) then
+    status = "success"
+else
+    status = "failure"
+endif
+
+subformula "parse_body"
+    # USER_REMOVE_SNAPSHOT
+    # USER_REMOVE_SNAPSHOT_FINISHED_SUCCESS
+    TEXT = "Snapshot {$snapshot_name=STRING+} deletion for VM {$vm_name=STRING+} {'was initiated by'|'has been completed.'} {$user=REST}"
+    
+    $user = strip($user, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_SNAPSHOT_FINISHED_FAILURE
+    TEXT = "Failed to delete snapshot {$snapshot_name=STRING+} for VM {$vm_name=REST}"
+    
+    $vm_name = strip($vm_name, "", ".")
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_REMOVE_SNAPSHOT
+    TEXT = "Failed to remove Snapshot {$snapshot_name=STRING+} for VM {$vm_name=STRING+} (User: {$user=REST}"
+    
+    $user = strip($user, "", ").")
+endsubformula
+
+subformula "parse_body"
+    # MERGE_SNAPSHOTS_ON_HOST
+    TEXT = "Merging snapshots {$snapshots=STRING+} of disk {$disk=STRING+} on host {$vds_name=REST}"
+    
+    $snapshots = strip($snapshots, "(", ")")
+    $snapshots_list = csv($snapshots, " into ", "")
+    if length($snapshots_list) == 2 then
+        $source_snapshot = $snapshots_list[0]
+        $destination_snapshot = $snapshots_list[1]
+    else
+        drop
+    endif
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_DISK_SNAPSHOT
+    TEXT = "Disk {$disk_alias=STRING+} from Snapshot(s) {$snapshots=STRING+} of VM {$vm_name=STRING+} deletion was initiated by {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_FAILED_REMOVE_DISK_SNAPSHOT
+    TEXT = "Failed to delete Disk {$disk_alias=STRING+} from Snapshot(s) {$snapshots=STRING+} of VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_DISK_SNAPSHOT_FINISHED_SUCCESS
+    TEXT = "Disk {$disk_alias=STRING+} from Snapshot(s) {$snapshots=STRING+} of VM {$vm_name=STRING+} deletion has been completed (User: {$user=REST}"
+endsubformula
+
+subformula "parse_body"
+    # USER_REMOVE_DISK_SNAPSHOT_FINISHED_FAILURE
+    TEXT = "Failed to complete deletion of Disk {$disk_alias=STRING+} from snapshot(s) {$snapshots=STRING+} of VM {$vm_name=STRING+} (User: {$user=REST}"
+endsubformula
+
+submessage("TEXT", "parse_body", $raw_message)
+
+$vm_name = strip($vm_name, "'", "'")
+$snapshot_name = strip($snapshot_name, "'", "'")
+$snapshots = strip($snapshots, "'", "'")
+
+if $user == "" then
+    $user = null
+endif
+
+if in_list([
+    "USER_FAILED_REMOVE_DISK_SNAPSHOT",
+    "USER_REMOVE_DISK_SNAPSHOT_FINISHED_SUCCESS",
+    "USER_REMOVE_DISK_SNAPSHOT_FINISHED_FAILURE"
+    ], $event_class) then
+    $user = strip($user, "", ").")
+elif $event_class == "USER_REMOVE_DISK_SNAPSHOT" then
+    $user = strip($user, "", ".")
+endif
+
+$user_list = csv($user, "@", "'")
+if length($user_list) == 2 then
+    $username = $user_list[0]
+    $authz_provider = $user_list[1]
+elif length($user_list) == 3 then
+    $username = $user_list[0]
+    $domain = $user_list[1]
+    $authz_provider = $user_list[2]
+else
+    $username = $user
+endif
+
+subject.account.name = $username
+subject.account.domain = $domain
+
+object.type = "snapshot"
+object.name = coalesce($snapshot_name, $source_snapshot, $snapshots)
+
+if $event_class == "MERGE_SNAPSHOTS_ON_HOST" then
+    object.property = "destination_snapshot"
+    object.value = $destination_snapshot
+elif in_list([
+    "USER_REMOVE_DISK_SNAPSHOT", "USER_FAILED_REMOVE_DISK_SNAPSHOT",
+    "USER_REMOVE_DISK_SNAPSHOT_FINISHED_SUCCESS", "USER_REMOVE_DISK_SNAPSHOT_FINISHED_FAILURE"
+    ], $event_class) then
+    object.property = "removed_disk"
+    object.value = strip($disk_alias, "'", "'")
+endif
+
+logon_service = $authz_provider
+
+datafield5 = $vm_name  # Virtual Machine Name
+datafield6 = $vds_name  # VDS (Host) Name
+
+msgid = $event_class
+importance = "low"
+
+event_src.vendor = "orionsoft"
+$dot_pos = find_substr($Computer, '.')
+if $dot_pos != null then
+    event_src.fqdn = lower($Computer)
+    if substr($Computer, 0, $dot_pos) != string(number(substr($Computer, 0, $dot_pos))) then event_src.hostname = lower(substr($Computer, 0, $dot_pos)) endif
+else
+    event_src.hostname = lower($Computer)
+endif
+event_src.title = "zvirt"
+event_src.category = "Virtualization"
+
+id = "PT_Orionsoft_zVirt_syslog_VM_Snapshot_File"

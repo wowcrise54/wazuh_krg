@@ -1,0 +1,227 @@
+<!--
+  Wazuh-native rules for MITRE ATT&CK T1556 Modify Authentication Process.
+
+  MP SIEM source coverage available in the local knowledgebase:
+    PT-CR-834  Enable_SAN_Flag_CA_Policy      -> T1556.001
+    PT-CR-1695 Unix_PAM_Modify                -> T1556.003
+
+  The local knowledgebase_2025_04_10 export does not contain PT-CR-2439,
+  PT-CR-2427, PT-CR-3341, PT-CR-2633, or PT-CR-2623. The remaining requested
+  detections are implemented from MITRE ATT&CK v19 technique behavior.
+-->
+<group name="modify_authentication_process,t1556,">
+
+  <!-- T1556.001 / PT-CR-834: AD CS policy changed to allow SAN attributes. -->
+  <rule id="110500" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\SYSTEM\\CurrentControlSet\\Services\\CertSvc\\Configuration\\[^\\]+\\PolicyModules\\CertificateAuthority_MicrosoftDefault\.Policy\\EditFlags$</field>
+    <field name="win.eventdata.details" type="pcre2">(?i)dword\s+\(0x00?5[0-9a-f]{4}\)</field>
+    <description>PT-CR-834 AD CS policy EditFlags changed to allow SAN attributes by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details).</description>
+    <mitre><id>T1556.001</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,domain_controller_authentication,adcs,</group>
+  </rule>
+
+  <!-- T1556.001: process access to LSASS on a domain controller. Tune the role group with agent labels or deployment scope. -->
+  <rule id="110501" level="10">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^10$</field>
+    <field name="win.eventdata.targetImage" type="pcre2">(?i)\\lsass\.exe$</field>
+    <field name="win.eventdata.sourceImage" type="pcre2" negate="yes">(?i)\\(?:MsMpEng|lsass|csrss|smss|wininit|services|svchost|taskmgr|procexp(?:64)?|procmon(?:64)?)\.exe$</field>
+    <description>Possible domain controller authentication tampering: $(win.eventdata.sourceImage) accessed LSASS with granted access $(win.eventdata.grantedAccess).</description>
+    <mitre><id>T1556.001</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,domain_controller_authentication,lsass_access,</group>
+  </rule>
+
+  <!-- T1556.001: authentication DLL loaded into LSASS from an unusual path. -->
+  <rule id="110502" level="12">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^7$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\lsass\.exe$</field>
+    <field name="win.eventdata.imageLoaded" type="pcre2">(?i)\\(?:cryptdll|kerberos|msv1_0|samsrv|wdigest|schannel|cloudap|tspkg|livessp|pku2u|ssp|scecli)\.dll$</field>
+    <field name="win.eventdata.imageLoaded" type="pcre2" negate="yes">(?i)^[A-Z]:\\Windows\\System32\\</field>
+    <description>Authentication-related DLL loaded into LSASS from a non-System32 path: $(win.eventdata.imageLoaded).</description>
+    <mitre><id>T1556.001</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,domain_controller_authentication,lsass_module,</group>
+  </rule>
+
+  <!-- T1556.002: Password Filter DLL registration via LSA Notification Packages. -->
+  <rule id="110510" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\Notification Packages$</field>
+    <description>Password filter DLL registration changed by $(win.eventdata.image): $(win.eventdata.details).</description>
+    <mitre><id>T1556.002</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,password_filter_dll,registry,</group>
+  </rule>
+
+  <!-- T1556.002: additional authentication packages can also load code into LSASS. -->
+  <rule id="110511" level="10">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\Authentication Packages$</field>
+    <description>LSA Authentication Packages changed by $(win.eventdata.image): $(win.eventdata.details).</description>
+    <mitre><id>T1556.002</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,password_filter_dll,registry,</group>
+  </rule>
+
+  <rule id="110512" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(?:reg|regini|powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:Notification Packages|Authentication Packages|\\Control\\Lsa)</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:add|set|Set-ItemProperty|New-ItemProperty)</field>
+    <description>Command modifies LSA authentication package configuration: $(win.eventdata.commandLine).</description>
+    <mitre><id>T1556.002</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,password_filter_dll,process,</group>
+  </rule>
+
+  <rule id="110513" level="7">
+    <if_sid>61613</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)^[A-Z]:\\Windows\\System32\\[^\\]+(?:filter|flt|pwd|pass|auth)[^\\]*\.dll$</field>
+    <description>Suspicious DLL name created in System32, possible password filter payload: $(win.eventdata.targetFilename) by $(win.eventdata.image).</description>
+    <mitre><id>T1556.002</id></mitre>
+    <group>sysmon,attack,persistence,credential_access,modify_authentication_process,password_filter_dll,file_creation,</group>
+  </rule>
+
+  <!-- T1556.003 / PT-CR-1695: PAM configuration and module changes. -->
+  <rule id="110520" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">(?i)^/etc/pam\.d(?:/|$)</field>
+    <description>PT-CR-1695 PAM configuration changed: $(file).</description>
+    <mitre><id>T1556.003</id></mitre>
+    <group>syscheck,attack,defense_evasion,persistence,credential_access,modify_authentication_process,pam,</group>
+  </rule>
+
+  <rule id="110521" level="12">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">(?i)^/(?:usr/)?(?:local/)?lib(?:64)?/(?:x86_64-linux-gnu/)?security/[^/]+\.so$</field>
+    <description>PT-CR-1695 PAM module changed: $(file).</description>
+    <mitre><id>T1556.003</id></mitre>
+    <group>syscheck,attack,defense_evasion,persistence,credential_access,modify_authentication_process,pam,pam_module,</group>
+  </rule>
+
+  <rule id="110522" level="10">
+    <if_sid>80700</if_sid>
+    <field name="audit.key" type="pcre2">^pam_authentication$</field>
+    <field name="audit.success" type="pcre2" negate="yes">(?i)^(?:no|0|false)$</field>
+    <description>PT-CR-1695 Audit: PAM authentication path changed by $(audit.exe), UID $(audit.auid).</description>
+    <mitre><id>T1556.003</id></mitre>
+    <group>audit,attack,defense_evasion,persistence,credential_access,modify_authentication_process,pam,</group>
+  </rule>
+
+  <rule id="110523" level="5">
+    <if_sid>80700</if_sid>
+    <field name="audit.key" type="pcre2">^pam_authentication$</field>
+    <field name="audit.exe" type="pcre2">(?i)^/usr/bin/dpkg$</field>
+    <description>Package manager changed PAM authentication files: $(audit.exe). Review during maintenance windows.</description>
+    <options>no_log</options>
+    <group>audit,pam,package_manager_noise,</group>
+  </rule>
+
+  <!-- T1556.005: Reversible Encryption. -->
+  <rule id="110530" level="12">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4738$</field>
+    <field name="win.system.message" type="pcre2">(?i)reversible encryption.*(?:enabled|yes|true)</field>
+    <description>User account changed to allow reversible password encryption: $(win.eventdata.targetUserName).</description>
+    <mitre><id>T1556.005</id></mitre>
+    <group>windows,security_event,attack,defense_evasion,persistence,credential_access,modify_authentication_process,reversible_encryption,</group>
+  </rule>
+
+  <rule id="110531" level="12">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^5136$</field>
+    <field name="win.eventdata.attributeLDAPDisplayName" type="pcre2">(?i)^(?:userAccountControl|msDS-PasswordSettings)$</field>
+    <field name="win.system.message" type="pcre2">(?i)(?:PASSWD_NOTREQD|ENCRYPTED_TEXT_PWD_ALLOWED|reversible|msDS-PasswordReversibleEncryptionEnabled|AllowReversiblePasswordEncryption)</field>
+    <description>Directory object changed with reversible-password-encryption indicator: $(win.eventdata.objectDN).</description>
+    <mitre><id>T1556.005</id></mitre>
+    <group>windows,security_event,attack,defense_evasion,persistence,credential_access,modify_authentication_process,reversible_encryption,</group>
+  </rule>
+
+  <rule id="110532" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(?:powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:Set-ADUser|Set-ADDefaultDomainPasswordPolicy|Set-ADFineGrainedPasswordPolicy)</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:AllowReversiblePasswordEncryption|ReversibleEncryptionEnabled)\s+\$?true</field>
+    <description>PowerShell enables reversible password encryption: $(win.eventdata.commandLine).</description>
+    <mitre><id>T1556.005</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,reversible_encryption,powershell,</group>
+  </rule>
+
+  <!-- T1556.007: Hybrid Identity. -->
+  <rule id="110540" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(?:powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:Add-AdfsCertificate|Set-AdfsCertificate|Set-AdfsRelyingPartyTrust|Set-AdfsClaimsProviderTrust|Set-AdfsProperties|Set-AdfsGlobalAuthenticationPolicy)</field>
+    <description>AD FS hybrid identity authentication configuration changed through PowerShell: $(win.eventdata.commandLine).</description>
+    <mitre><id>T1556.007</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,hybrid_identity,adfs,powershell,</group>
+  </rule>
+
+  <rule id="110541" level="10">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\SOFTWARE\\Microsoft\\ADFS\\</field>
+    <description>AD FS registry configuration changed by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details).</description>
+    <mitre><id>T1556.007</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,hybrid_identity,adfs,registry,</group>
+  </rule>
+
+  <rule id="110542" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">(?i)^[A-Z]:\\Windows\\ADFS\\|^[A-Z]:\\Program Files\\Active Directory Federation Services\\</field>
+    <description>AD FS file changed: $(file). Possible hybrid identity authentication-process modification.</description>
+    <mitre><id>T1556.007</id></mitre>
+    <group>syscheck,attack,defense_evasion,persistence,credential_access,modify_authentication_process,hybrid_identity,adfs,</group>
+  </rule>
+
+  <rule id="110543" level="12">
+    <decoded_as>windows_eventchannel</decoded_as>
+    <field name="win.system.eventID">^4104$</field>
+    <field name="win.system.message" type="pcre2">(?i)(?:Add-AdfsCertificate|Set-AdfsCertificate|Set-AdfsRelyingPartyTrust|Set-AdfsClaimsProviderTrust|Set-AdfsProperties|Set-AdfsGlobalAuthenticationPolicy)</field>
+    <description>PowerShell script block modified AD FS hybrid identity authentication settings.</description>
+    <mitre><id>T1556.007</id></mitre>
+    <group>windows,powershell,attack,defense_evasion,persistence,credential_access,modify_authentication_process,hybrid_identity,adfs,</group>
+  </rule>
+
+  <!-- T1556.008: Network Provider DLL. -->
+  <rule id="110550" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\SYSTEM\\CurrentControlSet\\Control\\NetworkProvider\\Order\\ProviderOrder$</field>
+    <description>Network provider order changed by $(win.eventdata.image): $(win.eventdata.details).</description>
+    <mitre><id>T1556.008</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,network_provider_dll,registry,</group>
+  </rule>
+
+  <rule id="110551" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\SYSTEM\\CurrentControlSet\\Services\\[^\\]+\\NetworkProvider\\ProviderPath$</field>
+    <description>Network Provider DLL path changed by $(win.eventdata.image): $(win.eventdata.targetObject) = $(win.eventdata.details).</description>
+    <mitre><id>T1556.008</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,network_provider_dll,registry,</group>
+  </rule>
+
+  <rule id="110552" level="10">
+    <if_sid>61613</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)^[A-Z]:\\Windows\\System32\\[^\\]*(?:np|npp|provider|cred|logon)[^\\]*\.dll$</field>
+    <description>Suspicious Network Provider style DLL created in System32: $(win.eventdata.targetFilename) by $(win.eventdata.image).</description>
+    <mitre><id>T1556.008</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,network_provider_dll,file_creation,</group>
+  </rule>
+
+  <rule id="110553" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(?:reg|regini|powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:NetworkProvider\\Order|\\NetworkProvider\\ProviderPath|ProviderOrder)</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:add|set|Set-ItemProperty|New-ItemProperty)</field>
+    <description>Command modifies Network Provider DLL registration: $(win.eventdata.commandLine).</description>
+    <mitre><id>T1556.008</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,network_provider_dll,process,</group>
+  </rule>
+
+  <rule id="110554" level="14" frequency="1" timeframe="300">
+    <if_sid>110552</if_sid>
+    <if_matched_sid>110551</if_matched_sid>
+    <same_location />
+    <description>High-confidence Network Provider DLL registration: ProviderPath change followed by suspicious DLL creation.</description>
+    <mitre><id>T1556.008</id></mitre>
+    <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,network_provider_dll,correlation,</group>
+  </rule>
+
+</group>

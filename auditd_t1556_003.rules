@@ -1,0 +1,10 @@
+## MITRE ATT&CK T1556.003 - Pluggable Authentication Modules.
+## Used by modify_authentication_process_t1556_rules.xml rule 110522.
+
+-w /etc/pam.d/ -p wa -k pam_authentication
+-w /lib/security/ -p wa -k pam_authentication
+-w /lib64/security/ -p wa -k pam_authentication
+-w /usr/lib/security/ -p wa -k pam_authentication
+-w /usr/lib64/security/ -p wa -k pam_authentication
+-w /usr/lib/x86_64-linux-gnu/security/ -p wa -k pam_authentication
+-w /usr/local/lib/security/ -p wa -k pam_authentication

@@ -36,7 +36,7 @@
   </rule>
 
   <!-- PT-CR-2314: same Outlook PID loads a Forms DLL within five seconds. -->
-  <rule id="110303" level="12" frequency="1" timeframe="5">
+  <rule id="110303" level="12" frequency="2" timeframe="5">
     <if_sid>61609</if_sid>
     <if_matched_sid>110302</if_matched_sid>
     <same_location />

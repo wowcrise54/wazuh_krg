@@ -38,7 +38,7 @@
   </rule>
 
   <!-- PT-CR-1095: LiquidSnake filter followed by DCOM-launched scrcons.exe. -->
-  <rule id="110233" level="12" frequency="1" timeframe="180">
+  <rule id="110233" level="12" frequency="2" timeframe="180">
     <if_sid>61603</if_sid>
     <if_matched_sid>110232</if_matched_sid>
     <same_location />
@@ -74,7 +74,7 @@
   </rule>
 
   <!-- PT-CR-2449: WMI filter creation followed by MSBuild on the same agent. -->
-  <rule id="110236" level="12" frequency="1" timeframe="180">
+  <rule id="110236" level="12" frequency="2" timeframe="180">
     <if_sid>61603</if_sid>
     <if_matched_sid>110231</if_matched_sid>
     <same_location />

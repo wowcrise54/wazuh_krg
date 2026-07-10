@@ -44,7 +44,7 @@
   </rule>
 
   <!-- Registry artifact shortly after sdbinst execution. -->
-  <rule id="110334" level="13" frequency="1" timeframe="60">
+  <rule id="110334" level="13" frequency="2" timeframe="60">
     <if_sid>110332</if_sid>
     <if_matched_sid>110330</if_matched_sid>
     <same_location />
@@ -54,7 +54,7 @@
   </rule>
 
   <!-- Custom .sdb creation shortly after sdbinst execution. -->
-  <rule id="110335" level="13" frequency="1" timeframe="60">
+  <rule id="110335" level="13" frequency="2" timeframe="60">
     <if_sid>110331</if_sid>
     <if_matched_sid>110330</if_matched_sid>
     <same_location />

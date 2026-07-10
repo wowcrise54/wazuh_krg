@@ -215,7 +215,7 @@
     <group>sysmon,attack,defense_evasion,persistence,credential_access,modify_authentication_process,network_provider_dll,process,</group>
   </rule>
 
-  <rule id="110554" level="14" frequency="1" timeframe="300">
+  <rule id="110554" level="14" frequency="2" timeframe="300">
     <if_sid>110552</if_sid>
     <if_matched_sid>110551</if_matched_sid>
     <same_location />

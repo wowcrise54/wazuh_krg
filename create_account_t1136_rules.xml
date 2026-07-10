@@ -1,0 +1,341 @@
+<!--
+  Wazuh-native rules for MITRE ATT&CK v19 Create Account.
+
+  Source mappings:
+    T1136.001: PT-CR-260, PT-CR-259, PT-CR-2594, PT-CR-264, PT-CR-1908
+    T1136.002: PT-CR-2143, PT-CR-663, PT-CR-1344, PT-CR-1342, PT-CR-3079
+
+  Required CDB lists:
+    etc/lists/ad-domain-names
+    etc/lists/authorized-account-creators
+-->
+<group name="create_account,t1136,">
+
+  <!-- Shared Windows 4720 selector. Level 1 + no_log keeps it available to if_matched_* rules. -->
+  <rule id="110600" level="1">
+    <if_sid>60109</if_sid>
+    <field name="win.system.eventID">^4720$</field>
+    <description>Windows user account creation selector: $(win.eventdata.targetDomainName)\$(win.eventdata.targetUserName).</description>
+    <options>no_log</options>
+    <group>windows_account_creation_selector,windows,security_event,</group>
+  </rule>
+
+  <!-- T1136.001 / PT-CR-259: 4720 whose target domain is not an AD domain. -->
+  <rule id="110601" level="10">
+    <if_sid>110600</if_sid>
+    <list field="win.eventdata.targetDomainName" lookup="not_match_key">etc/lists/ad-domain-names</list>
+    <description>PT-CR-259 Local account created by $(win.eventdata.subjectUserName): $(win.eventdata.targetDomainName)\$(win.eventdata.targetUserName).</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>attack,persistence,create_account,local_account,windows,</group>
+  </rule>
+
+  <!-- PT-CR-259 optional branch: the new account is added to local Administrators. -->
+  <rule id="110602" level="1">
+    <if_sid>60144</if_sid>
+    <field name="win.system.eventID">^4732$</field>
+    <field name="win.eventdata.targetSid">^S-1-5-32-544$</field>
+    <description>Local Administrators membership change selector for $(win.eventdata.memberName).</description>
+    <options>no_log</options>
+    <group>local_administrators_add_selector,windows,security_event,</group>
+  </rule>
+
+  <rule id="110603" level="13" frequency="2" timeframe="30">
+    <if_sid>110602</if_sid>
+    <if_matched_sid>110601</if_matched_sid>
+    <same_field>win.system.computer</same_field>
+    <description>PT-CR-259 Local account creation followed by an addition to local Administrators on the same host. Added SID: $(win.eventdata.memberSid).</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>attack,persistence,privilege_escalation,create_account,local_account,windows,correlation,</group>
+  </rule>
+
+  <!-- PT-CR-260: same local account is created and deleted within 24 hours. -->
+  <rule id="110604" level="1">
+    <if_sid>60111</if_sid>
+    <field name="win.system.eventID">^4726$</field>
+    <list field="win.eventdata.targetDomainName" lookup="not_match_key">etc/lists/ad-domain-names</list>
+    <description>Windows local account deletion selector: $(win.eventdata.targetDomainName)\$(win.eventdata.targetUserName).</description>
+    <options>no_log</options>
+    <group>windows_local_account_deletion_selector,windows,security_event,</group>
+  </rule>
+
+  <rule id="110605" level="12" frequency="2" timeframe="86400">
+    <if_sid>110604</if_sid>
+    <if_matched_sid>110601</if_matched_sid>
+    <same_field>win.system.computer</same_field>
+    <same_field>win.eventdata.targetUserName</same_field>
+    <description>PT-CR-260 Local account $(win.eventdata.targetUserName) was created and deleted on the same host within 24 hours.</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>attack,persistence,defense_evasion,create_account,local_account,windows,correlation,</group>
+  </rule>
+
+  <!-- T1136.001 / PT-CR-264: local account creation through Windows command interpreters. -->
+  <rule id="110610" level="1">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\net1?\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\buser\b.{1,160}(?:/add\b|-add\b)</field>
+    <field name="win.eventdata.commandLine" type="pcre2" negate="yes">(?i)(?:/domain\b|-domain\b)</field>
+    <description>PT-CR-264 Local account creation command selector: $(win.eventdata.commandLine).</description>
+    <options>no_log</options>
+    <group>t1136_001_command_selector,windows,sysmon,process_creation,</group>
+  </rule>
+
+  <rule id="110611" level="1">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(?:powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:\bNew-LocalUser\b|\bAdd-NetUser\b)</field>
+    <field name="win.eventdata.commandLine" type="pcre2" negate="yes">(?i)(?:-Domain\b|\bNew-ADUser\b)</field>
+    <description>PT-CR-264 PowerShell local account creation selector: $(win.eventdata.commandLine).</description>
+    <options>no_log</options>
+    <group>t1136_001_command_selector,windows,sysmon,powershell,process_creation,</group>
+  </rule>
+
+  <rule id="110612" level="1">
+    <decoded_as>windows_eventchannel</decoded_as>
+    <field name="win.system.eventID">^(?:4103|4104)$</field>
+    <field name="win.system.message" type="pcre2">(?i)(?:\bNew-LocalUser\b|\bAdd-NetUser\b|\bnet1?\b.{1,160}\buser\b.{1,160}/add\b)</field>
+    <field name="win.system.message" type="pcre2" negate="yes">(?i)(?:/domain\b|-domain\b|\bNew-ADUser\b)</field>
+    <description>PT-CR-264 PowerShell script content contains a local account creation command.</description>
+    <options>no_log</options>
+    <group>t1136_001_command_selector,windows,powershell,script_block,</group>
+  </rule>
+
+  <rule id="110613" level="14" frequency="2" timeframe="120">
+    <if_sid>110601</if_sid>
+    <if_matched_group>t1136_001_command_selector</if_matched_group>
+    <same_field>win.system.computer</same_field>
+    <description>PT-CR-264 Local account creation command followed by Windows 4720 on the same host.</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>attack,persistence,create_account,local_account,windows,correlation,</group>
+  </rule>
+
+  <!-- PT-CR-2594: direct SAM writes can create a hidden account without 4720. -->
+  <rule id="110620" level="14">
+    <if_sid>61614,61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\SAM\\SAM\\Domains\\Account\\Users\\(?:Names\\[^\\]+(?:\\|$)|[0-9A-F]{8}\\F$)</field>
+    <field name="win.eventdata.image" type="pcre2" negate="yes">(?i)\\lsass\.exe$</field>
+    <description>PT-CR-2594 Direct non-LSASS modification of the SAM user database by $(win.eventdata.image): $(win.eventdata.targetObject).</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>attack,persistence,defense_evasion,create_account,local_account,hidden_account,registry,sysmon,</group>
+  </rule>
+
+  <!-- PT-CR-1908: WER exploitation chain followed by SYSTEM creating a local account. -->
+  <rule id="110625" level="1">
+    <if_sid>61613</if_sid>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)^[A-Z]:\\ProgramData\\Microsoft\\Windows\\WER\\ReportArchive\\.*\.wer$</field>
+    <field name="win.eventdata.image" type="pcre2" negate="yes">(?i)^[A-Z]:\\Windows\\(?:System32|SysWOW64)\\WerFault\.exe$</field>
+    <description>Unexpected WER report file selector: $(win.eventdata.targetFilename).</description>
+    <options>no_log</options>
+    <group>wer_exploitation_file_selector,windows,sysmon,file_creation,</group>
+  </rule>
+
+  <rule id="110626" level="1" frequency="2" timeframe="30">
+    <if_sid>61603</if_sid>
+    <if_matched_sid>110625</if_matched_sid>
+    <same_field>win.system.computer</same_field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\wermgr\.exe$</field>
+    <field name="win.eventdata.image" type="pcre2" negate="yes">(?i)^[A-Z]:\\Windows\\System32\\wermgr\.exe$</field>
+    <field name="win.eventdata.user" type="pcre2">(?i)(?:NT AUTHORITY\\SYSTEM|SYSTEM|S-1-5-18)$</field>
+    <description>Abnormal SYSTEM wermgr process after an unexpected WER report.</description>
+    <options>no_log</options>
+    <group>wer_exploitation_process_selector,windows,sysmon,process_creation,</group>
+  </rule>
+
+  <rule id="110627" level="13" frequency="2" timeframe="30">
+    <if_sid>61653</if_sid>
+    <if_matched_sid>110626</if_matched_sid>
+    <same_field>win.system.computer</same_field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\wermgr\.exe$</field>
+    <description>PT-CR-1908 WER exploitation sequence: fake report, abnormal wermgr process, and process tampering.</description>
+    <group>attack,privilege_escalation,wer_exploitation,windows,sysmon,correlation,</group>
+  </rule>
+
+  <rule id="110628" level="15" frequency="2" timeframe="120">
+    <if_sid>110601</if_sid>
+    <if_matched_sid>110627</if_matched_sid>
+    <same_field>win.system.computer</same_field>
+    <field name="win.eventdata.subjectUserSid">^S-1-5-18$</field>
+    <description>PT-CR-1908 SYSTEM created local account $(win.eventdata.targetUserName) after the WER exploitation sequence.</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>attack,persistence,privilege_escalation,create_account,local_account,wer_exploitation,windows,correlation,</group>
+  </rule>
+
+  <!-- MITRE ATT&CK v19 AN1236: Linux account tools and account database changes. -->
+  <rule id="110630" level="10">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^account_creation$</field>
+    <field name="audit.exe" type="pcre2">(?i)/(?:useradd|adduser)$</field>
+    <field name="audit.success" type="pcre2" negate="yes">(?i)^(?:no|0|false)$</field>
+    <description>Linux local account creation utility executed by AUID $(audit.auid): $(audit.exe) $(audit.command).</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>audit,attack,persistence,create_account,local_account,linux,command_execution,</group>
+  </rule>
+
+  <rule id="110631" level="7">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^account_database$</field>
+    <field name="audit.success" type="pcre2" negate="yes">(?i)^(?:no|0|false)$</field>
+    <description>Linux account database changed by $(audit.exe), AUID $(audit.auid).</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>audit,attack,persistence,create_account,local_account,linux,file_modification,</group>
+  </rule>
+
+  <rule id="110632" level="7">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">^/etc/(?:passwd|shadow)$</field>
+    <description>Linux account database file changed: $(file).</description>
+    <mitre><id>T1136.001</id></mitre>
+    <group>syscheck,attack,persistence,create_account,local_account,linux,file_modification,</group>
+  </rule>
+
+  <!-- T1136.002 / PT-CR-663: 4720 whose target domain is an AD domain. -->
+  <rule id="110650" level="1">
+    <if_sid>110600</if_sid>
+    <list field="win.eventdata.targetDomainName" lookup="match_key">etc/lists/ad-domain-names</list>
+    <description>Windows domain account creation selector: $(win.eventdata.targetDomainName)\$(win.eventdata.targetUserName).</description>
+    <options>no_log</options>
+    <group>windows_domain_account_creation_selector,windows,security_event,</group>
+  </rule>
+
+  <rule id="110651" level="10">
+    <if_sid>110650</if_sid>
+    <description>PT-CR-663 Domain account created by $(win.eventdata.subjectDomainName)\$(win.eventdata.subjectUserName): $(win.eventdata.targetDomainName)\$(win.eventdata.targetUserName).</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,active_directory,windows,</group>
+  </rule>
+
+  <!-- MITRE ATT&CK v19 AN0006 and account-creation branches of PT-CR-1342/PT-CR-1344. -->
+  <rule id="110652" level="1">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(?:net1?|powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:\bnet1?\b.{1,160}\buser\b.{1,160}/add\b.{0,160}/domain\b|\bNew-ADUser\b|\bAdd-NetUser\b.{0,160}-Domain\b|\b(?:New|Add)-DomainUser\b|\bAdd-DomainComputer\b)</field>
+    <description>Domain account creation command selector: $(win.eventdata.commandLine).</description>
+    <options>no_log</options>
+    <group>t1136_002_command_selector,windows,sysmon,process_creation,</group>
+  </rule>
+
+  <rule id="110653" level="1">
+    <decoded_as>windows_eventchannel</decoded_as>
+    <field name="win.system.eventID">^(?:4103|4104)$</field>
+    <field name="win.system.message" type="pcre2">(?i)(?:\bnet1?\b.{1,160}\buser\b.{1,160}/add\b.{0,160}/domain\b|\bNew-ADUser\b|\bAdd-NetUser\b.{0,160}-Domain\b|\b(?:New|Add)-DomainUser\b|\bAdd-DomainComputer\b)</field>
+    <description>PowerShell domain account creation content selector.</description>
+    <options>no_log</options>
+    <group>t1136_002_command_selector,windows,powershell,script_block,</group>
+  </rule>
+
+  <rule id="110654" level="14" frequency="2" timeframe="120">
+    <if_sid>110651</if_sid>
+    <if_matched_group>t1136_002_command_selector</if_matched_group>
+    <same_field>win.system.computer</same_field>
+    <description>Domain account creation command followed by Windows 4720 on the same domain controller.</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,active_directory,windows,correlation,</group>
+  </rule>
+
+  <!-- PT-CR-3079 command selector for gMSA/dMSA creation. -->
+  <rule id="110657" level="1">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(?:powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bNew-ADServiceAccount\b</field>
+    <description>Managed service account creation command selector: $(win.eventdata.commandLine).</description>
+    <options>no_log</options>
+    <group>msa_creation_command_selector,windows,sysmon,powershell,</group>
+  </rule>
+
+  <rule id="110658" level="1">
+    <decoded_as>windows_eventchannel</decoded_as>
+    <field name="win.system.eventID">^(?:4103|4104)$</field>
+    <field name="win.system.message" type="pcre2">(?i)\bNew-ADServiceAccount\b</field>
+    <description>PowerShell managed service account creation content selector.</description>
+    <options>no_log</options>
+    <group>msa_creation_command_selector,windows,powershell,script_block,</group>
+  </rule>
+
+  <!-- PT-CR-2143: Kerberos network logon followed by unauthorized computer account creation. -->
+  <rule id="110660" level="1">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4624$</field>
+    <field name="win.eventdata.logonType">^3$</field>
+    <field name="win.eventdata.authenticationPackageName" type="pcre2">(?i)^Kerberos$</field>
+    <description>Kerberos network logon selector for $(win.eventdata.targetDomainName)\$(win.eventdata.targetUserName).</description>
+    <options>no_log</options>
+    <group>kerberos_network_logon_selector,windows,security_event,</group>
+  </rule>
+
+  <rule id="110661" level="10">
+    <if_sid>60121</if_sid>
+    <field name="win.system.eventID">^4741$</field>
+    <list field="win.eventdata.targetDomainName" lookup="match_key">etc/lists/ad-domain-names</list>
+    <list field="win.eventdata.subjectUserSid" lookup="not_match_key">etc/lists/authorized-account-creators</list>
+    <description>PT-CR-2143 Computer account $(win.eventdata.targetUserName) created by an account outside the authorized creator list: $(win.eventdata.subjectUserName).</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,computer_account,active_directory,windows,</group>
+  </rule>
+
+  <rule id="110662" level="13" frequency="2" timeframe="5">
+    <if_sid>110661</if_sid>
+    <if_matched_sid>110660</if_matched_sid>
+    <same_field>win.system.computer</same_field>
+    <description>PT-CR-2143 Kerberos network logon followed by unauthorized computer account creation on the same domain controller.</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,computer_account,active_directory,windows,correlation,</group>
+  </rule>
+
+  <!-- PT-CR-1342/PT-CR-1344: PowerView-shaped LDAP 1644 queries correlated with account creation. -->
+  <rule id="110670" level="1">
+    <decoded_as>windows_eventchannel</decoded_as>
+    <field name="win.system.eventID">^1644$</field>
+    <field name="win.system.message" type="pcre2">(?i)(?:(?:objectcategory=cn=(?:person|computer),cn=schema,cn=configuration,dc=).*(?:samaccountname|distinguishedname)|\(objectclass=\*\).*(?:samaccountname|useraccountcontrol))</field>
+    <field name="win.system.message" type="pcre2" negate="yes">(?i)Client IP:\s*(?:127\.0\.0\.1|::1)(?::\d+)?</field>
+    <description>PowerView-shaped remote LDAP account query selector on a domain controller.</description>
+    <options>no_log</options>
+    <group>powerview_account_query_selector,windows,active_directory,ldap,</group>
+  </rule>
+
+  <rule id="110671" level="14" frequency="2" timeframe="30">
+    <if_sid>110651</if_sid>
+    <if_matched_sid>110670</if_matched_sid>
+    <same_field>win.system.computer</same_field>
+    <description>PT-CR-1342/PT-CR-1344 PowerView-shaped LDAP activity followed by domain user creation on the same controller.</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,powerview,active_directory,windows,correlation,</group>
+  </rule>
+
+  <rule id="110672" level="14" frequency="2" timeframe="30">
+    <if_sid>110661</if_sid>
+    <if_matched_sid>110670</if_matched_sid>
+    <same_field>win.system.computer</same_field>
+    <description>PT-CR-1342/PT-CR-1344 PowerView-shaped LDAP activity followed by computer account creation on the same controller.</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,computer_account,powerview,active_directory,windows,correlation,</group>
+  </rule>
+
+  <rule id="110673" level="14" frequency="2" timeframe="120">
+    <if_sid>110661</if_sid>
+    <if_matched_group>t1136_002_command_selector</if_matched_group>
+    <same_field>win.system.computer</same_field>
+    <description>Domain computer account creation command followed by Windows 4741 on the same controller.</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,computer_account,active_directory,windows,correlation,</group>
+  </rule>
+
+  <!-- PT-CR-3079: gMSA or dMSA object creation. -->
+  <rule id="110675" level="12">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^5137$</field>
+    <field name="win.eventdata.objectClass" type="pcre2">(?i)^msDS-(?:Group|Delegated)ManagedServiceAccount$</field>
+    <list field="win.eventdata.subjectUserSid" lookup="not_match_key">etc/lists/authorized-account-creators</list>
+    <description>PT-CR-3079 Managed service account created outside the authorized creator list: $(win.eventdata.objectDN), class $(win.eventdata.objectClass).</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,managed_service_account,gmsa,dmsa,active_directory,windows,</group>
+  </rule>
+
+  <rule id="110676" level="14" frequency="2" timeframe="120">
+    <if_sid>110675</if_sid>
+    <if_matched_group>msa_creation_command_selector</if_matched_group>
+    <same_field>win.system.computer</same_field>
+    <description>PT-CR-3079 New-ADServiceAccount execution followed by gMSA/dMSA object creation on the same controller.</description>
+    <mitre><id>T1136.002</id></mitre>
+    <group>attack,persistence,create_account,domain_account,managed_service_account,gmsa,dmsa,active_directory,windows,correlation,</group>
+  </rule>
+
+</group>

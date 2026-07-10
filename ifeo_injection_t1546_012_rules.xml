@@ -25,7 +25,7 @@
   </rule>
 
   <!-- GlobalFlag followed by SilentProcessExit ReportingMode on the same agent. -->
-  <rule id="110312" level="5" frequency="1" timeframe="1800">
+  <rule id="110312" level="5" frequency="2" timeframe="1800">
     <if_sid>61615</if_sid>
     <if_matched_sid>110311</if_matched_sid>
     <same_location />
@@ -45,7 +45,7 @@
   </rule>
 
   <!-- PT-CR-261 complete sequence within 30 minutes on the same Wazuh agent. -->
-  <rule id="110314" level="12" frequency="1" timeframe="1800">
+  <rule id="110314" level="12" frequency="2" timeframe="1800">
     <if_sid>110313</if_sid>
     <if_matched_sid>110312</if_matched_sid>
     <same_location />

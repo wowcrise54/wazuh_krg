@@ -33,7 +33,7 @@
   </rule>
 
   <!-- Same PID writes AppCert after referencing the path within 30 seconds. -->
-  <rule id="110323" level="13" frequency="1" timeframe="30">
+  <rule id="110323" level="13" frequency="2" timeframe="30">
     <if_sid>110321</if_sid>
     <if_matched_sid>110322</if_matched_sid>
     <same_location />

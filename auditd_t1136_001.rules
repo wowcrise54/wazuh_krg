@@ -1,0 +1,9 @@
+## MITRE ATT&CK v19 T1136.001 - Local Account.
+## Deploy to /etc/audit/rules.d/t1136-account-creation.rules.
+
+-a always,exit -F arch=b64 -S execve -F exe=/usr/sbin/useradd -k account_creation
+-a always,exit -F arch=b32 -S execve -F exe=/usr/sbin/useradd -k account_creation
+-a always,exit -F arch=b64 -S execve -F exe=/usr/sbin/adduser -k account_creation
+-a always,exit -F arch=b32 -S execve -F exe=/usr/sbin/adduser -k account_creation
+-w /etc/passwd -p wa -k account_database
+-w /etc/shadow -p wa -k account_database
